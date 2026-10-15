@@ -1,0 +1,13 @@
+import { approvals, drafts, empty, entry, field, form, h, money, owner, panel, person, personSelect, rows, stamp } from './shared'
+
+export function packs(s: any) {
+ const packList = rows(s, 'packs').map(p => entry(`${person(s, p.personId)} · ${p.remaining} credits remaining`, `<p>Original credits: ${h(p.credits)}<br>Amount: ${money(p.amountCents)}<br>Expires ${stamp(p.expiresAt)}<br>Pack ID: ${h(p.id)}</p>`)).join('')
+ const payments = panel('Payment history', rows(s, 'payments').length ? rows(s, 'payments').map(p => entry(`${person(s, p.personId)} · ${money(p.amountCents)}`, `<p>Reference: ${h(p.reference)}<br>Recorded ${stamp(p.createdAt)}</p>`)).join('') : empty('No payments have been recorded.'))
+ const balances = rows(s, 'people').filter(p => p.role === 'member').map(p => {
+  const charged = rows(s, 'charges').filter(c => c.personId === p.id).reduce((total, c) => total + c.amountCents, 0)
+  const paid = rows(s, 'payments').filter(c => c.personId === p.id).reduce((total, c) => total + c.amountCents, 0)
+  return entry(p.name, `<p>Charged: ${money(charged)} · Paid: ${money(paid)}<br>Outstanding: ${money(charged - paid)}</p>`)
+ }).join('')
+ const forms = owner(s) ? panel('Prepare a pack', `<p>Review and approve the prepared pack before credits and its charge are added.</p>${form('pack.prepare', '/app/packs', personSelect(s) + field('credits', 'Class credits', '', 'number', 'required min="1" step="1"') + field('amountCents', 'Pack amount (cents)', '', 'number', 'required min="0" step="1"') + field('expiresAt', 'Expiry (ISO timestamp with timezone)', '', 'text', 'required placeholder="YYYY-MM-DDTHH:mm:ssZ"'), 'Prepare pack')}`) + panel('Record a payment', `<p>Enter a unique payment reference. Reusing the same reference will not create a second payment.</p>${form('payment.record', '/app/packs', personSelect(s) + field('amountCents', 'Amount received (cents)', '', 'number', 'required min="1" step="1"') + field('reference', 'Unique payment reference', '', 'text', 'required'), 'Record payment')}`) + panel('Prepare a payment reminder', `<p>The draft captures the recipient, outstanding balance and exact message. Review it before approval.</p>${form('reminder.prepare', '/app/packs', personSelect(s), 'Prepare reminder')}`) : ''
+ return `<h1>${owner(s) ? 'Packs and payments' : 'My packs and payments'}</h1><div class="grid">${panel('Class packs', packList || empty('No packs yet. Prepare and approve a pack to issue class credits.'))}${panel(owner(s) ? 'Member balances' : 'My balance', balances || empty('No member balance yet.'))}${forms}${payments}${owner(s) ? `<div class="full">${drafts(s, '/app/packs', ['pack', 'reminder'])}${approvals(s)}</div>` : ''}</div>`
+}

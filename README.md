@@ -1,0 +1,74 @@
+# Strap
+
+Classes, class packs and member balances for an Australian yoga, pilates or fitness studio. You own the records and run the app in your Cloudflare account. Payments stay with your existing processor. MIT licensed. [First release](ACCEPTANCE.md).
+
+## Run
+
+Install Git and Node 22 or newer. Install the launcher, clone and start:
+
+```sh
+npx -y @runeditrun/rer cli install
+export PATH="$HOME/.local/bin:$PATH"
+git clone https://github.com/just-every/run-strap.git
+cd run-strap
+rer dev
+```
+
+RER installs the pinned dependencies and Node 22.20.0, builds the app, migrates local D1 and prepares an owner. First launch can take several minutes. Open the private `RER_OPEN` link printed in the terminal, confirm the owner and click **Finish setup**. Keep that link private. `RER_READY` is the ordinary app address. A repeated `rer dev` resumes or reuses the running app. On a busy Mac, RER may refuse when its 15-second process-ownership inspection times out; retry the same command. This is a launcher limitation, not a completed launch.
+
+For your own owner email, use `rer install`, `rer setup --owner-email you@example.com`, then `rer dev`. Local development sends no external email. Stop with `rer dev --stop` or Ctrl-C. If a saved port is occupied, run `rer dev --port 8899` with an available port. Never expose local development publicly.
+
+## Run your first week
+
+1. Open **People**. Add an instructor with role `instructor` and members with role `member`; activate them, then **Invite**. Invites establish native sessions, and only the owner grants access. To use a second local browser profile, open the terminal's private `RER_OPEN` link there first, then sign out. In the original owner profile, open **Local mail** and follow the invite in the second profile. Local owner access uses the private launch link; local member access uses these invitations. Hosted email sign-in uses the configured mail sender.
+2. Open **Packs & balances**. Prepare a pack for a member, review its credits, price in AUD cents and expiry, then approve. The approved amount becomes owed; no card is charged. Record payments only after receiving them through your processor, with a unique receipt reference. Credits and money balances are separate.
+3. Open **Timetable**. Prepare a Monday-starting week with class title, ISO timestamps with timezone offset, capacity and instructor. Review the exact draft, then publish it. The week uses each supplied local start date; use `+10:00` for Brisbane class times. Stored timestamps display in UTC. This release uses explicit occurrences, not repeating schedules. A published class cannot be silently edited.
+4. Sign in as a member. Acknowledge the current waiver if the owner has published one, then book a class. A full class adds the member to its waitlist without spending a credit. Cancellation before start returns the booked credit once and promotes the first eligible waiting member with a valid credit. Members see their own balances and bookings. An assigned instructor opens the timetable and checks attendees in.
+5. An owner can prepare a balance reminder and review its exact wording and balance before approving the text export. Strap does not send reminders or collect payments. [Agent commands](docs/AGENT-COMMANDS.md) can prepare drafts, while native human owner sessions approve them.
+6. **Move in** accepts the [documented Mindbody member CSV shape](docs/MOVE-IN.md). Paste the [synthetic fixture](tests/fixtures/members.csv), preview, review and apply the unchanged CSV. Imports start inactive with no credits or charges. The journal retains original source and supports resume and conflict-preserving undo.
+
+Deactivate a person in **People** to revoke studio access immediately. Revoke preparation keys in **Agent access**. Waiver acknowledgement records receipt of the exact version; it is not a legal signature. Only unused, uninvited, non-imported people can be erased; used member history remains retained. Erasure blocks the same identity from being recreated or imported.
+
+## Back up and restore
+
+Stop the app, and keep exports private:
+
+```sh
+rer dev --stop
+rer export --output exports/strap.rer
+```
+
+Restore into a fresh clone of the same revision before setup or entering data:
+
+```sh
+rer install
+rer import --input /private/path/strap.rer --yes
+rer setup --owner-email original-owner@example.com
+rer dev
+```
+
+The original owner/member identities, classes, packs, bookings, payments, approvals, waiver acknowledgements, import originals and journals travel. Sessions, sign-in links, agent keys, provider credentials and the development outbox do not. Re-enter private configuration and sign in again. Setup uses the archived owner's email. Damaged archives and populated destinations are refused. After erasure, pass a later archive as the journal: `rer import --input OLD.rer --journal LATER.rer --yes`. A current destination or supplied later journal fences older data. Offline older backups cannot discover later erasure; protect and retire old copies. `rer reset --yes` destroys local data and settings; export first if needed.
+
+## Deploy
+
+No domain or provider account is needed locally. For hosting, use your own Cloudflare Workers/D1 account and verified mail sender. Resource identities in `wrangler.jsonc` and `deploy.json` stay stable. Set `MAIL_FROM` in `deploy.json` to your verified sender and provide private `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OWNER_EMAIL`, `SESSION_SECRET`, `SETUP_TOKEN` and `MAIL_API_KEY` environment variables through your secret manager. Mail uses Resend. Never put secrets in arguments or source. Commit intended configuration changes before deploying.
+
+```sh
+rer deploy --dry-run
+rer deploy
+```
+
+Dry run validates and builds without provider calls. Real deployment provisions resources, applies migrations, uploads secrets and checks health. It claims the configured owner and retires the setup token. Open the returned workers.dev origin and sign in by email. A custom domain is optional. `rer signin` provides owner recovery when mail is not working yet; then correct the sender/email configuration. This round verifies local runtime and dry-run behavior; real provider delivery and hosted acceptance remain unverified.
+
+## Develop
+
+Package mode pins `@runeditrun/rer@0.2.22`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
+
+```sh
+pnpm run test:strap
+pnpm run test:archive
+pnpm run typecheck
+rer verify
+```
+
+Integration tests use real workerd/D1, native invitations/sessions and public HTTP commands, plus the public archive CLI. Build/deploy never run tests. One sharded Verify workflow runs per push commit; the separate lane runs the stranger journey. Screens use Base's current theme; a visual design round follows.

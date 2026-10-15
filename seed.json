@@ -1,0 +1,88 @@
+{
+  "id": "strap",
+  "name": "Strap",
+  "version": "0.1.0",
+  "maturity": "first-release-local",
+  "category": "studio",
+  "spine": {
+    "id": "class",
+    "record": "Published studio class occurrence"
+  },
+  "description": "Studio timetable, class credits, waitlist promotion, attendance and member balances.",
+  "capabilities": [
+    {
+      "id": "studio-operations",
+      "clauses": [
+        "STRAP-001"
+      ]
+    }
+  ],
+  "nonGoals": [
+    "Card processing",
+    "Recurring billing",
+    "Payroll",
+    "Marketplace",
+    "Video classes"
+  ],
+  "externals": [
+    {
+      "id": "cloudflare",
+      "required": true,
+      "why": "Worker hosting",
+      "data": [
+        "HTTP requests"
+      ],
+      "adapters": []
+    }
+  ],
+  "env": [],
+  "deploy": {
+    "healthPath": "/health",
+    "publicPaths": [
+      "/",
+      "/health",
+      "/signin"
+    ],
+    "notes": "Native owner sessions guard /app; unknown paths return real 404s; development and demo mail is suppressed."
+  },
+  "extensionPoints": {
+    "contributions": [],
+    "policies": [],
+    "events": [],
+    "slots": [],
+    "adapters": []
+  },
+  "limits": {
+    "status": "unmeasured"
+  },
+  "accessibility": {
+    "level": "WCAG 2.2 AA",
+    "status": "target; unaudited"
+  },
+  "operatingCost": {
+    "status": "unmeasured"
+  },
+  "composition": {
+    "base": "base",
+    "family": "studio",
+    "edition": "strap",
+    "modules": [
+      "delivery-producer",
+      "job-queue",
+      "release",
+      "deploy-kit",
+      "container",
+      "demo-host",
+      "demo",
+      "integrations",
+      "mail",
+      "ai",
+      "portability",
+      "d1-transport",
+      "erasure",
+      "dependencies",
+      "operator-auth",
+      "owner-claim"
+    ]
+  }
+}

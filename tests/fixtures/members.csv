@@ -1,0 +1,4 @@
+MemberId,FirstName,LastName,Email
+synthetic-001,Alex,Example,alex.member@example.test
+synthetic-002,Sam,"Example, Jr.",sam.member@example.test
+synthetic-003,Taylor,Example,taylor.member@example.test
