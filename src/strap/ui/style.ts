@@ -99,6 +99,7 @@ pre{max-width:100%;max-height:420px;overflow:auto;margin:12px 0 0;padding:12px 1
 .top{padding:0 24px}
 nav.studio{flex-direction:row;gap:8px;min-height:0;margin:0 -24px;padding:12px 24px;border-right:0;border-bottom:1px solid var(--strap-rule);overflow-x:auto;scrollbar-width:none}
 nav.studio a{flex:none;min-height:44px;padding:0 18px;white-space:nowrap}
+nav.studio a[aria-current]{scroll-initial-target:nearest}
 main{padding:28px 0 72px}
 .columns,.columns.wide-aside{grid-template-columns:minmax(0,1fr)}
 }
