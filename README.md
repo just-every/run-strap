@@ -2,6 +2,8 @@
 
 Classes, class packs and member balances for an Australian yoga, pilates or fitness studio. You own the records and run the app in your Cloudflare account. Payments stay with your existing processor. MIT licensed. [First release](ACCEPTANCE.md).
 
+The owner guides start at [Getting started](docs/getting-started.md); the run site serves them at `/docs`.
+
 ## Run
 
 Install Git and Node 22 or newer. Install the launcher, clone and start:
@@ -20,12 +22,12 @@ For your own owner email, use `rer install`, `rer setup --owner-email you@exampl
 
 ## Run your first week
 
-1. Open **People**. Add an instructor with role `instructor` and members with role `member`; activate them, then **Invite**. Invites establish native sessions, and only the owner grants access. To use a second local browser profile, open the terminal's private `RER_OPEN` link there first, then sign out. In the original owner profile, open **Local mail** and follow the invite in the second profile. Local owner access uses the private launch link; local member access uses these invitations. Hosted email sign-in uses the configured mail sender.
-2. Open **Packs & balances**. Prepare a pack for a member, review its credits, price in AUD cents and expiry, then approve. The approved amount becomes owed; no card is charged. Record payments only after receiving them through your processor, with a unique receipt reference. Credits and money balances are separate.
-3. Open **Timetable**. Prepare a Monday-starting week with class title, ISO timestamps with timezone offset, capacity and instructor. Review the exact draft, then publish it. The week uses each supplied local start date; use `+10:00` for Brisbane class times. Stored timestamps display in UTC. This release uses explicit occurrences, not repeating schedules. A published class cannot be silently edited.
-4. Sign in as a member. Acknowledge the current waiver if the owner has published one, then book a class. A full class adds the member to its waitlist without spending a credit. Cancellation before start returns the booked credit once and promotes the first eligible waiting member with a valid credit. Members see their own balances and bookings. An assigned instructor opens the timetable and checks attendees in.
+1. Open **People**. Add an instructor with role `instructor` and members with role `member`; activate them, then **Invite to sign in**. Invites establish native sessions, and only the owner grants access. To use a second local browser profile, open the terminal's private `RER_OPEN` link there first, then sign out. In the original owner profile, open **Local mail** and follow the invite in the second profile. Local owner access uses the private launch link; local member access uses these invitations. Hosted email sign-in uses the configured mail sender.
+2. Open **Packs and payments**. Prepare a pack for a member, review its credits, price in AUD cents and expiry, then approve. The approved amount becomes owed; no card is charged. Record payments only after receiving them through your processor, with a unique receipt reference. Credits and money balances are separate.
+3. Open **Classes**. Prepare a Monday-starting week with class title, ISO timestamps with timezone offset, capacity and instructor. Review the exact draft, then publish it. The week uses each supplied local start date; use `+10:00` for Brisbane class times. Stored timestamps display in UTC. This release uses explicit occurrences, not repeating schedules. A published class cannot be silently edited.
+4. Sign in as a member. Acknowledge the current waiver if the owner has published one, then book a class. A full class adds the member to its waitlist without spending a credit. Cancellation before start returns the booked credit once and promotes the first eligible waiting member with a valid credit. Members see their own balances and bookings. An assigned instructor opens **My teaching schedule** and checks attendees in.
 5. An owner can prepare a balance reminder and review its exact wording and balance before approving the text export. Strap does not send reminders or collect payments. [Agent commands](docs/AGENT-COMMANDS.md) can prepare drafts, while native human owner sessions approve them.
-6. **Move in** accepts the [documented Mindbody member CSV shape](docs/MOVE-IN.md). Paste the [synthetic fixture](tests/fixtures/members.csv), preview, review and apply the unchanged CSV. Imports start inactive with no credits or charges. The journal retains original source and supports resume and conflict-preserving undo.
+6. **Import** accepts the [documented Mindbody member CSV shape](docs/MOVE-IN.md). Paste the [synthetic fixture](tests/fixtures/members.csv), preview, review and apply the unchanged CSV. Imports start inactive with no credits or charges. The journal retains original source and supports resume and conflict-preserving undo.
 
 Deactivate a person in **People** to revoke studio access immediately. Revoke preparation keys in **Agent access**. Waiver acknowledgement records receipt of the exact version; it is not a legal signature. Only unused, uninvited, non-imported people can be erased; used member history remains retained. Erasure blocks the same identity from being recreated or imported.
 
@@ -62,7 +64,7 @@ Dry run validates and builds without provider calls. Real deployment provisions 
 
 ## Develop
 
-Package mode pins `@runeditrun/rer@0.2.22`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
+Package mode pins `@runeditrun/rer@0.2.27`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
 
 ```sh
 pnpm run test:strap
@@ -71,4 +73,10 @@ pnpm run typecheck
 rer verify
 ```
 
-Integration tests use real workerd/D1, native invitations/sessions and public HTTP commands, plus the public archive CLI. Build/deploy never run tests. One sharded Verify workflow runs per push commit; the separate lane runs the stranger journey. Screens use Base's current theme; a visual design round follows.
+Integration tests use real workerd/D1, native invitations/sessions and public HTTP commands, plus the public archive CLI. Build/deploy never run tests. One sharded Verify workflow runs per push commit; the separate lane runs the stranger journey.
+
+The look is one berry yoga mat carrying the product, in Urbanist: tokens in `public/rer-theme.css`, Strap's own tokens and shared components (mat, cards, pills, buttons) in `public/brand/strap.css`, which also dresses Base's sign-in and setup frames, and the app layout in `src/strap/ui/style.ts`.
+
+## Run site
+
+`rer build --site` writes the static run site to `dist/site`: the homepage (`src/site/landing`), whose **Run Strap** opens `/run`, Base's Run page with the commands in `src/site/run.json`, and the docs rendered from `docs/*.md` in the order `docs/site.json` gives. An installed Strap serves the Lobby at `/` instead. `rer dev` serves the run site too and prints its address as `RER_SITE`. `.github/workflows/run-site.yml` publishes it to the domain in `deploy-site.json` only when the repository variable `RUN_SITE_DEPLOY` is `true`.

@@ -1,0 +1,79 @@
+/* The homepage: hero with the upright mat, five features, Also included and the closing band. */
+.hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 56px; align-items: center; padding-top: 36px; padding-bottom: 72px; }
+.hero h1 { font-size: 64px; line-height: 1.05; font-weight: 600; letter-spacing: -.02em; }
+.hero-sub { margin-top: 26px; max-width: 21em; font-size: 24px; line-height: 1.4; }
+.hero-free { margin-top: 24px; font-size: 18px; }
+.hero-free strong { font-weight: 700; }
+.hero .actions { margin-top: 40px; }
+.hero-small { margin-top: 22px; color: var(--rer-muted); font-size: 15px; }
+.hero-drawing { justify-self: end; width: min(100%, 480px); }
+.hero-mat { --roll: 108px; padding: 132px 44px 72px; border-radius: 22px; }
+.steps { display: grid; gap: 26px; }
+.step { padding: 18px 22px 20px; border-color: transparent; box-shadow: var(--strap-mat-card-shadow); }
+.step-head { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--strap-rule); }
+.numeral { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--strap-berry-soft); color: var(--strap-berry); font-size: 15px; font-weight: 600; }
+.step-title { font-size: 18px; font-weight: 600; }
+.step-class { margin-top: 12px; font-size: 17px; }
+.step-person { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.step-name { flex: 1; font-size: 15px; }
+.step .initials { width: 34px; height: 34px; font-size: 14px; }
+.step .pill { min-height: 34px; padding: 0 16px; font-size: 15px; }
+.step-note { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--strap-rule); color: var(--rer-muted); font-size: 15px; }
+
+.feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; padding-top: 72px; padding-bottom: 72px; }
+.feature .piece { justify-self: center; }
+.feature.flip .feature-copy { order: 2; }
+.feature h2 { font-size: 40px; line-height: 1.15; font-weight: 600; letter-spacing: -.015em; }
+.feature-copy p { margin-top: 18px; max-width: 46ch; font-size: 19px; line-height: 1.5; }
+#free h2 { font-size: 48px; }
+
+.included { padding-top: 64px; padding-bottom: 40px; }
+.included h2 { font-size: 40px; line-height: 1.15; font-weight: 600; letter-spacing: -.015em; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 32px; }
+.tile { display: flex; gap: 16px; align-items: flex-start; padding: 22px 22px 24px; }
+.tile-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--strap-berry-soft); color: var(--strap-berry); }
+.tile-icon svg { width: 20px; height: 20px; }
+.tile b { display: block; font-size: 17px; font-weight: 600; }
+.tile b + span { display: block; margin-top: 4px; color: var(--rer-muted); font-size: 15px; line-height: 1.45; }
+
+.closing { padding-top: 104px; padding-bottom: 104px; }
+.closing-mat { --roll: 120px; padding: 56px 172px 56px 56px; border-radius: 22px 10px 10px 22px; }
+.closing-card { max-width: 680px; padding: 44px 48px 48px; border-color: transparent; box-shadow: var(--strap-mat-card-shadow); }
+.closing h2 { font-size: 40px; line-height: 1.15; font-weight: 600; letter-spacing: -.015em; }
+.closing-card > p { margin-top: 14px; font-size: 21px; }
+.closing .actions { margin-top: 32px; }
+
+@media (max-width: 1023px) {
+  .hero { grid-template-columns: 1fr; gap: 48px; }
+  .hero-drawing { justify-self: center; }
+  .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; padding-top: 48px; padding-bottom: 48px; }
+  .feature.flip .feature-copy { order: 0; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .hero { padding-top: 28px; padding-bottom: 40px; gap: 40px; }
+  .hero h1 { font-size: 40px; line-height: 1.08; }
+  .hero-sub { margin-top: 18px; font-size: 19px; }
+  .hero-free { margin-top: 18px; font-size: 16px; }
+  .hero .actions { margin-top: 28px; gap: 16px 28px; }
+  .hero-small { margin-top: 18px; font-size: 14px; }
+  .hero-mat { --roll: 84px; padding: 104px 18px 40px; }
+  .steps { gap: 18px; }
+  .step { padding: 14px 16px 16px; }
+  .step-title { font-size: 16px; }
+  .step-class { font-size: 15px; }
+  .step-name, .step-note { font-size: 14px; }
+  .step .pill { min-height: 30px; padding: 0 12px; font-size: 13px; }
+  .step .initials { width: 30px; height: 30px; font-size: 13px; }
+  .feature h2, .included h2, .closing h2 { font-size: 30px; }
+  #free h2 { font-size: 34px; }
+  .feature-copy p { margin-top: 12px; font-size: 17px; }
+  .tiles { grid-template-columns: 1fr; gap: 12px; margin-top: 24px; }
+  .tile { padding: 18px; }
+  .closing { padding-top: 64px; padding-bottom: 72px; }
+  .closing-mat { padding: 96px 16px 32px; border-radius: 18px; }
+  .closing-mat.roll-end::after { top: -12px; bottom: auto; left: -5px; right: -5px; width: auto; height: 84px; border-radius: 32px; background: var(--strap-roll-across); box-shadow: var(--strap-roll-shadow); }
+  .closing-mat.roll-end::before { content: none; }
+  .closing-card { padding: 28px 20px 30px; }
+  .closing-card > p { font-size: 17px; }
+}

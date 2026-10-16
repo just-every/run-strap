@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "title": "strap",
+  "title": "Strap",
   "groups": [
     {
       "id": "application",
@@ -18,7 +18,7 @@
       "help": "The name shown in your new application.",
       "kind": "text",
       "required": true,
-      "default": "strap",
+      "default": "Strap",
       "group": "application"
     },
     {
@@ -26,7 +26,7 @@
       "label": "Brand colour",
       "kind": "colour",
       "required": true,
-      "default": "#356c60",
+      "default": "#94174B",
       "group": "application"
     },
     {

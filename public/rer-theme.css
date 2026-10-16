@@ -1,25 +1,35 @@
-/* This edition's declared theme. The installer, sign-in, confirmation, /setup
-   read these --rer-* tokens; the app serves this file and its fonts.
-   Buttons keep the colour chosen at setup (src/branding.json primaryColor)
-   because no --rer-accent is declared here; declare --rer-accent and
-   --rer-accent-text together to fix them instead. */
+/* Strap's declared theme: the --rer-* tokens every Base frame, the Lobby, the
+   installer and the run site read, and Urbanist (SIL OFL 1.1) served from
+   public/fonts/urbanist. Strap's own extra tokens and shared components are in
+   public/brand/strap.css. Berry is the one accent. */
 @font-face {
-  font-family: Outfit;
+  font-family: Urbanist;
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('/fonts/outfit/outfit-latin-wght-normal.woff2') format('woff2');
+  src: url('/fonts/urbanist/urbanist-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: Urbanist;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/urbanist/urbanist-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 :root {
-  --rer-font-body: Outfit, Arial, sans-serif;
-  --rer-font-heading: Outfit, Arial, sans-serif;
-  --rer-page: #f4f6f5;
-  --rer-surface: #ffffff;
-  --rer-text: #1b2724;
-  --rer-muted: #4a5a55;
-  --rer-border: #6b7c76;
-  --rer-focus: #1b2724;
-  --rer-link: #1f5f52;
-  --rer-radius: 12px;
+  --rer-font-body: Urbanist, ui-sans-serif, system-ui, sans-serif;
+  --rer-font-heading: Urbanist, ui-sans-serif, system-ui, sans-serif;
+  --rer-page: #FBF9F5;
+  --rer-surface: #FFFFFF;
+  --rer-text: #1C2129;
+  --rer-muted: #6B6F76;
+  --rer-border: #8A857F;
+  --rer-focus: #94174B;
+  --rer-accent: #94174B;
+  --rer-accent-text: #FFFFFF;
+  --rer-link: #1C2129;
+  --rer-radius: 16px;
   --rer-logo: url('/brand/mark.svg');
 }

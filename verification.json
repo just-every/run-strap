@@ -26,6 +26,14 @@
       ]
     },
     {
+      "name": "site",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "pnpm run build:site"
+      ]
+    },
+    {
       "name": "domain",
       "browser": false,
       "hosted": false,

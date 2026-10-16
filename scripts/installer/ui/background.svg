@@ -1,1 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#132e40"/><stop offset="1" stop-color="#669389"/></linearGradient><linearGradient id="land"><stop stop-color="#142f39"/><stop offset="1" stop-color="#34675d"/></linearGradient></defs><path fill="url(#sky)" d="M0 0h1600v1000H0z"/><circle cx="1160" cy="250" r="115" fill="#f0dba2" opacity=".65"/><path fill="#426a69" d="M0 570 320 300 670 610 1100 390 1600 680v320H0z"/><path fill="url(#land)" d="m0 740 410-280 370 330 350-210 470 140v280H0z"/><path fill="#112d34" d="m0 880 500-180 450 260 650-150v190H0z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice"><!-- The installer's backdrop: Strap's paper with the floor mat from public/brand/band.svg. --><rect width="1600" height="1000" fill="#FBF9F5"/><g transform="translate(-60 640) scale(1.15)">
+  
+  <defs>
+    <pattern id="knit" width="6" height="4" patternUnits="userSpaceOnUse">
+      <path d="M0 1.5h2.6M3.2 3.5h2.6" stroke="#7A1936" stroke-width="1" stroke-linecap="round" opacity=".55"/>
+    </pattern>
+    <pattern id="knit-roll" width="4" height="6" patternUnits="userSpaceOnUse">
+      <path d="M1.5 0v2.6M3.5 3.2v2.6" stroke="#7A1936" stroke-width="1" stroke-linecap="round" opacity=".5"/>
+    </pattern>
+    <linearGradient id="top" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#7A1936"/>
+      <stop offset=".35" stop-color="#94174B"/>
+      <stop offset="1" stop-color="#9C1D52"/>
+    </linearGradient>
+    <linearGradient id="roll" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#7A1936"/>
+      <stop offset=".3" stop-color="#94174B"/>
+      <stop offset=".55" stop-color="#B84068"/>
+      <stop offset=".8" stop-color="#94174B"/>
+      <stop offset="1" stop-color="#6A1430"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#3C081C" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#3C081C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="760" cy="292" rx="820" ry="20" fill="url(#shadow)"/>
+  <path d="M-20 196 L1236 188 L1254 282 L-20 290 Z" fill="url(#top)"/>
+  <path d="M-20 196 L1236 188 L1254 282 L-20 290 Z" fill="url(#knit)"/>
+  <path d="M-20 290 L1254 282 L1254 292 L-20 300 Z" fill="#6A1430"/>
+  <circle cx="1290" cy="190" r="56" fill="url(#roll)"/>
+  <path d="M1234 190 L1346 190 L1360 234 L1240 234 Z" fill="url(#roll)"/>
+  <path d="M1234 190 L1346 190 L1360 234 L1240 234 Z M1290 134 a56 56 0 0 1 0 112 a56 56 0 0 1 0 -112" fill="url(#knit-roll)"/>
+  <path d="M1252 150 C1272 136 1306 134 1326 146" fill="none" stroke="#B84068" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+  <circle cx="1300" cy="234" r="60" fill="#7A1936"/>
+  <path d="M1293.7 234 A6.3 6.3 0 0 1 1306.3 234 A12.6 12.6 0 0 1 1281.1 234 A18.9 18.9 0 0 1 1318.9 234 A25.2 25.2 0 0 1 1268.5 234 A31.5 31.5 0 0 1 1331.5 234 A37.8 37.8 0 0 1 1255.9 234 A44.1 44.1 0 0 1 1344.1 234 A50.4 50.4 0 0 1 1243.3 234" fill="none" stroke="#5C0F2B" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="1300" cy="234" r="59" fill="none" stroke="#B84068" stroke-width="2" opacity=".75"/>
+</g></svg>

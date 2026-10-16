@@ -1,0 +1,31 @@
+{
+  "sections": [
+    {
+      "title": "Start here",
+      "pages": [
+        { "slug": "getting-started", "file": "getting-started.md", "title": "Getting started", "summary": "Run Strap on your own computer, finish setup and find your way around the studio." },
+        { "slug": "put-strap-online", "file": "put-strap-online.md", "title": "Put Strap online", "summary": "Deploy Strap to your own account so members and instructors can sign in from anywhere." }
+      ]
+    },
+    {
+      "title": "Run your studio",
+      "pages": [
+        { "slug": "classes", "file": "classes.md", "title": "Classes and the waitlist", "summary": "Prepare and publish the week, let members book, fill cancellations from the waitlist and check people in." },
+        { "slug": "packs-and-payments", "file": "packs-and-payments.md", "title": "Packs, credits and payments", "summary": "Give members class credits, record the payments you receive and see what every member owes." },
+        { "slug": "people", "file": "people.md", "title": "People and access", "summary": "Add members and instructors, invite them to sign in, and end someone's access at once." },
+        { "slug": "waivers", "file": "waivers.md", "title": "Waivers", "summary": "Publish a waiver version that members acknowledge before they book." },
+        { "slug": "agent-access", "file": "AGENT-COMMANDS.md", "title": "Agent access", "summary": "Let an assistant prepare next week's classes, packs and reminders for you to approve." }
+      ]
+    },
+    {
+      "title": "Your data",
+      "pages": [
+        { "slug": "move-in", "file": "MOVE-IN.md", "title": "Move in from Mindbody", "summary": "Bring your members across from a CSV: preview it, apply it, and undo it later if you need to." },
+        { "slug": "backup-and-restore", "file": "backup-and-restore.md", "title": "Backup and restore", "summary": "Export the whole studio to one archive and restore it into a fresh copy of Strap." }
+      ]
+    }
+  ],
+  "githubOnly": [
+    { "file": "SOURCES.md", "reason": "Where Strap's code was adapted from, for maintainers" }
+  ]
+}

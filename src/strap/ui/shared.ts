@@ -8,18 +8,49 @@ export const field = (name: string, label: string, value: unknown = '', type = '
 export const textarea = (name: string, label: string, value: unknown = '', attrs = '') => `<label>${h(label)}<textarea name="${h(name)}" ${attrs}>${h(value)}</textarea></label>`
 export const select = (name: string, label: string, choices: [unknown, unknown][], value: unknown = '') => `<label>${h(label)}<select name="${h(name)}" required>${choices.map(([id, text]) => `<option value="${h(id)}" ${id === value ? 'selected' : ''}>${h(text)}</option>`).join('')}</select></label>`
 export const personSelect = (s: any, role = 'member') => select('personId', 'Person', [['', 'Choose a person'], ...rows(s, 'people').filter(p => p.active && p.role === role).map(p => [p.id, p.name] as [unknown, unknown])])
-export const form = (command: string, path: string, body: string, button: string) => `<form method="post" action="/app/action?name=${encodeURIComponent(command)}&amp;returnTo=${encodeURIComponent(path)}">${body}<button type="submit">${h(button)}</button></form>`
-export const panel = (title: string, body: string) => `<section class="panel"><h2>${h(title)}</h2>${body}</section>`
+
+/**
+ * A command form. One with no visible fields is a lone action button; the
+ * secondary (outlined) style is for undoing, revoking and erasing.
+ */
+export const form = (command: string, path: string, body: string, button: string, style: 'primary' | 'secondary' = 'primary') => `<form class="${/<(label|textarea|select)\b/.test(body) ? 'fields' : 'act'}" method="post" action="/app/action?name=${encodeURIComponent(command)}&amp;returnTo=${encodeURIComponent(path)}">${body}<button class="${style === 'primary' ? 'btn' : 'btn-outline'}" type="submit">${h(button)}</button></form>`
+
+/** A plain white panel. */
+export const panel = (title: string, body: string, id = '') => `<section class="panel card"${id ? ` id="${h(id)}"` : ''}><h2>${h(title)}</h2>${body}</section>`
+/** The screen's one primary panel, resting on a frame of berry mat. */
+export const matPanel = (title: string, body: string) => `<section class="mat-surface mat"><div class="panel card"><h2>${h(title)}</h2>${body}</div></section>`
 export const empty = (message: string) => `<p class="empty">${h(message)}</p>`
+/** A screen with nothing in it yet: a flat mat holding the real message and its one action. */
+export const emptyMat = (message: string, action = '') => `<section class="empty-mat mat roll-end"><div class="card"><p>${h(message)}</p>${action}</div></section>`
 export const exact = (value: unknown) => `<pre>${h(JSON.stringify(value, null, 2))}</pre>`
-export const status = (value: unknown) => `<span class="status">${h(value)}</span>`
+
+const pillStyles: Record<string, string> = {
+ active: 'solid', approved: 'solid', completed: 'solid', published: 'solid', 'checked in': 'solid',
+ booked: 'tint', draft: 'tint',
+ waitlisted: 'outline', queued: 'outline', applying: 'outline', undoing: 'outline', 'rolling back': 'outline',
+ failed: 'alert',
+}
+/** A status pill: stored lowercase values show capitalised. */
+export const status = (value: unknown) => {
+ const text = String(value ?? '').replace(/_/g, ' ')
+ const label = text.charAt(0).toUpperCase() + text.slice(1)
+ const style = /^version /i.test(text) ? 'tint' : pillStyles[text.toLowerCase()] ?? 'muted'
+ return `<span class="pill ${style}">${h(label)}</span>`
+}
+/** Stored instants, to the minute, in UTC. */
 export const stamp = (value: unknown) => {
  if (!value) return '—'
  const iso = typeof value === 'number' ? new Date(value).toISOString() : String(value)
- return `<time datetime="${h(iso)}">${h(iso.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC').replace(/Z$/, ' UTC'))}</time>`
+ const shown = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso) && /(Z|\.\d{3}Z)$/.test(iso) ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : iso.replace('T', ' ')
+ return `<time datetime="${h(iso)}">${h(shown)}</time>`
 }
 export const money = (value: unknown) => `${(Number(value ?? 0) / 100).toFixed(2)}`
-export const entry = (title: string, body: string) => `<article class="entry"><h3>${h(title)}</h3>${body}</article>`
+export const initials = (name: unknown) => `<span class="initials" aria-hidden="true">${h(String(name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '·')}</span>`
+
+/** One list row: an optional lead, the title and its lines, meta, actions, then anything below. */
+export const row = (parts: { title: string; lead?: string; sub?: string; meta?: string; actions?: string; more?: string; current?: boolean }) =>
+ `<article class="row${parts.current ? ' current' : ''}">${parts.lead ?? ''}<div class="row-main"><h3>${h(parts.title)}</h3>${parts.sub ? `<p class="row-sub">${parts.sub}</p>` : ''}</div>${parts.meta ? `<p class="row-meta">${parts.meta}</p>` : ''}${parts.actions ? `<div class="row-actions">${parts.actions}</div>` : ''}${parts.more ? `<div class="row-more">${parts.more}</div>` : ''}</article>`
+export const entry = (title: string, body: string) => row({ title, more: body })
 export const result = (notice: any) => notice.result?.result ?? notice.result
 
 export function approvals(s: any) {
@@ -28,5 +59,9 @@ export function approvals(s: any) {
 
 export function drafts(s: any, path: string, kinds: string[]) {
  const items = rows(s, 'drafts').filter(d => kinds.includes(d.type))
- return panel('Prepared drafts', items.length ? items.map(d => entry(`${d.type} · ${d.id}`, `${status(d.status)}${exact(d)}${owner(s) && d.status === 'draft' ? form(d.type === 'classes' ? 'classes.publish' : d.type === 'pack' ? 'pack.approve' : 'reminder.approve', path, hidden('id', d.id), d.type === 'classes' ? 'Approve and publish this exact week' : d.type === 'pack' ? 'Approve this exact pack' : 'Approve this exact reminder') : ''}${owner(s) && d.type === 'reminder' && d.status === 'approved' ? `<p><a href="/api/strap/reminders/${h(d.id)}.txt">Download approved reminder</a></p>` : ''}`)).join('') : empty('Prepare a draft first. Its exact contents will be shown here before approval.'))
+ return panel('Prepared drafts', items.length ? items.map(d => row({
+  title: `${d.type} · ${d.id}`,
+  actions: status(d.status),
+  more: `${exact(d)}${owner(s) && d.status === 'draft' ? form(d.type === 'classes' ? 'classes.publish' : d.type === 'pack' ? 'pack.approve' : 'reminder.approve', path, hidden('id', d.id), d.type === 'classes' ? 'Approve and publish this exact week' : d.type === 'pack' ? 'Approve this exact pack' : 'Approve this exact reminder') : ''}${owner(s) && d.type === 'reminder' && d.status === 'approved' ? `<p><a href="/api/strap/reminders/${h(d.id)}.txt">Download approved reminder</a></p>` : ''}`,
+ })).join('') : empty('Prepare a draft first. Its exact contents will be shown here before approval.'))
 }
