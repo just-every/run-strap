@@ -11,19 +11,13 @@ database and opens in your browser.
 
 ## Run Strap on your computer
 
-Install the `rer` command once per computer:
+One line installs the `rer` command, gets Strap and starts it:
 
 ```sh
-curl -fsSL https://runeditrun.com/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
+npx -y @runeditrun/rer dev just-every/run-strap
 ```
 
-or `npm install -g @runeditrun/rer`. Then get Strap and start it:
-
-```sh
-git clone https://github.com/just-every/run-strap.git
-cd run-strap && rer dev
-```
+To start it again later, run `cd run-strap && rer dev`.
 
 `rer dev` installs everything, makes you the owner and prints two lines. `RER_OPEN` is a private link that opens Strap
 signed in as you: keep it to yourself. `RER_READY` is the ordinary address. The first launch can take a few minutes;
