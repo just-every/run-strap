@@ -6,7 +6,7 @@ The owner guides start at [Getting started](docs/getting-started.md); the run si
 
 ## Run
 
-Install Git and Node 22 or newer. Install the launcher, clone and start:
+Strap's run site is live at https://run-strap.com, and https://run-strap.com/run has the install commands. To run it locally instead, install Git and Node 22 or newer. Install the launcher, clone and start:
 
 ```sh
 npx -y @runeditrun/rer cli install
@@ -79,4 +79,4 @@ The look is one berry yoga mat carrying the product, in Urbanist: tokens in `pub
 
 ## Run site
 
-`rer build --site` writes the static run site to `dist/site`: the homepage (`src/site/landing`), whose **Run Strap** opens `/run`, Base's Run page with the commands in `src/site/run.json`, and the docs rendered from `docs/*.md` in the order `docs/site.json` gives. An installed Strap serves the Lobby at `/` instead. `rer dev` serves the run site too and prints its address as `RER_SITE`. `.github/workflows/run-site.yml` publishes it to the domain in `deploy-site.json` only when the repository variable `RUN_SITE_DEPLOY` is `true`.
+`rer build --site` writes the static run site to `dist/site`: the homepage (`src/site/landing`), whose **Run Strap** opens `/run`, Base's Run page with the commands in `src/site/run.json`, and the docs rendered from `docs/*.md` in the order `docs/site.json` gives. An installed Strap serves the Lobby at `/` instead. `rer dev` serves the run site too and prints its address as `RER_SITE`; open its `/run` page for the local install commands. `.github/workflows/run-site.yml` publishes it to the domain in `deploy-site.json` only when the repository variable `RUN_SITE_DEPLOY` is `true`.
