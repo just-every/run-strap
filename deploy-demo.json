@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "domain": "run-strap.com",
+  "name": "Strap",
+  "ownerEmail": "jordan@studio.example",
+  "settings": { "MAIL_FROM": "studio@studio.example" }
+}

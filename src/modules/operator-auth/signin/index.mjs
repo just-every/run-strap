@@ -5,6 +5,7 @@
 import { escapeHtml } from '../http.mjs';
 import { normalizeEmail, safeReturnTo } from '../policy.mjs';
 import { pageResponse } from '../page.mjs';
+import { oneClickPage } from './one-click.mjs';
 
 const NOTICES = {
   sent: ['status', 'If this address can sign in here, a sign-in link is on its way. Open it on this device and press Confirm.'],
@@ -14,10 +15,10 @@ const NOTICES = {
   mail_unavailable: ['alert', 'Sign-in email is not available right now. Ask the person who runs this app to check its mail settings.'],
   invalid_email: ['alert', 'Enter a complete email address.'],
   invalid_input: ['alert', 'Enter a complete email address.'],
-  provider_required: ['alert', 'Your organisation requires its own sign-in provider for this address.'],
-  oidc_provider_required: ['alert', 'Your organisation requires its own sign-in provider for this address.'],
+  provider_required: ['alert', 'Your organization requires its own sign-in provider for this address.'],
+  oidc_provider_required: ['alert', 'Your organization requires its own sign-in provider for this address.'],
   oidc_admission_denied: ['alert', 'That account cannot sign in here. Use the email link, or ask an owner of this app for an invitation.'],
-  oidc_provider_denied: ['alert', 'Sign-in was cancelled at the provider.'],
+  oidc_provider_denied: ['alert', 'Sign-in was canceled at the provider.'],
 };
 const UNAVAILABLE = ['alert', 'That sign-in provider is not available right now. Use the email link instead.'];
 const UNFINISHED = ['alert', 'Signing in with that provider did not finish. Try again, or use the email link.'];
@@ -50,6 +51,12 @@ export function createSignInHandler(auth, { setup, links, defaultReturnTo = '/ap
     const branding = auth.presentation;
     const returnTo = safeReturnTo(url.searchParams.get('returnTo'), defaultReturnTo);
     const hint = emailHint(url.searchParams.get('login_hint'));
+    const people = await auth.oneClick?.people(request);
+    if (people?.length) return oneClickPage({ branding, method: request.method, people: people.map(person => {
+      const href = new URL(person.href, url.origin);
+      href.searchParams.set('returnTo', returnTo);
+      return { ...person, href: href.pathname + href.search };
+    }) });
     const providers = auth.providers ? (await auth.providers.list()).filter(p => p.visible) : [];
     const parts = [];
     const emailAvailable = auth.emailSignInAvailable;

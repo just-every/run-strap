@@ -18,8 +18,10 @@ import { createAdmission, legacyAdmission } from './identity/admission.mjs';
 import { createOidcProviders } from './identity/oidc/index.mjs';
 import { ownerSignIn } from './accounts/owner-signin.mjs';
 import { emailChange } from './accounts/email-change.mjs';
+import { displayNameChange } from './accounts/display-name.mjs';
 import { isLocalCli } from './local-cli.mjs';
 import { devAdmitted } from './dev-admission.mjs';
+import { oneClickAccounts } from './accounts/one-click.mjs';
 
 export { STEP_UP_ACTIONS, STEP_UP_SECONDS } from './identity/email-link/index.mjs';
 export function createOperatorAuth(options) {
@@ -78,7 +80,9 @@ export function createOperatorAuth(options) {
     ...fencedCredentials({store,authenticate,requireFreshProof,config,clock,hash}),
     ...ownerSignIn({ config, store, clock, sessions, limit }),
     ...emailChange({ config, store, clock, authenticate, requireFreshProof }),
+    ...displayNameChange({ config, store, clock, authenticate }),
     presentation: config.branding,
+    oneClick: oneClickAccounts({ config, store, clock, sessions, authorizedLink, requireRoute, afterConfirm: admission.afterConfirm }),
     emailSignInAvailable: Boolean(mailSender),
     /** Identity providers (null when none is configured): routes, the sign-in page's list and owner actions. */
     providers,

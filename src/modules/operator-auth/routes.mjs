@@ -30,6 +30,10 @@ export function createAuthHandler(auth) {
       const providerResponse = await oidc?.(request);
       if (providerResponse) return providerResponse;
       if (!path.startsWith('/auth/')) return null;
+      if (path === '/auth/one-click' && auth.oneClick) {
+        const value = await auth.oneClick.enter(request, readParameters(url.searchParams));
+        return seeOther(value.returnTo, value.cookie);
+      }
       if (path.startsWith('/auth/oidc/')) return json({ error: 'not_found' }, 404);
       if (path === '/auth/review-session') requireLoopback(request);
       if (path === '/auth/confirm' && ['GET', 'HEAD'].includes(request.method)) {
@@ -37,8 +41,8 @@ export function createAuthHandler(auth) {
         const preview = await auth.previewLink(request, token);
         return await confirmationResponse({ branding: auth.presentation, preview, token, method: request.method });
       }
-      // Composition without the owner link or email change (native accounts) does not own these paths.
-      if ((path === OWNER_SIGNIN_PATH && !auth.confirmOwnerSignIn) || (path === '/auth/email' && !auth.changeEmail)) return json({ error: 'not_found' }, 404);
+      // Composition without the owner link, email or name change (native accounts) does not own these paths.
+      if ((path === OWNER_SIGNIN_PATH && !auth.confirmOwnerSignIn) || (path === '/auth/email' && !auth.changeEmail) || (path === '/auth/display-name' && !auth.changeDisplayName)) return json({ error: 'not_found' }, 404);
       if (path === OWNER_SIGNIN_PATH && ['GET', 'HEAD'].includes(request.method)) {
         const token = readParameters(url.searchParams).token ?? null;
         const preview = await auth.previewOwnerSignIn(request, token);
@@ -48,13 +52,20 @@ export function createAuthHandler(auth) {
         const session = await auth.getSession(request);
         return session ? json(session) : json({ error: 'unauthenticated' }, 401);
       }
-      if (path === '/auth/operators' && request.method === 'GET') return json(await auth.listOperators(request));
+      if (path === '/auth/operators' && request.method === 'GET') {
+        const operators = await auth.listOperators(request);
+        const people = await auth.oneClick?.people(request);
+        return json(operators.map(operator => {
+          const person = people?.find(person => person.email === operator.email);
+          return person ? { ...operator, signInUrl: person.href } : operator;
+        }));
+      }
       if (path === '/auth/sessions' && request.method === 'GET') return json(await auth.listSessions(request, readParameters(url.searchParams).operatorId));
       if (path === '/auth/domain-rules' && request.method === 'GET') return json(await auth.listDomainRules(request));
       if (path === '/auth/settings/identity' && request.method === 'GET') {const value=await auth.identitySettings(request);return /text\/html/.test(request.headers.get('accept')??'')?await identitySettingsPage(value,auth.presentation):json(value);}
       if (path === '/auth/providers' && request.method === 'GET') return json(await auth.listProviders(request));
       const posts = new Set(['/auth/bootstrap', '/auth/magic-link', '/auth/confirm', '/auth/signout', '/auth/invite', '/auth/invite/cancel', '/auth/review-session',
-        '/auth/operator/status', '/auth/operator/role', '/auth/session/revoke', '/auth/step-up', '/auth/domain-rules', '/auth/providers/unlink', '/auth/providers/relink', '/auth/settings/identity', '/auth/setup-complete', OWNER_SIGNIN_PATH, '/auth/email']);
+        '/auth/operator/status', '/auth/operator/role', '/auth/session/revoke', '/auth/step-up', '/auth/domain-rules', '/auth/providers/unlink', '/auth/providers/relink', '/auth/settings/identity', '/auth/setup-complete', OWNER_SIGNIN_PATH, '/auth/email', '/auth/display-name']);
       if (!posts.has(path)) return json({ error: 'not_found' }, 404);
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       const query = readParameters(url.searchParams);
@@ -69,11 +80,20 @@ export function createAuthHandler(auth) {
         case '/auth/bootstrap': { const value = await auth.bootstrap(request, input); return seeOther(value.returnTo, value.cookie); }
         case '/auth/magic-link': {
           const result = await auth.requestMagicLink(request, input);
+          const people = await auth.oneClick?.people(request);
+          if (people) {
+            const person = people.find(person => person.email === String(input.email).trim().toLowerCase());
+            const signInUrl = person ? new URL(person.href, url.origin) : null;
+            if (signInUrl) signInUrl.searchParams.set('returnTo', safeReturnTo(input.returnTo));
+            return form ? seeOther(signInUrl ? signInUrl.pathname + signInUrl.search : auth.presentation.signInPath)
+              : json({ ...result, ...(signInUrl ? { signInUrl: signInUrl.pathname + signInUrl.search } : {}) }, 202);
+          }
           return form ? seeOther(notice(auth, 'sent', { returnTo: safeReturnTo(input.returnTo) === '/app' ? undefined : safeReturnTo(input.returnTo), provider: result.requiredProvider })) : json(result, 202);
         }
         case '/auth/confirm': { const value = await auth.confirmLink(request, input); return seeOther(value.returnTo, value.cookie); }
         case OWNER_SIGNIN_PATH: { const value = await auth.confirmOwnerSignIn(request, input); return seeOther(value.returnTo, value.cookie); }
         case '/auth/email': return json(await auth.changeEmail(request, input));
+        case '/auth/display-name': return json(await auth.changeDisplayName(request, input));
         case '/auth/review-session': { const value = await auth.issueReviewSession(request, input); return seeOther(value.returnTo, value.cookie); }
         case '/auth/step-up': {
           const result = await auth.requestStepUp(request, input);

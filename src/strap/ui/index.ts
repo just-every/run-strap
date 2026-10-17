@@ -3,7 +3,6 @@ import branding from '../../branding.json'
 import { agent } from './agent'
 import { classes } from './classes'
 import { movein } from './import'
-import { mail } from './mail'
 import { packs } from './packs'
 import { people } from './people'
 import { h, owner } from './shared'
@@ -15,12 +14,12 @@ const hashStyle = async () => btoa(String.fromCharCode(...new Uint8Array(await c
 
 export async function renderApp(state: any, path: string, notice: { message?: string; error?: string; result?: any } = {}): Promise<Response> {
  const current = path.split('?')[0].replace(/\/$/, '') || '/app'
- const tabs = [['/app', 'Classes'], ['/app/packs', owner(state) ? 'Packs and payments' : 'My packs'], ...(owner(state) ? [['/app/people', 'People'], ['/app/import', 'Import'], ['/app/agent', 'Agent access'], ...(state.localMail ? [['/app/mail', 'Local mail']] : [])] : [])]
+ const tabs = [['/app', 'Classes'], ['/app/packs', owner(state) ? 'Packs and payments' : 'My packs'], ...(owner(state) ? [['/app/people', 'People'], ['/app/import', 'Import'], ['/app/agent', 'Agent access']] : [])]
  const allowed = tabs.some(([url]) => url === current)
  const title = tabs.find(([url]) => url === current)?.[1] ?? 'Page unavailable'
- const content = !allowed ? '<h1>Page unavailable</h1><p class="lede">Your role cannot access this page.</p><p><a class="btn" href="/app">Open classes</a></p>' : current === '/app/people' ? people(state) : current === '/app/packs' ? packs(state) : current === '/app/import' ? movein(state, notice) : current === '/app/agent' ? agent(state, notice) : current === '/app/mail' ? mail(state) : classes(state)
+ const content = !allowed ? '<h1>Page unavailable</h1><p class="lede">Your role cannot access this page.</p><p><a class="btn" href="/app">Open classes</a></p>' : current === '/app/people' ? people(state) : current === '/app/packs' ? packs(state) : current === '/app/import' ? movein(state, notice) : current === '/app/agent' ? agent(state, notice) : classes(state)
  const name = h(branding.name)
- const header = `<header class="top"><a class="lockup" href="/app" aria-label="${name} home"><img src="/brand/mark.svg" alt="" width="28" height="28"><span>${name}</span></a><p class="who">${h(state.actor.email)} · ${h(state.actor.role)}</p>${owner(state) ? '<a class="settings" href="/auth/settings/identity">Sign-in settings</a>' : ''}<form class="signout" method="post" action="/app/action?name=session.signout&amp;returnTo=/app"><button class="btn-outline" type="submit">Sign out</button></form></header>`
+ const header = `<header class="top"><a class="lockup" href="/app" aria-label="${name} home"><img src="/brand/mark.svg" alt="" width="28" height="28"><span data-rer-name>${name}</span></a><p class="who">${h(state.actor.email)} · ${h(state.actor.role)}</p>${owner(state) ? '<a class="settings" href="/auth/settings/identity">Sign-in settings</a>' : ''}<form class="signout" method="post" action="/app/action?name=session.signout&amp;returnTo=/app"><button class="btn-outline" type="submit">Sign out</button></form></header>`
  const nav = `<nav class="studio" aria-label="Studio">${tabs.map(([url, text]) => `<a href="${h(url)}"${current === url ? ' aria-current="page"' : ''}>${h(text)}</a>`).join('')}</nav>`
  const notices = `${notice.error ? `<div class="notice error" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" role="status">${h(notice.message)}</div>` : ''}`
  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${h(title)} · ${name}</title><link rel="icon" href="/brand/mark.svg">${fontHead}<link rel="stylesheet" href="/rer-theme.css"><style>${style}</style></head><body><a class="skip" href="#content">Skip to content</a>${header}<div class="shell">${nav}<main id="content">${notices}${content}</main></div></body></html>`

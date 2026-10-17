@@ -38,7 +38,8 @@
       "browser": false,
       "hosted": false,
       "commands": [
-        "pnpm run test:strap"
+        "pnpm run test:strap",
+        "node --test tests/demo.test.mjs"
       ]
     },
     {

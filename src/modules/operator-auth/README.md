@@ -133,6 +133,7 @@ version), domain rules in `oa_domain_rules`. `auth.accounts` exposes it and
 | `/auth/owner-signin?token=…` | GET/HEAD | 200 owner sign-in confirmation for a live `rer signin` link, or 400 invalid/used/expired; **no writes** |
 | `/auth/owner-signin` | POST | token; consume once for the active owner it names, 303 with cookie; see "Owner sign-in without mail" |
 | `/auth/email` | POST | email; the signed-in operator's own sign-in email; fresh step-up proof; 409 `email_in_use` |
+| `/auth/display-name` | POST | displayName; the signed-in operator's own name (1-120 characters); no step-up |
 
 Unknown `/auth/*` paths return 404. Unsupported methods return 405. Except for invalid/expired confirmation GET/HEAD documents, known public
 errors are JSON `{error:code}`: invalid input 400, unauthenticated 401, policy/host/
@@ -151,7 +152,8 @@ Do not log confirmation URLs, input tokens, cookies or provider message bodies.
 GET/HEAD confirmation uses a self-contained, responsive document. A magic link
 says “Confirm sign-in to Example”; an invitation says “Accept your invitation to
 Example”. Both explain that the link works once and show its remaining lifetime,
-rounded up to minutes (singular for one minute). The sole primary form button is
+rounded up to days for lifetimes of a day or more, otherwise minutes (singular
+for one day or minute). The sole primary form button is
 “Confirm”. Only its hidden POST field contains the token. Invalid, expired,
 consumed or unauthorized links return a styled 400 document with “Request a new
 link” pointing to the configured sign-in page. HEAD has the same status and
@@ -219,7 +221,8 @@ Cookies are host-only, Path=/, HttpOnly, SameSite=Lax; production uses Secure an
 127.0.0.1 or [::1] and uses `operator_session_local_<port>` (for example
 `operator_session_local_8787`): browsers keep cookies per host, not per port, so
 checkouts side by side on one loopback host each keep their own session. Session expiry defaults to
-7 days (maximum 30), links to 15 minutes (maximum 60); no silent sliding renewal.
+7 days (maximum 30), sign-in and step-up links to 15 minutes (maximum 60), and
+invitations to 7 days; no silent sliding renewal.
 `returnTo` must be a local absolute path; unsafe values become `/app`. It is stored
 with the token, and cannot be replaced on confirmation. Auth methods never return
 raw link tokens. `CompletedSession.cookie` is server-only and must only be emitted
@@ -308,6 +311,12 @@ session, allow-list, version fences and last-owner safeguards cannot be overridd
 The exported `isActiveOperator` is the shared admission predicate.
 
 ## Mail, OIDC, password and review seams
+
+Invitation links default to seven days (604800 seconds). `invitationSeconds`
+can shorten that lifetime, up to the seven-day maximum. `linkSeconds` remains
+independent: sign-in and step-up links default to 15 minutes and allow at most
+one hour. Invitation mail and confirmation pages describe the longer lifetime
+in days; single use, cancellation and issuer-authority checks still apply.
 
 Magic and invitation mail include both plain text and HTML. Each part has exactly
 one confirmation URL; the HTML part presents it as a button with inline mail-safe
@@ -425,6 +434,11 @@ owner invitation cancellation, and owner activation or deactivation. Unchanged
 roles/statuses and non-owner status changes retain their usual authorization.
 The existing version fences and last-active-owner protection still apply after
 the proof succeeds.
+With the `RER_DEMO=1` demo guard active, the configured owner's authenticated
+session supplies this proof inside its own visitor container because mail is
+mocked. Authentication still checks the container's own session secret and
+store; another visitor's session is refused. Ordinary hosted instances keep
+requiring the real proof described above.
 Creating a server-declared owner dev persona also requires the signed-in owner's
 fresh local proof in addition to the checkout key. Its creation repeats the actor
 session/version fence in the database write.
@@ -462,6 +476,10 @@ link to the current address, a recent email-link sign-in, or a `rer signin`
 link). It revokes unused links sent to the old address and keeps sessions and
 provider bindings. An address another operator holds is refused with
 `email_in_use`. `STEP_UP_ACTIONS` gains `email:change`.
+
+A name is corrected the same way, without a step-up: `POST /auth/display-name
+{displayName}`. First-run `/setup` shows the owner's name as an editable field
+that saves through it. Native accounts do not mount this route.
 
 ## Local dev identity and the key gate
 
@@ -505,6 +523,17 @@ one. HTML documents gain the Dev suffix on product labels marked with
 request URLs. `RER_DEV_IDENTITY=off` disables dev sign-in and personas. The
 layer answers 503 to every request when `RER_INSTALLATION_ID` is set beside a
 non-loopback `RER_MANAGEMENT_ORIGIN`.
+
+In dev and isolated hosted demos, `/signin` lists **Sign in as <name>** for
+active people and people with a live invitation. The default operator screen
+gets `signInUrl` on those `/auth/operators` records and offers the same action.
+`GET /auth/one-click?as=EMAIL&returnTo=/app` accepts the invitation with the
+existing atomic issuer, expiry, version and cancellation checks. Local sessions
+are always `dev` and require the checkout key on every request; hosted demo
+sessions belong only to that visitor's database. Production answers 404. The
+local persona list also includes invited/active people by email. Suppressed
+email-link form requests direct the admitted visitor to this same one-click
+entry rather than telling them to wait for mail.
 
 `dev/sign-in-as.mjs` is the test harness door: `signInAs({origin, key, as})`
 returns the cookies a test browser or fetch client installs, and

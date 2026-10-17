@@ -16,11 +16,11 @@ Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-
 
 RER installs the pinned dependencies and Node 22.20.0, builds the app, migrates local D1 and prepares an owner. First launch can take several minutes. Open the private `RER_OPEN` link printed in the terminal, confirm the owner and click **Finish setup**. Keep that link private. `RER_READY` is the ordinary app address. A repeated `rer dev` resumes or reuses the running app. On a busy Mac, RER may refuse when its 15-second process-ownership inspection times out; retry the same command. This is a launcher limitation, not a completed launch.
 
-For your own owner email, run `npx -y @runeditrun/rer install just-every/run-strap`, then from the checkout `rer setup --owner-email you@example.com` and `rer dev`. Local development sends no external email. Stop with `rer dev --stop` or Ctrl-C. If a saved port is occupied, run `rer dev --port 8899` with an available port. Never expose local development publicly.
+For your own owner email, run `npx -y @runeditrun/rer install just-every/run-strap`, then from the checkout `rer setup --owner-email you@example.com` and `rer dev`. Local development sends no external email. Stop its foreground process with Ctrl-C. If a saved port is occupied, run `rer dev --port 8899` with an available port. Never expose local development publicly.
 
 ## Run your first week
 
-1. Open **People**. Add an instructor with role `instructor` and members with role `member`; activate them, then **Invite to sign in**. Invites establish native sessions, and only the owner grants access. To use a second local browser profile, open the terminal's private `RER_OPEN` link there first, then sign out. In the original owner profile, open **Local mail** and follow the invite in the second profile. Local owner access uses the private launch link; local member access uses these invitations. Hosted email sign-in uses the configured mail sender.
+1. Open **People**. Add an instructor with role `instructor` and members with role `member`; activate them, then **Invite to sign in**. Invites establish native sessions, and only the owner grants access. To use a second local browser profile, open the terminal's private `RER_OPEN` link there first, then sign out. In the second profile, open `/signin` and choose the invited person’s one-click sign-in. Local owner access uses the private launch link; local member access uses these invitations. Hosted email sign-in uses the configured mail sender.
 2. Open **Packs and payments**. Prepare a pack for a member, review its credits, price in AUD cents and expiry, then approve. The approved amount becomes owed; no card is charged. Record payments only after receiving them through your processor, with a unique receipt reference. Credits and money balances are separate.
 3. Open **Classes**. Prepare a Monday-starting week with class title, ISO timestamps with timezone offset, capacity and instructor. Review the exact draft, then publish it. The week uses each supplied local start date; use `+10:00` for Brisbane class times. Stored timestamps display in UTC. This release uses explicit occurrences, not repeating schedules. A published class cannot be silently edited.
 4. Sign in as a member. Acknowledge the current waiver if the owner has published one, then book a class. A full class adds the member to its waitlist without spending a credit. Cancellation before start returns the booked credit once and promotes the first eligible waiting member with a valid credit. Members see their own balances and bookings. An assigned instructor opens **My teaching schedule** and checks attendees in.
@@ -63,7 +63,7 @@ Dry run validates and builds without provider calls. Real deployment provisions 
 
 ## Develop
 
-Package mode pins `@runeditrun/rer@0.2.27`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
+Package mode pins `@runeditrun/rer@0.2.50`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
 
 ```sh
 pnpm run test:strap
