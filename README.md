@@ -6,13 +6,13 @@ The owner guides start at [Getting started](docs/getting-started.md); the run si
 
 ## Run
 
-Strap's run site is live at https://run-strap.com, and https://run-strap.com/run has the install commands. To run it locally instead, install Git and Node 22 or newer. Run one line to install the launcher, clone and start:
+Strap's run site is live at https://run-strap.com, and https://run-strap.com/run has the install commands. To run it locally instead, install Git, then run one line to install the launcher, clone and start:
 
 ```sh
 npx -y @runeditrun/rer dev just-every/run-strap
 ```
 
-To start it again later, run `cd run-strap && rer dev`.
+Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-strap` does the same. To start it again later, run `cd run-strap && rer dev`.
 
 RER installs the pinned dependencies and Node 22.20.0, builds the app, migrates local D1 and prepares an owner. First launch can take several minutes. Open the private `RER_OPEN` link printed in the terminal, confirm the owner and click **Finish setup**. Keep that link private. `RER_READY` is the ordinary app address. A repeated `rer dev` resumes or reuses the running app. On a busy Mac, RER may refuse when its 15-second process-ownership inspection times out; retry the same command. This is a launcher limitation, not a completed launch.
 
@@ -41,7 +41,8 @@ rer export --output exports/strap.rer
 Restore into a fresh clone of the same revision before setup or entering data:
 
 ```sh
-rer install
+npx -y @runeditrun/rer install just-every/run-strap
+cd run-strap
 rer import --input /private/path/strap.rer --yes
 rer setup --owner-email original-owner@example.com
 rer dev

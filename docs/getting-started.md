@@ -17,14 +17,13 @@ One line installs the `rer` command, gets Strap and starts it:
 npx -y @runeditrun/rer dev just-every/run-strap
 ```
 
-To start it again later, run `cd run-strap && rer dev`.
+Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-strap` does the same. To start it again later, run `cd run-strap && rer dev`.
 
 `rer dev` installs everything, makes you the owner and prints two lines. `RER_OPEN` is a private link that opens Strap
 signed in as you: keep it to yourself. `RER_READY` is the ordinary address. The first launch can take a few minutes;
 running `rer dev` again reuses the copy that is already running.
 
-To start with your own email as the owner, run `rer install`, then `rer setup --owner-email you@example.com`, then
-`rer dev`. Stop Strap with `rer dev --stop` or Ctrl-C. If the saved port is busy, run `rer dev --port 8899`.
+To start with your own email as the owner, run `npx -y @runeditrun/rer install just-every/run-strap`, then `rer setup --owner-email you@example.com` and `rer dev` from the checkout. Stop Strap with `rer dev --stop` or Ctrl-C. If the saved port is busy, run `rer dev --port 8899`.
 
 ## Finish setup
 

@@ -21,7 +21,8 @@ credentials and local mail are not included; you sign in again after a restore a
 Restore into a fresh clone of the same version of Strap, before running setup or entering any data:
 
 ```sh
-rer install
+npx -y @runeditrun/rer install just-every/run-strap
+cd run-strap
 rer import --input /private/path/strap.rer --yes
 rer setup --owner-email original-owner@example.com
 rer dev
