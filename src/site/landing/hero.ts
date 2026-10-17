@@ -22,7 +22,7 @@ export const hero = html`<section class="hero wrap" id="top">
     <h1>Studio classes, handled.</h1>
     <p class="hero-sub">Publish the week, give members class credits, and let the waitlist fill cancellations.</p>
     <p class="hero-free">100% free, open source alternative to <strong>Mindbody</strong>, <strong>TeamUp</strong> and <strong>Momence</strong></p>
-    <p class="actions"><a class="btn btn-lg" href="/run">Run Strap${arrow}</a><a class="text-link" href="/docs">Read the docs</a></p>
+    <p class="actions"><a class="btn btn-lg" href="/run">Run Strap${arrow}</a><a class="btn btn-lg" href="https://demo.run-strap.com/">Try the demo</a><a class="text-link" href="/docs">Read the docs</a></p>
     <p class="hero-small">Free and open source, MIT licensed.</p>
   </div>
   <figure class="hero-drawing" aria-label="Ava cancels her Morning Flow booking and gets her credit back; Leo, first on the waitlist, gets the spot and checks in.">

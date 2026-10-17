@@ -6,5 +6,5 @@ import { arrow } from '../shell'
 export const closing = html`<section class="closing wrap" id="run"><div class="closing-mat mat roll-end"><div class="closing-card card">
   <h2>Try it beside what you have.</h2>
   <p>Run Strap on your own computer in two commands.</p>
-  <p class="actions"><a class="btn btn-lg" href="/run">Run Strap${arrow}</a><a class="text-link" href="/docs">Read the docs</a></p>
+  <p class="actions"><a class="btn btn-lg" href="/run">Run Strap${arrow}</a><a class="btn btn-lg" href="https://demo.run-strap.com/">Try the demo</a><a class="text-link" href="/docs">Read the docs</a></p>
 </div></div></section>`
