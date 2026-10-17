@@ -2,6 +2,7 @@
 // Strap opens /run; the Run page from Base; the docs built from the
 // repository's Markdown; and the not-found page. Every Run page string and
 // command is in run.json; nothing here reads installation data.
+import { contractPageHtml } from '../base/contract-page'
 import { runPageHtml, siteNotFoundHtml, type RunData, type SiteBuild, type SiteContext } from '../base/run-site'
 import { identity } from '../identity'
 import { copyScript, docsArticle, docsDescription, docsIndex, docsTitle } from './docs/pages'
@@ -10,15 +11,16 @@ import { landing, landingDescription, landingTitle } from './landing'
 import { sitePage } from './shell'
 import run from './run.json'
 
-export function sitePages({ styles }: SiteContext): SiteBuild {
+export function sitePages({ styles, contract }: SiteContext): SiteBuild {
   const data: RunData = run
   return {
     pages: [
       { path: '/', html: sitePage(landingTitle, landingDescription, styles, landing) },
-      { path: '/run', html: runPageHtml(identity, data) },
+      { path: '/run', html: runPageHtml(identity, data, contract) },
+      ...(contract ? [{ path: '/contract', html: contractPageHtml(identity, data, contract) }] : []),
       { path: '/docs', html: sitePage(docsTitle(), docsDescription(), styles, docsIndex()) },
       ...docPages.map(page => ({ path: `/docs/${page.slug}`, html: sitePage(docsTitle(page), docsDescription(page), styles, docsArticle(page), copyScript) })),
-      { path: '/404', html: siteNotFoundHtml(identity, data) },
+      { path: '/404', html: siteNotFoundHtml(identity, data, contract) },
     ],
     assets: ['rer-theme.css', 'fonts', 'brand'],
   }

@@ -1,4 +1,4 @@
-// The run site's frame: the document head, the header (mark, Docs, Source) and
+// The run site's frame: the document head, the header (mark, Docs, Contract, Source) and
 // the footer, shared by the homepage and every docs page.
 import { identity } from '../identity'
 import { html, raw, type Markup } from './html'
@@ -8,7 +8,7 @@ export const repository = run.repository
 export const arrow = raw('<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg>')
 
 const lockup = html`<a class="site-lockup" href="/"><img src="${identity.mark}" alt="" width="28" height="28"><span>${identity.product}</span></a>`
-const links = (current?: 'docs') => html`<nav class="site-links" aria-label="Site"><a href="/docs"${current === 'docs' ? raw(' aria-current="page"') : ''}>Docs</a><a href="${repository}">Source</a></nav>`
+const links = (current?: 'docs') => html`<nav class="site-links" aria-label="Site"><a href="/docs"${current === 'docs' ? raw(' aria-current="page"') : ''}>Docs</a><a href="/contract">Contract</a><a href="${repository}">Source</a></nav>`
 
 export const siteHeader = (current?: 'docs') => html`<header class="site-bar"><div class="site-bar-inner">${lockup}${links(current)}</div></header>`
 export const siteFooter = () => html`<footer class="site-foot"><div class="site-foot-inner"><p class="site-foot-brand">${lockup}<span class="site-foot-line">Free and open source, MIT licensed.</span></p>${links()}</div></footer>`
