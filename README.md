@@ -16,7 +16,7 @@ Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-
 
 RER installs the pinned dependencies and Node 22.20.0, builds the app, migrates local D1 and prepares an owner. First launch can take several minutes. Open the private `RER_OPEN` link printed in the terminal, confirm the owner and click **Finish setup**. Keep that link private. `RER_READY` is the ordinary app address. A repeated `rer dev` resumes or reuses the running app. On a busy Mac, RER may refuse when its 15-second process-ownership inspection times out; retry the same command. This is a launcher limitation, not a completed launch.
 
-For your own owner email, use `rer install`, `rer setup --owner-email you@example.com`, then `rer dev`. Local development sends no external email. Stop with `rer dev --stop` or Ctrl-C. If a saved port is occupied, run `rer dev --port 8899` with an available port. Never expose local development publicly.
+For your own owner email, run `npx -y @runeditrun/rer install just-every/run-strap`, then from the checkout `rer setup --owner-email you@example.com` and `rer dev`. Local development sends no external email. Stop with `rer dev --stop` or Ctrl-C. If a saved port is occupied, run `rer dev --port 8899` with an available port. Never expose local development publicly.
 
 ## Run your first week
 
