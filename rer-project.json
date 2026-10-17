@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "projectId": "just-every/run-strap",
+  "name": "Strap",
+  "sourceRepository": "https://github.com/just-every/run-strap",
+  "license": "MIT"
+}
