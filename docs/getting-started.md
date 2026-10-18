@@ -1,13 +1,13 @@
 # Getting started
 
 Strap runs your studio's week: the classes you publish, the class credits members book with, the waitlist that fills a
-cancelled spot, and what each member has paid. It is free and open source under the MIT licence, and every record stays
+cancelled spot, and what each member has paid. It is free and open source under the MIT license, and every record stays
 in your own account.
 
 ## What you need
 
-A Mac, a Linux computer or Windows with WSL2, with Git and Node 22 or later. Nothing else: Strap brings its own
-database and opens in your browser.
+A Mac, a Linux computer or Windows with WSL2, with Git. With Node 22 or later Strap starts in one line; without it, the
+installer below brings its own Node. Nothing else: Strap brings its own database and opens in your browser.
 
 ## Run Strap on your computer
 

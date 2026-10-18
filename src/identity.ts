@@ -1,7 +1,8 @@
 // This edition's identity: what its installed Lobby and its run site say.
 // The name and colour are the ones setup saves in src/branding.json; replace
 // the purpose with the installation's own when it has one. The tagline is the
-// approved hero's subhead; Urbanist's faces are declared in the theme.
+// approved hero's headline (the run site's /contract footer and not-found page);
+// Urbanist's faces are declared in the app theme.
 import type { EditionIdentity } from './base/identity'
 import branding from './branding.json'
 import site from '../deploy-site.json'
@@ -10,7 +11,7 @@ export const identity: EditionIdentity = {
   product: branding.name,
   deployment: branding.name,
   purpose: '{deployment} keeps studio classes, pack credits, attendance and member balances.',
-  tagline: 'Publish the week, give members class credits, and let the waitlist fill cancellations.',
+  tagline: 'Full classes. Members who stay.',
   signInPath: '/signin',
   // The run site `rer deploy --site` publishes (deploy-site.json).
   runSite: `https://${site.domain}`,

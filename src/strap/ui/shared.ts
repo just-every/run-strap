@@ -37,14 +37,17 @@ export const status = (value: unknown) => {
  const style = /^version /i.test(text) ? 'tint' : pillStyles[text.toLowerCase()] ?? 'muted'
  return `<span class="pill ${style}">${h(label)}</span>`
 }
-/** Stored instants, to the minute, in UTC. */
+const usStamp = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+/** Stored instants, to the minute, in UTC, written the US way: "Tue, Oct 20, 2026, 7:00 AM UTC". */
 export const stamp = (value: unknown) => {
  if (!value) return '—'
  const iso = typeof value === 'number' ? new Date(value).toISOString() : String(value)
- const shown = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso) && /(Z|\.\d{3}Z)$/.test(iso) ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : iso.replace('T', ' ')
+ const shown = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso) && /(Z|\.\d{3}Z)$/.test(iso) ? `${usStamp.format(new Date(iso))} UTC` : iso.replace('T', ' ')
  return `<time datetime="${h(iso)}">${h(shown)}</time>`
 }
-export const money = (value: unknown) => `${(Number(value ?? 0) / 100).toFixed(2)}`
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+/** Whole cents as US dollars: 18000 → "$180.00". */
+export const money = (value: unknown) => usd.format(Number(value ?? 0) / 100)
 export const initials = (name: unknown) => `<span class="initials" aria-hidden="true">${h(String(name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '·')}</span>`
 
 /** One list row: an optional lead, the title and its lines, meta, actions, then anything below. */

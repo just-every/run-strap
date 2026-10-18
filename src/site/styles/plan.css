@@ -1,0 +1,68 @@
+/* 05: the reformer room as an architect's drawing. Landscape (mirror along the
+   top, two rows of six upright reformers, the door bottom left) from 761 px;
+   portrait under it (two columns of six sideways reformers, names inside). */
+.plan { padding: 26px 28px 28px; }
+.plan-title { font-size: 21px; }
+.plan-title b { font-weight: 700; }
+.plan-by { display: none; }
+.room { --line: var(--strap-blueprint); position: relative; margin-top: 16px; padding: 92px 56px 104px; border: 3px solid var(--line); border-top-width: 2px; background: linear-gradient(#fff, #fff) padding-box, var(--line); }
+.room::before, .room::after { content: ''; position: absolute; top: -9px; width: 10px; height: 16px; border: 2px solid var(--line); background: #fff; }
+.room::before { left: -9px; } .room::after { right: -9px; }
+.mirror { position: absolute; left: 60px; right: 60px; top: 10px; height: 10px; border: 1.5px solid #9EB3C6; background: linear-gradient(90deg, #E6F0F6, #F6FAFC 50%, #E6F0F6); }
+.mirror span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); color: #39445A; font-size: 14px; }
+.plant { position: absolute; top: 34px; width: 46px; height: 46px; color: #3E7F6E; }
+.plant:nth-of-type(1) { left: 14px; } .plant:nth-of-type(2) { right: 14px; }
+.plant svg { width: 100%; height: 100%; }
+.teacher { position: absolute; top: 56px; left: 50%; display: flex; align-items: center; gap: 16px; transform: translateX(-30%); }
+.teacher-mat { position: relative; width: 216px; height: 38px; border: 1.5px solid #6FA7A3; border-radius: 4px; background: #CFE7E5; }
+.teacher-mat i { position: absolute; right: 12px; top: 7px; width: 28px; height: 20px; border: 1.5px solid #6FA7A3; border-radius: 3px; background: #A9D3CF; }
+.teacher-name { color: #2B3446; font-size: 15px; }
+.reformers { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 46px 24px; margin-top: 30px; }
+.ref { position: relative; display: grid; justify-items: center; gap: 8px; }
+.ref-label { color: #2B3446; font-size: clamp(12px, 1.1vw, 15px); white-space: nowrap; }
+.ref-label b { font-weight: 600; margin-right: 2px; }
+.ref-frame { --ink: #6A7790; --fill: var(--strap-reformer); position: relative; width: 66px; height: 148px; border: 2px solid var(--ink); border-radius: 5px; background: var(--fill); }
+.ref-frame::before, .ref-frame::after { content: ''; position: absolute; bottom: -7px; width: 10px; height: 8px; border: 2px solid var(--ink); border-top: 0; border-radius: 0 0 3px 3px; background: #fff; }
+.ref-frame::before { left: -4px; } .ref-frame::after { right: -4px; }
+.ref-bar { position: absolute; left: 6px; right: 6px; top: 22px; height: 10px; border: 1.5px solid var(--ink); background: color-mix(in srgb, var(--ink) 40%, #fff); }
+.ref-strap { position: absolute; top: 18px; width: 6px; height: 34px; border-radius: 3px; background: var(--ink); }
+.ref-strap:nth-of-type(2) { left: 17px; } .ref-strap:nth-of-type(3) { right: 17px; }
+.ref-carriage { position: absolute; left: 8px; right: 8px; top: 60px; bottom: 26px; border: 1.5px solid color-mix(in srgb, var(--ink) 60%, #fff); border-radius: 3px; background: color-mix(in srgb, var(--fill) 70%, #fff); }
+.ref-foot { position: absolute; left: 10px; right: 10px; bottom: 8px; height: 10px; border: 1.5px solid var(--ink); border-radius: 2px; }
+.ref.classpass .ref-frame { --ink: #4E9C93; --fill: #CBE9E4; }
+.ref.waitlist .ref-frame { --ink: #9B2F63; --fill: #F6DCE8; }
+.ref-tag { position: absolute; top: calc(100% + 6px); padding: 2px 12px; border-radius: 999px; background: #D5EEEA; color: #245E57; font-size: 13px; white-space: nowrap; }
+.ref.waitlist .ref-tag { background: #F9DDE9; color: #7A1D4C; }
+.door { position: absolute; left: -3px; bottom: -3px; width: 80px; height: 80px; }
+.door svg { width: 100%; height: 100%; overflow: visible; fill: none; stroke: var(--line); stroke-width: 1.6; }
+.door .door-gap { stroke: #fff; stroke-width: 5; }
+.door span { position: absolute; left: 22px; bottom: 14px; color: #39445A; font-size: 14px; }
+
+@media (max-width: 1100px) {
+  .reformers { gap: 46px 12px; }
+  .room { padding-left: 28px; padding-right: 28px; }
+}
+@media (max-width: 760px) {
+  .plan { padding: 18px 14px 18px; }
+  .plan-title { font-size: 18px; line-height: 1.35; }
+  .plan-by { display: inline; }
+  .room { padding: 104px 12px 72px; }
+  .mirror { left: 18px; right: 18px; }
+  .plant { width: 32px; height: 32px; top: 40px; }
+  .plant:nth-of-type(1) { left: 6px; } .plant:nth-of-type(2) { right: 6px; }
+  .teacher { top: 48px; left: 50%; transform: translateX(-50%); flex-direction: column; gap: 0; }
+  .teacher-mat { width: 150px; height: 32px; display: grid; place-items: center; }
+  .teacher-mat i { display: none; }
+  .teacher-name { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
+  .reformers { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(6, auto); grid-auto-flow: column; gap: 14px 22px; margin-top: 12px; }
+  .ref { display: block; }
+  .ref-frame { display: block; width: 100%; height: 40px; }
+  .ref-frame::before, .ref-frame::after { bottom: auto; top: 50%; width: 8px; height: 10px; margin-top: -5px; border: 2px solid var(--ink); border-left: 0; border-radius: 0 3px 3px 0; }
+  .ref-frame::before { left: auto; right: -9px; } .ref-frame::after { right: auto; left: -9px; transform: scaleX(-1); }
+  .ref-bar, .ref-strap, .ref-foot { display: none; }
+  .ref-carriage { left: 10px; right: 10px; top: 6px; bottom: 6px; }
+  .ref-label { position: absolute; z-index: 1; left: 14px; right: 8px; top: 0; height: 40px; display: flex; align-items: center; gap: 2px; font-size: 13px; }
+  .ref-tag { position: absolute; z-index: 1; top: -9px; right: 6px; padding: 0 8px; font-size: 11px; line-height: 17px; }
+  .door { width: 64px; height: 64px; }
+  .door span { left: 14px; bottom: 10px; font-size: 12px; }
+}

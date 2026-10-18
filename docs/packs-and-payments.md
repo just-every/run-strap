@@ -11,8 +11,8 @@ Open **Packs and payments** and use **Prepare a pack**:
 
 - **Person**: an active member.
 - **Class credits**: how many classes the pack covers.
-- **Pack amount (cents)**: the price in cents, so `18000` is 180.00.
-- **Expiry**: when unused credits lapse, as a timestamp with a timezone, such as `2026-12-31T23:59:00+10:00`.
+- **Pack amount (cents)**: the price in cents, so `18000` is $180.00.
+- **Expiry**: when unused credits lapse, as a timestamp with a timezone, such as `2026-12-31T23:59:00-06:00`.
 
 **Prepare pack** creates a draft. Check it under **Prepared drafts**, then press **Approve this exact pack**. The credits
 are ready at once and the pack's amount is added to what the member owes. If a member was waiting for a spot and now

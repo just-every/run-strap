@@ -13,16 +13,16 @@ as a JSON array. Each class needs a `title`, a `start` and an `end` (timestamps 
 [
   {
     "title": "Morning Flow",
-    "start": "2026-10-20T07:00:00+10:00",
-    "end": "2026-10-20T08:00:00+10:00",
+    "start": "2026-10-20T07:00:00-05:00",
+    "end": "2026-10-20T08:00:00-05:00",
     "capacity": 12,
     "instructorId": "INSTRUCTOR_ID"
   }
 ]
 ```
 
-Use your studio's own offset, such as `+10:00` for Brisbane, so each class lands on the right day. Strap stores every
-time in UTC and shows it that way.
+Use your studio's own offset, such as `-05:00` for Nashville in October (`-06:00` once daylight saving time ends), so
+each class lands on the right day. Strap stores every time in UTC and shows it that way.
 
 **Prepare class week** creates a draft. Nothing is published yet.
 

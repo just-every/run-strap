@@ -23,8 +23,8 @@ const frame = (main: Markup, current?: string, toc?: Markup) => html`${siteHeade
 
 export function docsIndex(): Markup {
   const start = docPages[0]
-  return frame(html`<header class="docs-intro"><div><h1>Strap docs</h1><p class="docs-lede">Everything you need to run your studio on Strap, from the first week of classes to moving your members in and keeping a backup.</p></div>
-    <figure class="piece docs-piece" aria-label="Start here: ${start.title}"><div class="piece-mat mat roll-top" aria-hidden="true"></div><div class="piece-card card"><p class="piece-title">Start here</p><p class="docs-start"><a href="/docs/${start.slug}">${start.title}${arrow}</a></p><p class="piece-foot">${start.summary}</p></div></figure></header>
+  return frame(html`<header class="docs-intro"><div><p class="eyebrow docs-eyebrow"><span class="dot" aria-hidden="true"></span>Owner guides</p><h1>Strap docs</h1><p class="docs-lede">Everything you need to run your studio on Strap, from the first week of classes to moving your members in and keeping a backup.</p></div>
+    <a class="card docs-start" href="/docs/${start.slug}"><span class="docs-start-label"><span class="dot" aria-hidden="true"></span>Start here</span><b>${start.title} ${arrow}</b><span>${start.summary}</span></a></header>
     ${docSections.map(section => html`<section class="docs-group"><h2>${section.title}</h2><ul class="docs-cards">${section.pages.map(page => html`<li><a class="docs-card card" href="/docs/${page.slug}"><b>${page.title}</b><span>${page.summary}</span></a></li>`)}</ul></section>`)}`)
 }
 
@@ -32,7 +32,7 @@ export function docsArticle(page: DocPage): Markup {
   const { html: body, toc } = renderDoc(page)
   const at = docPages.indexOf(page), previous = docPages[at - 1], next = docPages[at + 1]
   const contents = toc.length > 1 ? html`<aside class="docs-toc"><p class="docs-toc-title">On this page</p><ol>${toc.map(item => html`<li><a href="#${item.id}">${item.text}</a></li>`)}</ol></aside>` : undefined
-  return frame(html`<article class="docs-article"><p class="docs-eyebrow">${page.section}</p><h1>${page.title}</h1><p class="docs-lede">${page.summary}</p><div class="docs-body">${raw(body)}</div></article>
+  return frame(html`<article class="docs-article"><p class="eyebrow docs-eyebrow"><span class="dot" aria-hidden="true"></span>${page.section}</p><h1>${page.title}</h1><p class="docs-lede">${page.summary}</p><div class="docs-body">${raw(body)}</div></article>
     <nav class="docs-pager" aria-label="More guides">${previous ? html`<a class="docs-card card prev" href="/docs/${previous.slug}"><span>Previous</span><b>${previous.title}</b></a>` : raw('<span></span>')}${next ? html`<a class="docs-card card next" href="/docs/${next.slug}"><span>Next</span><b>${next.title}</b></a>` : ''}</nav>
     <p class="docs-source"><a href="${repository}/blob/main/docs/${page.file}">View this guide's Markdown</a></p>`, page.slug, contents)
 }

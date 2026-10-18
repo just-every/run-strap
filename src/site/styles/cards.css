@@ -1,0 +1,179 @@
+/* The product cards the homepage draws: white hairline cards with rows, pills,
+   initials and green checks (02, 06, 08, 09, 10), at Uptime's density. Devices
+   (phone, tablet, terminal) are in devices.css, the reformer room in plan.css. */
+.card h3 { color: var(--rer-text); font-size: 24px; line-height: 1.25; letter-spacing: -.01em; }
+.card h3 span { font-weight: 400; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 80px; padding: 18px 24px; border-bottom: 1px solid var(--strap-hairline); }
+.card-head.start { justify-content: flex-start; border-bottom: 0; padding-bottom: 6px; }
+.card-title { padding: 24px 24px 14px; }
+.rows > li { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 12px 22px; border-bottom: 1px solid var(--strap-hairline); font-size: 17px; line-height: 1.35; }
+.rows.tight > li { min-height: 52px; padding: 11px 0; font-size: 18px; }
+.rows.tight > li:last-child { border-bottom: 0; }
+.rows.counts > li { justify-content: space-between; font-size: 17px; min-height: 50px; }
+.rows.counts b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.rows.checks > li { justify-content: space-between; font-size: 17px; }
+.card-foot { padding: 18px 24px 22px; }
+.card-note { padding: 14px 24px 18px; color: var(--rer-muted); font-size: 14px; }
+.tick { width: 18px; height: 18px; color: var(--strap-green); }
+.tick-disc { width: 28px; height: 28px; }
+.ico { width: 26px; height: 26px; }
+.arr { width: 18px; height: 18px; }
+
+.pill { display: inline-flex; align-items: center; min-height: 34px; padding: 0 16px; border-radius: 999px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+.pill-plum { background: var(--strap-plum-tint); color: var(--strap-plum); }
+.pill-red { min-height: 28px; padding: 0 12px; border-radius: 6px; background: var(--strap-red-tint); color: var(--strap-red); font-size: 15px; font-weight: 500; }
+.pill-amber { min-height: 32px; padding: 0 14px; background: var(--strap-amber-tint); color: #4D3A06; font-size: 14px; font-weight: 500; }
+.av { display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--strap-sea-tint); color: var(--strap-sea-ink); font-size: 16px; font-weight: 600; letter-spacing: .02em; }
+.av-grey { background: #E4E6EA; color: #6C7280; }
+.av-lg { width: 60px; height: 60px; font-size: 20px; }
+.done-pill { display: flex; align-items: center; gap: 14px; margin: 14px 20px 20px; padding: 14px 18px; border-radius: 12px; background: var(--strap-green-tint); color: #0E4A3A; font-size: 18px; font-weight: 600; }
+.done-pill .tick-disc { color: var(--strap-green); }
+
+/* 02: three cards joined by arrows. */
+.flow { display: grid; grid-template-columns: minmax(0, 1.17fr) 46px minmax(0, 1fr) 46px minmax(0, 1.02fr); align-items: start; margin-top: 44px; }
+.flow-arrow { display: grid; place-items: center; align-self: center; color: var(--strap-plum-button); }
+.flow-arrow .arr { width: 30px; height: 30px; }
+.flow-card { min-height: 100%; }
+.flow-card .rows > li:last-child { border-bottom: 0; }
+.head-tick { color: var(--strap-green); margin-right: auto; }
+.flow-card .card-head:has(.head-tick) { justify-content: flex-start; }
+.chat { display: grid; gap: 14px; padding: 18px 20px 6px; }
+.bubble { max-width: 94%; padding: 14px 20px; border-radius: 14px; font-size: 17px; line-height: 1.6; }
+.bubble.out { justify-self: end; background: var(--strap-plum-button); color: #fff; border-bottom-right-radius: 4px; }
+.bubble.in { justify-self: start; background: #EEF0F3; color: var(--rer-text); border-bottom-left-radius: 4px; }
+.chat-time { color: var(--rer-muted); font-size: 14px; }
+.text-card .card-note { margin: 8px 20px 0; padding: 14px 4px 18px; border-top: 1px solid var(--strap-hairline); }
+
+/* 05: the cards beside the floor plan. */
+.side-cards { display: grid; gap: 20px; align-content: start; }
+.side-card { padding: 22px 26px 12px; }
+.side-head { display: flex; align-items: flex-start; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--strap-hairline); }
+.side-head h3 { font-size: 21px; padding-top: 4px; }
+.side-head h3 span { color: var(--rer-text); font-size: 18px; }
+.side-ico { color: var(--strap-green); padding-top: 2px; }
+.side-ico .ico { width: 40px; height: 40px; }
+.rows .ok { gap: 14px; }
+.queue li { gap: 18px; }
+.num { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--strap-sea-tint); color: var(--strap-sea-ink); font-size: 16px; font-weight: 600; }
+.queue .av { width: 34px; height: 34px; font-size: 13px; }
+
+/* 06: the cover request and the pay run. */
+.staff-card .card-title { padding: 30px 32px 14px; font-size: 20px; letter-spacing: -.015em; }
+.cover { position: relative; display: grid; gap: 0; margin: 4px 32px 0; }
+.cover::before { content: ''; position: absolute; left: 10px; top: 20px; bottom: 20px; width: 2px; background: var(--strap-green); opacity: .55; }
+.cover > li { position: relative; padding: 16px 0 16px 46px; font-size: 19px; }
+.cover > li::before { content: ''; position: absolute; left: 0; top: 19px; width: 22px; height: 22px; border-radius: 50%; background: var(--strap-green); }
+.cover > li.open::before { background: #fff; border: 2px solid var(--strap-green); }
+.cover b { font-weight: 400; }
+.cover-label { display: block; color: var(--rer-muted); font-size: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 5px 12px 5px 7px; border: 1px solid var(--strap-card-line); border-radius: 10px; font-size: 15px; }
+.chip .av { width: 36px; height: 36px; font-size: 14px; }
+.chip.off { background: #F4F5F7; color: #7A808C; }
+.staff-card .done-pill { display: inline-flex; margin: 18px 32px 32px; padding: 14px 22px; }
+.table-scroll { margin: 0 32px; overflow-x: auto; }
+.pay { width: 100%; border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; }
+.pay th, .pay td { padding: 11px 8px; border-bottom: 1px solid var(--strap-hairline); text-align: right; font-weight: 400; white-space: nowrap; }
+.pay th:first-child { text-align: left; }
+.pay thead th { color: var(--rer-muted); font-size: 16px; font-weight: 500; border-bottom-color: #CDD3DA; }
+.pay .sums tr:first-child > * { border-top: 1px solid #CDD3DA; }
+.pay tfoot th, .pay tfoot td { padding-top: 14px; padding-bottom: 14px; border-top: 1px solid #CDD3DA; font-size: 20px; font-weight: 700; }
+.staff-card .card-note { padding: 18px 32px 26px; color: var(--rer-text); font-size: 17px; }
+
+/* 08: the autopay cards. */
+.pay-card { padding: 24px 24px 14px; }
+.pay-head { display: flex; align-items: flex-start; gap: 14px; }
+.pay-head h3 { font-size: 21px; }
+.pay-head h3 span { font-weight: 600; }
+.pay-head .pill { margin-top: 10px; }
+.pay-ico { display: none; color: var(--strap-green); }
+.pay-ico.bad { color: var(--strap-red); }
+.pay-sub { margin-top: 2px; color: var(--rer-muted); font-size: 16px; }
+.stack { display: grid; grid-template-columns: 196fr 12fr 4fr; height: 18px; margin: 20px 0 10px; border-radius: 6px; overflow: hidden; }
+.stack .paid, .tally .paid::before { background: #1B7A5A; }
+.stack .ach, .tally .ach::before { background: #8DCBC0; }
+.stack .declined, .tally .declined::before { background: var(--strap-red); }
+.tally li { display: flex; align-items: center; gap: 14px; min-height: 40px; border-bottom: 1px solid var(--strap-hairline); font-size: 16px; }
+.tally li::before { content: ''; width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.tally span { flex: 1; }
+.tally b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.pay-total { padding: 18px 0 10px; font-size: 17px; font-weight: 700; }
+.pay-total span { display: inline; }
+.steps { position: relative; margin-top: 18px; }
+.steps::before { content: ''; position: absolute; left: 6px; top: 22px; bottom: 22px; width: 2px; background: #C7D6DA; }
+.steps li { position: relative; min-height: 46px; padding: 11px 0 11px 32px; border-bottom: 1px solid var(--strap-hairline); font-size: 16px; line-height: 1.5; }
+.steps li:last-child { border-bottom: 0; }
+.steps li::before { content: ''; position: absolute; left: 0; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: #8DCBC0; }
+.steps li.bad::before { background: var(--strap-red); }
+.steps li.paid::before { background: #1B7A5A; }
+.pay-card .card-note { padding: 8px 0 6px; border-top: 1px solid var(--strap-hairline); font-size: 13px; }
+
+/* 09: Ana's weeks. */
+.weeks { display: grid; grid-template-columns: repeat(5, 1fr); margin: 6px 20px 0; padding-bottom: 14px; border-bottom: 1px solid var(--strap-hairline); text-align: center; }
+.weeks li { display: grid; justify-items: center; gap: 8px; font-size: 14px; color: var(--rer-muted); }
+.weeks i { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #B8BEC8; }
+.weeks .on i { border: 0; background: var(--strap-plum); }
+.weeks b { color: var(--rer-text); font-weight: 600; }
+.back-card .rows > li { padding-left: 20px; padding-right: 20px; }
+.back-card .card-title { padding: 26px 22px 14px; font-size: 22px; }
+.back-card .card-head h3 { font-size: 22px; }
+.back-card .card-note { font-size: 13px; text-align: center; }
+
+/* 10: the import rehearsal. */
+.import-card { padding: 36px 32px 32px; }
+.import-card h3 { padding-bottom: 22px; border-bottom: 1px solid var(--strap-hairline); font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+.import-card li { display: flex; align-items: center; gap: 22px; min-height: 76px; border-bottom: 1px solid var(--strap-hairline); font-size: 19px; }
+.import-card .tick-disc { width: 36px; height: 36px; }
+.amber-dot { flex: none; width: 30px; height: 30px; margin: 0 3px; border-radius: 50%; background: var(--strap-amber); }
+.import-actions { display: flex; justify-content: flex-end; padding-top: 22px; }
+
+@media (max-width: 1100px) {
+  .flow { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+  .flow-arrow { height: 44px; }
+  .flow-arrow .arr { transform: rotate(90deg); }
+}
+@media (max-width: 760px) {
+  .card h3 { font-size: 20px; }
+  .card-head { min-height: 64px; padding: 14px 16px; }
+  .rows > li { min-height: 48px; padding: 10px 16px; font-size: 16px; }
+  .rows.tight > li { font-size: 16px; }
+  .rows.counts > li, .rows.checks > li { font-size: 15px; }
+  .card-foot { padding: 14px 16px 18px; }
+  .card-note { padding: 12px 16px 16px; }
+  .pill { font-size: 15px; min-height: 30px; }
+  .done-pill { margin: 12px 14px 16px; font-size: 16px; }
+  .flow { margin-top: 28px; }
+  .flow-arrow .arr { width: 26px; height: 26px; }
+  .chat { padding: 14px 14px 4px; }
+  .bubble { font-size: 16px; padding: 12px 16px; }
+  .text-card .card-note { margin: 6px 14px 0; }
+  .side-card { padding: 18px 18px 8px; }
+  .side-head { gap: 14px; }
+  .side-head h3 { font-size: 19px; }
+  .side-head h3 span { font-size: 16px; }
+  .side-ico .ico { width: 32px; height: 32px; }
+  .staff-card .card-title { padding: 20px 16px 10px; font-size: 19px; }
+  .cover { margin: 0 16px; }
+  .cover > li { padding-left: 38px; font-size: 16px; }
+  .cover > li::before { width: 18px; height: 18px; top: 18px; }
+  .cover::before { left: 8px; }
+  .chip { font-size: 14px; min-height: 44px; }
+  .staff-card .done-pill { margin: 14px 16px 20px; }
+  .table-scroll { margin: 0 16px; }
+  .pay { font-size: 15px; }
+  .pay thead th { font-size: 13px; }
+  .pay th, .pay td { padding: 10px 4px; }
+  .pay tfoot th, .pay tfoot td { font-size: 17px; }
+  .staff-card .card-note { padding: 14px 16px 20px; font-size: 15px; }
+  .pay-card { padding: 20px 18px 12px; }
+  .pay-ico { display: block; }
+  .pay-ico .ico { width: 36px; height: 36px; }
+  .pay-head h3 { font-size: 19px; }
+  .pay-total { font-size: 18px; }
+  .pay-total span { display: block; }
+  .import-card { padding: 24px 18px 20px; }
+  .import-card h3 { font-size: 25px; padding-bottom: 14px; }
+  .import-card li { gap: 14px; min-height: 60px; font-size: 16px; }
+  .import-card .tick-disc { width: 28px; height: 28px; }
+  .amber-dot { width: 24px; height: 24px; margin: 0 2px; }
+}
