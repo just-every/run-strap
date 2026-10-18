@@ -75,7 +75,8 @@ label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:10px;fon
 input:not([type=checkbox]):not([type=hidden]),select,textarea{width:100%;min-width:0;min-height:48px;padding:10px 14px;border:1px solid var(--rer-border);border-radius:12px;background:var(--rer-surface);color:var(--rer-text);font:400 16px/1.4 var(--rer-font-body)}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--rer-focus);outline-offset:1px;border-color:var(--rer-focus)}
 input[type=checkbox]{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--strap-berry)}
-select{appearance:none;padding-right:44px;background:linear-gradient(45deg,transparent calc(50% - .8px),var(--rer-text) calc(50% - .8px) calc(50% + .8px),transparent calc(50% + .8px)) calc(100% - 23px) 50%/7px 7px no-repeat,linear-gradient(-45deg,transparent calc(50% - .8px),var(--rer-text) calc(50% - .8px) calc(50% + .8px),transparent calc(50% + .8px)) calc(100% - 16px) 50%/7px 7px no-repeat,var(--rer-surface)}
+/* Single-choice selects: two-line chevron in --rer-text, its right edge 14px in from the border; multiple and size>1 lists stay native. */
+select:not([multiple]):not([size]),select[size="1"]:not([multiple]){-webkit-appearance:none;appearance:none;padding-right:44px;background:linear-gradient(45deg,transparent calc(50% - .8px),var(--rer-text) calc(50% - .8px) calc(50% + .8px),transparent calc(50% + .8px)) calc(100% - 21px) 50%/7px 7px no-repeat,linear-gradient(-45deg,transparent calc(50% - .8px),var(--rer-text) calc(50% - .8px) calc(50% + .8px),transparent calc(50% + .8px)) calc(100% - 14px) 50%/7px 7px no-repeat,var(--rer-surface)}
 textarea{min-height:150px;resize:vertical;font-family:var(--strap-mono);font-size:14px}
 .field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:16px;align-items:end}
 form.fields>.btn{justify-self:start;min-width:180px}
