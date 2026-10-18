@@ -16,8 +16,8 @@ function exception(s: any, c: any, stuck: NonNullable<ReturnType<typeof stuckWai
     ? `${spots}, but ${who}, first on the waitlist, has not signed the current waiver. Strap moves people up only once they have.`
     : `${spots}, but ${who}, first on the waitlist, has no class credit that covers this class. Strap moves people up only with a valid credit.`
   const actions = owner(s) && stuck.reason === 'credit'
-    ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(stuck.first.personId)}#prepare-pack">Prepare a pack for ${h(who.split(' ')[0])}</a><a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(stuck.first.personId)}">View member</a>`
-    : owner(s) ? `<a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(stuck.first.personId)}">View member</a>` : ''
+    ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(stuck.first.personId)}#prepare-pack">Prepare a pack for ${h(who.split(' ')[0])}</a><a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(stuck.first.personId)}#person">View member</a>`
+    : owner(s) ? `<a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(stuck.first.personId)}#person">View member</a>` : ''
   return `<div class="decision">${'<span class="decision-mark">' + icon('users') + '</span>'}<div class="decision-copy"><strong>The waitlist can’t fill ${h(classTitle(c))}</strong><p>${h(why)}</p></div>${actions ? `<div class="decision-actions">${actions}</div>` : ''}</div>`
 }
 

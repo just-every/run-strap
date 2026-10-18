@@ -127,7 +127,8 @@
 .field textarea { min-height: 132px; resize: vertical; }
 .field textarea.mono { font: 400 13px/1.55 var(--rer-font-mono); }
 .field input:hover, .field select:hover, .field textarea:hover { border-color: var(--strap-hover-line); }
-.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .search input:focus-visible {
+/* As specific as the borders above, so focus always wins: a plum border and a 30% plum ring. */
+.field input:not([type=checkbox]):not([type=radio]):focus-visible, .field select:focus-visible, .field textarea:focus-visible, .search input:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent);
   outline-offset: 0;
   border-color: var(--rer-focus);
@@ -191,7 +192,8 @@ html.rer-themed main dl dd { padding: 8px 16px; color: var(--rer-text); font-siz
 html.rer-themed main dl dt:not(:first-of-type), html.rer-themed main dl dd:not(:first-of-type) { border-top: 1px solid var(--strap-line); }
 html.rer-themed main label { font-size: 14px; font-weight: 600; color: var(--rer-text); }
 html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--strap-control-line); border-radius: var(--strap-radius-control); background: var(--rer-surface); color: var(--rer-text); font: 400 16px/1.4 var(--rer-font-body); }
-html.rer-themed main input:focus-visible { outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent); outline-offset: 0; border-color: var(--rer-focus); }
+/* Above Base's frame rule (.rer-themed input:not(…):not(…)), the same plum focus as the app's fields. */
+html.rer-themed main input:not([type=checkbox]):not([type=hidden]):focus-visible { outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent); outline-offset: 0; border-color: var(--rer-focus); }
 html.rer-themed main button:focus-visible, html.rer-themed main a:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 3px; }
 html.rer-themed main input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--strap-plum-button); }
 html.rer-themed main label:has(input[type=checkbox]) { font-weight: 400; font-size: 15px; }

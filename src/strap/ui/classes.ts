@@ -9,7 +9,7 @@ import { addDays, mondayOf, zoneName } from '../zone'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-/** The week by day. Members see each class's size; staff see who has booked. */
+/** The week by day. Members see how many spots are open; staff see who has booked. */
 export function weekTable(s: any, list: any[], action: (c: any) => string = () => '') {
   const staff = s.actor.role !== 'member'
   let day = ''
@@ -18,7 +18,7 @@ export function weekTable(s: any, list: any[], action: (c: any) => string = () =
     const heading = date !== day ? `<tr class="day-row"><td colspan="5">${h(dayShort(s, date))}${date === studioToday(s) ? ' · Today' : ''}</td></tr>` : ''
     day = date
     return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
-      + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${a.booked.length} of ${c.capacity}</span>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : `<span class="pill quiet">${c.capacity} spots</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
+      + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${a.booked.length} of ${c.capacity}</span>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : full ? `<span class="pill full">Full${a.waiting.length ? ` · waitlist ${a.waiting.length}` : ''}</span>` : `<span class="pill quiet">${c.capacity - a.booked.length} open</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
   }).join(''))
 }
 

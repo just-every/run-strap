@@ -7,6 +7,7 @@ import { saveStudio } from '../domain/studio'
 import type { Actor, State, Person, RecordData } from '../domain/types'
 import { addDays, localDate, localInstant, mondayOf } from '../zone'
 import { inactive, instructorNames, memberPacks, studio, today, week, type Slot } from './timetable'
+import { stampHistory } from './history'
 
 const day = 86_400_000
 
@@ -46,8 +47,8 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
     await run(acknowledgeWaiver, { id: waiver.id }, memberActor(p))
   }
 
-  // Publish one day's slots through a week draft. A past day is published on a
-  // future date with the same weekday, booked there, then moved back as a unit
+  // Publish one day's slots through a week draft. A past day is published on the
+  // first later date with the same weekday, booked there, then moved back as a unit
   // (on the studio's wall clock); the domain's live clock never changes.
   const publish = async (days: [string, Slot[]][]) => {
     const classes = days.flatMap(([on, slots]) => slots.map(s => {
@@ -75,7 +76,8 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
     [before(2, 14), week[1][1], ['Grace Liu', 'Hannah Brooks', 'Olivia Grant', 'Priya Desai', 'Lena Ortiz']],
     [before(4, 7), week[3][3], ['Nora Price', 'Jasmine Hart', 'Diane Lowry', 'Ruth Adler', 'Ivy Chen', 'Paige Turner']],
   ] as [string, Slot, string[]][]) {
-    const future = addDays(past, 42)
+    let future = past
+    while (future <= date) future = addDays(future, 7)
     const { draft, published } = await publish([[future, [slot]]])
     for (const name of names) {
       const booking = await run(book, { classId: published[0].id }, memberActor(member(name)))
@@ -86,7 +88,7 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
 
   // Today, as the front desk sees it at this hour: who came, who waits, who cancelled.
   {
-    const future = addDays(date, 70)
+    const future = addDays(date, 7)
     const { draft, published } = await publish([[future, today.map(t => t.slot)]])
     const started: boolean[] = []
     for (const [index, plan] of today.entries()) {
@@ -127,14 +129,16 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
   // agent, and a balance reminder she started herself.
   await run(preparePack, { personId: member('Jordan Park').id, credits: 10, amountCents: 18900, expiresAt: new Date(Date.parse(localInstant(addDays(date, 93), '23:59', zone)) + 59_000).toISOString() }, agent)
   await run(prepareReminder, { personId: member('Taylor Kim').id })
+  // The agent's week is the whole weekly pattern for the week after the last one published.
   {
-    const monday = addDays(mondayOf(date), 14)
-    const classes = week[0].map(s => {
-      const start = localInstant(monday, s.time, zone)
+    const monday = addDays(mondayOf(ahead.at(-1)!), 7)
+    const classes = week.flatMap((slots, i) => slots.map(s => {
+      const start = localInstant(addDays(monday, i), s.time, zone)
       return { title: `${s.title} · ${s.room}`, start, end: new Date(Date.parse(start) + s.minutes * 60_000).toISOString(), capacity: s.capacity, instructorId: instructors[s.instructor].id }
-    })
+    }))
     await run(prepareClasses, { week: monday, classes }, agent)
   }
+  stampHistory(state, zone, now)
 
   const fixed = new Map<string, string>()
   state.people.forEach((p, i) => fixed.set(p.id, `demo-person-${i + 1}`))

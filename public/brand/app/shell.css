@@ -25,6 +25,9 @@ time, td, .num { font-variant-numeric: tabular-nums; }
 .location .icon { width: 18px; height: 18px; color: var(--strap-quiet); }
 .location span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 a.location:hover { border-color: var(--strap-control-line); }
+.location .edit { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: -6px; border-radius: var(--strap-radius-sm); color: var(--strap-quiet); }
+.location .edit .icon { width: 16px; height: 16px; }
+a.location:hover .edit { background: var(--strap-wash); color: var(--strap-plum-button); }
 .nav { display: grid; gap: 6px; }
 .nav a { display: flex; align-items: center; gap: 16px; min-height: 50px; padding: 0 14px; border-radius: var(--strap-radius-control); color: var(--strap-nav-ink); font-size: 16px; text-decoration: none; transition: background-color .15s ease; }
 .nav a:hover { background: var(--strap-wash); }

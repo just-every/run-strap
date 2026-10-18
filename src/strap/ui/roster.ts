@@ -40,7 +40,7 @@ export function roster(s: any, c: any, back: string) {
   const { booked, waiting, cancelled } = attendance(s, c.id)
   const started = Date.parse(c.start) <= Date.now()
   const canCheckIn = owner(s) || s.actor.personId === c.instructorId
-  const line = (b: any, n: string) => `<tr><td class="n">${n}</td><td class="who-cell"><div class="who">${avatar(person(s, b.personId))}${owner(s) ? `<a href="/app/people?person=${encodeURIComponent(b.personId)}">${h(person(s, b.personId))}</a>` : `<span>${h(person(s, b.personId))}</span>`}</div></td>`
+  const line = (b: any, n: string) => `<tr><td class="n">${n}</td><td class="who-cell"><div class="who">${avatar(person(s, b.personId))}${owner(s) ? `<a href="/app/people?person=${encodeURIComponent(b.personId)}#person">${h(person(s, b.personId))}</a>` : `<span>${h(person(s, b.personId))}</span>`}</div></td>`
     + `<td data-label="Status">${state(s, c, b, started)}</td><td data-label="Pack">${packChip(s, c, b)}</td><td data-label="Notes">${note(s, b)}</td>`
     + `<td class="act">${b.status === 'booked' && !b.checkedInAt && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') : ''}</td></tr>`
   const body = [...booked.map((b, i) => line(b, String(i + 1))), ...waiting.map((b, i) => line(b, `W${i + 1}`)), ...cancelled.map(b => line(b, '—'))].join('')

@@ -11,7 +11,7 @@ const symbols: Record<string, string> = {
   pin: '<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
   back: '<path d="m15 5-7 7 7 7"/>',
-  down: '<path d="m6 9 6 6 6-6"/>',
+  pencil: '<path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
   search: '<circle cx="10" cy="10" r="7.5"/><path d="m16 16 6 6"/>',
   plus: '<path d="M12 4v16M4 12h16"/>',

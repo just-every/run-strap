@@ -13,9 +13,11 @@ classes (6:00 am Reformer Flow full with two waiting, 9:30 am Mat Yoga, 12:15 pm
 can't move, 5:30 pm Barre, 6:00 pm Restore Yoga: 65 of 92 spots); classes already begun show their check-ins. The six
 days ahead follow the week's pattern. Four earlier classes carry attendance, so Ana Patel's last Tuesday and Thursday
 6 am visits are three weeks back. Unpaid and part-paid balances, a pack ending this week, an expired pass and two
-inactive members are there, and a renewal pack and next-but-one week prepared by the studio's agent and a balance
-reminder wait for approval. Dates follow the start time; fixed IDs and one atomic batch make the seed idempotent. It
-never fetches.
+inactive members are there, and a renewal pack and the next full week (the same 27-class pattern) prepared by the
+studio's agent overnight and a balance reminder Mara started yesterday evening wait for approval. The history reads as a
+studio keeps it: each published week was approved the Thursday evening before it starts, members booked in the days
+between, and each pack was bought, approved and paid at the desk before its member's first booking. Dates follow the
+start time; fixed IDs and one atomic batch make the seed idempotent. It never fetches.
 
 Strap currently supports finite packs and inactive access, not recurring
 membership or subscription pause states. Rooms are the part of a class title after " · ".

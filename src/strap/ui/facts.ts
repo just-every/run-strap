@@ -60,7 +60,7 @@ export function followUps(s: any): FollowUp[] {
     else if (owed > 0 && !pendingReminder.has(p.id)) items.push({ personId: p.id, name: p.name, kind: 'owes' })
     else if (live.length && !future.length && last && now() - time(last) >= 14 * 86_400_000) items.push({ personId: p.id, name: p.name, kind: 'lapsed' })
     else if (live.some(pack => time(pack.expiresAt) - now() < 7 * 86_400_000) && !pendingPack.has(p.id)) items.push({ personId: p.id, name: p.name, kind: 'expiring' })
-    else if (!live.length && rows(s, 'packs').some(pack => pack.personId === p.id) && !pendingPack.has(p.id)) items.push({ personId: p.id, name: p.name, kind: 'empty' })
+    else if (!live.length && !pendingPack.has(p.id)) items.push({ personId: p.id, name: p.name, kind: 'empty' })
   }
   const order = { lapsed: 0, waiting: 1, owes: 2, expiring: 3, empty: 4 }
   return items.sort((a, b) => order[a.kind] - order[b.kind] || a.name.localeCompare(b.name))

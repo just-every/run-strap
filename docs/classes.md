@@ -5,7 +5,7 @@ cancellation hands the spot to the first person waiting.
 
 ## Set your studio's clock
 
-Before the first week, open **Studio** (the location under the logo) and save the location name and the studio's time
+Before the first week, open **Studio** (the location row under the logo, with its pencil) and save the location name and the studio's time
 zone, such as Central for Nashville. Every class time is entered and shown on that clock, the US way ("6:00 am"),
 for you, your instructors and your members, and daylight saving time is handled for you.
 
@@ -27,7 +27,8 @@ Strap publishes the classes you list; it does not repeat a schedule for you.
 
 ## Booking
 
-A member opens **Classes** and presses **Book**.
+A member opens **Classes**, where each class shows how many spots are open ("11 open", or "Full · waitlist 2"), and presses
+**Book**.
 
 - If the class has room, the booking spends one credit from the member's pack that expires first.
 - If the class is full, the member joins the waitlist. A waitlist entry spends no credit.

@@ -22,7 +22,7 @@ function openSpot(s: any, personId: string) {
 
 function card(s: any, f: FollowUp, first: boolean) {
   const facts: string[] = [], packs = livePacks(s, f.personId)
-  let action = `<a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(f.personId)}">View member</a>`
+  let action = `<a class="btn-quiet small" href="/app/people?person=${encodeURIComponent(f.personId)}#person">View member</a>`
   let extra = ''
   if (f.kind === 'waiting') {
     const c = rows(s, 'classes').find(c => c.id === f.classId)
@@ -40,7 +40,7 @@ function card(s: any, f: FollowUp, first: boolean) {
     if (c) extra = `<div class="offer">${icon('calendar')}<div><small>Open spot</small><b>${h(dayShort(s, dayOf(s, c.start)))} · ${h(clock(s, c.start))}</b><small>${h(classTitle(c))} · ${c.capacity - attendance(s, c.id).booked.length} open</small></div></div><p>${h(packs[0].remaining)} credits left on their ${h(packName(packs[0]))}. Members book open spots themselves from Classes.</p>`
   }
   if (f.kind === 'expiring') facts.push(`${packName(packs[0])} ends ${dayShort(s, dayOf(s, packs[0].expiresAt))}`, `${packs[0].remaining} credits left`), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a renewal</a>`
-  if (f.kind === 'empty') facts.push('No credits left'), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a pack</a>`
+  if (f.kind === 'empty') facts.push(rows(s, 'packs').some(p => p.personId === f.personId) ? 'No credits left' : 'No class pack yet'), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a pack</a>`
   return `<article class="followup"><div class="followup-head">${avatar(f.name, 'large')}<div><strong>${h(f.name)}</strong>${facts.map(line => `<p>${h(line)}</p>`).join('')}</div></div>${extra}<div class="actions">${action}</div></article>`
 }
 
@@ -52,7 +52,7 @@ export function successRail(s: any, query: URLSearchParams) {
   const recent = rows(s, 'approvals').sort((a, b) => b.approvedAt.localeCompare(a.approvedAt)).slice(0, 5)
   const drafts = new Map(rows(s, 'drafts').map(d => [d.id, d]))
   const body = tab === 'follow'
-    ? (items.length ? `<div class="followups">${items.slice(0, 3).map(f => card(s, f, f === items.find(x => x.kind === 'lapsed'))).join('')}${items.length > 3 ? `<p class="meta">${items.length - 3} more in <a href="/app/people">People</a>.</p>` : ''}</div>` : `<p class="panel-empty">${rows(s, 'people').some(p => p.role === 'member') ? 'Every member is booked, paid up and has credits. Nothing to follow up.' : 'Members who need a follow-up appear here: a waitlist with no credit, a balance, a pack running out or a regular who stopped coming.'}</p>`)
+    ? (items.length ? `<div class="followups">${items.slice(0, 3).map(f => card(s, f, f === items.find(x => x.kind === 'lapsed'))).join('')}${items.length > 3 ? `<p class="meta">${items.length - 3} more in <a href="/app/people">People</a>.</p>` : ''}</div>` : `<p class="panel-empty">${rows(s, 'people').some(p => p.role === 'member') ? 'No follow-ups right now.' : 'Members who need a follow-up appear here: a waitlist with no credit, a balance, a pack running out or a regular who stopped coming.'}</p>`)
     : (recent.length ? `<div class="approvals">${recent.map(a => { const d = drafts.get(a.draftId); return `<div class="approval"><span class="approval-mark">${icon(draftGlyph(a))}</span><div><strong>${h(draftTitle(a))} approved</strong>${d ? `<p>${h(draftLine(s, d))}</p>` : ''}<small>${when(s, a.approvedAt)}</small></div><span></span></div>` }).join('')}</div>` : '<p class="panel-empty">Approvals you make appear here.</p>')
   const success = `<section class="panel"><div class="success-head">${icon('sparkles')}<h2>Member success</h2></div>${tabs}${body}</section>`
   const pending = rows(s, 'drafts').filter(d => d.status === 'draft').sort((a, b) => b.createdAt.localeCompare(a.createdAt))
