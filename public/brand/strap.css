@@ -151,19 +151,21 @@ select:not([multiple],[size]:not([size="1"])):focus-visible { --rer-select-ink: 
 .btn:focus-visible, .btn-quiet:focus-visible { outline-offset: 3px; }
 
 /* Base's server-rendered frames (sign-in, /setup, settings): a white card on the cool ground. */
-html.rer-themed { background: var(--strap-ground); }
+html.rer-themed { min-height: 100%; background: radial-gradient(90% 60% at 50% 0%, #FFFFFF, transparent 70%), var(--strap-ground); }
 html.rer-themed body {
+  position: relative;
   display: grid;
   place-items: center;
   box-sizing: border-box;
   min-height: 100vh;
   margin: 0;
-  padding: 56px 20px;
-  padding-bottom: max(56px, 24vh);
-  background: url('/site/run-floor.webp') center bottom / auto max(150px, 22vh) repeat-x, radial-gradient(90% 60% at 50% 0%, var(--rer-surface), transparent 70%), var(--strap-ground);
+  padding: 56px 20px max(80px, 26vh);
+  background: transparent;
   color: var(--rer-text);
   font-family: var(--rer-font-body);
 }
+/* The run site's entryway floor along the foot, as the Lobby shows it. */
+html.rer-themed body::after { content: ''; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: max(150px, 22vh); background: url('/site/run-floor.webp') center bottom / cover no-repeat; }
 html.rer-themed body > main {
   box-sizing: border-box;
   width: 100%;

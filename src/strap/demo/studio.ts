@@ -49,12 +49,12 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
   // Publish one day's slots through a week draft. A past day is published on a
   // future date with the same weekday, booked there, then moved back as a unit
   // (on the studio's wall clock); the domain's live clock never changes.
-  const publish = async (on: string, slots: Slot[]) => {
-    const classes = slots.map(s => {
+  const publish = async (days: [string, Slot[]][]) => {
+    const classes = days.flatMap(([on, slots]) => slots.map(s => {
       const start = localInstant(on, s.time, zone)
       return { title: `${s.title} · ${s.room}`, start, end: new Date(Date.parse(start) + s.minutes * 60_000).toISOString(), capacity: s.capacity, instructorId: instructors[s.instructor].id }
-    })
-    const draft = await run(prepareClasses, { week: mondayOf(on), classes })
+    }))
+    const draft = await run(prepareClasses, { week: mondayOf(days[0][0]), classes })
     return { draft, published: (await run(publishClasses, { id: draft.id })).classes as RecordData[] }
   }
   const relocate = (ids: Set<string>, from: string, to: string) => {
@@ -76,7 +76,7 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
     [before(4, 7), week[3][3], ['Nora Price', 'Jasmine Hart', 'Diane Lowry', 'Ruth Adler', 'Ivy Chen', 'Paige Turner']],
   ] as [string, Slot, string[]][]) {
     const future = addDays(past, 42)
-    const { draft, published } = await publish(future, [slot])
+    const { draft, published } = await publish([[future, [slot]]])
     for (const name of names) {
       const booking = await run(book, { classId: published[0].id }, memberActor(member(name)))
       await arrive(booking.id, published[0].start, 4 + name.length % 7)
@@ -87,7 +87,7 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
   // Today, as the front desk sees it at this hour: who came, who waits, who cancelled.
   {
     const future = addDays(date, 70)
-    const { draft, published } = await publish(future, today.map(t => t.slot))
+    const { draft, published } = await publish([[future, today.map(t => t.slot)]])
     const started: boolean[] = []
     for (const [index, plan] of today.entries()) {
       const entry = published[index], bookings = new Map<string, RecordData>()
@@ -106,13 +106,12 @@ export async function buildStudio(db: D1Database, operator: State['operator'], n
   // The days ahead: the week's pattern from tomorrow, a few members on each.
   const regulars = memberPacks.filter(([name, credits]) => credits >= 20 && !inactive.includes(name)).map(([name]) => member(name))
   let next = 0
-  for (let ahead = 1; ahead <= 6; ahead++) {
-    const on = addDays(date, ahead), slots = week[(new Date(on + 'T12:00:00Z').getUTCDay() + 6) % 7]
-    const { published } = await publish(on, slots)
+  const ahead = Array.from({ length: 6 }, (_, i) => addDays(date, i + 1))
+  for (const monday of [...new Set(ahead.map(mondayOf))]) {
+    const days = ahead.filter(on => mondayOf(on) === monday).map(on => [on, week[(new Date(on + 'T12:00:00Z').getUTCDay() + 6) % 7]] as [string, Slot[]])
+    const { published } = await publish(days)
     for (const [index, entry] of published.entries()) {
-      for (let k = 0; k < 3 + (index + ahead) % 4; k++) {
-        await run(book, { classId: entry.id }, memberActor(regulars[next++ % regulars.length]))
-      }
+      for (let k = 0; k < 3 + index % 4; k++) await run(book, { classId: entry.id }, memberActor(regulars[next++ % regulars.length]))
     }
   }
 
