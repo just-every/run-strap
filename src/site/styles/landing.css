@@ -9,7 +9,7 @@
 
 /* 01 */
 /* The plates are 1536 wide: past that the bands stop growing taller and crop instead. */
-.hero-art { position: relative; aspect-ratio: 1536 / 464; max-height: 520px; overflow: hidden; background: #B9CBD6; }
+.hero-art { position: relative; width: 100%; aspect-ratio: 1536 / 464; max-height: 520px; overflow: hidden; background: #B9CBD6; }
 .hero-art img { width: 100%; height: 100%; object-fit: cover; }
 .hero-grid { display: grid; grid-template-columns: 664px minmax(0, 1fr); gap: 28px; align-items: start; padding-top: 44px; padding-bottom: 72px; }
 .hero h1 { font-size: 80px; line-height: .98; letter-spacing: -.04em; }

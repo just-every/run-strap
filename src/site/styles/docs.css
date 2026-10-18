@@ -46,8 +46,10 @@
 .docs-code-head { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 8px 0 16px; border-bottom: 1px solid rgba(255, 255, 255, .12); color: #D9C3CE; font-size: 13px; font-weight: 600; }
 .docs-copy { min-height: 30px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px; background: transparent; color: inherit; font: 500 13px/1 var(--rer-font-body); cursor: pointer; }
 .docs-copy:hover { border-color: #fff; }
-.docs-code pre { margin: 0; padding: 16px 18px; overflow-x: auto; font: 400 14px/1.65 var(--rer-font-mono); }
+.docs-code pre { margin: 0; padding: 16px 18px; font: 400 14px/1.65 var(--rer-font-mono); white-space: pre-wrap; }
 .docs-code pre code { padding: 0; background: none; color: inherit; font: inherit; overflow-wrap: normal; }
+.docs-code .docs-line { display: block; padding-left: calc(var(--indent) + 2ch); text-indent: calc(-1 * var(--indent) - 2ch); }
+.docs-code .docs-word { display: inline-block; max-width: 100%; overflow-wrap: anywhere; text-indent: 0; }
 .docs-table { margin: 20px 0 0; overflow-x: auto; border: 1px solid var(--strap-card-line); border-radius: 12px; background: var(--rer-surface); }
 .docs-table table { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.5; }
 .docs-table th, .docs-table td { padding: 12px 16px; border-top: 1px solid var(--strap-hairline); text-align: left; vertical-align: top; }

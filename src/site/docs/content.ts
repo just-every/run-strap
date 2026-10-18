@@ -17,6 +17,12 @@ const source = (file: string) => {
   return text
 }
 
+// Code blocks wrap at spaces only, as the homepage terminal does: each word is kept whole unless it alone is wider
+// than the block, and a wrapped line continues under its own indent. The text (and so Copy) is unchanged.
+const words = (line: string) => escape(line).replace(/\S+/g, word => `<span class="docs-word">${word}</span>`)
+const lines = (text: string) => text.split('\n').map((line, i, all) =>
+  `<span class="docs-line" style="--indent: ${line.length - line.trimStart().length}ch">${words(line)}${i < all.length - 1 ? '\n' : ''}</span>`).join('')
+
 export const docPages: DocPage[] = manifest.sections.flatMap(section => section.pages.map(page => ({ ...page, section: section.title })))
 export const docSections = manifest.sections.map(section => ({ title: section.title, pages: docPages.filter(page => page.section === section.title) }))
 for (const path of Object.keys(sources)) {
@@ -54,7 +60,7 @@ export function renderDoc(page: DocPage): RenderedDoc {
       },
       code({ text, lang }) {
         const language = (lang ?? '').trim().split(/\s+/)[0].toLowerCase()
-        return `<div class="docs-code"><div class="docs-code-head"><span>${escape(languages[language] ?? (language.toUpperCase() || 'Code'))}</span><button type="button" class="docs-copy" hidden>Copy</button></div><pre><code>${escape(text.replace(/\n$/, ''))}</code></pre></div>\n`
+        return `<div class="docs-code"><div class="docs-code-head"><span>${escape(languages[language] ?? (language.toUpperCase() || 'Code'))}</span><button type="button" class="docs-copy" hidden>Copy</button></div><pre><code>${lines(text.replace(/\n$/, ''))}</code></pre></div>\n`
       },
       html({ text }) { return escape(text) },
       link({ href, title, tokens }) { return `<a href="${escape(link(href, page))}"${title ? ` title="${escape(title)}"` : ''}>${this.parser.parseInline(tokens)}</a>` },
