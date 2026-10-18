@@ -86,6 +86,8 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
   .data.stack thead { display: none; }
   .data.stack tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 12px 0; border-top: 1px solid var(--strap-line-soft); }
   .data.stack tr.day-row { border-top: 0; padding-bottom: 0; }
+  .data.stack tr.current { margin: 0 -10px; padding: 12px 10px; border-radius: 10px; background: var(--strap-plum-wash); }
+  .data.stack tr.current td { background: none; }
   .data.stack td { display: block; width: auto; padding: 0; border: 0; }
   .data.stack td:first-child { flex-basis: 100%; }
   .data.stack td.right { text-align: left; }
