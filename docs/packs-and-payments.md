@@ -12,8 +12,8 @@ Open **Packs and payments** and use **Prepare a pack**:
 - **Member**: an active member.
 - **Class credits**: how many classes the pack covers.
 - **Price**: in dollars, such as `$189.00`.
-- **Good through**: the last day the credits can be used, picked on a calendar. Credits lapse at the end of that day on
-  the studio's clock.
+- **Good for**: 30 days to a year, each shown with the last day the credits can be used. Credits lapse at the end of
+  that day on the studio's clock.
 
 **Prepare pack** creates a draft. Check it under **Prepared packs and reminders**, then press **Approve this exact pack**. The credits
 are ready at once and the pack's amount is added to what the member owes. If a member was waiting for a spot and now

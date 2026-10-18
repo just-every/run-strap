@@ -1,10 +1,13 @@
 // Packs and payments: class packs and what members owe, recorded payments, and
 // the forms that prepare packs and reminders, in dollars and calendar dates.
 import { balance, packName } from './facts'
-import { dayOf, datePlain, money, studioToday, when } from './format'
+import { dayLong, dayOf, datePlain, money, studioToday, when } from './format'
 import { approvalHistory, draftRecords } from './drafts'
-import { avatar, body, cell, emptyLine, field, form, h, owner, panel, person, personSelect, rows, table } from './shared'
+import { avatar, body, cell, emptyLine, field, form, h, owner, panel, person, personSelect, rows, select, table } from './shared'
 import { addDays } from '../zone'
+
+/** How long a pack lasts, each with the last day it can be used. */
+const terms = (s: any): [unknown, unknown][] => [30, 60, 90, 120, 180, 365].map(days => { const last = addDays(studioToday(s), days); return [last, `${days === 365 ? '1 year' : `${days} days`} · through ${dayLong(last).replace(/^(\w{3})\w*/, '$1')}`] })
 
 export function packsPage(s: any, query: URLSearchParams) {
   const mine = !owner(s), chosen = query.get('person') ?? ''
@@ -20,8 +23,7 @@ export function packsPage(s: any, query: URLSearchParams) {
   const myBalance = mine ? panel('My balance', body(`<p class="credits-big"><b>${money(balance(s, s.actor.personId))}</b> owed</p>`), { icon: 'card' }) : ''
   if (mine) return `<div class="page"><div class="page-main"><div class="page-title"><h1>My packs</h1></div>${panel('Class packs', packTable, { icon: 'card' })}${panel('Payments', paymentTable, { icon: 'report' })}</div><aside class="rail">${myBalance}</aside></div>`
 
-  const expiry = addDays(studioToday(s), 90)
-  const forms = panel('Prepare a pack', body(`<p>A pack gives a member class credits and adds its price to what they owe. Review and approve it before the credits appear.</p>${form('pack.prepare', '/app/packs', `${personSelect(s, chosen)}<div class="row2">${field('credits', 'Class credits', '10', 'number', 'required min="1" max="10000" step="1"')}${field('amount', 'Price', '', 'text', 'required inputmode="decimal" placeholder="$189.00"')}</div>${field('expiresOn', 'Good through', expiry, 'date', `required min="${studioToday(s)}"`, 'the last day it can be used')}`, 'Prepare pack')}`), { id: 'prepare-pack', icon: 'plus' })
+  const forms = panel('Prepare a pack', body(`<p>A pack gives a member class credits and adds its price to what they owe. Review and approve it before the credits appear.</p>${form('pack.prepare', '/app/packs', `${personSelect(s, chosen)}<div class="row2">${field('credits', 'Class credits', '10', 'number', 'required min="1" max="10000" step="1"')}${field('amount', 'Price', '', 'text', 'required inputmode="decimal" placeholder="$189.00"')}</div>${select('expiresOn', 'Good for', terms(s), addDays(studioToday(s), 90))}`, 'Prepare pack')}`), { id: 'prepare-pack', icon: 'plus' })
     + panel('Record a payment', body(`<p>Record money you received through your own processor. A reference is used once, so the same payment is never recorded twice.</p>${form('payment.record', '/app/packs', `${personSelect(s, chosen)}<div class="row2">${field('amount', 'Amount received', '', 'text', 'required inputmode="decimal" placeholder="$189.00"')}${field('reference', 'Payment reference', '', 'text', 'required maxlength="160" placeholder="SQ-4821"')}</div>`, 'Record payment')}`), { id: 'record-payment', icon: 'card' })
     + panel('Prepare a balance reminder', body(`<p>The draft freezes the member’s balance and the exact message. Once approved you download it to send yourself; Strap sends no email for it.</p>${form('reminder.prepare', '/app/packs', personSelect(s, chosen), 'Prepare reminder')}`), { icon: 'chat' })
   const drafts = draftRecords(s, '/app/packs', ['pack', 'reminder'])

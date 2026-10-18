@@ -100,6 +100,8 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
   .week-editor td { padding: 0; width: auto; }
   .week-editor td:first-child { grid-column: 1 / -1; padding: 0; }
   .week-editor td.wide { grid-column: 1 / -1; }
+  .week-editor td.w-day, .week-editor td.w-time, .week-editor td.w-min, .week-editor td.w-cap, .week-editor td.w-who { width: auto; }
+  .week-editor td.w-who { grid-column: auto; }
   .week-editor .visually-hidden { position: static; width: auto; height: auto; clip: auto; white-space: normal; }
   .record { grid-template-columns: 36px minmax(0, 1fr); padding: 14px 16px; }
   .record > .pill { grid-column: 2; justify-self: start; }

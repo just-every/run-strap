@@ -2,7 +2,7 @@
 // instructors picked in the studio's zone, never typed as JSON), the waiver,
 // and class-week drafts with their approval.
 import { attendance, classRoom, classTitle, upcoming } from './facts'
-import { clock, dayOf, dayShort, length, studioToday } from './format'
+import { clock, dayLong, dayOf, dayShort, length, studioToday } from './format'
 import { approvalHistory, draftRecords } from './drafts'
 import { body, cell, emptyLine, emptyState, field, form, h, hidden, owner, panel, person, rows, select, table, textarea } from './shared'
 import { addDays, mondayOf, zoneName } from '../zone'
@@ -26,17 +26,18 @@ function editor(s: any, count: number) {
   const instructors = rows(s, 'people').filter(p => p.active && p.role === 'instructor')
   if (!s.studio) return `<p class="meta">Set the studio’s time zone in <a href="/app/studio">Studio settings</a> before preparing classes.</p>`
   if (!instructors.length) return `<p class="meta">Add an active instructor in <a href="/app/people#add-person">People</a> before preparing classes.</p>`
+  // The weeks an owner can prepare: this week (if not over) and the next nine, by their Monday.
   const monday = addDays(mondayOf(studioToday(s)), 7)
   const line = (i: number) => `<tr><td>${i + 1}</td>`
-    + `<td class="wide">${field(`c${i}_title`, 'Class', '', 'text', 'maxlength="120" placeholder="Reformer Flow"')}</td>`
-    + `<td>${field(`c${i}_room`, 'Room', '', 'text', 'maxlength="38" placeholder="Reformer room"')}</td>`
+    + `<td class="wide">${field(`c${i}_title`, 'Class', '', 'text', `maxlength="120"${i ? '' : ' placeholder="Reformer Flow"'}`)}</td>`
+    + `<td>${field(`c${i}_room`, 'Room', '', 'text', `maxlength="38"${i ? '' : ' placeholder="Reformer room"'}`)}</td>`
     + `<td class="w-day">${select(`c${i}_day`, 'Day', days.map((d, n) => [String(n), d] as [unknown, unknown]), '0', '')}</td>`
     + `<td class="w-time">${field(`c${i}_time`, 'Starts', '', 'time', 'step="300"')}</td>`
     + `<td class="w-min">${field(`c${i}_minutes`, 'Minutes', '50', 'number', 'min="5" max="600" step="5"')}</td>`
     + `<td class="w-cap">${field(`c${i}_capacity`, 'Spots', '12', 'number', 'min="1" max="1000" step="1"')}</td>`
     + `<td class="w-who wide">${select(`c${i}_instructorId`, 'Instructor', instructors.map(p => [p.id, p.name] as [unknown, unknown]), instructors[i % instructors.length].id, '')}</td></tr>`
   return `<p>Choose the Monday that starts the week, then add each class. Times are on the studio’s clock (${h(zoneName(s.studio.timeZone))}). Rows without a class name are skipped. Preparing makes a draft you review before it opens for booking.</p>`
-    + form('classes.prepare', '/app/classes', `${field('week', 'Week starting Monday', monday, 'date', 'required')}${hidden('rows', count)}<table class="week-editor"><thead><tr><th>#</th><th>Class</th><th>Room</th><th>Day</th><th>Starts</th><th>Minutes</th><th>Spots</th><th>Instructor</th></tr></thead><tbody>${Array.from({ length: count }, (_, i) => line(i)).join('')}</tbody></table>`
+    + form('classes.prepare', '/app/classes', `${select('week', 'Week starting', Array.from({ length: 10 }, (_, n) => { const d = addDays(monday, 7 * (n - 1)); return [d, dayLong(d)] as [unknown, unknown] }), monday)}${hidden('rows', count)}<table class="week-editor"><thead><tr><th>#</th><th>Class</th><th>Room</th><th>Day</th><th>Starts</th><th>Minutes</th><th>Spots</th><th>Instructor</th></tr></thead><tbody>${Array.from({ length: count }, (_, i) => line(i)).join('')}</tbody></table>`
       .replace(/<label class="field">(?:<span>)?(Class|Room|Day|Starts|Minutes|Spots|Instructor)(?:<\/span>)?</g, '<label class="field"><span class="visually-hidden">$1</span><'), 'Prepare class week')
     + `<p class="meta"><a href="/app/classes?rows=${Math.min(count + 7, 70)}#prepare-week">Add seven more rows</a></p>`
 }
