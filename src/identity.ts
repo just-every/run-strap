@@ -2,7 +2,7 @@
 // The name and colour are the ones setup saves in src/branding.json; replace
 // the purpose with the installation's own when it has one. The tagline is the
 // approved hero's headline (the run site's /contract footer and not-found page);
-// Urbanist's faces are declared in the app theme.
+// the Lobby's floor is the run site's entryway art.
 import type { EditionIdentity } from './base/identity'
 import branding from './branding.json'
 import site from '../deploy-site.json'
@@ -19,6 +19,6 @@ export const identity: EditionIdentity = {
   installedHome: 'lobby',
   theme: '/rer-theme.css',
   mark: '/brand/mark.svg',
-  band: '/brand/band.svg',
+  band: '/site/run-floor.webp',
   accentColor: branding.primaryColor,
 }

@@ -3,15 +3,17 @@ import { command, snapshot, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { renderApp } from './ui'
+import { formInput } from './forms'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/people', '/app/packs', '/app/import', '/app/agent'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio'])
 const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare']
 
 async function state(env: Bindings, who: Actor) {
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
-  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), importJobs }
+  const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
+  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
@@ -29,11 +31,7 @@ async function inputBody(request: Request): Promise<Record<string, unknown>> {
     return input
   }
   if (!request.headers.get('content-type')?.includes('application/x-www-form-urlencoded')) fail('Use JSON or a form', 415)
-  const input: Record<string, unknown> = Object.fromEntries(new URLSearchParams(raw))
-  for (const key of ['credits', 'amountCents']) if (key in input) input[key] = Number(input[key])
-  if (input.classes) { try { input.classes = JSON.parse(String(input.classes)) } catch { fail('Invalid classes JSON') } }
-  if ('active' in input) input.active = ['on', 'true', '1'].includes(String(input.active))
-  return input
+  return Object.fromEntries(new URLSearchParams(raw))
 }
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
@@ -41,14 +39,16 @@ export async function strapResponse(request: Request, original: Bindings): Promi
   if (!path.startsWith('/api/strap/') && path !== '/app' && !path.startsWith('/app/')) return null
   const env = runtimeBindings(original), isAgent = path.startsWith('/api/strap/agent/')
   let who: Actor | undefined
-  const back = pages.has(url.searchParams.get('returnTo') ?? '') ? url.searchParams.get('returnTo')! : '/app'
+  // Back to the page (and its view, such as one person or one class) the form came from.
+  const returnTo = url.searchParams.get('returnTo') ?? ''
+  const back = /^\/app[\w/-]*(?:\?[\w=&%.-]*)?$/.test(returnTo) && pages.has(returnTo.split('?')[0]) ? returnTo : '/app'
   try {
     if (url.origin !== env.AUTH_ORIGIN || (request.headers.has('host') && request.headers.get('host') !== url.host)) fail('Wrong application origin', 403)
     if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
-      if (pages.has(path)) return renderApp(await state(env, who), path)
+      if (pages.has(path)) return renderApp(await state(env, who), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
       const reminderFile = path.match(/^\/api\/strap\/reminders\/([\w-]+)\.txt$/)
@@ -61,7 +61,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
     } else {
       if (path === '/app/action') {
-        const input = await inputBody(request), name = url.searchParams.get('name') ?? ''
+        const name = url.searchParams.get('name') ?? ''
+        const current = await state(env, who)
+        const input = formInput(name, await inputBody(request), current.studio?.timeZone)
         if (name === 'session.signout') {
           const response = await operatorAuth(env).signOut(request)
           const next = new Headers({ ...headers, 'set-cookie': response.cookie, location: '/signin' })

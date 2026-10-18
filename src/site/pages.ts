@@ -12,7 +12,7 @@ import { landing, landingDescription, landingPreload, landingTitle } from './lan
 import { sitePage, siteTheme } from './shell'
 import run from './run.json'
 
-const site = { ...identity, theme: siteTheme, band: '/site/run-floor.webp' }
+const site = { ...identity, theme: siteTheme }
 
 export function sitePages({ styles, contract }: SiteContext): SiteBuild {
   const data: RunData = run
@@ -25,6 +25,6 @@ export function sitePages({ styles, contract }: SiteContext): SiteBuild {
       ...docPages.map(page => ({ path: `/docs/${page.slug}`, html: sitePage(docsTitle(page), docsDescription(page), styles, docsArticle(page), copyScript) })),
       { path: '/404', html: siteNotFoundHtml(site, data, contract) },
     ],
-    assets: ['fonts', 'brand', 'site', 'favicon.ico', 'apple-touch-icon.png'],
+    assets: ['rer-theme.css', 'fonts', 'brand', 'site', 'favicon.ico', 'apple-touch-icon.png'],
   }
 }

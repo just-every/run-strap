@@ -4,6 +4,7 @@ import { prepareClasses, publishClasses } from './classes';
 import { acknowledgeWaiver, book, cancel, checkin, latestWaiver, publishWaiver } from './bookings';
 import { approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
+import { saveStudio, studioSettings } from './studio';
 export { actor } from './store';
 export { DomainError } from './types';
 export type { Actor, Person } from './types';
@@ -19,6 +20,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
     'payment.record':recordPayment, 'reminder.prepare':prepareReminder, 'reminder.approve':approveReminder,
     'booking.book':book, 'booking.cancel':cancel, 'attendance.checkin':checkin,
     'waiver.publish':publishWaiver, 'waiver.acknowledge':acknowledgeWaiver,
+    'studio.save':saveStudio,
   };
   const handler = handlers[name as keyof typeof handlers];
   if (!handler) throw new DomainError('unknown_command',404);
@@ -38,6 +40,6 @@ export async function snapshot(db: D1Database, who: Actor) {
     owner || p.id === who.personId ? p : {id:p.id,name:p.name,role:p.role,active:p.active});
   const own = (kind: string) => list(state,kind).filter(r => owner || r.personId === who.personId);
   return {actor:who,version:state.version,people,classes,bookings,packs:own('pack'),payments:own('payment'),charges:own('charge'),
-    drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],waiver:latestWaiver(state),acknowledgements:own('acknowledgement'),
+    drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     balances:state.people.filter(p => !p.erasedAt && (owner || p.id === who.personId)).map(p => ({personId:p.id,balanceCents:balance(state,p.id)}))};
 }

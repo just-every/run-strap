@@ -1,193 +1,204 @@
-/* Strap's own tokens and the components every Strap surface shares: the run
-   site, the app and Base's server-rendered frames (sign-in, /setup, email-link
-   confirmation, sign-in settings). The --rer-* tokens come from
-   /rer-theme.css, linked before this file. */
-:root {
-  --strap-berry: var(--rer-accent, #94174B);
-  --strap-berry-soft: #E9C6D5;
-  --strap-berry-tint: #F7E4EC;
-  --strap-rule: #E6E2DC;
-  --strap-mat-shade: #7A1936;
-  --strap-mat-light: #B84068;
-  --strap-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --strap-texture: url('/brand/mat-texture.webp');
-  --strap-card-shadow: 0 1px 0 rgba(28, 33, 41, .04), 0 12px 32px -18px rgba(28, 33, 41, .28);
-  --strap-mat-card-shadow: 0 18px 36px -20px rgba(60, 8, 28, .55);
-  /* A rolled end: lit along its top edge (across) or its middle (down). */
-  --strap-roll-across: linear-gradient(180deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .05) 30%, rgba(0, 0, 0, 0) 52%, rgba(40, 4, 18, .45)), var(--strap-texture) 0 0 / 200px repeat, var(--strap-berry);
-  --strap-roll-down: linear-gradient(90deg, rgba(40, 4, 18, .4), rgba(255, 255, 255, .06) 30%, rgba(255, 255, 255, .2) 50%, rgba(0, 0, 0, 0) 68%, rgba(40, 4, 18, .5)), var(--strap-texture) 0 0 / 200px repeat, var(--strap-berry);
-  --strap-roll-shadow: inset 0 0 0 1px rgba(60, 8, 28, .35), 0 12px 16px -10px rgba(40, 4, 18, .65);
-}
+/* Strap's shared components: buttons, pills, chips, avatars, panels and form
+   controls, used by the app and by Base's server-rendered frames (sign-in,
+   /setup, email-link confirmation, sign-in settings). Every colour, face and
+   radius is a token from /rer-theme.css, linked before this file. */
 
-/* The mat: textured berry rubber, a rounded slab with a soft floor shadow. */
-.mat {
-  position: relative;
-  border-radius: 18px;
-  background: var(--strap-texture) 0 0 / 200px repeat, var(--strap-berry);
-  box-shadow: inset 0 0 0 1px rgba(60, 8, 28, .3), inset 0 -12px 22px -12px rgba(40, 4, 18, .5), 0 26px 44px -28px rgba(60, 8, 28, .7);
-}
-/* The rolled end across the top, a cylinder a little wider than the mat. */
-.mat.roll-top::before {
-  content: '';
-  position: absolute;
-  top: calc(var(--roll, 64px) * -.18);
-  left: -5px;
-  right: -5px;
-  height: var(--roll, 64px);
-  border-radius: calc(var(--roll, 64px) * .38);
-  background: var(--strap-roll-across);
-  box-shadow: inset 0 0 0 1px rgba(60, 8, 28, .35), 0 12px 16px -10px rgba(40, 4, 18, .65);
-}
-/* The rolled end along the right, its spiral facing the floor. */
-.mat.roll-end::after {
-  content: '';
-  position: absolute;
-  top: -10px;
-  bottom: -10px;
-  right: -12px;
-  width: var(--roll, 84px);
-  border-radius: calc(var(--roll, 84px) * .42) calc(var(--roll, 84px) * .42) calc(var(--roll, 84px) * .5) calc(var(--roll, 84px) * .5) / 26px 26px 30px 30px;
-  background: var(--strap-roll-down);
-  box-shadow: inset 0 0 0 1px rgba(60, 8, 28, .35), -10px 0 16px -10px rgba(40, 4, 18, .55), 0 22px 30px -20px rgba(40, 4, 18, .7);
-}
-.mat.roll-end::before {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  bottom: -14px;
-  right: -12px;
-  width: var(--roll, 84px);
-  height: 30px;
-  border-radius: 50%;
-  background: repeating-radial-gradient(ellipse at 50% 50%, var(--strap-mat-shade) 0 2px, var(--strap-berry) 2px 5px);
-  box-shadow: inset 0 0 0 2px var(--strap-mat-light), 0 6px 10px -4px rgba(40, 4, 18, .6);
-}
-
-/* White cards: the product, crisp on paper or resting on the mat. */
-.card {
-  background: var(--rer-surface, #fff);
-  border: 1px solid var(--strap-rule);
-  border-radius: 16px;
-  box-shadow: var(--strap-card-shadow);
-}
-.mat > .card, .mat .on-mat { border-color: transparent; box-shadow: var(--strap-mat-card-shadow); }
-
-/* Status pills: stored values shown capitalised. */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1.5px solid transparent;
-  font: 600 13px/1 var(--rer-font-body, inherit);
-  white-space: nowrap;
-}
-.pill.solid { background: var(--strap-berry); color: var(--rer-accent-text, #fff); }
-.pill.tint { background: var(--strap-berry-tint); color: var(--strap-berry); }
-.pill.outline { border-color: var(--strap-berry); color: var(--strap-berry); background: var(--rer-surface, #fff); }
-.pill.muted { border-color: var(--strap-rule); color: var(--rer-muted); background: var(--rer-surface, #fff); }
-.pill.alert { border: 2px solid var(--strap-berry); background: var(--strap-berry-tint); color: var(--strap-berry); }
-
-/* A person's initials, as rows and the hero cards show them. */
-.initials {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--strap-berry-tint);
-  color: var(--strap-berry);
-  font: 600 13px/1 var(--rer-font-body, inherit);
-  letter-spacing: .02em;
-}
-
-/* Buttons and links that act like them: ink pills, or an ink outline. */
-.btn, .btn-outline {
+/* Buttons: plum for the one main action, quiet white for the rest. */
+.btn, .btn-quiet {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   min-height: 44px;
-  padding: 8px 22px;
-  border-radius: 999px;
-  border: 1.5px solid var(--rer-text, #1C2129);
-  font: 600 15px/1.2 var(--rer-font-body, inherit);
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--strap-plum-button);
+  font: 600 15px/1.2 var(--rer-font-body);
   text-align: center;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.btn { background: var(--rer-text, #1C2129); color: #fff; box-shadow: 0 10px 22px -14px rgba(28, 33, 41, .8); }
-.btn:hover { background: #2B313B; }
-.btn-outline { background: transparent; color: var(--rer-text, #1C2129); }
-.btn-outline:hover { background: rgba(28, 33, 41, .05); }
-.btn:active, .btn-outline:active { transform: translateY(1px); }
-.btn svg, .btn-outline svg { width: 18px; height: 18px; }
+.btn { background: var(--strap-plum-button); color: var(--rer-accent-text); box-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8); }
+.btn:hover { background: var(--strap-plum); border-color: var(--strap-plum); }
+.btn-quiet { background: var(--rer-surface); border-color: var(--strap-control-line); color: var(--rer-text); box-shadow: 0 2px 6px -4px rgba(31, 26, 51, .18); }
+.btn-quiet:hover { border-color: var(--strap-quiet); background: var(--strap-wash); }
+.btn-quiet.danger { color: var(--strap-red); }
+.btn .icon, .btn-quiet .icon { width: 18px; height: 18px; }
+.btn.small, .btn-quiet.small { min-height: 36px; padding: 0 14px; font-size: 14px; }
 
-/* Base's server-rendered frames: the white card resting on an upright mat. */
-html.rer-themed { background: var(--rer-page); }
-html.rer-themed body { display: grid; place-items: center; box-sizing: border-box; min-height: 100vh; margin: 0; padding: 150px 20px 190px; background: transparent; color: var(--rer-text); font-family: var(--rer-font-body); }
+/* Pills: spots and states. Sea-glass for spots, deep sea-glass when full. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font: 600 14px/1 var(--rer-font-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: var(--strap-sea-wash);
+  color: var(--strap-sea-ink);
+}
+.pill.full { background: var(--strap-sea-strong); color: #fff; }
+.pill.quiet { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; }
+.pill.wait { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; padding-right: 6px; }
+.pill.wait b { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--strap-plum-wash); color: var(--strap-plum-button); font-weight: 600; font-size: 13px; }
+.pill.done { background: var(--strap-green-tint); color: var(--strap-green); }
+.pill.pending { background: var(--strap-amber-wash); color: var(--strap-amber-ink); }
+.pill.alert { background: var(--strap-red-tint); color: var(--strap-red); }
+
+/* Chips: a pack, a role or a short fact beside a name. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--strap-sea-wash);
+  color: var(--strap-sea-ink);
+  font: 500 13px/1.2 var(--rer-font-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chip.quiet { background: var(--strap-wash); color: var(--strap-quiet); }
+.chip.pending { background: var(--strap-amber-wash); color: var(--strap-amber-ink); }
+.chip.plum { background: var(--strap-plum-wash); color: var(--strap-plum-button); }
+
+/* A count beside a navigation item or a heading: one claret treatment. */
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--strap-plum-wash);
+  color: var(--strap-plum-button);
+  font: 600 13px/1 var(--rer-font-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A person's initials. */
+.avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--strap-sea-wash);
+  color: var(--strap-sea-ink);
+  font: 600 13px/1 var(--rer-font-body);
+  letter-spacing: .02em;
+}
+.avatar.large { width: 48px; height: 48px; font-size: 16px; }
+.avatar.plum { background: var(--strap-plum-wash); color: var(--strap-plum-button); }
+
+/* Panels: white cards on the cool ground. */
+.panel {
+  min-width: 0;
+  background: var(--rer-surface);
+  border: 1px solid var(--strap-line);
+  border-radius: 12px;
+  box-shadow: var(--strap-panel-shadow);
+}
+
+/* Form controls: thin quiet borders, a clear plum focus ring. */
+.field { display: grid; gap: 6px; min-width: 0; font: 600 13px/1.3 var(--rer-font-body); color: var(--rer-text); }
+.field .hint { font-weight: 400; color: var(--strap-quiet); }
+.field input:not([type=checkbox]):not([type=radio]), .field select, .field textarea, .search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--strap-control-line);
+  border-radius: 10px;
+  background: var(--rer-surface);
+  color: var(--rer-text);
+  font: 400 15px/1.4 var(--rer-font-body);
+  font-variant-numeric: tabular-nums;
+}
+.field textarea { min-height: 132px; resize: vertical; }
+.field textarea.mono { font: 400 13px/1.55 var(--rer-font-mono); }
+.field input:hover, .field select:hover, .field textarea:hover { border-color: #AEBBCB; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .search input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent);
+  outline-offset: 0;
+  border-color: var(--rer-focus);
+}
+.check { display: flex; align-items: flex-start; gap: 10px; font: 400 15px/1.45 var(--rer-font-body); }
+.check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--strap-plum-button); }
+/* Base #247's dropdown: two gradient strokes 14px in from the border, 40px end padding. */
+select:not([multiple],[size]:not([size="1"])) {
+  --rer-select-ink: var(--strap-chevron);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(to top right, transparent calc(50% - 1.1px), var(--rer-select-ink) calc(50% - .55px), var(--rer-select-ink) calc(50% + .55px), transparent calc(50% + 1.1px)), linear-gradient(to top left, transparent calc(50% - 1.1px), var(--rer-select-ink) calc(50% - .55px), var(--rer-select-ink) calc(50% + .55px), transparent calc(50% + 1.1px));
+  background-repeat: no-repeat;
+  background-position: right 20px center, right 14px center;
+  background-size: 6px 6px;
+  padding-inline-end: 40px;
+  text-overflow: ellipsis;
+}
+select:not([multiple],[size]:not([size="1"])):focus-visible { --rer-select-ink: var(--rer-text); }
+:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 2px; }
+.btn:focus-visible, .btn-quiet:focus-visible { outline-offset: 3px; }
+
+/* Base's server-rendered frames (sign-in, /setup, settings): a white card on the cool ground. */
+html.rer-themed { background: var(--strap-ground); }
+html.rer-themed body {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: 56px 20px;
+  padding-bottom: max(56px, 24vh);
+  background: url('/site/run-floor.webp') center bottom / auto max(150px, 22vh) repeat-x, radial-gradient(90% 60% at 50% 0%, #FFFFFF, transparent 70%), var(--strap-ground);
+  color: var(--rer-text);
+  font-family: var(--rer-font-body);
+}
 html.rer-themed body > main {
-  position: relative;
   box-sizing: border-box;
   width: 100%;
   max-width: 460px;
   margin: 0 auto;
-  padding: 40px 36px 36px;
+  padding: 36px 36px 32px;
   background: var(--rer-surface);
-  border: 0;
+  border: 1px solid var(--strap-line);
   border-radius: 16px;
-  box-shadow: var(--strap-mat-card-shadow);
+  box-shadow: var(--strap-card-shadow);
 }
-html.rer-themed body > main::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -84px -64px -150px;
-  border-radius: 18px;
-  background: var(--strap-texture) 0 0 / 200px repeat, var(--strap-berry);
-  box-shadow: inset 0 0 0 1px rgba(60, 8, 28, .3), inset 0 -14px 26px -14px rgba(40, 4, 18, .5), 0 30px 50px -30px rgba(60, 8, 28, .75);
-}
-html.rer-themed body > main::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  top: -124px;
-  left: -70px;
-  right: -70px;
-  height: 92px;
-  border-radius: 34px;
-  background: var(--strap-roll-across);
-  box-shadow: inset 0 0 0 1px rgba(60, 8, 28, .35), 0 14px 18px -12px rgba(40, 4, 18, .65);
-}
-html.rer-themed .rer-brand, html.rer-themed .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 28px; color: var(--rer-text); font: 600 22px/1 var(--rer-font-heading); letter-spacing: -.01em; }
-html.rer-themed .rer-brand::before, html.rer-themed .brand::before { width: 28px; height: 28px; }
-html.rer-themed main h1 { margin: 0 0 14px; font: 600 34px/1.15 var(--rer-font-heading); letter-spacing: -.02em; color: var(--rer-text); }
-html.rer-themed main h2 { font: 600 20px/1.3 var(--rer-font-heading); }
+html.rer-themed .rer-brand, html.rer-themed .brand { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; color: var(--strap-ink); font: 700 30px/1 var(--rer-font-heading); letter-spacing: var(--rer-wordmark-tracking); }
+html.rer-themed .rer-brand::before, html.rer-themed .brand::before { width: 36px; height: 36px; }
+html.rer-themed main h1 { margin: 0 0 12px; font: 800 38px/1.1 var(--rer-font-heading); letter-spacing: -.02em; color: var(--strap-plum); }
+html.rer-themed main h2 { font: 700 21px/1.3 var(--rer-font-heading); color: var(--strap-ink); }
 html.rer-themed main p { color: var(--rer-muted); font-size: 16px; line-height: 1.5; }
 html.rer-themed main:has(input[type=email]) .brand, html.rer-themed main:has(input[type=email]) .rer-brand { justify-content: center; }
-html.rer-themed main:has(input[type=email]) h1 { text-align: center; font-size: 30px; margin-bottom: 28px; }
-html.rer-themed main dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px 0; margin: 0 0 24px; }
-html.rer-themed main dl dt, html.rer-themed main dl dd { display: flex; align-items: center; min-height: 52px; margin: 0; padding: 8px 0; border: 1px solid var(--strap-rule); }
-html.rer-themed main dl dt { padding-left: 16px; border-right: 0; border-radius: 12px 0 0 12px; color: var(--rer-muted); font-size: 14px; }
-html.rer-themed main dl dd { padding-right: 16px; border-left: 0; border-radius: 0 12px 12px 0; color: var(--rer-text); font-size: 16px; }
+html.rer-themed main:has(input[type=email]) h1 { text-align: center; margin-bottom: 24px; }
+html.rer-themed main dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 0; margin: 0 0 24px; border: 1px solid var(--strap-line); border-radius: 12px; overflow: hidden; }
+html.rer-themed main dl dt, html.rer-themed main dl dd { display: flex; align-items: center; min-height: 48px; margin: 0; padding: 8px 0; }
+html.rer-themed main dl dt { padding-left: 16px; color: var(--strap-quiet); font-size: 14px; background: var(--strap-wash); }
+html.rer-themed main dl dd { padding: 8px 16px; color: var(--rer-text); font-size: 16px; overflow-wrap: anywhere; }
+html.rer-themed main dl dt:not(:first-of-type), html.rer-themed main dl dd:not(:first-of-type) { border-top: 1px solid var(--strap-line); }
 html.rer-themed main label { font-size: 14px; font-weight: 600; color: var(--rer-text); }
-html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing: border-box; width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--rer-border); border-radius: 12px; background: var(--rer-surface); color: var(--rer-text); font: 400 16px/1.4 var(--rer-font-body); }
-html.rer-themed main input:focus-visible, html.rer-themed main button:focus-visible, html.rer-themed main a:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 2px; }
-html.rer-themed main input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--strap-berry); }
+html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--strap-control-line); border-radius: 10px; background: var(--rer-surface); color: var(--rer-text); font: 400 16px/1.4 var(--rer-font-body); }
+html.rer-themed main input:focus-visible { outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent); outline-offset: 0; border-color: var(--rer-focus); }
+html.rer-themed main button:focus-visible, html.rer-themed main a:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 3px; }
+html.rer-themed main input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--strap-plum-button); }
 html.rer-themed main label:has(input[type=checkbox]) { font-weight: 400; font-size: 15px; }
-html.rer-themed main button, html.rer-themed main .action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 22px; border: 1.5px solid var(--rer-text); border-radius: 999px; background: var(--rer-text); color: #fff; font: 600 15px/1.2 var(--rer-font-body); text-decoration: none; box-shadow: 0 10px 22px -14px rgba(28, 33, 41, .8); cursor: pointer; }
-html.rer-themed main button:hover, html.rer-themed main .action:hover { background: #2B313B; box-shadow: 0 10px 22px -14px rgba(28, 33, 41, .8); }
-html.rer-themed main button.secondary { background: transparent; color: var(--rer-text); box-shadow: none; }
-html.rer-themed main .divider::before, html.rer-themed main .divider::after { border-color: var(--strap-rule); }
-html.rer-themed main .notice { border-left: 4px solid var(--strap-berry); background: var(--rer-surface); border-radius: 4px 12px 12px 4px; }
+html.rer-themed main button, html.rer-themed main .action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 22px; border: 1px solid var(--strap-plum-button); border-radius: 10px; background: var(--strap-plum-button); color: #fff; font: 600 16px/1.2 var(--rer-font-body); text-decoration: none; box-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8); cursor: pointer; }
+html.rer-themed main button:hover, html.rer-themed main .action:hover { background: var(--strap-plum); border-color: var(--strap-plum); }
+html.rer-themed main button.secondary { background: var(--rer-surface); border-color: var(--strap-control-line); color: var(--rer-text); box-shadow: none; }
+html.rer-themed main a { color: var(--strap-plum-button); }
+html.rer-themed main .divider::before, html.rer-themed main .divider::after { border-color: var(--strap-line); }
+html.rer-themed main .notice { border: 1px solid var(--strap-line); border-left: 4px solid var(--strap-plum-button); background: var(--strap-wash); border-radius: 4px 10px 10px 4px; }
 @media (max-width: 520px) {
-  html.rer-themed body { padding: 120px 34px 120px; }
-  html.rer-themed body > main { padding: 30px 22px 26px; }
-  html.rer-themed body > main::before { inset: -64px -26px -64px; }
-  html.rer-themed body > main::after { top: -96px; left: -32px; right: -32px; height: 70px; border-radius: 26px; }
-  html.rer-themed main h1 { font-size: 28px; }
+  html.rer-themed body { padding: 24px 16px; place-items: start center; }
+  html.rer-themed body > main { padding: 28px 20px 24px; }
+  html.rer-themed main h1 { font-size: 32px; }
 }
