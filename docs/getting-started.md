@@ -28,21 +28,23 @@ To start with your own email as the owner, run `npx -y @runeditrun/rer install j
 ## Finish setup
 
 The first time you open Strap you see **Finish setup**. Check the owner name and email, tick the box and press
-**Finish setup**. Strap then opens on **Classes**.
+**Finish setup**. Strap then opens on **Today**, which first asks for your studio's location and time zone.
 
 ## Find your way around
 
 | Screen | What it is for |
 | --- | --- |
+| Today | The day's classes, each class's roster with check-in, the class that needs you, and Member success: follow-ups and drafts waiting for your approval |
 | Classes | The published week, the current waiver and the form that prepares next week |
 | Packs and payments | Class packs and credits, member balances, payments and balance reminders |
 | People | Members and instructors, invitations and access |
 | Import | Bringing members across from a Mindbody CSV |
 | Agent access | Keys that let an assistant prepare drafts for you |
+| Studio | The location name and time zone every class time is shown in |
 | Local mail | Sign-in and invitation emails while Strap runs on your computer |
 
-Each person sees only their own work. The owner sees everything. An instructor sees **My teaching schedule** and checks
-people in to their own classes. A member sees the published classes, their own bookings, **My packs** and their balance.
+Each person sees only their own work. The owner sees everything. An instructor sees their classes on **Today** and **My
+classes** and checks people in to their own classes. A member sees the published classes, their own bookings, **My packs** and their balance.
 
 ## Your first week
 

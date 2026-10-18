@@ -36,7 +36,7 @@ Current judgment: commit `411dc1910f35337acd819abe79b1e061e25e90c3` (17 October 
 
 ## Studio and members
 
-- **STUDIO-001 — US studio configuration.** **Status:** missing. **Acceptance evidence:** Configure a New York studio and a Los Angeles location; buy a USD pack, view its receipt and book across a DST transition; local times and charged cents agree across staff and member views. **Gap:** No implemented us studio configuration workflow or public-door acceptance coverage.
+- **STUDIO-001 — US studio configuration.** **Status:** partly. **Acceptance evidence:** Configure a New York studio and a Los Angeles location; buy a USD pack, view its receipt and book across a DST transition; local times and charged cents agree across staff and member views. **Current evidence:** one location name and IANA time zone per studio (`src/strap/domain/studio.ts`); classes entered as wall times and packs priced in dollars through the browser forms (`src/strap/forms.ts`, `src/strap/zone.ts`); `tests/strap.test.mjs` (browser forms on the studio clock). **Gap:** One location per installation; no receipts.
 
 - **STUDIO-002 — Locations and shared memberships.** **Status:** missing. **Acceptance evidence:** Give a member a two-location plan, book at both, deny a third location, and compare site-restricted manager and consolidated owner reports. **Gap:** No implemented locations and shared memberships workflow or public-door acceptance coverage.
 

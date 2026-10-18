@@ -150,3 +150,34 @@ test('unused identity erasure clears PII and blocks recreation or CSV reimport',
   const preview = await h.cmd('import.preview', { csv })
   await h.cmd('import.apply', { csv, fingerprint: preview.fingerprint }, h.owner, 409)
 }))
+
+test('browser forms take dollars, calendar dates and wall times on the studio clock', () => run(async h => {
+  const form = async (name, fields, back = '/app') => {
+    const r = await h.mf.dispatchFetch(`${h.origin}/app/action?name=${name}&returnTo=${encodeURIComponent(back)}`, { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString(), redirect: 'manual' })
+    return { status: r.status, text: await r.text() }
+  }
+  await h.mf.dispatchFetch(h.origin + '/setup', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes', redirect: 'manual' })
+  const chicago = (iso, options) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', ...options }).format(new Date(iso))
+  const coach = await h.cmd('person.save', { name: 'Dana Reyes', email: 'dana@studio.example', role: 'instructor', active: true })
+  const alex = await h.cmd('person.save', { name: 'Alex Rivera', email: 'alex@studio.example', role: 'member', active: true })
+  assert.match((await form('classes.prepare', { week: week(), rows: '1', c0_title: 'Reformer Flow', c0_day: '1', c0_time: '06:00', c0_minutes: '50', c0_capacity: '12', c0_instructorId: coach.id })).text, /time zone/)
+  assert.equal((await form('studio.save', { location: 'East Nashville', timeZone: 'America/Chicago' })).status, 303)
+  assert.equal((await form('classes.prepare', { week: week(), rows: '2', c0_title: 'Reformer Flow', c0_room: 'Reformer room', c0_day: '1', c0_time: '06:00', c0_minutes: '50', c0_capacity: '12', c0_instructorId: coach.id, c1_title: '' }, '/app/classes')).status, 303)
+  const draft = (await h.state()).drafts.find(d => d.type === 'classes')
+  assert.equal(draft.classes.length, 1)
+  const [entry] = draft.classes
+  assert.equal(chicago(entry.start, { weekday: 'short', hour: 'numeric', minute: '2-digit' }), 'Tue 6:00 AM')
+  assert.equal(Date.parse(entry.end) - Date.parse(entry.start), 50 * 60_000)
+  assert.equal((await form('classes.publish', { id: draft.id }, '/app/classes')).status, 303)
+  const day = new Date(Date.parse(week() + 'T12:00:00Z') + 86400_000).toISOString().slice(0, 10)
+  const today = await h.send(`/app?day=${day}`, undefined, h.owner)
+  assert.match(today.text, /6:00 am/); assert.match(today.text, /Reformer Flow/); assert.doesNotMatch(today.text, /UTC/)
+  const expires = new Date(Date.now() + 60 * 86400_000).toISOString().slice(0, 10)
+  assert.equal((await form('pack.prepare', { personId: alex.id, credits: '10', amount: '$189.00', expiresOn: expires }, '/app/packs')).status, 303)
+  const pack = (await h.state()).drafts.find(d => d.type === 'pack')
+  assert.equal(pack.amountCents, 18900)
+  assert.equal(chicago(pack.expiresAt, { year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }), `${expires.slice(5, 7)}/${expires.slice(8, 10)}/${expires.slice(0, 4)}, 23:59`)
+  assert.match((await form('payment.record', { personId: alex.id, amount: '1,2x', reference: 'SQ-1' }, '/app/packs')).text, /in dollars/)
+  assert.equal((await form('payment.record', { personId: alex.id, amount: '75', reference: 'SQ-1' }, '/app/packs')).status, 303)
+  assert.equal((await h.state()).payments[0].amountCents, 7500)
+}))

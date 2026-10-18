@@ -99,8 +99,8 @@
   --strap-quiet: #5D6B85;
   --strap-wash: #F3F7FA;
   --strap-plum-wash: #F5ECF2;
-  --strap-sea-strong: #2B7A72;
-  --strap-sea-wash: #E3F2F0;
+  --strap-sea-strong: #1C857D;
+  --strap-sea-wash: #E0F1F3;
   --strap-rose: #E2577F;
   --strap-rose-line: #F4B3C8;
   --strap-rose-wash: #FFF5F8;
@@ -108,6 +108,32 @@
   --strap-amber-ink: #8F5200;
   --strap-amber-wash: #FFF3E0;
   --strap-chevron: #5D6B85;
+  --strap-spots: #BCE3E5;
+  --strap-nav-ink: #3F4D6B;
+  --strap-teacher-ink: #34405C;
+  --strap-past-ink: #4C5874;
+  --strap-copy-ink: #4E5A76;
+  --strap-tab-ink: #44506C;
+  --strap-icon-ink: #3D4A6A;
+  --strap-pending: #F2A93B;
+  --strap-hover-line: #AEBBCB;
+  --strap-glow: #FBFDFF;
+  --strap-rose-end: #FDF4F8;
+  --strap-sidebar: rgba(255, 255, 255, .72);
+  --strap-card-surface: rgba(255, 255, 255, .86);
+  --strap-decision-surface: rgba(255, 255, 255, .7);
+  --strap-roster-surface: rgba(255, 255, 255, .6);
+  --strap-search-shadow: 0 3px 8px rgba(38, 62, 112, .05);
+  --strap-button-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8);
+  --strap-quiet-shadow: 0 2px 6px -4px rgba(31, 26, 51, .18);
+  --strap-radius-xs: 3px;
+  --strap-radius-sm: 8px;
+  --strap-radius-control: 10px;
+  --strap-radius-card: 12px;
+  --strap-radius-large: 16px;
+  --strap-radius-pill: 999px;
+  --strap-radius-round: 50%;
+  --strap-radius-notice: 4px 10px 10px 4px;
   --strap-panel-shadow: 0 1px 2px rgba(31, 26, 51, .03), 0 8px 24px -18px rgba(31, 26, 51, .18);
 }
 /* Playfair's default figures are old-style; every page here sets times and money, so figures line up. */

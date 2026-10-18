@@ -8,12 +8,13 @@ only the owner grants or ends access.
 Use **Add a person** with the person's full name, email, role (**Member** or **Instructor**) and status. People you
 [move in](MOVE-IN.md) from a CSV arrive inactive; set them to **Active** when they are ready.
 
-Each person has an ID, shown under **Edit person**. You need an instructor's ID when you
-[prepare a class week](classes.md).
+Search by name or email, and open a person to see their card: credits, what they owe, their last visit and upcoming
+bookings, with **Edit** and **Prepare a pack**. When you [prepare a class week](classes.md) you pick each class's
+instructor by name.
 
 ## Invite someone to sign in
 
-Press **Invite to sign in** beside an active person. Strap emails them a sign-in link; after that they sign in with
+Open an active person and press **Invite to sign in**. Strap emails them a sign-in link; after that they sign in with
 their email whenever they like.
 
 While Strap runs on your computer no email leaves it. Invitations land in **Local mail** instead. To try a member's view

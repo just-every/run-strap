@@ -11,7 +11,7 @@
   gap: 10px;
   min-height: 44px;
   padding: 0 18px;
-  border-radius: 10px;
+  border-radius: var(--strap-radius-control);
   border: 1px solid var(--strap-plum-button);
   font: 600 15px/1.2 var(--rer-font-body);
   text-align: center;
@@ -20,9 +20,9 @@
   cursor: pointer;
   transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.btn { background: var(--strap-plum-button); color: var(--rer-accent-text); box-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8); }
+.btn { background: var(--strap-plum-button); color: var(--rer-accent-text); box-shadow: var(--strap-button-shadow); }
 .btn:hover { background: var(--strap-plum); border-color: var(--strap-plum); }
-.btn-quiet { background: var(--rer-surface); border-color: var(--strap-control-line); color: var(--rer-text); box-shadow: 0 2px 6px -4px rgba(31, 26, 51, .18); }
+.btn-quiet { background: var(--rer-surface); border-color: var(--strap-control-line); color: var(--rer-text); box-shadow: var(--strap-quiet-shadow); }
 .btn-quiet:hover { border-color: var(--strap-quiet); background: var(--strap-wash); }
 .btn-quiet.danger { color: var(--strap-red); }
 .btn .icon, .btn-quiet .icon { width: 18px; height: 18px; }
@@ -33,19 +33,21 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--strap-radius-pill);
   font: 600 14px/1 var(--rer-font-body);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   background: var(--strap-sea-wash);
   color: var(--strap-sea-ink);
 }
-.pill.full { background: var(--strap-sea-strong); color: #fff; }
+.spots > .pill:first-child { background: var(--strap-spots); }
+.spots > .pill.full, .pill.full { background: var(--strap-sea-strong); color: var(--rer-accent-text); }
+.pill.quiet, .pill.wait { font-size: 13px; }
 .pill.quiet { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; }
 .pill.wait { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; padding-right: 6px; }
-.pill.wait b { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--strap-plum-wash); color: var(--strap-plum-button); font-weight: 600; font-size: 13px; }
+.pill.wait b { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--strap-radius-pill); background: var(--strap-plum-wash); color: var(--strap-plum-button); font-weight: 600; font-size: 13px; }
 .pill.done { background: var(--strap-green-tint); color: var(--strap-green); }
 .pill.pending { background: var(--strap-amber-wash); color: var(--strap-amber-ink); }
 .pill.alert { background: var(--strap-red-tint); color: var(--strap-red); }
@@ -56,7 +58,7 @@
   align-items: center;
   min-height: 26px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: var(--strap-radius-sm);
   background: var(--strap-sea-wash);
   color: var(--strap-sea-ink);
   font: 500 13px/1.2 var(--rer-font-body);
@@ -74,7 +76,7 @@
   min-width: 26px;
   height: 26px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--strap-radius-pill);
   background: var(--strap-plum-wash);
   color: var(--strap-plum-button);
   font: 600 13px/1 var(--rer-font-body);
@@ -88,7 +90,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--strap-radius-round);
   background: var(--strap-sea-wash);
   color: var(--strap-sea-ink);
   font: 600 13px/1 var(--rer-font-body);
@@ -102,7 +104,7 @@
   min-width: 0;
   background: var(--rer-surface);
   border: 1px solid var(--strap-line);
-  border-radius: 12px;
+  border-radius: var(--strap-radius-card);
   box-shadow: var(--strap-panel-shadow);
 }
 
@@ -116,7 +118,7 @@
   min-height: 44px;
   padding: 10px 12px;
   border: 1px solid var(--strap-control-line);
-  border-radius: 10px;
+  border-radius: var(--strap-radius-control);
   background: var(--rer-surface);
   color: var(--rer-text);
   font: 400 15px/1.4 var(--rer-font-body);
@@ -124,7 +126,7 @@
 }
 .field textarea { min-height: 132px; resize: vertical; }
 .field textarea.mono { font: 400 13px/1.55 var(--rer-font-mono); }
-.field input:hover, .field select:hover, .field textarea:hover { border-color: #AEBBCB; }
+.field input:hover, .field select:hover, .field textarea:hover { border-color: var(--strap-hover-line); }
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .search input:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent);
   outline-offset: 0;
@@ -158,7 +160,7 @@ html.rer-themed body {
   margin: 0;
   padding: 56px 20px;
   padding-bottom: max(56px, 24vh);
-  background: url('/site/run-floor.webp') center bottom / auto max(150px, 22vh) repeat-x, radial-gradient(90% 60% at 50% 0%, #FFFFFF, transparent 70%), var(--strap-ground);
+  background: url('/site/run-floor.webp') center bottom / auto max(150px, 22vh) repeat-x, radial-gradient(90% 60% at 50% 0%, var(--rer-surface), transparent 70%), var(--strap-ground);
   color: var(--rer-text);
   font-family: var(--rer-font-body);
 }
@@ -170,7 +172,7 @@ html.rer-themed body > main {
   padding: 36px 36px 32px;
   background: var(--rer-surface);
   border: 1px solid var(--strap-line);
-  border-radius: 16px;
+  border-radius: var(--strap-radius-large);
   box-shadow: var(--strap-card-shadow);
 }
 html.rer-themed .rer-brand, html.rer-themed .brand { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; color: var(--strap-ink); font: 700 30px/1 var(--rer-font-heading); letter-spacing: var(--rer-wordmark-tracking); }
@@ -180,23 +182,23 @@ html.rer-themed main h2 { font: 700 21px/1.3 var(--rer-font-heading); color: var
 html.rer-themed main p { color: var(--rer-muted); font-size: 16px; line-height: 1.5; }
 html.rer-themed main:has(input[type=email]) .brand, html.rer-themed main:has(input[type=email]) .rer-brand { justify-content: center; }
 html.rer-themed main:has(input[type=email]) h1 { text-align: center; margin-bottom: 24px; }
-html.rer-themed main dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 0; margin: 0 0 24px; border: 1px solid var(--strap-line); border-radius: 12px; overflow: hidden; }
+html.rer-themed main dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 0; margin: 0 0 24px; border: 1px solid var(--strap-line); border-radius: var(--strap-radius-card); overflow: hidden; }
 html.rer-themed main dl dt, html.rer-themed main dl dd { display: flex; align-items: center; min-height: 48px; margin: 0; padding: 8px 0; }
 html.rer-themed main dl dt { padding-left: 16px; color: var(--strap-quiet); font-size: 14px; background: var(--strap-wash); }
 html.rer-themed main dl dd { padding: 8px 16px; color: var(--rer-text); font-size: 16px; overflow-wrap: anywhere; }
 html.rer-themed main dl dt:not(:first-of-type), html.rer-themed main dl dd:not(:first-of-type) { border-top: 1px solid var(--strap-line); }
 html.rer-themed main label { font-size: 14px; font-weight: 600; color: var(--rer-text); }
-html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--strap-control-line); border-radius: 10px; background: var(--rer-surface); color: var(--rer-text); font: 400 16px/1.4 var(--rer-font-body); }
+html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--strap-control-line); border-radius: var(--strap-radius-control); background: var(--rer-surface); color: var(--rer-text); font: 400 16px/1.4 var(--rer-font-body); }
 html.rer-themed main input:focus-visible { outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent); outline-offset: 0; border-color: var(--rer-focus); }
 html.rer-themed main button:focus-visible, html.rer-themed main a:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 3px; }
 html.rer-themed main input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--strap-plum-button); }
 html.rer-themed main label:has(input[type=checkbox]) { font-weight: 400; font-size: 15px; }
-html.rer-themed main button, html.rer-themed main .action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 22px; border: 1px solid var(--strap-plum-button); border-radius: 10px; background: var(--strap-plum-button); color: #fff; font: 600 16px/1.2 var(--rer-font-body); text-decoration: none; box-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8); cursor: pointer; }
+html.rer-themed main button, html.rer-themed main .action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 22px; border: 1px solid var(--strap-plum-button); border-radius: var(--strap-radius-control); background: var(--strap-plum-button); color: var(--rer-accent-text); font: 600 16px/1.2 var(--rer-font-body); text-decoration: none; box-shadow: var(--strap-button-shadow); cursor: pointer; }
 html.rer-themed main button:hover, html.rer-themed main .action:hover { background: var(--strap-plum); border-color: var(--strap-plum); }
 html.rer-themed main button.secondary { background: var(--rer-surface); border-color: var(--strap-control-line); color: var(--rer-text); box-shadow: none; }
 html.rer-themed main a { color: var(--strap-plum-button); }
 html.rer-themed main .divider::before, html.rer-themed main .divider::after { border-color: var(--strap-line); }
-html.rer-themed main .notice { border: 1px solid var(--strap-line); border-left: 4px solid var(--strap-plum-button); background: var(--strap-wash); border-radius: 4px 10px 10px 4px; }
+html.rer-themed main .notice { border: 1px solid var(--strap-line); border-left: 4px solid var(--strap-plum-button); background: var(--strap-wash); border-radius: var(--strap-radius-notice); }
 @media (max-width: 520px) {
   html.rer-themed body { padding: 24px 16px; place-items: start center; }
   html.rer-themed body > main { padding: 28px 20px 24px; }
