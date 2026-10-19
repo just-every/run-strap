@@ -26,6 +26,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "EXIT-EXPORT.md", "reason": "Portable exit schema and reconstruction instructions for independent receivers and maintainers" },
     { "file": "SOURCES.md", "reason": "Where Strap's code was adapted from, for maintainers" }
   ]
 }
