@@ -31,6 +31,19 @@ export async function load(db: D1Database, who: Actor): Promise<{ state: State; 
   for (const row of rows[2].results as {id:string;kind:string;data:string}[]) state.records.set(row.id, {kind:row.kind,data:JSON.parse(row.data)});
   return {state,who:current};
 }
+/** A paired kiosk reads the studio's records through its own door only. */
+export async function loadKiosk(db: D1Database, kioskId: string): Promise<{ state: State; who: Actor }> {
+  const rows = await db.batch([
+    db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
+    db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
+    db.prepare('SELECT id FROM st_kiosks WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL').bind(kioskId),
+  ]);
+  insist(rows[3].results.length === 1,'kiosk_not_paired',401);
+  const state: State = {version:Number((rows[0].results[0] as {version:number}).version),people:(rows[1].results as unknown as PersonRow[]).map(asPerson),
+    operator:{id:kioskId,email:'',role:'kiosk',status:'active',version:0},records:new Map()};
+  for (const row of rows[2].results as {id:string;kind:string;data:string}[]) state.records.set(row.id, {kind:row.kind,data:JSON.parse(row.data)});
+  return {state,who:{id:kioskId,email:'',role:'kiosk',isOwner:false,kioskId}};
+}
 export class Transaction {
   sql: D1PreparedStatement[] = [];
   constructor(public db: D1Database, public state: State, public who: Actor) {}
@@ -49,7 +62,9 @@ export class Transaction {
   async commit() {
     const {who,state} = this;
     const p = who.personId ? state.people.find(p => p.id === who.personId) : null;
-    const authorization = who.isOwner
+    const authorization = who.role === 'kiosk'
+      ? this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_kiosks WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL) THEN 1 ELSE 0 END',who.kioskId)
+      : who.isOwner
       ? this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",who.id,who.email,state.operator.version)
       : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,who.role,p?.version);
     try {

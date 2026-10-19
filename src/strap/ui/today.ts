@@ -6,6 +6,7 @@ import { icon } from './icons'
 import { roster } from './roster'
 import { avatar, emptyState, h, owner, person } from './shared'
 import { studioSetup } from './studio'
+import { deskScan } from './checkin'
 import { addDays } from '../zone'
 
 const strip = (s: any, booked: any[]) => `<ul class="strip" aria-label="Booked spots">${booked.map(b => `<li title="${h(person(s, b.personId))}">${h(person(s, b.personId).split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase())}</li>`).join('')}</ul>`
@@ -50,7 +51,7 @@ export function today(s: any, query: URLSearchParams, rail: string) {
     ? emptyState('calendar', `No classes on ${dayLong(date)}`, 'Prepare a class week, review it and publish it. Members can then book with their pack credits.', '<a class="btn" href="/app/classes#prepare-week">Prepare a class week</a>')
     : emptyState('calendar', `No classes on ${dayLong(date)}`, 'You are not teaching on this day.')
   const timeline = list.length ? `<div class="timeline">${list.map(c => classCard(s, c, c === chosen, link, back)).join('')}</div>` : `<section class="panel">${nothing}</section>`
-  return `<div class="page${rail ? '' : ' single'}"><div class="page-main">${heading}${setup}${timeline}</div>${rail ? `<aside class="rail" aria-label="Member success">${rail}</aside>` : ''}</div>`
+  return `<div class="page${rail ? '' : ' single'}"><div class="page-main">${heading}${setup}${list.length ? deskScan(back) : ''}${timeline}</div>${rail ? `<aside class="rail" aria-label="Member success">${rail}</aside>` : ''}</div>`
 }
 
 /** The day's date for the top bar, with the previous and next day. */

@@ -9,8 +9,10 @@ import { avatar, form, h, hidden, owner, person, rows, select } from './shared'
 import { staffCancel } from './booking-rules'
 import { correctionNote, correctionRow } from './attendance'
 import { deskSpot, spotLine, staffSpotRow } from './spots'
+import { alertNotes } from './checkin'
 
-// Instructors see who is in their class, not members' packs, balances or waivers.
+// Instructors see who is in their class and their check-in alerts (waiver and
+// pack), never members' balances.
 function state(s: any, c: any, b: any, started: boolean) {
   const signed = (yes: string, no: string) => owner(s) ? (waiverSigned(s, b.personId) ? yes : no) : ''
   const line = (tone: string, glyph: string, title: string, sub: string) => `<div class="state ${tone}"><span class="mark">${icon(glyph)}</span><div><strong>${h(title)}</strong><span>${sub}</span></div></div>`
@@ -34,6 +36,7 @@ function packChip(s: any, c: any, b: any) {
 }
 
 function note(s: any, b: any) {
+  if (b.alerts) return alertNotes(s, b)
   if (!owner(s)) return '<span class="note none">—</span>'
   const owed = balance(s, b.personId)
   if (owed > 0) return `<span class="note owes">Owes ${money(owed)}</span>`

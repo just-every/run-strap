@@ -3,7 +3,7 @@ import type { Transaction } from './store';
 import { balance } from './money';
 import { appendPackEvent } from './pack-credits';
 
-// Attendance on a booked seat: check-in, no-show (ATT-001) and the owner's
+// Attendance on a booked seat: roster check-in, no-show (ATT-001) and the owner's
 // corrections (ATT-003). A booking's `attendance` is its current outcome; every
 // correction appends to `corrections`, so the original outcome stays readable.
 const fees = ['late_cancel_fee','no_show_fee'];
@@ -11,15 +11,21 @@ const fees = ['late_cancel_fee','no_show_fee'];
 function teaches(who: Actor, entry: RecordData) {
   insist(who.role === 'owner' || (who.role === 'instructor' && who.personId === entry.instructorId),'instructor_required',403);
 }
-export function checkin(tx: Transaction, input: Record<string,unknown>) {
-  const booking = record(tx.state,input.id,'booking'), entry = record(tx.state,booking.classId,'class');
-  teaches(tx.who,entry);
+/** Every check-in door ends here: the seat's reserved credit becomes consumed
+ * (no further credit is spent), and a second check-in is refused. */
+export function recordCheckin(tx: Transaction, booking: RecordData, entry: RecordData, how: { channel: string; kioskId?: string }): RecordData {
   insist(booking.status === 'booked','confirmed_booking_required',409);
   insist(!booking.checkedInAt,'already_checked_in',409);
   insist(!booking.attendance,'attendance_needs_correction',409);
   const pack = record(tx.state,booking.packId,'pack');
   appendPackEvent(tx,pack,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id});
-  const checked = {...booking,attendance:'attended',checkedInAt:now(),checkedInBy:tx.who.id}; tx.put('booking',checked); return checked;
+  const checked = {...booking,attendance:'attended',checkedInAt:now(),checkedInBy:tx.who.id,checkedInByRole:tx.who.role,checkinChannel:how.channel,...(how.kioskId ? {kioskId:how.kioskId} : {})};
+  tx.put('booking',checked); return checked;
+}
+export function checkin(tx: Transaction, input: Record<string,unknown>) {
+  const booking = record(tx.state,input.id,'booking'), entry = record(tx.state,booking.classId,'class');
+  teaches(tx.who,entry);
+  return recordCheckin(tx,booking,entry,{channel:'roster'});
 }
 /** Once the class has started, a seat nobody checked in is a no-show: the credit
  * is spent and the no-show fee in the booking's terms is added once. */

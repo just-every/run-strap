@@ -5,6 +5,8 @@ import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { renderApp } from './ui'
 import { formInput } from './forms'
 import { exitExport } from './exit-export'
+import { kioskResponse } from './kiosk/http'
+import { kioskDeviceCommand, kioskDevices } from './kiosk/devices'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
@@ -14,12 +16,13 @@ const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare']
 async function state(env: Bindings, who: Actor) {
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), importJobs, displayName: operator?.name ?? '' }
+  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
   if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
+  if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
   return command(env.DB, who, name, input)
 }
 
@@ -37,6 +40,7 @@ async function inputBody(request: Request): Promise<Record<string, unknown>> {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if (path === '/kiosk' || path.startsWith('/kiosk/')) return kioskResponse(request, runtimeBindings(original))
   if (!path.startsWith('/api/strap/') && path !== '/app' && !path.startsWith('/app/')) return null
   const env = runtimeBindings(original), isAgent = path.startsWith('/api/strap/agent/')
   let who: Actor | undefined
@@ -74,9 +78,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (name === 'person.save' && !('active' in input)) input.active = false
         const result = await execute(request, env, who, name, input)
         // A refresh after booking or approving must read the result, rather
-        // than resubmit the mutation. These three commands need an immediate
-        // private result document (source review, journal or one-time key).
-        if (!['import.preview', 'import.journal', 'agent.create'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        // than resubmit the mutation. These commands need an immediate
+        // private result document (source review, journal, one-time key or pairing link).
+        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await state(env, who), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {

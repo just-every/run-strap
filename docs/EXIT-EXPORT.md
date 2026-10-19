@@ -31,7 +31,8 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 | `packCreditEvent` | Person/pack IDs, revision, grant/reserve/restore/consume/adjust/opening event, signed credit delta, remaining/expiry after event, optional class/booking IDs and actor provenance. Legacy openings can contain reservation booking IDs. |
 | `charge` | Person and pack IDs, exact amount cents and creation time. |
 | `payment` | Person ID, exact received cents, unique external receipt reference and recorder. This records received money; it is not an instruction to collect it. |
-| `booking` | Person/class IDs, optional pack ID, booking/waitlist/cancellation state and times, FIFO sequence, check-in attribution and refund flag. |
+| `booking` | Person/class IDs, optional pack ID, booking/waitlist/cancellation state and times, FIFO sequence, check-in attribution (actor, role, `checkinChannel` of roster, self, kiosk, kiosk_scan or desk_scan, and the opaque `kioskId` for kiosk check-ins) and refund flag. |
+| `memberCheckin` | Person ID, optional 10-digit US phone used for kiosk lookup, and the member's current opaque check-in code with its revision and issue time. Paired kiosk devices are credentials and are not exported. |
 | `waiver` | Immutable text, document version and creation attribution. |
 | `acknowledgement` | Person ID, exact waiver ID, actor and receipt time. **This is not a signature.** |
 
