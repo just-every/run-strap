@@ -22,12 +22,12 @@ export function waitlistPanel(s: any) {
 }
 
 /** A member's own open offer: claim it, or decline (leaving the waitlist costs nothing). */
-export const memberOffer = (s: any, b: any, back: string) => `<span class="pill pending">Spot offered</span> <small class="effect">Claim by ${h(when(s, b.offer.expiresAt))}; a credit is used only when you claim.</small>`
+export const memberOffer = (s: any, b: any, back: string) => `<span class="pill pending">Spot offered</span> <small class="effect">Claim by ${when(s, b.offer.expiresAt)}; a credit is used only when you claim.</small>`
   + form('booking.offer.accept', back, hidden('id', b.id), 'Claim spot', 'primary', 'small') + form('booking.cancel', back, hidden('id', b.id), 'Decline', 'quiet', 'small')
 
 /** The desk's line for an offered seat, with the offer email's recorded outcome. */
 export function offerLine(s: any, b: any) {
   const mail = rows(s, 'noticeDeliveries').find(d => d.sourceKind === 'booking' && d.sourceId === b.id)
-  return `Claim by ${h(when(s, b.offer.expiresAt))}${b.offer.reason === 'late_window' ? ' · late-cancel window' : ''}${mail ? ` · ${h(delivery(mail))}` : ''}`
+  return `Claim by ${when(s, b.offer.expiresAt)}${b.offer.reason === 'late_window' ? ' · late-cancel window' : ''}${mail ? ` · ${h(delivery(mail))}` : ''}`
 }
 export const acceptForMember = (b: any, back: string) => form('booking.offer.accept', back, hidden('id', b.id), 'Accept for member', 'quiet', 'small')
