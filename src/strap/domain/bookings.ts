@@ -2,7 +2,7 @@ import { humanOwner, id, insist, list, now, person, record, text, type RecordDat
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from './booking-policy';
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
-import { appendPackEvent, packServiceEligible } from './pack-credits';
+import { appendPackEvent, bookingCredit, packServiceEligible } from './pack-credits';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
 
@@ -45,37 +45,6 @@ export function book(tx: Transaction, input: Record<string,unknown>) {
   insist(pack,'eligible_credit_required',409);
   return seat(tx,booking,entry,pack,chooseSpot(tx.state,entry,input.spot));
 }
-/** The owner operates the desk until STAFF-001 introduces scoped staff roles. */
-export function deskBook(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
-  const member = person(tx.state,input.personId), entry = record(tx.state,input.classId,'class');
-  insist(member.role === 'member','member_required');
-  insist(entry.status !== 'cancelled','class_cancelled',409);
-  insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
-  tx.future(entry.start);
-  // Staff window overrides arrive with SCHED-010's override right.
-  insistBookingOpen(tx,entry,!!eligiblePack(tx.state,member.id,entry));
-  insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
-  insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
-  // Existing eligible online waiters have priority over an unallocated online seat.
-  promote(tx,entry);
-  const capacity = seatCapacity(tx.state,entry);
-  const channel = text(input.channel ?? 'desk','channel',30);
-  insist(['desk','phone','inbox'].includes(channel),'invalid_channel');
-  // MSG-004: a full class takes the member onto the end of its online waitlist.
-  if (capacity.totalOpen === 0) {
-    insist(input.waitlist === true,'class_full',409);
-    const waiter = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:channel,
-      madeBy:tx.who.id,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
-    tx.put('booking',waiter); return waiter;
-  }
-  const pack = eligiblePack(tx.state,member.id,entry);
-  insist(pack,'eligible_credit_required',409);
-  const spot = chooseSpot(tx.state,entry,input.spot);
-  return seat(tx,{id:id(),classId:entry.id,personId:member.id,status:'waitlisted',
-    capacityPool:capacity.heldOpen > 0?'held':'online',bookingChannel:channel,
-    madeBy:tx.who.id,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1},entry,pack,spot);
-}
 /** SCHED-006: the effect shown before cancelling is the effect applied. The
  * owner acts for front desk with the fee-waiver right until STAFF-001. */
 export function cancel(tx: Transaction, input: Record<string,unknown>) {
@@ -97,11 +66,11 @@ export function cancel(tx: Transaction, input: Record<string,unknown>) {
       waiver = {reason:text(input.reason,'waiver_reason',500),by:tx.who.id,right:'fee-waiver',waivedFeeCents:effect.feeCents,creditReturnedByWaiver:!effect.creditReturned,at:now()};
     }
   } else if (effect.waivable) insist(input.mode === undefined || input.mode === 'late','fee_waiver_right_required',403);
-  const returned = booking.status === 'booked' && (choice === 'early' || effect.creditReturned);
+  // An unpaid visit (SCHED-010) has no credit to return: cancelling releases it.
+  const returned = booking.status === 'booked' && !!booking.packId && (choice === 'early' || effect.creditReturned);
   const feeCents = choice === 'late' ? effect.feeCents : 0;
   if (booking.status === 'booked') {
-    const pack = record(tx.state,booking.packId,'pack');
-    appendPackEvent(tx,pack,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
+    bookingCredit(tx,booking,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
   }
   if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',createdAt:now(),createdBy:tx.who.id});
   const cancelled = {...booking,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,

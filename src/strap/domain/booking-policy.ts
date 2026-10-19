@@ -63,7 +63,7 @@ export function cancellationEffect(booking: RecordData, entry: RecordData, at = 
   const cutoffAt = before(entry.start,terms.cutoffHours*60);
   const seated = booking.status === 'booked';
   const timing: 'early' | 'late' = seated && at >= cutoffAt ? 'late' : 'early';
-  const effect = {timing,cutoffAt,creditReturned:seated && (timing === 'early' || terms.lateReturnsCredit),feeCents:timing === 'late' ? terms.lateFeeCents : 0};
+  const effect = {timing,cutoffAt,unpaid:seated && !booking.packId,creditReturned:seated && !!booking.packId && (timing === 'early' || terms.lateReturnsCredit),feeCents:timing === 'late' ? terms.lateFeeCents : 0};
   return {...effect,key:`${effect.timing}|${effect.creditReturned ? 1 : 0}|${effect.feeCents}`,
     waivable:timing === 'late' && (!terms.lateReturnsCredit || terms.lateFeeCents > 0)};
 }

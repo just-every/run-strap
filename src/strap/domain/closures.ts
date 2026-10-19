@@ -1,6 +1,6 @@
 import { humanOwner, id, instant, insist, list, now, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { appendPackEvent } from './pack-credits';
+import { bookingCredit } from './pack-credits';
 import { resourceLabel, roomOf } from './scheduling';
 import { mailNotConfigured, putNotice, reserveMail, titleOf, whenText, type NoticeContext } from './notices';
 
@@ -72,8 +72,8 @@ export function confirmClosure(tx: Transaction, input: Record<string,unknown>, c
     tx.put('class',{...entry,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelReason:closure.reason,closureId:closure.id});
     for (const seat of item.bookings) {
       const booking = record(tx.state,seat.bookingId,'booking');
-      if (booking.status === 'booked') appendPackEvent(tx,record(tx.state,booking.packId,'pack'),{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'class_cancelled'});
-      tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked',feeCents:0,closureId:closure.id});
+      if (booking.status === 'booked') bookingCredit(tx,booking,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'class_cancelled'});
+      tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked' && !!booking.packId,feeCents:0,closureId:closure.id});
       const title = titleOf(entry), when = whenText(tx.state,entry.start);
       const body = `${title} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? 'Your class credit is back in your pack.' : 'Your waitlist spot is closed; no credit was used.'}`;
       const notice = {id:`notice:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,closureId:closure.id,subject:`Cancelled: ${title}, ${when}`,body};

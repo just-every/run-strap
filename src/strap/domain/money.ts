@@ -2,6 +2,7 @@ import { humanOwner, preparer, id, instant, integer, insist, list, now, person, 
 import type { Transaction } from './store';
 import { approveDraft } from './drafts';
 import { promoteAll } from './bookings';
+import { settleUnpaid } from './desk';
 import { appendPackEvent, packEvents } from './pack-credits';
 
 export function balance(state: State, personId: string) {
@@ -31,6 +32,7 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
+  settleUnpaid(tx,record(tx.state,pack.id,'pack'));
   promoteAll(tx);
   return {id:pack.id,draftId:draft.id,status:'approved'};
 }

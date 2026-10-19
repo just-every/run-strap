@@ -31,6 +31,10 @@ type CreditEvent = {
   bookingId?: string; classId?: string; reason?: string; expiresAt?: string;
   requestId?: string; requestBasis?: string;
 };
+/** A booking's credit event on its own pack; an unsettled unpaid visit (SCHED-010) has none. */
+export function bookingCredit(tx: Transaction, booking: RecordData, input: CreditEvent) {
+  return booking.packId ? appendPackEvent(tx,record(tx.state,booking.packId,'pack'),input) : null;
+}
 /** Each call inserts a fresh event; balance and ledger share the command fence. */
 export function appendPackEvent(tx: Transaction, pack: RecordData, input: CreditEvent) {
   openLegacyLedger(tx,pack);

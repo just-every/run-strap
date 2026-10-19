@@ -1,7 +1,7 @@
 import { humanOwner, id, insist, list, now, record, text, type Actor, type RecordData } from './types';
 import type { Transaction } from './store';
 import { balance } from './money';
-import { appendPackEvent } from './pack-credits';
+import { appendPackEvent, bookingCredit } from './pack-credits';
 
 // Attendance on a booked seat: roster check-in, no-show (ATT-001) and the owner's
 // corrections (ATT-003). A booking's `attendance` is its current outcome; every
@@ -17,8 +17,7 @@ export function recordCheckin(tx: Transaction, booking: RecordData, entry: Recor
   insist(booking.status === 'booked','confirmed_booking_required',409);
   insist(!booking.checkedInAt,'already_checked_in',409);
   insist(!booking.attendance,'attendance_needs_correction',409);
-  const pack = record(tx.state,booking.packId,'pack');
-  appendPackEvent(tx,pack,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id});
+  bookingCredit(tx,booking,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id});
   const checked = {...booking,attendance:'attended',checkedInAt:now(),checkedInBy:tx.who.id,checkedInByRole:tx.who.role,checkinChannel:how.channel,...(how.kioskId ? {kioskId:how.kioskId} : {})};
   tx.put('booking',checked); return checked;
 }
@@ -36,7 +35,7 @@ export function markNoShow(tx: Transaction, input: Record<string,unknown>) {
   insist(!booking.checkedInAt && !booking.attendance,'attendance_already_recorded',409);
   insist(entry.start <= now(),'class_not_started',409);
   tx.reached(entry.start);
-  appendPackEvent(tx,record(tx.state,booking.packId,'pack'),{type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'no_show'});
+  bookingCredit(tx,booking,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'no_show'});
   const feeCents = booking.cancelTerms?.noShowFeeCents ?? 0;
   if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});
   const marked = {...booking,attendance:'no_show',noShowAt:now(),noShowBy:tx.who.id,noShowByRole:tx.who.role,noShowFeeCents:feeCents};
@@ -55,7 +54,7 @@ export function correctAttendance(tx: Transaction, input: Record<string,unknown>
   insist(from,'nothing_to_correct',409);
   insist(from === 'no_show' ? ['attended','excused'].includes(outcome) : outcome === 'early_cancel','invalid_outcome');
   const restore = outcome === 'excused' || (outcome === 'early_cancel' && !booking.refunded);
-  if (restore) {
+  if (restore && booking.packId) {
     const pack = record(tx.state,booking.packId,'pack');
     insist(pack.expiresAt > now(),'pack_expired_extend_first',409);
     tx.future(pack.expiresAt);

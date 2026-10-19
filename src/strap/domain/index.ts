@@ -1,7 +1,8 @@
 import { load, loadKiosk, loadSystem, Transaction } from './store';
 import { DomainError, insist, list, type Actor } from './types';
 import { prepareClasses, publishClasses } from './classes';
-import { acknowledgeWaiver, book, deskBook, cancel, latestWaiver, publishWaiver } from './bookings';
+import { acknowledgeWaiver, book, cancel, latestWaiver, publishWaiver } from './bookings';
+import { deskBook } from './desk';
 import { checkin, correctAttendance, markNoShow } from './attendance';
 import { closureImpact, confirmClosure, dismissNotice, prepareClosure } from './closures';
 import { connectMemberMail, memberMail, type NoticeContext } from './notices';

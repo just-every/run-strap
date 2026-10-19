@@ -43,6 +43,9 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if ('revision' in input) input.revision = Number(input.revision)
   if (typeof input.eligibleServices === 'string') input.eligibleServices = input.eligibleServices.split(/\r?\n/).map(value => value.trim()).filter(Boolean)
   if ('active' in input) input.active = ['on', 'true', '1'].includes(String(input.active))
+  if (name === 'booking.desk' && String(input.amount ?? '').trim() === '') delete input.amount
+  if (name === 'booking.desk' && !['sell-pack'].includes(String(input.pay))) { delete input.expiresOn; delete input.credits }
+  if (name === 'booking.desk' && String(input.pay) !== 'pack') delete input.packId
   if ('amount' in input) { input.amountCents = cents(input.amount, name === 'payment.record' ? 'the amount received' : 'the pack price'); delete input.amount }
   if ('expiresOn' in input) {
     if (!date.test(String(input.expiresOn))) fail('Choose the last day the pack can be used')

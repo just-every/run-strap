@@ -11,6 +11,7 @@ import { correctionNote, correctionRow } from './attendance'
 import { deskSpot, spotLine, staffSpotRow } from './spots'
 import { alertNotes } from './checkin'
 import { acceptForMember, offerLine } from './waitlist'
+import { deskForm, deskNote } from './desk'
 
 // Instructors see who is in their class and their check-in alerts (waiver and
 // pack), never members' balances.
@@ -35,7 +36,7 @@ function state(s: any, c: any, b: any, started: boolean) {
 function packChip(s: any, c: any, b: any) {
   if (!owner(s)) return ''
   const pack = rows(s, 'packs').find(p => p.id === b.packId) ?? (b.status !== 'booked' ? eligiblePack(s, b.personId, c) : null)
-  if (!pack) return '<span class="chip quiet">No credit</span>'
+  if (!pack) return `<span class="chip quiet">${b.unpaid ? 'Unpaid visit' : 'No credit'}</span>`
   return `<span class="chip">${h(packName(pack))} · ${pack.remaining} left</span>`
 }
 
@@ -54,12 +55,12 @@ export function roster(s: any, c: any, back: string) {
   const started = Date.parse(c.start) <= Date.now()
   const canCheckIn = owner(s) || s.actor.personId === c.instructorId
   const line = (b: any, n: string) => `<tr><td class="n">${n}</td><td class="who-cell"><div class="who">${avatar(person(s, b.personId))}${owner(s) ? `<a href="/app/people?person=${encodeURIComponent(b.personId)}#person">${h(person(s, b.personId))}</a>` : `<span>${h(person(s, b.personId))}</span>`}</div></td>`
-    + `<td data-label="Status">${state(s, c, b, started)}${b.spot && b.status === 'booked' ? `<small>Spot: ${h(b.spot)}</small>` : ''}${owner(s) ? correctionNote(b) : ''}${owner(s) && b.status === 'booked' ? `<small>${b.capacityPool === 'held' ? 'Desk-held' : 'Online'} spot · ${h(b.bookingChannel ?? 'online')}</small>` : ''}</td><td data-label="Pack">${packChip(s, c, b)}</td><td data-label="Notes">${note(s, b)}</td>`
+    + `<td data-label="Status">${state(s, c, b, started)}${b.spot && b.status === 'booked' ? `<small>Spot: ${h(b.spot)}</small>` : ''}${owner(s) ? correctionNote(b) : ''}${owner(s) && b.status === 'booked' ? `<small>${b.capacityPool === 'held' ? 'Desk-held' : 'Online'} spot · ${h(b.bookingChannel ?? 'online')}${deskNote(b)}</small>` : ''}</td><td data-label="Pack">${packChip(s, c, b)}</td><td data-label="Notes">${note(s, b)}</td>`
     + `<td class="act">${owner(s) && b.status === 'offered' && !started ? acceptForMember(b, back) : ''}${b.status === 'booked' && !b.checkedInAt && !b.attendance && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') + (started ? form('attendance.noshow', back, hidden('id', b.id), 'No-show', 'quiet', 'small') : '') : ''}</td></tr>${owner(s) && !started && b.status !== 'cancelled' ? staffCancel(person(s, b.personId), b, back) : ''}${owner(s) ? staffSpotRow(s, c, b, back) : ''}${correctionRow(s, person(s, b.personId), b, back)}`
   const body = [...booked.map((b, i) => line(b, String(i + 1))), ...waiting.map((b, i) => line(b, `W${i + 1}`)), ...cancelled.map(b => line(b, '—'))].join('')
   return `<div class="roster" id="roster"><table><thead><tr><th>#</th><th>Member</th><th>Status</th><th>Pack</th><th>Notes</th><th><span class="visually-hidden">Action</span></th></tr></thead><tbody>${body || `<tr><td colspan="6" class="note">No one has booked this class yet.</td></tr>`}</tbody></table>`
     + spotLine(s, c)
     + `<p class="roster-foot"><span>${c.occupancy.booked - c.occupancy.offered} / ${c.occupancy.total} booked${c.occupancy.offered ? ` · ${c.occupancy.offered} held for an offer` : ''} · ${c.occupancy.onlineBooked} / ${c.occupancy.online} online · ${c.occupancy.heldBooked} / ${c.occupancy.held} desk-held</span></p>`
-    + (owner(s) && !started ? `<div class="panel-body">${form('booking.desk', back, hidden('classId', c.id) + select('personId', 'Member or walk-in profile', rows(s, 'people').filter(p => p.active && p.role === 'member').map(p => [p.id, p.name]), '') + select('channel', 'Request channel', [['desk', 'At the desk'], ['phone', 'Phone'], ['inbox', 'Inbox']], 'desk') + (c.occupancy.totalOpen === 0 ? hidden('waitlist', 'true') : c.spots ? deskSpot(c) : ''), c.occupancy.totalOpen === 0 ? 'Add to waitlist' : 'Book at desk')}<p class="meta">Walk-ins need an active profile, an eligible pack and their own current waiver acknowledgment. <a href="/app/people#add-person">Add a profile</a>. Held spots are available only at the desk.</p></div>` : '')
+    + (owner(s) && !started ? deskForm(s, c, back) : '')
     + `<p class="roster-foot"><span>${booked.length} booked · ${booked.filter(b => b.checkedInAt).length} checked in · ${booked.filter(b => b.attendance === 'no_show').length} no-show · ${waiting.length} waiting · ${cancelled.length} cancelled</span></p></div>`
 }

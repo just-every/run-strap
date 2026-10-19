@@ -32,7 +32,7 @@ export const livePacks = (s: any, personId: string) => rows(s, 'packs').filter(p
 export const balance = (s: any, personId: string) => rows(s, 'balances').find(b => b.personId === personId)?.balanceCents ?? 0
 export const waiverSigned = (s: any, personId: string) => !s.waiver || rows(s, 'acknowledgements').some(a => a.personId === personId && a.waiverId === s.waiver.id)
 export const lastVisit = (s: any, personId: string) => rows(s, 'bookings').filter(b => b.personId === personId && b.checkedInAt).map(b => b.checkedInAt).sort().at(-1)
-export const packName = (p: any) => `${p.credits}-class pack`
+export const packName = (p: any) => p.kind === 'drop-in' ? 'Drop-in' : `${p.credits}-class pack`
 
 /** The class that is on now, or the next to start today, or the day's last. */
 export function currentClass(s: any, list: any[]) {

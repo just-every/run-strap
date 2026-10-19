@@ -31,6 +31,7 @@ export function ruleLine(s: any, c: any) {
 /** The exact effect of cancelling now, as the domain will apply it. */
 export function effectText(e: any, waitlisted: boolean) {
   if (waitlisted) return 'Leaving the waitlist costs nothing.'
+  if (e.unpaid) return `Cancel now: the unpaid visit is released${e.feeCents ? `, ${money(e.feeCents)} late fee added` : ''}.`
   if (e.timing === 'early') return 'Cancel now: your credit returns.'
   return `Late cancel: ${e.creditReturned ? 'credit returns' : 'credit kept'}${e.feeCents ? `, ${money(e.feeCents)} fee added` : ''}.`
 }
