@@ -441,9 +441,9 @@ Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Published | 13 | 1 | 0 | 14 |
+| Published | 14 | 0 | 0 | 14 |
 | Target and push further | 1 | 26 | 106 | 133 |
-| All | 14 | 27 | 106 | 147 |
+| All | 15 | 26 | 106 | 147 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -460,7 +460,7 @@ Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90
 | `ARCHIVE-001` | Complete native archive and guarded restore | published | done | `src/strap/archive-policy.mjs`; `tests/archive.test.mjs` |  |
 | `ERASE-001` | Unused identity erasure fence | published | done | `src/strap/domain/people.ts`; `tests/strap.test.mjs`; `tests/archive.test.mjs` |  |
 | `AUDIT-001` | Retained draft approval records | published | done | `src/strap/domain/drafts.ts`; `tests/strap.test.mjs`; `tests/archive.test.mjs` |  |
-| `PUBLIC-001` | Run site and installed studio doors | published | partial | `src/site/pages.ts`; `src/site/html.ts`; `src/strap/http.ts`; `tests/runtime.mjs` | Installed Lobby and private HTTP doors have coverage; no complete browser journey verifies the built run-site, /run and every docs link. |
+| `PUBLIC-001` | Run site and installed studio doors | published | done | `src/site/pages.ts`; `src/site/shell.ts`; `src/strap/http.ts`; `tests/site/site.test.mjs`; `tests/site/browser-journey.mjs` |  |
 | `STUDIO-001` | US studio configuration | target | missing |  | No implemented us studio configuration workflow or public-door acceptance coverage. |
 | `STUDIO-002` | Locations and shared memberships | target | missing |  | No implemented locations and shared memberships workflow or public-door acceptance coverage. |
 | `MEM-001` | Unified member history | target | partial | `src/strap/domain/index.ts`; `src/strap/ui/people.ts`; `src/strap/ui/packs.ts`; `tests/strap.test.mjs` | People, bookings and payment records exist; combined profiles, notes, preferences, emergency contacts, duplicate merge and staff profile creation and editing are absent. |

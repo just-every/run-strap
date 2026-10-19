@@ -32,7 +32,7 @@ Current judgment: commit `411dc1910f35337acd819abe79b1e061e25e90c3` (17 October 
 
 - **AUDIT-001 — Retained draft approval records.** **Status:** done. **Acceptance evidence:** Approve a pack through HTTP, inspect its draft-linked approval, archive the populated studio and compare the restored approval records. **Current evidence:** `src/strap/domain/drafts.ts`; `tests/strap.test.mjs`; `tests/archive.test.mjs`.
 
-- **PUBLIC-001 — Run site and installed studio doors.** **Status:** partial. **Acceptance evidence:** Build the run site, open its homepage, /run and /docs; open the installed Worker Lobby signed out and attempt /app before and after sign-in. Confirm the public and private routes remain separate. **Current evidence:** `src/site/pages.ts`; `src/site/html.ts`; `src/strap/http.ts`; `tests/runtime.mjs`. **Gap:** Installed Lobby and private HTTP doors have coverage; no complete browser journey verifies the built run-site, /run and every docs link.
+- **PUBLIC-001 — Run site and installed studio doors.** **Status:** done. **Acceptance evidence:** Build the run site, open its homepage, /run and /docs; open the installed Worker Lobby signed out and attempt /app before and after sign-in. Confirm the public and private routes remain separate. **Current evidence:** `src/site/pages.ts`; `src/site/shell.ts`; `src/strap/http.ts`; `tests/site/site.test.mjs`; `tests/site/browser-journey.mjs` (built pages, every guide, native setup/sign-in and separate doors at 1440 and 390 pixels).
 
 ## Studio and members
 

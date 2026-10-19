@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { publicDoors } from './browser-journey.mjs'
 
 const root = new URL('../..', import.meta.url).pathname
 const site = join(root, 'dist/site')
@@ -13,7 +14,7 @@ const pages = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => 
 const served = path => [path, `${path}.html`, join(path, 'index.html')].some(candidate => existsSync(join(site, candidate)) && !candidate.endsWith('/'))
 const attrs = (html, name) => [...html.matchAll(new RegExp(`\\s${name}="([^"]*)"`, 'g'))].map(match => match[1].replaceAll('&amp;', '&'))
 
-test('the run site builds, its primary action opens /run, and every link and file it names resolves', () => {
+test('PUBLIC-001: built site, every guide and installed private doors stay separate at desktop and phone widths', async () => {
   execFileSync(join(root, 'node_modules/.bin/rer'), ['build', '--site'], { cwd: root, stdio: 'pipe' })
   const home = readFileSync(join(site, 'index.html'), 'utf8')
   assert.match(home, /<a class="btn" href="\/run">/, 'the homepage leads with Run Strap to /run')
@@ -30,4 +31,5 @@ test('the run site builds, its primary action opens /run, and every link and fil
       if (path !== '/') assert.ok(served(path), `${where} names ${path}, which the site does not serve`)
     }
   }
+  await publicDoors(site)
 })
