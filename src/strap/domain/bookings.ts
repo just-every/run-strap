@@ -3,7 +3,7 @@ import type { Transaction } from './store';
 import { classCapacity } from './capacity';
 import { appendPackEvent, packServiceEligible } from './pack-credits';
 
-export const latestWaiver = (state: State) => list(state,'waiver').at(-1) ?? null;
+export const latestWaiver = (state: State) => list(state,'waiver').sort((a,b) => a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1) ?? null;
 function acknowledged(state: State, personId: string) {
   const waiver = latestWaiver(state);
   return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id);

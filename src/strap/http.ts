@@ -4,6 +4,7 @@ import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { renderApp } from './ui'
 import { formInput } from './forms'
+import { exitExport } from './exit-export'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
@@ -48,6 +49,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
       if (pages.has(path)) return renderApp(await state(env, who), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
