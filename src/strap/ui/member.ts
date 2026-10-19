@@ -6,10 +6,11 @@ import { body, emptyLine, emptyState, form, h, hidden, panel, rows } from './sha
 import { memberCancel, windowState } from './booking-rules'
 import { when } from './format'
 import { packServiceEligible } from '../domain/pack-credits'
+import { bookingSpot, ownSpot } from './spots'
 
 function bookAction(s: any, c: any) {
   const own = rows(s, 'bookings').find(b => b.classId === c.id && b.personId === s.actor.personId && b.status !== 'cancelled')
-  if (own) return `<span class="pill ${own.status === 'booked' ? 'done' : 'pending'}">${own.status === 'booked' ? 'Booked' : 'On the waitlist'}</span> ${memberCancel(own, '/app')}`
+  if (own) return `<span class="pill ${own.status === 'booked' ? 'done' : 'pending'}">${own.status === 'booked' ? 'Booked' : 'On the waitlist'}</span> ${ownSpot(c, own, '/app')}${memberCancel(own, '/app')}`
   if (Date.parse(c.start) <= Date.now()) return ''
   const priority = rows(s, 'packs').some(p => p.personId === s.actor.personId && p.priorityBooking && p.remaining > 0 && packServiceEligible(p, c) && p.expiresAt > c.start && Date.parse(p.expiresAt) > Date.now())
   const open = windowState(c, priority)
@@ -17,7 +18,7 @@ function bookAction(s: any, c: any) {
   if (open === 'not-open') return `<span class="chip quiet">Opens&nbsp;${when(s, priority && c.bookingWindow.priorityOpensAt ? c.bookingWindow.priorityOpensAt : c.bookingWindow.opensAt)}</span>`
   // A member cannot see who else booked: a full class puts them on its waitlist.
   if (!eligiblePack(s, s.actor.personId, c)) return '<span class="chip quiet">No credit for this class</span>'
-  return form('booking.book', '/app', hidden('classId', c.id), c.occupancy.onlineOpen === 0 ? 'Join waitlist' : 'Book', 'primary', 'small')
+  return form('booking.book', '/app', hidden('classId', c.id) + bookingSpot(c), c.occupancy.onlineOpen === 0 ? 'Join waitlist' : 'Book', 'primary', 'small')
 }
 
 export function memberHome(s: any) {

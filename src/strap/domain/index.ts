@@ -7,7 +7,7 @@ import { adjustPack, approvePack, approveReminder, balance, preparePack, prepare
 import { erasePerson, savePerson } from './people';
 import { saveStudio, studioSettings } from './studio';
 import { packSummary } from './pack-credits';
-import { classCapacity } from './capacity';
+import { classSpots, moveSpot, saveSpotLayout, seatCapacity, spotLayouts } from './spots';
 import { saveUnavailability, removeUnavailability } from './scheduling';
 import { bookingRules, bookingWindow, cancellationEffect, removeBookingRule, saveBookingRule } from './booking-policy';
 export { actor } from './store';
@@ -27,7 +27,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
     'booking.book':book, 'booking.desk':deskBook, 'booking.cancel':cancel, 'attendance.checkin':checkin,
     'attendance.noshow':markNoShow, 'attendance.correct':correctAttendance,
     'waiver.publish':publishWaiver, 'waiver.acknowledge':acknowledgeWaiver,
-    'studio.save':saveStudio, 'bookingRule.save':saveBookingRule, 'bookingRule.remove':removeBookingRule,
+    'studio.save':saveStudio, 'spots.save':saveSpotLayout, 'booking.spot':moveSpot, 'bookingRule.save':saveBookingRule, 'bookingRule.remove':removeBookingRule,
   };
   const handler = handlers[name as keyof typeof handlers];
   if (!handler) throw new DomainError('unknown_command',404);
@@ -49,7 +49,7 @@ export async function snapshot(db: D1Database, who: Actor) {
   const people = state.people.filter(p => !p.erasedAt && (owner || visibleIds.has(p.id))).map(p =>
     owner || p.id === who.personId ? p : {id:p.id,name:p.name,role:p.role,active:p.active});
   const own = (kind: string) => list(state,kind).filter(r => owner || r.personId === who.personId);
-  return {actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:classCapacity(c,list(state,'booking')),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
-    drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
+  return {actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
+    drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     balances:state.people.filter(p => !p.erasedAt && (owner || p.id === who.personId)).map(p => ({personId:p.id,balanceCents:balance(state,p.id)}))};
 }

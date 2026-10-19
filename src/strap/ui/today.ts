@@ -23,16 +23,16 @@ function exception(s: any, c: any, stuck: NonNullable<ReturnType<typeof stuckWai
 
 function classCard(s: any, c: any, open: boolean, link: (id: string) => string, back: string) {
   const { booked, waiting } = attendance(s, c.id)
-  const full = booked.length >= c.capacity, stuck = stuckWaitlist(s, c)
+  const full = booked.length >= c.occupancy.total, stuck = stuckWaitlist(s, c)
   const past = Date.parse(c.end) <= Date.now()
   const room = classRoom(c)
-  const spots = `<span class="pill${full ? ' full' : ''}">${booked.length} of ${c.capacity}</span>`
-    + (waiting.length ? `<span class="pill wait">Waitlist <b>${waiting.length}</b></span>` : `<span class="pill quiet">${c.capacity - booked.length} open</span>`)
+  const spots = `<span class="pill${full ? ' full' : ''}">${booked.length} of ${c.occupancy.total}</span>`
+    + (waiting.length ? `<span class="pill wait">Waitlist <b>${waiting.length}</b></span>` : `<span class="pill quiet">${c.occupancy.total - booked.length} open</span>`)
   const head = `<div class="class-head"><div class="class-time"><strong>${h(clock(s, c.start))}</strong><span>${h(length(c.start, c.end))}</span></div>`
     + `<div class="class-name"><strong>${h(classTitle(c))}</strong>${room ? `<span>${h(room)}</span>` : ''}${stuck ? `<span class="flag">${icon('alert')}Waitlist stuck</span>` : ''}</div>`
     + `<div class="teacher">${avatar(c.instructorName ?? person(s, c.instructorId), 'plum')}<span>${h(c.instructorName ?? person(s, c.instructorId))}</span></div>`
     + `<div class="spots">${spots}</div><a class="toggle" href="${h(open ? link('') : link(c.id))}" aria-label="${open ? 'Close' : 'Open'} the roster for ${h(classTitle(c))} at ${h(clock(s, c.start))}"${open ? ' aria-expanded="true"' : ''}>${icon(open ? 'up' : 'chevron')}</a></div>`
-  const body = (stuck ? exception(s, c, stuck) : '') + (open ? roster(s, c, back) : '') + (!open && !stuck && full && c.capacity <= 16 ? strip(s, booked) : '')
+  const body = (stuck ? exception(s, c, stuck) : '') + (open ? roster(s, c, back) : '') + (!open && !stuck && full && c.occupancy.total <= 16 ? strip(s, booked) : '')
   return `<article class="class-card${open ? ' open' : ''}${stuck ? ' exception' : ''}${past ? ' past' : ''}" id="class-${h(c.id)}">${head}${body}</article>`
 }
 
@@ -43,7 +43,7 @@ export function today(s: any, query: URLSearchParams, rail: string) {
   const base = (extra: Record<string, string>) => { const q = new URLSearchParams({ ...(date !== studioToday(s) ? { day: date } : {}), ...extra }); return `/app${q.size ? '?' + q : ''}` }
   const link = (id: string) => base(id ? { class: id } : { class: '' }) + (id ? `#class-${id}` : '')
   const back = base(chosen ? { class: chosen.id } : {})
-  const totals = list.reduce((t, c) => { const a = attendance(s, c.id); return { booked: t.booked + a.booked.length, spots: t.spots + c.capacity, waiting: t.waiting + a.waiting.length } }, { booked: 0, spots: 0, waiting: 0 })
+  const totals = list.reduce((t, c) => { const a = attendance(s, c.id); return { booked: t.booked + a.booked.length, spots: t.spots + c.occupancy.total, waiting: t.waiting + a.waiting.length } }, { booked: 0, spots: 0, waiting: 0 })
   const heading = `<div class="page-title"><h1>${date === studioToday(s) ? 'Today' : h(dayShort(s, date))}</h1>${list.length ? `<p>${list.length} ${list.length === 1 ? 'class' : 'classes'} · ${totals.booked} of ${totals.spots} spots booked${totals.waiting ? ` · ${totals.waiting} waiting` : ''}</p>` : ''}</div>`
   const setup = owner(s) && !s.studio ? studioSetup('/app') : ''
   const nothing = owner(s)

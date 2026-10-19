@@ -1,7 +1,7 @@
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from './booking-policy';
 import type { Transaction } from './store';
-import { classCapacity } from './capacity';
+import { chooseSpot, seatCapacity } from './spots';
 import { appendPackEvent, packServiceEligible } from './pack-credits';
 
 export const latestWaiver = (state: State) => list(state,'waiver').sort((a,b) => a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1) ?? null;
@@ -20,10 +20,11 @@ function ownMember(tx: Transaction) {
   insist(tx.who.personId,'person_required',403);
   return person(tx.state,tx.who.personId);
 }
-function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData) {
+/** A seat in a room with spots takes the named spot, or the first free one. */
+function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData, spot = chooseSpot(tx.state,entry,undefined)) {
   tx.future(entry.start); tx.future(pack.expiresAt);
   appendPackEvent(tx,pack,{type:'reserve',credits:-1,bookingId:booking.id,classId:entry.id});
-  const updated = {...booking,status:'booked',packId:pack.id,bookedAt:now()};
+  const updated = {...booking,status:'booked',packId:pack.id,bookedAt:now(),...(spot ? {spot} : {})};
   tx.put('booking',updated); return updated;
 }
 /** Stable creation-order FIFO among currently eligible members. No credit is
@@ -31,7 +32,7 @@ function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: Rec
 export function promote(tx: Transaction, entry: RecordData) {
   if (entry.start <= now()) return;
   const all = list(tx.state,'booking').filter(b => b.classId === entry.id);
-  let vacancies = classCapacity(entry,all).onlineOpen;
+  let vacancies = seatCapacity(tx.state,entry,all).onlineOpen;
   const waiting = all.filter(b => b.status === 'waitlisted').sort((a,b) => a.sequence-b.sequence || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   for (const candidate of waiting) {
     if (vacancies <= 0) break;
@@ -52,12 +53,12 @@ export function book(tx: Transaction, input: Record<string,unknown>) {
   insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   promote(tx,entry);
-  const full = classCapacity(entry,list(tx.state,'booking')).onlineOpen === 0;
+  const full = seatCapacity(tx.state,entry).onlineOpen === 0;
   const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:'online',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
   if (full) { tx.put('booking',booking); return booking; }
   const pack = eligiblePack(tx.state,member.id,entry);
   insist(pack,'eligible_credit_required',409);
-  return seat(tx,booking,entry,pack);
+  return seat(tx,booking,entry,pack,chooseSpot(tx.state,entry,input.spot));
 }
 /** The owner operates the desk until STAFF-001 introduces scoped staff roles. */
 export function deskBook(tx: Transaction, input: Record<string,unknown>) {
@@ -72,15 +73,16 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   // Existing eligible online waiters have priority over an unallocated online seat.
   promote(tx,entry);
-  const capacity = classCapacity(entry,list(tx.state,'booking'));
+  const capacity = seatCapacity(tx.state,entry);
   insist(capacity.totalOpen > 0,'class_full',409);
   const pack = eligiblePack(tx.state,member.id,entry);
   insist(pack,'eligible_credit_required',409);
   const channel = text(input.channel ?? 'desk','channel',30);
   insist(['desk','phone','inbox'].includes(channel),'invalid_channel');
+  const spot = chooseSpot(tx.state,entry,input.spot);
   return seat(tx,{id:id(),classId:entry.id,personId:member.id,status:'waitlisted',
     capacityPool:capacity.heldOpen > 0?'held':'online',bookingChannel:channel,
-    madeBy:tx.who.id,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1},entry,pack);
+    madeBy:tx.who.id,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1},entry,pack,spot);
 }
 /** SCHED-006: the effect shown before cancelling is the effect applied. The
  * owner acts for front desk with the fee-waiver right until STAFF-001. */

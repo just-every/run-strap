@@ -60,6 +60,10 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     }
     delete input.expiresDate; delete input.expiresTime
   }
+  if (name === 'spots.save') {
+    const lines = (key: string) => String(input[key] ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+    return { room: String(input.room ?? '').trim(), spots: lines('spots'), disabled: lines('disabled') }
+  }
   if (name === 'pack.prepare') input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
   if (name === 'bookingRule.save') {
     const whole = (key: string) => { const value = String(input[key] ?? '').trim(); return value === '' ? null : Number(value) }

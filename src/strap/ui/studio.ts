@@ -3,6 +3,7 @@
 import { usZones, zoneName } from '../zone'
 import { body, field, form, h, panel, select } from './shared'
 import { rulesPanel } from './booking-rules'
+import { spotsPanel } from './spots'
 
 const fields = (s: any) => `<div class="row2">${field('location', 'Location name', s.studio?.location ?? '', 'text', 'required maxlength="80" autocomplete="off" placeholder="East Nashville"')}${select('timeZone', 'Time zone', [['', 'Choose the studio’s time zone'], ...usZones], s.studio?.timeZone ?? '')}</div>`
 
@@ -14,6 +15,7 @@ export function studioPage(s: any) {
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s), 'Save studio')}`), { icon: 'pin' })
     + rulesPanel(s)
+    + spotsPanel(s)
     + panel('Sign-in', body('<p>Choose how you and your staff sign in: email links, or your own identity provider.</p><a class="btn-quiet" href="/auth/settings/identity">Open sign-in settings</a>'), { icon: 'key' })
     + `</div></div>`
 }

@@ -68,6 +68,14 @@ Once the class has started, **No-show** marks a booked person who didn't come: t
 no-show fee from your booking rules, if any, is added to what they owe. Members see that fee with the class's rules before
 they book.
 
+## Name the spots in a room
+
+In **Studio**, **Room spots** lists a room's reformers, bikes or mat places in order, one per line, with any that are out
+of service. A class in that room then seats no more people than it has spots in service. Members pick a free spot when
+they book (or get the first free one) and can change to another free spot before class; they see which spots are taken,
+not by whom. On the roster, instructors see who is on each spot, and the owner can choose a spot when booking at the desk
+or use **Move spot** for a member; each move is kept on the booking. Move anyone off a spot before taking it out of service.
+
 ## Correct a no-show or late cancel
 
 If a no-show or late cancel was a mistake, the owner opens the roster and uses **Correct no-show** or **Correct late cancel**
