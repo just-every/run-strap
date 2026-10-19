@@ -9,10 +9,12 @@ import { packServiceEligible } from '../domain/pack-credits'
 import { bookingSpot, ownSpot } from './spots'
 import { memberCheckin } from './checkin'
 import { noticesPanel } from './closures'
+import { memberOffer } from './waitlist'
 
 function bookAction(s: any, c: any) {
   const own = rows(s, 'bookings').find(b => b.classId === c.id && b.personId === s.actor.personId && b.status !== 'cancelled')
   if (c.status === 'cancelled') return '<span class="chip quiet">Class cancelled</span>'
+  if (own?.status === 'offered') return memberOffer(s, own, '/app')
   if (own) return `<span class="pill ${own.status === 'booked' ? 'done' : 'pending'}">${own.status === 'booked' ? 'Booked' : 'On the waitlist'}</span> ${ownSpot(c, own, '/app')}${memberCancel(own, '/app')}`
   if (Date.parse(c.start) <= Date.now()) return ''
   const priority = rows(s, 'packs').some(p => p.personId === s.actor.personId && p.priorityBooking && p.remaining > 0 && packServiceEligible(p, c) && p.expiresAt > c.start && Date.parse(p.expiresAt) > Date.now())

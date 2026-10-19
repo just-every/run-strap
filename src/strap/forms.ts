@@ -64,6 +64,8 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     const lines = (key: string) => String(input[key] ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
     return { room: String(input.room ?? '').trim(), spots: lines('spots'), disabled: lines('disabled') }
   }
+  if (name === 'waitlist.save') input.claimMinutes = Number(input.claimMinutes)
+  if (name === 'booking.desk') input.waitlist = input.waitlist === 'true'
   if (name === 'pack.prepare') input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
   if (name === 'bookingRule.save') {
     const whole = (key: string) => { const value = String(input[key] ?? '').trim(); return value === '' ? null : Number(value) }

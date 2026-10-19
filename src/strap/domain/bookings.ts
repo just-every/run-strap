@@ -3,14 +3,16 @@ import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
 import { appendPackEvent, packServiceEligible } from './pack-credits';
+import { promote, promoteAll } from './waitlist';
+export { promoteAll };
 
 export const latestWaiver = (state: State) => list(state,'waiver').sort((a,b) => a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1) ?? null;
-function acknowledged(state: State, personId: string) {
+export function acknowledged(state: State, personId: string) {
   const waiver = latestWaiver(state);
   return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id);
 }
 /** Inside a priority-only window, only a pack sold with priority booking can seat. */
-function eligiblePack(state: State, personId: string, entry: RecordData) {
+export function eligiblePack(state: State, personId: string, entry: RecordData) {
   const priority = priorityOnly(state,entry);
   return list(state,'pack').filter(p => p.personId === personId && p.remaining > 0 && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now() && (!priority || p.priorityBooking === true))
     .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
@@ -21,29 +23,11 @@ function ownMember(tx: Transaction) {
   return person(tx.state,tx.who.personId);
 }
 /** A seat in a room with spots takes the named spot, or the first free one. */
-function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData, spot = chooseSpot(tx.state,entry,undefined)) {
+export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData, spot = chooseSpot(tx.state,entry,undefined)) {
   tx.future(entry.start); tx.future(pack.expiresAt);
   appendPackEvent(tx,pack,{type:'reserve',credits:-1,bookingId:booking.id,classId:entry.id});
   const updated = {...booking,status:'booked',packId:pack.id,bookedAt:now(),...(spot ? {spot} : {})};
   tx.put('booking',updated); return updated;
-}
-/** Stable creation-order FIFO among currently eligible members. No credit is
- * consumed until a seat is actually assigned; all promotions share the fence. */
-export function promote(tx: Transaction, entry: RecordData) {
-  if (entry.start <= now() || entry.status !== 'published') return;
-  const all = list(tx.state,'booking').filter(b => b.classId === entry.id);
-  let vacancies = seatCapacity(tx.state,entry,all).onlineOpen;
-  const waiting = all.filter(b => b.status === 'waitlisted').sort((a,b) => a.sequence-b.sequence || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  for (const candidate of waiting) {
-    if (vacancies <= 0) break;
-    if (!tx.state.people.some(p => p.id === candidate.personId && p.active && !p.erasedAt) || !acknowledged(tx.state,candidate.personId)) continue;
-    const pack = eligiblePack(tx.state,candidate.personId,entry);
-    if (!pack) continue;
-    seat(tx,candidate,entry,pack); vacancies--;
-  }
-}
-export function promoteAll(tx: Transaction) {
-  for (const entry of list(tx.state,'class').sort((a,b) => a.start.localeCompare(b.start))) promote(tx,entry);
 }
 export function book(tx: Transaction, input: Record<string,unknown>) {
   const member = ownMember(tx), entry = record(tx.state,input.classId,'class');
@@ -76,11 +60,17 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   // Existing eligible online waiters have priority over an unallocated online seat.
   promote(tx,entry);
   const capacity = seatCapacity(tx.state,entry);
-  insist(capacity.totalOpen > 0,'class_full',409);
-  const pack = eligiblePack(tx.state,member.id,entry);
-  insist(pack,'eligible_credit_required',409);
   const channel = text(input.channel ?? 'desk','channel',30);
   insist(['desk','phone','inbox'].includes(channel),'invalid_channel');
+  // MSG-004: a full class takes the member onto the end of its online waitlist.
+  if (capacity.totalOpen === 0) {
+    insist(input.waitlist === true,'class_full',409);
+    const waiter = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:channel,
+      madeBy:tx.who.id,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
+    tx.put('booking',waiter); return waiter;
+  }
+  const pack = eligiblePack(tx.state,member.id,entry);
+  insist(pack,'eligible_credit_required',409);
   const spot = chooseSpot(tx.state,entry,input.spot);
   return seat(tx,{id:id(),classId:entry.id,personId:member.id,status:'waitlisted',
     capacityPool:capacity.heldOpen > 0?'held':'online',bookingChannel:channel,

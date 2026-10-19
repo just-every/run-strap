@@ -37,7 +37,7 @@ export function effectText(e: any, waitlisted: boolean) {
 
 /** A member's own cancel button with its effect beside it. */
 export function memberCancel(b: any, back: string) {
-  const e = b.cancelEffect, waitlisted = b.status === 'waitlisted'
+  const e = b.cancelEffect, waitlisted = b.status !== 'booked'
   if (!e) return ''
   return `<small class="effect">${h(effectText(e, waitlisted))}</small>${form('booking.cancel', back, hidden('id', b.id) + hidden('terms', e.key), waitlisted ? 'Leave waitlist' : 'Cancel', 'quiet', 'small')}`
 }
@@ -47,7 +47,7 @@ export function memberCancel(b: any, back: string) {
 export function staffCancel(name: string, b: any, back: string) {
   const e = b.cancelEffect
   if (!e) return ''
-  const waitlisted = b.status === 'waitlisted', id = hidden('id', b.id) + hidden('terms', e.key)
+  const waitlisted = b.status !== 'booked', id = hidden('id', b.id) + hidden('terms', e.key)
   const choice = !e.waivable ? form('booking.cancel', back, id, waitlisted ? 'Remove from waitlist' : 'Cancel booking', 'quiet', 'small')
     : form('booking.cancel', back, id + hidden('mode', 'late'), 'Late cancel', 'quiet', 'small')
       + form('booking.cancel', back, id + hidden('mode', 'early') + field('reason', 'Waiver reason (early cancel)', '', 'text', 'required maxlength="500"'), 'Early cancel: credit back, no fee', 'quiet', 'small')

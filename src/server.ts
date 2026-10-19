@@ -10,7 +10,7 @@ import { lobbyResponse } from './base/lobby'
 import { setupStateResponse } from './base/setup-state'
 import { authResponse, runtimeBindings, type Bindings } from './auth.server'
 import { identity } from './identity'
-import { strapResponse } from './strap/http'
+import { strapResponse, strapScheduled } from './strap/http'
 
 const api = new Hono<{ Bindings: Bindings }>()
 api.get('/health', (context) => context.json({ status: 'ok', ...deploymentHealth(context.env) }))
@@ -39,5 +39,9 @@ export default withDemo<Bindings, ExportedHandler<Bindings>>({
     const lobby = await lobbyResponse(request, runtimeBindings(env), identity)
     if (lobby) return lobby
     return rejectedResponse(request, await dispatch(request, () => api.fetch(request, env, execution), async () => noTransform(await start.fetch(request))))
+  },
+  // Every minute: MSG-004 waitlist offers expire on time and the seat moves on.
+  async scheduled(_controller, env) {
+    await strapScheduled(env)
   },
 } satisfies ExportedHandler<Bindings>, { seed: seedDemo })

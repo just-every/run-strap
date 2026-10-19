@@ -2,7 +2,7 @@ import type { Bindings } from '../auth.server'
 // @ts-ignore The pinned Base mail module is JavaScript without declarations here.
 import { createMailSender } from '../modules/mail/index.mjs'
 
-// SCHED-008 member email through the installation's configured Base mail
+// SCHED-008 closure and MSG-004 waitlist member email through the installation's configured Base mail
 // provider (MAIL_PROVIDER resend, sendgrid or cloudflare with its key, from
 // MAIL_FROM), built here rather than through the sign-in sender. Development,
 // demo or missing configuration means no email: members get the in-app notice.
@@ -34,5 +34,5 @@ export async function sendNotices(env: Bindings, ids: string[]) {
 
 export async function noticeDeliveries(env: Bindings, role: string) {
   if (role !== 'owner') return []
-  return (await env.DB.prepare('SELECT id,closure_id AS closureId,person_id AS personId,status,provider,code FROM st_notice_deliveries ORDER BY created_at,id').all()).results
+  return (await env.DB.prepare('SELECT id,source_kind AS sourceKind,source_id AS sourceId,person_id AS personId,status,provider,code FROM st_notice_deliveries ORDER BY created_at,id').all()).results
 }

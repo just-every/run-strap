@@ -5,7 +5,7 @@ import { classTitle, upcoming } from './facts'
 import { clock, dayOf, dayShort, when } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, person, rows, select, textarea } from './shared'
 
-const delivery = (d: any) => d ? ({
+export const delivery = (d: any) => d ? ({
   accepted: `Email accepted by ${d.provider}; delivery not confirmed`,
   rejected: `Email refused by ${d.provider}${d.code ? ` (${d.code.replace(/_/g, ' ')})` : ''}`,
   rate_limited: `Email refused by ${d.provider} (rate limited); not retried`,
@@ -14,6 +14,7 @@ const delivery = (d: any) => d ? ({
   queued: 'Email reserved but not sent (interrupted)',
   not_configured: 'Email not configured; in-app notice only',
   no_address: 'No email address; in-app notice only',
+  paused: 'Email paused after restore; in-app notice only until you reconnect member email',
 } as Record<string, string>)[d.status] ?? d.status : ''
 
 const at = (s: any, value: string) => `${dayShort(s, dayOf(s, value))} · ${clock(s, value)}`
@@ -22,7 +23,7 @@ const scopeText = (s: any, c: any) => c.scope === 'class' ? 'One class' : `${c.s
 function impactList(s: any, c: any, deliveries: any[] = []) {
   const i = c.impact
   if (!i.classes.length) return emptyLine('No upcoming class is affected.')
-  return i.classes.map((x: any) => `<p><strong>${h(classTitle(x))}</strong> · ${h(at(s, x.start))}${x.room ? ` · ${h(x.room)}` : ''}</p><ul class="impact">${x.bookings.map((b: any) => `<li>${h(person(s, b.personId))}: ${b.status === 'booked' ? 'credit returns to their pack' : 'waitlist spot closes, no credit used'}${c.status === 'applied' ? ` · in-app notice · ${h(delivery(deliveries.find(d => d.closureId === c.id && d.personId === b.personId)))}` : ''}</li>`).join('') || '<li>No bookings.</li>'}</ul>`).join('')
+  return i.classes.map((x: any) => `<p><strong>${h(classTitle(x))}</strong> · ${h(at(s, x.start))}${x.room ? ` · ${h(x.room)}` : ''}</p><ul class="impact">${x.bookings.map((b: any) => `<li>${h(person(s, b.personId))}: ${b.status === 'booked' ? 'credit returns to their pack' : 'waitlist spot closes, no credit used'}${c.status === 'applied' ? ` · in-app notice · ${h(delivery(deliveries.find(d => d.sourceKind === 'closure' && d.sourceId === c.id && d.personId === b.personId)))}` : ''}</li>`).join('') || '<li>No bookings.</li>'}</ul>`).join('')
 }
 
 const totals = (c: any) => `<p class="meta">${c.impact.classes.length} ${c.impact.classes.length === 1 ? 'class' : 'classes'} cancelled · ${c.impact.members} ${c.impact.members === 1 ? 'member' : 'members'} notified · ${c.impact.creditsReturned} credits returned · ${c.impact.waitlistClosed} waitlist spots closed · no money moves (card refunds arrive with billing).</p>`

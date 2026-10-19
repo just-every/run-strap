@@ -15,7 +15,7 @@ export const upcoming = (s: any) => rows(s, 'classes').filter(c => time(c.end) >
 export function attendance(s: any, classId: string) {
   const all = rows(s, 'bookings').filter(b => b.classId === classId)
   const booked = all.filter(b => b.status === 'booked').sort((a, b) => String(a.bookedAt ?? a.createdAt).localeCompare(String(b.bookedAt ?? b.createdAt)))
-  const waiting = all.filter(b => b.status === 'waitlisted').sort((a, b) => a.sequence - b.sequence || a.createdAt.localeCompare(b.createdAt))
+  const waiting = all.filter(b => b.status === 'waitlisted' || b.status === 'offered').sort((a, b) => a.sequence - b.sequence || a.createdAt.localeCompare(b.createdAt))
   const cancelled = all.filter(b => b.status === 'cancelled')
   return { booked, waiting, cancelled, checkedIn: booked.filter(b => b.checkedInAt) }
 }
