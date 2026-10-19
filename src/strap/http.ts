@@ -1,6 +1,7 @@
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { cancellationsCsv } from './cancellations'
-import { command, snapshot, sweep, type Actor } from './domain'
+import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
+import { commandCatalogue, command, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { renderApp } from './ui'
@@ -20,7 +21,8 @@ async function state(env: Bindings, who: Actor) {
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
   const current = await snapshot(env.DB, who), deliveries = await noticeDeliveries(env, who.role)
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
-  return { ...current, bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
+  const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
+  return { ...current, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
@@ -41,7 +43,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   const result = await command(env.DB, who, name, input, context)
   // Emails go out only after the change and their reservations commit.
   await sendNotices(env, context.queued)
-  return result
+  return name === 'waiver.launch' ? sendWaiverLaunch(request,env,result) : result
 }
 
 async function inputBody(request: Request): Promise<Record<string, unknown>> {
@@ -85,7 +87,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
       if (pages.has(path)) return renderApp(await state(env, who), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
-      if (path === '/api/strap/commands') return json({ preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
+      if (path === '/api/strap/commands') return json({ commands:commandCatalogue(), preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
       const reminderFile = path.match(/^\/api\/strap\/reminders\/([\w-]+)\.txt$/)
       if (reminderFile) {
         if (who.role !== 'owner') fail('Only the owner exports reminders', 403)

@@ -31,3 +31,9 @@ payment history stay on record.
 **Erase personal data** removes a person who never used Strap: no bookings, no packs or payments, never invited and not
 imported. Everyone else is deactivated instead, so the studio's history stays whole. An erased identity can't be added
 or imported again.
+
+## Act for a member
+
+Open a member in People. Under **Check-in code and key tag**, read their existing code or issue the first one; reading keeps the tag working. Replacing a lost tag is a separate action with a required reason. Under **Member waiver link**, review the exact current waiver and request the member’s secure sign-in link. The member signs in and acknowledges for themselves; a request never confirms delivery or acknowledgment. Under **Member notices**, mark a notice read for the named member. Its content stays unchanged and the member sees that staff marked it read. Choose how the request arrived (desk, phone or inbox). Staff action history retains each action’s right and before/after effect. Until staff roles ship, these controls belong to the native owner.
+
+After a restore, staff waiver links stay paused with member email. Review and reconnect member email in Studio before requesting a new link; an old launch record never resends itself. Members can still request their own ordinary sign-in link.

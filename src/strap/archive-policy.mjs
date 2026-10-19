@@ -3,7 +3,7 @@
 export default {
   product: 'studio/strap',
   includeTables: ['oa_operators', 'oa_bootstrap', 'oa_invitation_cancellations'],
-  excludeTables: ['st_agent_keys', 'st_kiosks'],
+  excludeTables: ['st_agent_keys', 'st_kiosks', 'st_waiver_launch_dispatches'],
   replaceableTables: ['st_meta'],
   requiredConfiguration: ['OWNER_EMAIL', 'SESSION_SECRET', 'SETUP_TOKEN', 'AUTH_ORIGIN', 'MAIL_PROVIDER', 'MAIL_FROM'],
 }

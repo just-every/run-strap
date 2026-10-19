@@ -41,9 +41,11 @@ export function closuresPanel(s: any) {
   return panel('Closures and cancellations', `${drafts}${body(`<p class="meta">Preview who is affected before anything changes. Confirming cancels the classes, returns each booked credit once, closes the waitlists and notifies every member once.</p>${prepare}`)}${done}`, { id: 'closures', icon: 'alert' })
 }
 
-/** A member's unread notices, newest first. */
+/** Unread notices plus retained notice history when staff marked one read. */
 export function noticesPanel(s: any) {
   const unread = rows(s, 'notices').filter(n => !n.dismissedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  if (!unread.length) return ''
-  return panel('Notices', body(unread.map(n => `<div class="notice" role="status"><p><strong>${h(n.subject)}</strong></p><p>${h(n.body)}</p>${form('notice.dismiss', '/app', hidden('id', n.id), 'Dismiss', 'quiet', 'small')}</div>`).join('')), { icon: 'alert', count: unread.length })
+  const staffRead = rows(s, 'notices').filter(n => n.dismissedByStaff).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  if (!unread.length && !staffRead.length) return ''
+  const history = staffRead.length ? `<p class="meta">${staffRead.length} ${staffRead.length === 1 ? 'notice' : 'notices'} · Marked read by staff</p><details class="more"><summary>Read notice history</summary><div class="panel-body">${staffRead.map(n => `<div class="notice"><p><strong>${h(n.subject)}</strong></p><p>${h(n.body)}</p><p class="meta">Marked read by staff · ${when(s, n.dismissedByStaff.at)}</p></div>`).join('')}</div></details>` : ''
+  return panel('Notices', body(unread.map(n => `<div class="notice" role="status"><p><strong>${h(n.subject)}</strong></p><p>${h(n.body)}</p>${form('notice.dismiss', '/app', hidden('id', n.id), 'Dismiss', 'quiet', 'small')}</div>`).join('') + history), { icon: 'alert', count: unread.length })
 }

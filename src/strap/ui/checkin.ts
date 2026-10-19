@@ -4,6 +4,7 @@ import { classTitle } from './facts'
 import { clock, datePlain, dayOf, money, when } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, rows } from './shared'
 import { qrSvg } from './qr'
+import { staffRequestFields } from './staff-actions'
 
 const alertText = (s: any, a: any) => ({
   balance_due: `Owes ${money(a.amountCents)}`,
@@ -35,7 +36,9 @@ export function memberCheckin(s: any) {
 export function personCheckin(s: any, p: any, back: string) {
   if (!owner(s) || p.role !== 'member') return ''
   const code = rows(s, 'checkinCodes').find(c => c.personId === p.id)
-  return `<details class="more"><summary>Check-in code and key tag</summary><div class="panel-body">${code ? `${codeCard(code, `Check-in code for ${p.name}`)}<p class="meta">Print this for a key tag. Issued ${when(s, code.codeIssuedAt)}.</p>` : '<p class="meta">No check-in code yet.</p>'}${form('checkin.rotate', back, hidden('personId', p.id), code ? 'Issue a new code (the old one stops working)' : 'Issue a check-in code', 'quiet', 'small')}</div></details>`
+  const read = form('checkin.code.staff', back, staffRequestFields(p.id), code ? 'Read existing check-in code' : 'Issue a check-in code', 'quiet', 'small')
+  const rotate = code ? `<details class="more"><summary>Replace a lost code or key tag</summary><div class="panel-body"><p class="meta">Issuing a new code immediately stops the old code and key tag from working. Your reason is recorded.</p>${form('checkin.rotate', back, staffRequestFields(p.id) + field('reason', 'Reason for replacing the code', '', 'text', 'required maxlength="500"'), 'Issue a new code (the old one stops working)', 'quiet', 'small')}</div></details>` : ''
+  return `<details class="more"><summary>Check-in code and key tag</summary><div class="panel-body">${code ? `${codeCard(code, `Check-in code for ${p.name}`)}<p class="meta">Print this for a key tag. Issued ${when(s, code.codeIssuedAt)}.</p>` : '<p class="meta">No check-in code yet.</p>'}<p class="meta">Reading an existing code keeps the current code and key tag working.</p>${read}${rotate}</div></details>`
 }
 
 /** Studio settings: pair, list and revoke check-in kiosks. */

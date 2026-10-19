@@ -6,6 +6,7 @@ import { clock, dayOf, dayShort, datePlain, money, when } from './format'
 import { personCheckin } from './checkin'
 import { staffCancelControls } from './booking-rules'
 import { bookingControls, canRestore, cancellationReasonsPanel, cancellationsPanel } from './booking-actions'
+import { staffActionHistory, staffProfileActions } from './staff-actions'
 import { avatar, body, cell, emptyLine, emptyState, field, form, h, hidden, owner, panel, rows, select, statusPill, table } from './shared'
 
 const personFields = (p?: any) => `<div class="row2">${field('name', 'Full name', p?.name, 'text', 'required maxlength="160" autocomplete="name"')}${field('email', 'Email', p?.email, 'email', 'required autocomplete="email"')}</div>${field('phone', 'Mobile phone (members; for kiosk check-in)', p?.phone ? p.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3') : '', 'tel', 'autocomplete="tel" maxlength="20"')}<div class="row2">${select('role', 'Role', [['member', 'Member'], ['instructor', 'Instructor']], p?.role ?? 'member')}${select('active', 'Status', [['true', 'Active'], ['false', 'Inactive']], p ? String(p.active) : 'true')}</div>`
@@ -22,6 +23,7 @@ function card(s: any, p: any, back: string) {
   const actions = `<div class="actions">${p.active ? form('person.invite', back, hidden('id', p.id), 'Invite to sign in', 'quiet', 'small') : ''}${p.role === 'member' && p.active ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(p.id)}#prepare-pack">Prepare a pack</a>` : ''}</div>`
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(p.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3'))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${packLines}${actions}</div>${upcomingList}`
     + personCheckin(s, p, back)
+    + staffProfileActions(s, p, back)
     + `<details class="more"><summary>Edit ${h(p.name.split(' ')[0])}</summary><div class="panel-body">${form('person.save', back, hidden('id', p.id) + personFields(p), 'Save changes')}</div></details>`
     + `<details class="more"><summary>Erase personal data</summary><div class="panel-body"><p class="meta">Only people with no bookings, packs, payments, sign-in or import history can be erased. Make anyone else inactive to end their access.</p>${form('person.erase', '/app/people', hidden('id', p.id) + '<label class="check"><input type="checkbox" required>I understand this erases this person’s personal data.</label>', 'Erase this person', 'quiet')}</div></details></section>`
 }
@@ -43,5 +45,6 @@ export function peoplePage(s: any, query: URLSearchParams) {
     + panel(q ? `Matching “${query.get('q')}”` : 'Members and instructors', `<div class="panel-body">${search}</div>${table_}`, { icon: 'users' })
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
+    + staffActionHistory(s, chosen)
     + `</div><aside class="rail">${chosen ? card(s, chosen, back) : ''}${add}${cancellationReasonsPanel(s)}</aside></div>`
 }

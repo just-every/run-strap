@@ -25,3 +25,7 @@ Only native human owners manage unavailable intervals, using `scheduling.unavail
 ## SCHED-014 booking-change drafts
 
 `booking.change.prepare` accepts `action` (`cancel` or `move`), the booking `id`, target `classId` for a move, `cancelReason` from the studio reason list, the displayed cancellation `terms` key, `mode` (`early` or `late`), a waiver `reason` when needed, and request `channel` (`desk`, `phone`, `inbox`). An optional capacity `override` needs a reason. Courtesy early cancellation may explicitly `suppressNotice` with `suppressionReason`. Preparing changes no booking, credit, fee or notice. The native owner reviews the exact draft under People and approves it once with `booking.change.approve` (`id` = draft id). Changed booking, waiver, capacity, pack, people or policy facts require a fresh draft. Agents cannot approve or execute the change.
+
+## STAFF-006 member/staff command catalogue
+
+`GET /api/strap/commands` publishes the actual studio dispatch registry’s roles, member-door mapping and staff right. Every member-role command has a current staff counterpart; current grants belong to the human owner. Agents retain only the listed preparation commands and cannot execute any staff action. Native authentication and member-owned acknowledgment remain the member’s own acts.

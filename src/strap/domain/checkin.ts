@@ -55,6 +55,7 @@ export function ownCode(tx: Transaction) {
 /** The owner issues a new code (for a lost key tag); the old one stops at once. */
 export function rotateCode(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
+  text(input.reason,'rotation_reason',500);
   const member = person(tx.state,input.personId);
   insist(member.role === 'member','member_required');
   return issueCode(tx,member.id);
@@ -141,4 +142,11 @@ export function checkinAlerts(state: State, booking: RecordData, who: Actor) {
     if (Date.parse(pack.expiresAt) - Date.parse(at) < 7 * 86_400_000) alerts.push({type:'pack_expiring',expiresAt:pack.expiresAt});
   }
   return alerts;
+}
+
+/** STAFF-006: printing reads the current tag; first issuance never rotates it. */
+export function staffCode(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who); text(input.requestId,'requestId',100);
+  const member = person(tx.state,input.personId); insist(member.role === 'member','member_required');
+  const current = memberCheckin(tx.state,member.id); return current?.code ? current : issueCode(tx,member.id);
 }

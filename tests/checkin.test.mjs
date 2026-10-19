@@ -117,8 +117,8 @@ test('ATT-001: members check in from their account, a paired kiosk by name, phon
   assert.equal((await post(h, '/kiosk/scan', { code: 'F'.repeat(32) }, kiosk)).status, 404)
 
   // A key-tag code issued by the owner and scanned at the desk; reissuing kills the old one.
-  const first = await h.cmd('checkin.rotate', { personId: Eve.id })
-  const second = await h.cmd('checkin.rotate', { personId: Eve.id })
+  const first = await h.cmd('checkin.rotate', { personId: Eve.id, reason:'Lost key tag' })
+  const second = await h.cmd('checkin.rotate', { personId: Eve.id, reason:'Lost key tag' })
   assert.notEqual(first.code, second.code)
   assert.match((await h.send(`/app/people?person=${Eve.id}`, undefined, h.owner)).text, /Check-in code for Eve Hall/)
   await refused(h, 'attendance.scan', { code: first.code }, coach.cookie, 404, 'no_booking_found')
