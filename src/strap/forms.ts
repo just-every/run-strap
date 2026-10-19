@@ -29,7 +29,8 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
   if (!Number.isInteger(minutes) || minutes < 5 || minutes > 600) fail(`Enter a length in minutes for class ${i + 1}`)
   const start = localInstant(addDays(week, day), get('time'), timeZone)
   return {
-    title: get('room') ? `${get('title')} · ${get('room')}` : get('title'),
+    title: get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
+    bufferBeforeMinutes: Number(get('bufferBeforeMinutes')), bufferAfterMinutes: Number(get('bufferAfterMinutes')),
     start, end: new Date(Date.parse(start) + minutes * 60_000).toISOString(),
     capacity: Number(get('capacity')), instructorId: get('instructorId'),
   }
@@ -53,6 +54,12 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     const classes = Array.from({ length: Number.isInteger(rows) && rows > 0 && rows <= 100 ? rows : 0 }, (_, i) => classRow(input, i, week, zone)).filter(Boolean)
     if (!classes.length) fail('Add at least one class to the week')
     return { week, classes }
+  }
+  if (name === 'scheduling.unavailable.save') {
+    const zone = zoneOf(timeZone)
+    return { ...input, resourceId: input.resourceKind === 'instructor' ? input.instructorId : input.resourceId,
+      start: localInstant(String(input.startDate), String(input.startTime), zone),
+      end: localInstant(String(input.endDate), String(input.endTime), zone) }
   }
   return input
 }

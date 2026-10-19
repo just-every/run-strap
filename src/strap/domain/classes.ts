@@ -1,6 +1,7 @@
 import { humanOwner, preparer, id, instant, integer, insist, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
 import { approveDraft } from './drafts';
+import { refuseSchedulingConflicts, schedulingConflicts, schedulingFields } from './scheduling';
 
 // Adapted from Dial availability/windows.ts -> weekdayForDate in timezone.ts.
 // Source: dial/src/core/features/availability/{windows,timezone}.ts
@@ -26,9 +27,8 @@ function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
     // Compare the supplied civil date, retained with the frozen draft, so offsets
     // do not move an evening class into a different timetable week.
     insist(item.localDate >= week && item.localDate < weekEnd,'class_outside_week');
-    const clashes = [...published,...classes.filter(c => c.id !== item.id)];
-    insist(!clashes.some(c => c.instructorId === item.instructorId && c.start < item.end && c.end > item.start),'instructor_time_conflict',409);
   }
+  refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')), tx.who.role === 'owner');
 }
 export function prepareClasses(tx: Transaction, input: Record<string, unknown>) {
   preparer(tx.who);
@@ -37,7 +37,7 @@ export function prepareClasses(tx: Transaction, input: Record<string, unknown>) 
   const classes = input.classes.map((raw: unknown): RecordData => {
     insist(raw && typeof raw === 'object','invalid_class');
     const entry = raw as Record<string,unknown>, instructor = person(tx.state,entry.instructorId);
-    return {id:id(),title:text(entry.title,'title',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version};
+    return {id:id(),title:text(entry.title,'title',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
   });
   checkClasses(tx,classes,week);
   const draft = {id:id(),type:'classes',status:'draft',week,classes,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};

@@ -3,6 +3,7 @@
 // derived from stored records only, by the same rules the domain applies.
 import { rows } from './shared'
 import { dayOf } from './format'
+import { roomOf } from '../domain/scheduling'
 
 const now = () => Date.now()
 const time = (value: unknown) => Date.parse(String(value))
@@ -20,7 +21,7 @@ export function attendance(s: any, classId: string) {
 
 /** The title before " · " is the class; after it, the room. */
 export const classTitle = (c: any) => String(c.title).split(' · ')[0]
-export const classRoom = (c: any) => String(c.title).split(' · ').slice(1).join(' · ')
+export const classRoom = (c: any) => roomOf(c)
 
 /** The credit Strap would use to seat this member in this class (bookings.ts eligiblePack). */
 export const eligiblePack = (s: any, personId: string, c: any) => rows(s, 'packs')

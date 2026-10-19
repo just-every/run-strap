@@ -8,10 +8,14 @@ Allowed commands:
 
 | Command | Input | Result |
 | --- | --- | --- |
-| `classes.prepare` | `week` (Monday date), `classes` array of `{title,start,end,capacity,instructorId}` | Frozen weekly publication draft |
+| `classes.prepare` | `week` (Monday date), `classes` array of `{title,start,end,capacity,instructorId}` with optional `room`, `equipment` (array of names), `bufferBeforeMinutes`, `bufferAfterMinutes` | Frozen weekly publication draft |
 | `pack.prepare` | `personId`, positive integer `credits`, nonnegative integer `amountCents`, ISO `expiresAt` | Frozen pack and charge draft |
 | `reminder.prepare` | `personId` | Frozen current balance and reminder text |
 
 Keys only prepare. The owner signs in normally, reviews the exact draft, and uses **Publish** or **Approve**. `classes.publish`, `pack.approve` and `reminder.approve` require that native human owner session and an `id` for the draft. The approval is recorded with the person, draft, reviewed contents and time; stale source data refuses approval. Neither a key nor a bearer token sent to a human route grants approval authority. Reminders export text; nothing is sent externally.
 
 Human command routes use `POST /api/strap/command` with the same JSON envelope, a native session cookie and the installation's exact Origin header. `GET /api/strap/commands` describes the preparation/approval boundary. Browser forms use these same domain operations.
+
+Class preparation and publication check instructor, room and equipment conflicts, including preparation/cleanup buffers and owner-recorded unavailable intervals. Buffer values are whole minutes, defaulting to zero. Resource names ignore case and extra whitespace. Intervals are half-open in UTC, so exact boundary contact is allowed. Agent conflict responses identify the blocking resource, time and record without revealing an unavailable interval’s private reason.
+
+Only native human owners manage unavailable intervals, using `scheduling.unavailable.save` with `resourceKind` (`instructor`, `room` or `equipment`), `resourceId` (instructor ID or resource name), ISO `start`/`end` and `reason`; an optional `id` updates an interval. `scheduling.unavailable.remove` takes its `id` and retains the removed record. An interval cannot invalidate a published class.

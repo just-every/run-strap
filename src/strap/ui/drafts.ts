@@ -4,6 +4,7 @@ import { classRoom, classTitle } from './facts'
 import { clock, dayOf, dayShort, datePlain, length, money, when } from './format'
 import { icon } from './icons'
 import { cell, emptyLine, form, h, hidden, owner, person, rows, statusPill, table } from './shared'
+import { allocationDetails, conflictDetails, draftConflicts } from './scheduling'
 
 const kinds: Record<string, { glyph: string; title: string; page: string; approve: string; command: string }> = {
   pack: { glyph: 'card', title: 'New class pack', page: '/app/packs', approve: 'Approve this exact pack', command: 'pack.approve' },
@@ -27,7 +28,7 @@ function contents(s: any, d: any) {
   if (d.type === 'pack') return `<dl class="facts"><dt>Member</dt><dd>${h(person(s, d.personId))}</dd><dt>Credits</dt><dd>${h(d.credits)} classes</dd><dt>Price</dt><dd>${money(d.amountCents)}, owed once approved</dd><dt>Good through</dt><dd>${h(datePlain(dayOf(s, d.expiresAt)))}</dd></dl>`
   if (d.type === 'reminder') return `<dl class="facts"><dt>To</dt><dd>${h(d.recipient)}</dd><dt>Subject</dt><dd>${h(d.subject)}</dd></dl><p class="letter">${h(d.body)}</p>`
   if (d.type === 'classes') return table(['Day', 'Time', 'Class', 'Instructor', '>Spots'], d.classes.map((c: any) =>
-    `<tr>${cell('Day', h(dayShort(s, dayOf(s, c.start))))}${cell('Time', `${h(clock(s, c.start))} <small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}`)}${cell('Instructor', h(c.instructorName))}${cell('Spots', h(c.capacity), 'right')}</tr>`).join(''))
+    `<tr>${cell('Day', h(dayShort(s, dayOf(s, c.start))))}${cell('Time', `${h(clock(s, c.start))} <small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${allocationDetails(c)}`)}${cell('Instructor', h(c.instructorName))}${cell('Spots', h(c.capacity), 'right')}</tr>`).join(''))
   return ''
 }
 
@@ -36,8 +37,9 @@ export function draftRecords(s: any, path: string, types: string[]) {
   const items = rows(s, 'drafts').filter(d => types.includes(d.type) && d.status === 'draft').sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const list = items.map(d => {
     const kind = kinds[d.type]
-    const approve = owner(s) ? `<div class="actions">${form(kind.command, path, hidden('id', d.id), kind.approve)}</div>` : ''
-    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill('Needs approval')}<div class="record-body">${contents(s, d)}${approve}</div></article>`
+    const conflicts = d.type === 'classes' ? draftConflicts(s, d) : []
+    const approve = owner(s) && !conflicts.length ? `<div class="actions">${form(kind.command, path, hidden('id', d.id), kind.approve)}</div>` : ''
+    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill(conflicts.length ? 'Blocked' : 'Needs approval')}<div class="record-body">${contents(s, d)}${conflictDetails(s, conflicts)}${approve}</div></article>`
   }).join('')
   return { waiting: items.length, html: list ? `<div class="records">${list}</div>` : emptyLine('Nothing is waiting. A prepared draft shows its exact contents here before anyone approves it.') }
 }

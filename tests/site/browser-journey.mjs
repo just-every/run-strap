@@ -44,6 +44,7 @@ export async function publicDoors(site) {
       for (const path of docs) {
         assert.equal((await page.goto(siteOrigin + path)).status(), 200, path)
         assert.ok(await page.locator('h1').innerText(), path + ' has a rendered guide')
+        if (['/docs/classes', '/docs/agent-access'].includes(path)) await shot(path.split('/').pop())
       }
       for (const path of ['/app', '/setup', '/signin']) assert.equal((await context.request.get(siteOrigin + path)).status(), 404, 'site excludes installed ' + path)
       // The installed Worker uses its real native invitations/session and D1.

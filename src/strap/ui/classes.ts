@@ -6,6 +6,7 @@ import { clock, dayLong, dayOf, dayShort, length, studioToday } from './format'
 import { approvalHistory, draftRecords } from './drafts'
 import { body, cell, emptyLine, emptyState, field, form, h, hidden, owner, panel, person, rows, select, table, textarea } from './shared'
 import { addDays, mondayOf, zoneName } from '../zone'
+import { allocationDetails, availabilityPanel } from './scheduling'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -17,7 +18,7 @@ export function weekTable(s: any, list: any[], action: (c: any) => string = () =
     const date = dayOf(s, c.start), a = attendance(s, c.id), full = a.booked.length >= c.capacity
     const heading = date !== day ? `<tr class="day-row"><td colspan="5">${h(dayShort(s, date))}${date === studioToday(s) ? ' · Today' : ''}</td></tr>` : ''
     day = date
-    return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
+    return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${staff ? allocationDetails(c) : ''}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
       + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${a.booked.length} of ${c.capacity}</span>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : full ? `<span class="pill full">Full${a.waiting.length ? ` · waitlist ${a.waiting.length}` : ''}</span>` : `<span class="pill quiet">${c.capacity - a.booked.length} open</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
   }).join(''))
 }
@@ -30,10 +31,10 @@ function editor(s: any, count: number) {
   const monday = addDays(mondayOf(studioToday(s)), 7)
   const line = (i: number) => `<tr><td>${i + 1}</td>`
     + `<td class="wide">${field(`c${i}_title`, 'Class', '', 'text', `maxlength="120"${i ? '' : ' placeholder="Reformer Flow"'}`)}</td>`
-    + `<td>${field(`c${i}_room`, 'Room', '', 'text', `maxlength="38"${i ? '' : ' placeholder="Reformer room"'}`)}</td>`
+    + `<td>${field(`c${i}_room`, 'Room', '', 'text', `maxlength="100"${i ? '' : ' placeholder="Reformer room"'}`)}${textarea(`c${i}_equipment`, 'Equipment / reformers (one name per line)', '', 'rows="2"')}</td>`
     + `<td class="w-day">${select(`c${i}_day`, 'Day', days.map((d, n) => [String(n), d] as [unknown, unknown]), '0', '')}</td>`
     + `<td class="w-time">${field(`c${i}_time`, 'Starts', '', 'time', 'step="300"')}</td>`
-    + `<td class="w-min">${field(`c${i}_minutes`, 'Minutes', '50', 'number', 'min="5" max="600" step="5"')}</td>`
+    + `<td class="w-min">${field(`c${i}_minutes`, 'Minutes', '50', 'number', 'min="5" max="600" step="5"')}${field(`c${i}_bufferBeforeMinutes`, 'Prep before (min)', '0', 'number', 'min="0" max="1440"')}${field(`c${i}_bufferAfterMinutes`, 'Cleanup after (min)', '0', 'number', 'min="0" max="1440"')}</td>`
     + `<td class="w-cap">${field(`c${i}_capacity`, 'Spots', '12', 'number', 'min="1" max="1000" step="1"')}</td>`
     + `<td class="w-who wide">${select(`c${i}_instructorId`, 'Instructor', instructors.map(p => [p.id, p.name] as [unknown, unknown]), instructors[i % instructors.length].id, '')}</td></tr>`
   return `<p>Choose the Monday that starts the week, then add each class. Times are on the studio’s clock (${h(zoneName(s.studio.timeZone))}). Rows without a class name are skipped. Preparing makes a draft you review before it opens for booking.</p>`
@@ -57,5 +58,5 @@ export function classesPage(s: any, query: URLSearchParams) {
     + panel(mine ? 'My teaching schedule' : 'Upcoming classes', week, { icon: 'calendar', note: s.studio ? h(zoneName(s.studio.timeZone)) : 'Times in UTC until the studio sets its zone' })
     + (owner(s) ? panel('Prepare a class week', body(editor(s, count)), { id: 'prepare-week', icon: 'plus' }) : '')
     + (drafts ? panel('Prepared class weeks', drafts.html, { count: drafts.waiting, icon: 'clock' }) + panel('Approval history', approvalHistory(s, ['classes']), { icon: 'check' }) : '')
-    + waiver(s) + `</div></div>`
+    + (owner(s) ? availabilityPanel(s) : '') + waiver(s) + `</div></div>`
 }

@@ -15,7 +15,9 @@ Open **Classes** and find **Prepare a class week**. Choose the Monday that start
 the class name, its room, the day, the start time, its length in minutes, the number of spots and the instructor,
 picked by name. Rows left without a class name are skipped; **Add seven more rows** gives you more.
 
-**Prepare class week** creates a draft. Nothing is published yet.
+Enter each shared piece of equipment or reformer by name, one per line. Use the same room and equipment names wherever they are shared; matching ignores case and extra spaces. Preparation and cleanup minutes reserve the instructor, room and equipment before and after the class. Two reservations may touch at their exact end and start, but may not overlap.
+
+**Prepare class week** creates a draft. Nothing is published yet. Conflicts name the occupied resource and the existing record; the entire week is refused if any class conflicts.
 
 ## Review and publish
 
@@ -23,7 +25,13 @@ The draft appears under **Prepared class weeks** as a table of the week's classe
 **Approve and publish this exact week**. The classes appear under **Upcoming classes** and on **Today**, and members can
 book them. A published class is never changed quietly: to run a different week, prepare and publish that week.
 
+The draft is checked again when you publish. If another class or an unavailable interval has appeared, the draft lists the blocking records and stays unpublished.
+
 Strap publishes the classes you list; it does not repeat a schedule for you.
+
+## Record unavailable time
+
+The owner opens **Availability exceptions** on **Classes**, chooses **Record unavailable time**, and selects an instructor, room or equipment name. Enter the start and end on the studio clock and a reason. The interval blocks new classes, including their preparation and cleanup; it cannot overlap a class already published. **Remove** releases the interval while retaining the removed record. Reasons are visible only to the human owner. A preparation agent receives the blocking resource and interval without the reason; members and instructors do not receive exception records.
 
 ## Booking
 
