@@ -2,6 +2,7 @@ import { humanOwner, preparer, id, instant, integer, insist, list, now, person, 
 import type { Transaction } from './store';
 import { approveDraft } from './drafts';
 import { refuseSchedulingConflicts, schedulingConflicts, schedulingFields } from './scheduling';
+import { refuseLocationClosures } from './closures';
 
 // Adapted from Dial availability/windows.ts -> weekdayForDate in timezone.ts.
 // Source: dial/src/core/features/availability/{windows,timezone}.ts
@@ -16,7 +17,7 @@ function weekStart(value: unknown) {
   return day;
 }
 function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
-  const published = list(tx.state,'class');
+  const published = list(tx.state,'class').filter(c => c.status !== 'cancelled');
   const weekEnd = new Date(Date.parse(week)+7*86_400_000).toISOString().slice(0,10);
   for (const item of classes) {
     const instructor = person(tx.state,item.instructorId);
@@ -29,6 +30,7 @@ function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
     insist(item.localDate >= week && item.localDate < weekEnd,'class_outside_week');
   }
   refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')), tx.who.role === 'owner');
+  refuseLocationClosures(tx.state,classes);
 }
 export function prepareClasses(tx: Transaction, input: Record<string, unknown>) {
   preparer(tx.who);

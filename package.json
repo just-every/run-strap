@@ -27,7 +27,7 @@
     "check": "rer check",
     "deps": "rer install",
     "rer": "rer",
-    "test:strap": "node --test --test-concurrency=1 tests/strap.test.mjs tests/pack-credits.test.mjs tests/capacity.test.mjs tests/booking-rules.test.mjs tests/attendance.test.mjs tests/spots.test.mjs tests/checkin.test.mjs",
+    "test:strap": "node --test --test-concurrency=1 tests/strap.test.mjs tests/pack-credits.test.mjs tests/capacity.test.mjs tests/booking-rules.test.mjs tests/attendance.test.mjs tests/spots.test.mjs tests/checkin.test.mjs tests/closures.test.mjs",
     "test:archive": "node --test --test-concurrency=1 tests/archive.test.mjs",
     "build:site": "rer build --site"
   },

@@ -7,6 +7,7 @@ import { formInput } from './forms'
 import { exitExport } from './exit-export'
 import { kioskResponse } from './kiosk/http'
 import { kioskDeviceCommand, kioskDevices } from './kiosk/devices'
+import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-mail'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
@@ -16,14 +17,17 @@ const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare']
 async function state(env: Bindings, who: Actor) {
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), importJobs, displayName: operator?.name ?? '' }
+  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: await noticeDeliveries(env, who.role), importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
   if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
   if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
-  return command(env.DB, who, name, input)
+  const result = await command(env.DB, who, name, input, { mailConfigured: memberMailConfigured(env) })
+  // Emails go out only after the cancellation and their reservations commit.
+  if (name === 'closure.confirm') await sendNotices(env, (result as any).deliveries.filter((d: any) => d.status === 'queued').map((d: any) => d.id))
+  return result
 }
 
 async function inputBody(request: Request): Promise<Record<string, unknown>> {

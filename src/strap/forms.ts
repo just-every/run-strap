@@ -79,6 +79,11 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     if (!classes.length) fail('Add at least one class to the week')
     return { week, classes }
   }
+  if (name === 'closure.prepare' && input.scope !== 'class') {
+    const zone = zoneOf(timeZone)
+    if (!date.test(String(input.startDate)) || !clock.test(String(input.startTime)) || !date.test(String(input.endDate)) || !clock.test(String(input.endTime))) fail('Choose when the closure starts and ends')
+    return { scope: input.scope, room: input.room, reason: input.reason, start: localInstant(String(input.startDate), String(input.startTime), zone), end: localInstant(String(input.endDate), String(input.endTime), zone) }
+  }
   if (name === 'scheduling.unavailable.save') {
     const zone = zoneOf(timeZone)
     return { ...input, resourceId: input.resourceKind === 'instructor' ? input.instructorId : input.resourceId,

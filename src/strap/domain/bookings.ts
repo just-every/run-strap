@@ -30,7 +30,7 @@ function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: Rec
 /** Stable creation-order FIFO among currently eligible members. No credit is
  * consumed until a seat is actually assigned; all promotions share the fence. */
 export function promote(tx: Transaction, entry: RecordData) {
-  if (entry.start <= now()) return;
+  if (entry.start <= now() || entry.status !== 'published') return;
   const all = list(tx.state,'booking').filter(b => b.classId === entry.id);
   let vacancies = seatCapacity(tx.state,entry,all).onlineOpen;
   const waiting = all.filter(b => b.status === 'waitlisted').sort((a,b) => a.sequence-b.sequence || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
@@ -47,6 +47,7 @@ export function promoteAll(tx: Transaction) {
 }
 export function book(tx: Transaction, input: Record<string,unknown>) {
   const member = ownMember(tx), entry = record(tx.state,input.classId,'class');
+  insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
   insistBookingOpen(tx,entry,!!eligiblePack(tx.state,member.id,entry));
@@ -65,6 +66,7 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const member = person(tx.state,input.personId), entry = record(tx.state,input.classId,'class');
   insist(member.role === 'member','member_required');
+  insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
   // Staff window overrides arrive with SCHED-010's override right.

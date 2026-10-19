@@ -3,6 +3,7 @@ import { DomainError, insist, list, type Actor } from './types';
 import { prepareClasses, publishClasses } from './classes';
 import { acknowledgeWaiver, book, deskBook, cancel, latestWaiver, publishWaiver } from './bookings';
 import { checkin, correctAttendance, markNoShow } from './attendance';
+import { closureImpact, confirmClosure, dismissNotice, prepareClosure, type NoticeContext } from './closures';
 import { checkinAlerts, inWindow, kioskCheckin, kioskLookup, memberCheckin, ownCode, rotateCode, scanCheckin, selfCheckin } from './checkin';
 import { adjustPack, approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
@@ -15,7 +16,7 @@ export { actor } from './store';
 export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
-export async function command(db: D1Database, who: Actor, name: string, input: Record<string,unknown>) {
+export async function command(db: D1Database, who: Actor, name: string, input: Record<string,unknown>, context: NoticeContext = {}) {
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   if (who.role === 'agent') insist(['classes.prepare','pack.prepare','reminder.prepare'].includes(name),'agents_can_only_prepare',403);
@@ -27,13 +28,14 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
     'payment.record':recordPayment, 'reminder.prepare':prepareReminder, 'reminder.approve':approveReminder,
     'booking.book':book, 'booking.desk':deskBook, 'booking.cancel':cancel, 'attendance.checkin':checkin,
     'attendance.noshow':markNoShow, 'attendance.correct':correctAttendance,
+    'closure.prepare':prepareClosure, 'closure.confirm':confirmClosure, 'notice.dismiss':dismissNotice,
     'attendance.self':selfCheckin, 'attendance.scan':scanCheckin, 'checkin.code':ownCode, 'checkin.rotate':rotateCode,
     'waiver.publish':publishWaiver, 'waiver.acknowledge':acknowledgeWaiver,
     'studio.save':saveStudio, 'spots.save':saveSpotLayout, 'booking.spot':moveSpot, 'bookingRule.save':saveBookingRule, 'bookingRule.remove':removeBookingRule,
   };
   const handler = handlers[name as keyof typeof handlers];
   if (!handler) throw new DomainError('unknown_command',404);
-  const result = await handler(tx,input);
+  const result = await handler(tx,input,context);
   await tx.commit(); return result;
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -66,6 +68,7 @@ export async function snapshot(db: D1Database, who: Actor) {
   const own = (kind: string) => list(state,kind).filter(r => owner || r.personId === who.personId);
   return {actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
     drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
+    closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],
     balances:state.people.filter(p => !p.erasedAt && (owner || p.id === who.personId)).map(p => ({personId:p.id,balanceCents:balance(state,p.id)}))};
 }

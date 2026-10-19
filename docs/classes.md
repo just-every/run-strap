@@ -64,6 +64,17 @@ The class's instructor or the owner opens **Today**, opens the class's roster an
 booked person as they arrive. **Check in** in the top bar opens the class that is on now. A check-in records the time and can't be
 repeated.
 
+Members can check themselves in, from an hour before class until 30 minutes after it starts: from **Check in** on their
+own Classes page, at a check-in kiosk by name or phone number, or by showing their check-in code (a QR code on their
+Classes page, or a key tag you print from their People card). On **Today**, staff can also scan a member's code. Each way
+uses the credit the booking already holds, once.
+
+To set up a kiosk, open **Studio**, name it under **Check-in kiosks** and make a pairing link. Open the link on the
+kiosk tablet within 15 minutes and choose **Pair this device**. A kiosk shows only first names, last initials and today's
+booked classes: never balances, packs, waivers or contact details, and it cannot open the studio app. **Revoke** stops it
+at once. The roster shows staff alerts beside each booked person: what they owe, an unsigned waiver, a last credit or a
+pack ending within a week (instructors see the waiver and pack alerts, not money).
+
 Once the class has started, **No-show** marks a booked person who didn't come: their credit stays used and the
 no-show fee from your booking rules, if any, is added to what they owe. Members see that fee with the class's rules before
 they book.
@@ -86,3 +97,13 @@ booking can be corrected once.
 
 When spots are open but the first person waiting has no credit that covers the class, **Today** marks the class
 **Waitlist stuck** and offers **Prepare a pack** for them.
+
+## Cancel a class or close a room
+
+Under **Closures and cancellations** on **Classes**, choose one class, a room or the whole location (with when it is
+closed) and a reason members will see, then **Preview the impact**. Nothing changes until you confirm: the preview lists
+every booked member, whose credit goes back to their pack, and everyone waiting, whose waitlist spot closes. **Confirm and
+notify members** cancels the classes, returns each credit once and gives each member a notice on their Classes page. If
+the studio's mail provider is set up, each member also gets one email, and the closure shows what the provider answered
+for each of them; otherwise it says email is not configured and members see the in-app notice only. A closed room or
+location can't be scheduled during the closure. Confirming again does nothing more.

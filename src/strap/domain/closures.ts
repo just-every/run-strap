@@ -1,0 +1,121 @@
+import { humanOwner, id, instant, insist, list, now, record, text, type RecordData, type State } from './types';
+import type { Transaction } from './store';
+import { appendPackEvent } from './pack-credits';
+import { resourceLabel, roomOf } from './scheduling';
+import { studioSettings } from './studio';
+
+// SCHED-008. The owner (manager until STAFF-001) cancels one class, or closes a
+// room or the whole location for an interval, which cancels every published
+// class there that has not started: classes overlapping [start, end) by their
+// own start and end instants. A closure is prepared with an impact preview and
+// confirmed against that exact impact; confirming returns each booked credit
+// to its own pack once, closes each waitlist, and reserves one in-app notice per
+// affected booking and one email per affected member covering all of their
+// bookings in the closure. Confirming again changes nothing.
+// A room closure also blocks that room for new classes (SCHED-003); a location
+// closure blocks every new class in its interval. Card refunds belong to
+// BILL-008, series scope to SCHED-001, other locations to STUDIO-002.
+export interface NoticeContext { mailConfigured?: boolean }
+export const mailNotConfigured = 'email not configured; members see an in-app notice only';
+const key = (value: string) => resourceLabel(value).toLowerCase();
+
+function scopeOf(state: State, input: Record<string,unknown>) {
+  const scope = text(input.scope,'scope',20);
+  insist(['class','room','location'].includes(scope),'invalid_scope');
+  if (scope === 'class') {
+    const entry = record(state,input.classId,'class');
+    insist(entry.status === 'published','class_not_open',409);
+    return {scope,classId:entry.id};
+  }
+  const start = instant(input.start,'start'), end = instant(input.end,'end');
+  insist(end > start,'closure_end_must_follow_start');
+  return {scope,start,end,...(scope === 'room' ? {room:resourceLabel(text(input.room,'room',100))} : {})};
+}
+function affected(state: State, scope: Record<string,any>) {
+  const at = now();
+  return list(state,'class').filter(c => c.status === 'published' && c.start > at && (scope.scope === 'class' ? c.id === scope.classId
+    : c.start < scope.end && c.end > scope.start && (scope.scope === 'location' || key(roomOf(c)) === key(scope.room))))
+    .sort((a,b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+}
+/** What confirming would do now, member by member. */
+export function closureImpact(state: State, scope: Record<string,any>) {
+  const classes = affected(state,scope).map(c => {
+    const seats = list(state,'booking').filter(b => b.classId === c.id && (b.status === 'booked' || b.status === 'waitlisted'))
+      .sort((a,b) => a.status.localeCompare(b.status) || a.id.localeCompare(b.id));
+    return {classId:c.id,title:c.title,start:c.start,end:c.end,room:roomOf(c),
+      bookings:seats.map(b => ({bookingId:b.id,personId:b.personId,status:b.status,creditReturned:b.status === 'booked'}))};
+  });
+  const bookings = classes.flatMap(c => c.bookings);
+  return {classes,members:new Set(bookings.map(b => b.personId)).size,creditsReturned:bookings.filter(b => b.creditReturned).length,
+    waitlistClosed:bookings.filter(b => b.status === 'waitlisted').length,moneyMoved:0,
+    key:classes.map(c => `${c.classId}:${c.bookings.map(b => `${b.bookingId}/${b.status}`).join(',')}`).join(';') || 'none'};
+}
+
+export function prepareClosure(tx: Transaction, input: Record<string,unknown>, context: NoticeContext = {}) {
+  humanOwner(tx.who);
+  const scope = scopeOf(tx.state,input), reason = text(input.reason,'reason',300);
+  const impact = closureImpact(tx.state,scope);
+  insist(scope.scope !== 'class' || impact.classes.length === 1,'class_already_started',409);
+  const closure = {id:id(),status:'draft',...scope,reason,impact,email:context.mailConfigured ? 'configured' : mailNotConfigured,createdAt:now(),createdBy:tx.who.id};
+  tx.put('closure',closure); return closure;
+}
+
+const zoneOf = (state: State) => studioSettings(state)?.timeZone ?? 'UTC';
+const whenText = (state: State, at: string) => new Intl.DateTimeFormat('en-US',{timeZone:zoneOf(state),weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(at));
+
+export function confirmClosure(tx: Transaction, input: Record<string,unknown>, context: NoticeContext = {}) {
+  humanOwner(tx.who);
+  const closure = record(tx.state,input.id,'closure');
+  if (closure.status === 'applied') return {closure,deliveries:[]};
+  insist(closure.status === 'draft','closure_not_draft',409);
+  const impact = closureImpact(tx.state,closure);
+  insist(text(input.impact,'impact',100_000) === closure.impact.key && impact.key === closure.impact.key,'closure_impact_changed',409);
+  const at = now(), deliveries: RecordData[] = [], mail = new Map<string,{subjects:string[];lines:string[];bookingIds:string[]}>();
+  for (const item of impact.classes) {
+    const entry = record(tx.state,item.classId,'class');
+    tx.future(entry.start);
+    tx.put('class',{...entry,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelReason:closure.reason,closureId:closure.id});
+    for (const seat of item.bookings) {
+      const booking = record(tx.state,seat.bookingId,'booking');
+      if (booking.status === 'booked') appendPackEvent(tx,record(tx.state,booking.packId,'pack'),{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'class_cancelled'});
+      tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked',feeCents:0,closureId:closure.id});
+      const title = String(entry.title).split(' · ')[0], when = whenText(tx.state,entry.start);
+      const body = `${title} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? 'Your class credit is back in your pack.' : 'Your waitlist spot is closed; no credit was used.'}`;
+      const notice = {id:`notice:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,closureId:closure.id,subject:`Cancelled: ${title}, ${when}`,body,createdAt:at,dismissedAt:null};
+      insist(!tx.state.records.has(notice.id),'notice_exists',409);
+      tx.put('notice',notice);
+      const letter = mail.get(booking.personId) ?? {subjects:[],lines:[],bookingIds:[]};
+      letter.subjects.push(notice.subject); letter.lines.push(body); letter.bookingIds.push(booking.id); mail.set(booking.personId,letter);
+    }
+  }
+  for (const [personId,letter] of mail) {
+    const member = tx.state.people.find(p => p.id === personId);
+    const status = !context.mailConfigured ? 'not_configured' : member?.email && !member.erasedAt ? 'queued' : 'no_address';
+    const delivery = {id:`mail:${closure.id}:${personId}`,personId,status};
+    deliveries.push(delivery);
+    // One email per member per closure; the key and UNIQUE(closure, person) refuse a second reservation.
+    tx.sql.push(tx.statement('INSERT INTO st_notice_deliveries(id,closure_id,person_id,booking_ids,recipient,subject,body,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+      delivery.id,closure.id,personId,JSON.stringify(letter.bookingIds),status === 'queued' ? member!.email : null,
+      letter.subjects.length === 1 ? letter.subjects[0] : `Cancelled: ${letter.subjects.length} of your classes`,letter.lines.join('\n\n'),status,Date.parse(at)));
+  }
+  if (closure.scope === 'room') tx.put('unavailability',{id:`closure-room:${closure.id}`,resourceKind:'room',resourceId:closure.room,resourceName:closure.room,start:closure.start,end:closure.end,
+    reason:`Closed: ${closure.reason}`,status:'active',closureId:closure.id,createdAt:at,createdBy:tx.who.id,updatedAt:at,updatedBy:tx.who.id});
+  const applied = {...closure,status:'applied',impact,appliedAt:at,appliedBy:tx.who.id};
+  tx.put('closure',applied);
+  return {closure:applied,deliveries};
+}
+
+/** New classes cannot be scheduled into an applied location closure. */
+export function refuseLocationClosures(state: State, classes: RecordData[]) {
+  for (const c of classes) {
+    const closed = list(state,'closure').find(x => x.status === 'applied' && x.scope === 'location' && c.start < x.end && c.end > x.start);
+    insist(!closed,`Location closed ${closed?.start} to ${closed?.end}: ${closed?.reason}`,409);
+  }
+}
+
+export function dismissNotice(tx: Transaction, input: Record<string,unknown>) {
+  const notice = record(tx.state,input.id,'notice');
+  insist(tx.who.personId === notice.personId,'forbidden',403);
+  if (notice.dismissedAt) return notice;
+  const dismissed = {...notice,dismissedAt:now()}; tx.put('notice',dismissed); return dismissed;
+}

@@ -79,7 +79,7 @@ export function saveUnavailability(tx: Transaction, input: Record<string,unknown
     createdAt:previous?.createdAt ?? now(),createdBy:previous?.createdBy ?? tx.who.id,updatedAt:now(),updatedBy:tx.who.id};
   insist(entry.end > entry.start,'unavailability_end_must_follow_start');
   // An exception cannot silently invalidate an already-published allocation.
-  refuseSchedulingConflicts(list(tx.state,'class').flatMap(c => schedulingConflicts([c],[],[entry])));
+  refuseSchedulingConflicts(list(tx.state,'class').filter(c => c.status !== 'cancelled').flatMap(c => schedulingConflicts([c],[],[entry])));
   tx.put('unavailability',entry); return entry;
 }
 

@@ -16,6 +16,7 @@ import { alertNotes } from './checkin'
 function state(s: any, c: any, b: any, started: boolean) {
   const signed = (yes: string, no: string) => owner(s) ? (waiverSigned(s, b.personId) ? yes : no) : ''
   const line = (tone: string, glyph: string, title: string, sub: string) => `<div class="state ${tone}"><span class="mark">${icon(glyph)}</span><div><strong>${h(title)}</strong><span>${sub}</span></div></div>`
+  if (b.cancellation === 'class_cancelled' || b.cancellation === 'waitlist_closed') return line('', 'cross', 'Class cancelled', b.refunded ? 'Credit returned' : 'Waitlist closed')
   if (b.status === 'cancelled') return line('', 'cross', b.cancellation === 'late' ? 'Late cancel' : 'Cancelled', `${b.cancellation === 'waitlist' || (!b.refunded && b.cancellation !== 'late') ? 'No credit used' : b.refunded ? 'Credit returned' : 'Credit kept'}${owner(s) && b.feeCents ? ` · ${money(b.feeCents)} fee` : ''}${owner(s) && b.waiver ? ` · Waived: ${h(b.waiver.reason)}` : ''}`)
   if (b.status === 'waitlisted') {
     const pack = eligiblePack(s, b.personId, c)
