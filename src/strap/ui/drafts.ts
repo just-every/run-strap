@@ -4,6 +4,7 @@ import { classRoom, classTitle } from './facts'
 import { clock, dayOf, dayShort, datePlain, length, money, when } from './format'
 import { icon } from './icons'
 import { cell, emptyLine, form, h, hidden, owner, person, rows, statusPill, table } from './shared'
+import { packExpiration } from './pack-history'
 import { allocationDetails, conflictDetails, draftConflicts } from './scheduling'
 
 const kinds: Record<string, { glyph: string; title: string; page: string; approve: string; command: string }> = {
@@ -25,10 +26,10 @@ export function draftLine(s: any, d: any) {
 export const preparedBy = (s: any, d: any) => `${d.createdByRole === 'agent' ? 'Prepared by your agent' : 'Prepared by you'} · ${when(s, d.createdAt)}`
 
 function contents(s: any, d: any) {
-  if (d.type === 'pack') return `<dl class="facts"><dt>Member</dt><dd>${h(person(s, d.personId))}</dd><dt>Credits</dt><dd>${h(d.credits)} classes</dd><dt>Price</dt><dd>${money(d.amountCents)}, owed once approved</dd><dt>Good through</dt><dd>${h(datePlain(dayOf(s, d.expiresAt)))}</dd></dl>`
+  if (d.type === 'pack') return `<dl class="facts"><dt>Member</dt><dd>${h(person(s, d.personId))}</dd><dt>Credits</dt><dd>${h(d.credits)} classes</dd><dt>Price</dt><dd>${money(d.amountCents)}, owed once approved</dd><dt>Eligible services</dt><dd>${h(d.eligibleServices?.length ? d.eligibleServices.join(', ') : 'All services')}</dd><dt>Expires</dt><dd>${packExpiration(s, d.expiresAt)}</dd></dl>`
   if (d.type === 'reminder') return `<dl class="facts"><dt>To</dt><dd>${h(d.recipient)}</dd><dt>Subject</dt><dd>${h(d.subject)}</dd></dl><p class="letter">${h(d.body)}</p>`
   if (d.type === 'classes') return table(['Day', 'Time', 'Class', 'Instructor', '>Spots'], d.classes.map((c: any) =>
-    `<tr>${cell('Day', h(dayShort(s, dayOf(s, c.start))))}${cell('Time', `${h(clock(s, c.start))} <small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${allocationDetails(c)}`)}${cell('Instructor', h(c.instructorName))}${cell('Spots', h(c.capacity), 'right')}</tr>`).join(''))
+    `<tr>${cell('Day', h(dayShort(s, dayOf(s, c.start))))}${cell('Time', `${h(clock(s, c.start))} <small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${c.service && c.service !== classTitle(c) ? `<small>Service: ${h(c.service)}</small>` : ''}${allocationDetails(c)}`)}${cell('Instructor', h(c.instructorName))}${cell('Spots', h(c.capacity), 'right')}</tr>`).join(''))
   return ''
 }
 

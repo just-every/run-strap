@@ -2,6 +2,7 @@ import { humanOwner, preparer, id, instant, integer, insist, list, now, person, 
 import type { Transaction } from './store';
 import { approveDraft } from './drafts';
 import { promoteAll } from './bookings';
+import { appendPackEvent, packEvents } from './pack-credits';
 
 export function balance(state: State, personId: string) {
   return list(state,'charge').filter(r => r.personId === personId).reduce((sum,r) => sum+r.amountCents,0)
@@ -12,7 +13,8 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   const member = person(tx.state,input.personId), expiresAt = instant(input.expiresAt,'expiresAt');
   insist(expiresAt > now(),'expiry_must_be_future');
   tx.future(expiresAt);
-  const draft = {id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits:integer(input.credits,'credits',1,10_000),amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const eligibleServices = packServices(input.eligibleServices);
+  const draft = {eligibleServices,id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits:integer(input.credits,'credits',1,10_000),amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -24,11 +26,40 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {id:id(),personId:member.id,credits:draft.credits,remaining:draft.credits,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
+  appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
   promoteAll(tx);
   return {id:pack.id,draftId:draft.id,status:'approved'};
+}
+function packServices(value: unknown): string[] {
+  if (value === undefined) return [];
+  insist(Array.isArray(value) && value.length <= 100,'invalid_eligibleServices');
+  const labels = value.map(item => text(item,'eligibleServices',160).replace(/\s+/g,' '));
+  const unique = new Map<string,string>();
+  for (const label of labels) if (!unique.has(label.toLowerCase())) unique.set(label.toLowerCase(),label);
+  return [...unique.values()];
+}
+/** Adjust available credits and/or expiration without changing purchase terms. */
+export function adjustPack(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const pack = record(tx.state,input.id,'pack');
+  const requestId = text(input.requestId,'requestId',100), reason = text(input.reason,'reason',2_000);
+  const creditsDelta = integer(input.creditsDelta,'creditsDelta',-10_000,10_000);
+  const expiresAt = input.expiresAt === undefined ? undefined : instant(input.expiresAt,'expiresAt');
+  const requestBasis = JSON.stringify({creditsDelta,reason,expiresAt:expiresAt ?? null});
+  const prior = packEvents(tx.state,pack).find(event => event.requestId === requestId);
+  if (prior) {
+    insist(prior.actorId === tx.who.id && prior.requestBasis === requestBasis,'adjustment_request_changed',409);
+    return prior;
+  }
+  const revision = integer(input.revision,'revision',0,1_000_000);
+  insist(revision === (pack.creditRevision ?? 0),'pack_changed',409);
+  insist(creditsDelta !== 0 || (expiresAt !== undefined && expiresAt !== pack.expiresAt),'adjustment_requires_change');
+  const event = appendPackEvent(tx,pack,{type:'adjust',credits:creditsDelta,reason,requestId,requestBasis,...(expiresAt ? {expiresAt} : {})});
+  promoteAll(tx);
+  return event;
 }
 export function recordPayment(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);

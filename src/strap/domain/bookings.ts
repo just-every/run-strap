@@ -1,5 +1,6 @@
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
+import { appendPackEvent, packServiceEligible } from './pack-credits';
 
 export const latestWaiver = (state: State) => list(state,'waiver').at(-1) ?? null;
 function acknowledged(state: State, personId: string) {
@@ -7,7 +8,7 @@ function acknowledged(state: State, personId: string) {
   return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id);
 }
 function eligiblePack(state: State, personId: string, entry: RecordData) {
-  return list(state,'pack').filter(p => p.personId === personId && p.remaining > 0 && p.expiresAt > entry.start && p.expiresAt > now())
+  return list(state,'pack').filter(p => p.personId === personId && p.remaining > 0 && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now())
     .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
 }
 function ownMember(tx: Transaction) {
@@ -17,7 +18,7 @@ function ownMember(tx: Transaction) {
 }
 function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData) {
   tx.future(entry.start); tx.future(pack.expiresAt);
-  tx.put('pack',{...pack,remaining:pack.remaining-1});
+  appendPackEvent(tx,pack,{type:'reserve',credits:-1,bookingId:booking.id,classId:entry.id});
   const updated = {...booking,status:'booked',packId:pack.id,bookedAt:now()};
   tx.put('booking',updated); return updated;
 }
@@ -62,8 +63,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>) {
   insist(booking.status !== 'cancelled','already_cancelled',409);
   if (booking.status === 'booked') {
     const pack = record(tx.state,booking.packId,'pack');
-    insist(pack.remaining < pack.credits,'invalid_credit_balance',409);
-    tx.put('pack',{...pack,remaining:pack.remaining+1});
+    appendPackEvent(tx,pack,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id});
   }
   const cancelled = {...booking,status:'cancelled',cancelledAt:now(),refunded:booking.status === 'booked'};
   tx.put('booking',cancelled); promote(tx,entry); return cancelled;
@@ -73,6 +73,8 @@ export function checkin(tx: Transaction, input: Record<string,unknown>) {
   insist(tx.who.role === 'owner' || (tx.who.role === 'instructor' && tx.who.personId === entry.instructorId),'instructor_required',403);
   insist(booking.status === 'booked','confirmed_booking_required',409);
   insist(!booking.checkedInAt,'already_checked_in',409);
+  const pack = record(tx.state,booking.packId,'pack');
+  appendPackEvent(tx,pack,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id});
   const checked = {...booking,checkedInAt:now(),checkedInBy:tx.who.id}; tx.put('booking',checked); return checked;
 }
 export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {

@@ -29,7 +29,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
   if (!Number.isInteger(minutes) || minutes < 5 || minutes > 600) fail(`Enter a length in minutes for class ${i + 1}`)
   const start = localInstant(addDays(week, day), get('time'), timeZone)
   return {
-    title: get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
+    title: get('title'), service: get('service') || get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     bufferBeforeMinutes: Number(get('bufferBeforeMinutes')), bufferAfterMinutes: Number(get('bufferAfterMinutes')),
     start, end: new Date(Date.parse(start) + minutes * 60_000).toISOString(),
     capacity: Number(get('capacity')), instructorId: get('instructorId'),
@@ -39,13 +39,26 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
   if ('credits' in input) input.credits = Number(input.credits)
+  if ('creditsDelta' in input) input.creditsDelta = Number(input.creditsDelta)
+  if ('revision' in input) input.revision = Number(input.revision)
+  if (typeof input.eligibleServices === 'string') input.eligibleServices = input.eligibleServices.split(/\r?\n/).map(value => value.trim()).filter(Boolean)
   if ('active' in input) input.active = ['on', 'true', '1'].includes(String(input.active))
   if ('amount' in input) { input.amountCents = cents(input.amount, name === 'payment.record' ? 'the amount received' : 'the pack price'); delete input.amount }
   if ('expiresOn' in input) {
     if (!date.test(String(input.expiresOn))) fail('Choose the last day the pack can be used')
-    // A pack is good through the end of its last day, on the studio's clock.
-    input.expiresAt = new Date(Date.parse(localInstant(String(input.expiresOn), '23:59', zoneOf(timeZone))) + 59_000).toISOString()
+    // Inclusive local Good through date; the next midnight is the exclusive boundary.
+    input.expiresAt = localInstant(addDays(String(input.expiresOn), 1), '00:00', zoneOf(timeZone))
     delete input.expiresOn
+  }
+  if (name === 'pack.adjust') {
+    if (input.expiresDate || input.expiresTime) {
+      const time = String(input.expiresTime)
+      if (!date.test(String(input.expiresDate)) || !/^\d\d:\d\d(?::\d\d)?$/.test(time)) fail('Choose both an expiration date and time')
+      const seconds = Number(time.split(':')[2] ?? 0)
+      if (seconds > 59) fail('Choose a valid expiration time')
+      input.expiresAt = new Date(Date.parse(localInstant(String(input.expiresDate), time.slice(0, 5), zoneOf(timeZone))) + seconds * 1000).toISOString()
+    }
+    delete input.expiresDate; delete input.expiresTime
   }
   if (name === 'classes.prepare') {
     const week = String(input.week ?? ''), zone = zoneOf(timeZone)

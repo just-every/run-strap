@@ -30,7 +30,7 @@ function editor(s: any, count: number) {
   // The weeks an owner can prepare: this week (if not over) and the next nine, by their Monday.
   const monday = addDays(mondayOf(studioToday(s)), 7)
   const line = (i: number) => `<tr><td>${i + 1}</td>`
-    + `<td class="wide">${field(`c${i}_title`, 'Class', '', 'text', `maxlength="120"${i ? '' : ' placeholder="Reformer Flow"'}`)}</td>`
+    + `<td class="wide">${field(`c${i}_title`, 'Class', '', 'text', `maxlength="120"${i ? '' : ' placeholder="Reformer Flow"'}`)}${field(`c${i}_service`, 'Service (blank = class name)', '', 'text', 'maxlength="160"')}</td>`
     + `<td>${field(`c${i}_room`, 'Room', '', 'text', `maxlength="100"${i ? '' : ' placeholder="Reformer room"'}`)}${textarea(`c${i}_equipment`, 'Equipment / reformers (one name per line)', '', 'rows="2"')}</td>`
     + `<td class="w-day">${select(`c${i}_day`, 'Day', days.map((d, n) => [String(n), d] as [unknown, unknown]), '0', '')}</td>`
     + `<td class="w-time">${field(`c${i}_time`, 'Starts', '', 'time', 'step="300"')}</td>`

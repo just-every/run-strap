@@ -37,7 +37,7 @@ export function prepareClasses(tx: Transaction, input: Record<string, unknown>) 
   const classes = input.classes.map((raw: unknown): RecordData => {
     insist(raw && typeof raw === 'object','invalid_class');
     const entry = raw as Record<string,unknown>, instructor = person(tx.state,entry.instructorId);
-    return {id:id(),title:text(entry.title,'title',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
+    return {id:id(),title:text(entry.title,'title',160),service:text(entry.service || entry.title,'service',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
   });
   checkClasses(tx,classes,week);
   const draft = {id:id(),type:'classes',status:'draft',week,classes,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};

@@ -1,6 +1,7 @@
 // Facts the screens read from the studio's records: who is in a class, which
 // credit a member can use, what they owe, and who needs a follow-up. Each is
 // derived from stored records only, by the same rules the domain applies.
+import { packServiceEligible } from '../domain/pack-credits'
 import { rows } from './shared'
 import { dayOf } from './format'
 import { roomOf } from '../domain/scheduling'
@@ -25,7 +26,7 @@ export const classRoom = (c: any) => roomOf(c)
 
 /** The credit Strap would use to seat this member in this class (bookings.ts eligiblePack). */
 export const eligiblePack = (s: any, personId: string, c: any) => rows(s, 'packs')
-  .filter(p => p.personId === personId && p.remaining > 0 && p.expiresAt > c.start && time(p.expiresAt) > now())
+  .filter(p => p.personId === personId && packServiceEligible(p, c) && p.remaining > 0 && p.expiresAt > c.start && time(p.expiresAt) > now())
   .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))[0]
 export const livePacks = (s: any, personId: string) => rows(s, 'packs').filter(p => p.personId === personId && p.remaining > 0 && time(p.expiresAt) > now())
 export const balance = (s: any, personId: string) => rows(s, 'balances').find(b => b.personId === personId)?.balanceCents ?? 0

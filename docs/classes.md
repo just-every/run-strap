@@ -13,7 +13,7 @@ for you, your instructors and your members, and daylight saving time is handled 
 
 Open **Classes** and find **Prepare a class week**. Choose the Monday that starts the week, then fill one row per class:
 the class name, its room, the day, the start time, its length in minutes, the number of spots and the instructor,
-picked by name. Rows left without a class name are skipped; **Add seven more rows** gives you more.
+picked by name. **Service** groups classes for pack eligibility, such as `Mat` or `Reformer`; blank uses the class name. The pack’s eligible services must match this name, ignoring case and extra spaces. Rows left without a class name are skipped; **Add seven more rows** gives you more.
 
 Enter each shared piece of equipment or reformer by name, one per line. Use the same room and equipment names wherever they are shared; matching ignores case and extra spaces. Preparation and cleanup minutes reserve the instructor, room and equipment before and after the class. Two reservations may touch at their exact end and start, but may not overlap.
 

@@ -83,7 +83,7 @@ The previous contract had no clause IDs. Its positive guarantees receive publish
 
 - **PLAN-002 — Unlimited and period entitlements.** Memberships grant unlimited access or credits per week/month with per-service and location limits, time-of-day and weekday windows (such as off-peak memberships), rollover rules, concurrent-booking caps and the guest-pass allowance of PLAN-010. The entitlement ledger distinguishes reservation, attendance, cancellation and expiry. **Acceptance evidence:** Buy a four-visit monthly plan and an unlimited plan, cross a period boundary, book eligible and ineligible classes concurrently and inspect exactly the allowed reservations; an off-peak plan books a 2:00 pm class and is refused a 6:00 pm class.
 
-- **PLAN-003 — Pack validity and credit history.** Members and staff see remaining, reserved, consumed, restored and expired pack credits with eligible services and exact expiration in the studio time zone. Staff adjustments require a reason and preserve history. **Acceptance evidence:** Buy a pack restricted to mat classes, attempt a reformer booking, consume and return a credit, cross expiry and inspect the immutable usage and adjustment history.
+- **PLAN-003 — Pack validity and credit history.** Members and staff see remaining, reserved, consumed, restored and expired pack credits with eligible services and exact expiration in the studio time zone. Staff adjustments require a reason and preserve history. Until STAFF-001 adds staff rights, the human owner makes adjustments. Service names match ignoring case and extra whitespace; an empty eligible-services list permits all classes. A class uses its explicit service or, when blank, its class name (older room-encoded titles use the class-name portion). A confirmed booking reserves one available credit, check-in marks that reservation consumed without a second debit, and cancellation returns it once. Reserved and consumed counts describe current allocations; restored is cumulative. Expiration is exclusive at the stored instant and evaluated against both booking time and class start; a browser Good through date includes that whole local day and expires at the following local midnight. Owner adjustments change available credits and/or expiration, with an exact reason, pack revision and pack-scoped retry identity; original purchase credits, price, charge and earlier events remain unchanged. Changing expiration affects unused credits; existing reservations keep their allocated credits. Every new grant, reservation, consumption, restoration and adjustment retains its actor and time. Older packs retain recorded balances and booking facts in an explicitly labelled legacy opening balance; unknown earlier events are labelled unavailable, never invented. Future plan and booking doors PLAN-001, PLAN-002, PLAN-004–011, SCHED-002, SCHED-005, SCHED-010–014 and BILL-002/014 inherit the same eligibility and credit-history obligations before shipping. **Acceptance evidence:** Buy a pack restricted to mat classes, attempt a reformer booking, consume and return a credit, cross expiry and inspect the immutable usage and adjustment history. Exercise a reasoned adjustment and its replay, refuse a changed or stale request and an unauthorized member or instructor adjustment, and confirm member and owner views agree while another member cannot read the history.
 
 - **PLAN-004 — Intro offers and eligibility.** Owners configure intro duration, included visits, new-client or returning-client eligibility, one-per-person/household limits and explicit conversion choices. Intro expiry cannot silently enroll a member into unaccepted renewal terms. Staff holding the sale right sell an intro offer at the desk or by phone under the same eligibility checks; selling outside eligibility needs the price right and a reason, audited (SEC-002). **Acceptance evidence:** Purchase a two-week intro as a new member, refuse a duplicate purchase under another account linked to the same member, use its visits and accept or decline an explicit recurring offer. Front desk is refused a second intro for the same person, and a manager's eligibility exception with a reason is sold once and audited.
 
@@ -437,13 +437,13 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90c3` (17 October 2026).
+Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90c3` (17 October 2026). This is the initial snapshot; updated rows cite the current code and public-door acceptance evidence.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 14 | 0 | 0 | 14 |
-| Target and push further | 2 | 25 | 106 | 133 |
-| All | 16 | 25 | 106 | 147 |
+| Target and push further | 3 | 24 | 106 | 133 |
+| All | 17 | 24 | 106 | 147 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -471,7 +471,7 @@ Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90
 | `MEM-006` | Member preferences and privacy choices | target | missing |  | No implemented member preferences and privacy choices workflow or public-door acceptance coverage. |
 | `PLAN-001` | Recurring memberships and product catalog | target | partial | `src/strap/domain/money.ts`; `tests/strap.test.mjs` | Approved finite packs exist; recurring subscriptions, catalog checkout, fixed-term plans and distinct intro/drop-in products are absent. |
 | `PLAN-002` | Unlimited and period entitlements | target | partial | `src/strap/domain/bookings.ts`; `src/strap/domain/money.ts`; `tests/strap.test.mjs` | Finite credit booking works; unlimited, periodic, service/location-limited, time-of-day windowed and rollover entitlements are absent. |
-| `PLAN-003` | Pack validity and credit history | target | partial | `src/strap/domain/bookings.ts`; `src/strap/domain/money.ts`; `src/strap/domain/index.ts`; `tests/strap.test.mjs` | Remaining credits and expiry checks exist; service restrictions, a complete ledger, adjustment reasons and expiry journey coverage are absent. |
+| `PLAN-003` | Pack validity and credit history | target | done | `src/strap/domain/pack-credits.ts`; `src/strap/domain/money.ts`; `src/strap/domain/bookings.ts`; `src/strap/ui/pack-history.ts`; `tests/pack-credits.test.mjs` |  |
 | `PLAN-004` | Intro offers and eligibility | target | missing |  | No implemented intro offers and eligibility workflow or public-door acceptance coverage. |
 | `PLAN-005` | Upgrades downgrades and proration preview | target | missing |  | No implemented upgrades downgrades and proration preview workflow or public-door acceptance coverage. |
 | `PLAN-006` | Freezes and planned resumption | target | missing |  | No implemented freezes and planned resumption workflow or public-door acceptance coverage. |
