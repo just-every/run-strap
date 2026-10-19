@@ -42,7 +42,7 @@ export function currentClass(s: any, list: any[]) {
 /** A class with open spots and a waitlist that cannot move: the day's exception. */
 export function stuckWaitlist(s: any, c: any) {
   if (time(c.start) <= now()) return null
-  const { booked, waiting } = attendance(s, c.id), open = c.capacity - booked.length
+  const { booked, waiting } = attendance(s, c.id), open = c.occupancy.onlineOpen
   if (open <= 0 || !waiting.length) return null
   return { open, first: waiting[0], reason: !waiverSigned(s, waiting[0].personId) ? 'waiver' : 'credit' }
 }

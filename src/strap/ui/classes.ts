@@ -15,11 +15,11 @@ export function weekTable(s: any, list: any[], action: (c: any) => string = () =
   const staff = s.actor.role !== 'member'
   let day = ''
   return table(['Time', 'Class', 'Instructor', 'Spots', ''], list.map(c => {
-    const date = dayOf(s, c.start), a = attendance(s, c.id), full = a.booked.length >= c.capacity
+    const date = dayOf(s, c.start), a = attendance(s, c.id), full = staff ? c.occupancy.totalOpen === 0 : c.occupancy.onlineOpen === 0
     const heading = date !== day ? `<tr class="day-row"><td colspan="5">${h(dayShort(s, date))}${date === studioToday(s) ? ' · Today' : ''}</td></tr>` : ''
     day = date
     return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${staff ? allocationDetails(c) : ''}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
-      + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${a.booked.length} of ${c.capacity}</span>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : full ? `<span class="pill full">Full${a.waiting.length ? ` · waitlist ${a.waiting.length}` : ''}</span>` : `<span class="pill quiet">${c.capacity - a.booked.length} open</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
+      + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${c.occupancy.booked} of ${c.capacity}</span><small>${c.occupancy.onlineBooked} / ${c.occupancy.online} online · ${c.occupancy.heldBooked} / ${c.occupancy.held} desk-held</small>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : full ? `<span class="pill full">Full${a.waiting.length ? ` · waitlist ${a.waiting.length}` : ''}</span>` : `<span class="pill quiet">${c.occupancy.onlineOpen} open</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
   }).join(''))
 }
 
@@ -35,7 +35,7 @@ function editor(s: any, count: number) {
     + `<td class="w-day">${select(`c${i}_day`, 'Day', days.map((d, n) => [String(n), d] as [unknown, unknown]), '0', '')}</td>`
     + `<td class="w-time">${field(`c${i}_time`, 'Starts', '', 'time', 'step="300"')}</td>`
     + `<td class="w-min">${field(`c${i}_minutes`, 'Minutes', '50', 'number', 'min="5" max="600" step="5"')}${field(`c${i}_bufferBeforeMinutes`, 'Prep before (min)', '0', 'number', 'min="0" max="1440"')}${field(`c${i}_bufferAfterMinutes`, 'Cleanup after (min)', '0', 'number', 'min="0" max="1440"')}</td>`
-    + `<td class="w-cap">${field(`c${i}_capacity`, 'Spots', '12', 'number', 'min="1" max="1000" step="1"')}</td>`
+    + `<td class="w-cap">${field(`c${i}_capacity`, 'Spots', '12', 'number', 'min="1" max="1000" step="1"')}${field(`c${i}_onlineCapacity`, 'Online spots (blank = total)', '', 'number', 'min="0" max="1000" step="1"')}</td>`
     + `<td class="w-who wide">${select(`c${i}_instructorId`, 'Instructor', instructors.map(p => [p.id, p.name] as [unknown, unknown]), instructors[i % instructors.length].id, '')}</td></tr>`
   return `<p>Choose the Monday that starts the week, then add each class. Times are on the studio’s clock (${h(zoneName(s.studio.timeZone))}). Rows without a class name are skipped. Preparing makes a draft you review before it opens for booking.</p>`
     + form('classes.prepare', '/app/classes', `${select('week', 'Week starting', Array.from({ length: 10 }, (_, n) => { const d = addDays(monday, 7 * (n - 1)); return [d, dayLong(d)] as [unknown, unknown] }), monday)}${hidden('rows', count)}<table class="week-editor"><thead><tr><th>#</th><th>Class</th><th>Room</th><th>Day</th><th>Starts</th><th>Minutes</th><th>Spots</th><th>Instructor</th></tr></thead><tbody>${Array.from({ length: count }, (_, i) => line(i)).join('')}</tbody></table>`

@@ -32,7 +32,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
     title: get('title'), service: get('service') || get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     bufferBeforeMinutes: Number(get('bufferBeforeMinutes')), bufferAfterMinutes: Number(get('bufferAfterMinutes')),
     start, end: new Date(Date.parse(start) + minutes * 60_000).toISOString(),
-    capacity: Number(get('capacity')), instructorId: get('instructorId'),
+    capacity: Number(get('capacity')), ...(get('onlineCapacity') ? { onlineCapacity: Number(get('onlineCapacity')) } : {}), instructorId: get('instructorId'),
   }
 }
 

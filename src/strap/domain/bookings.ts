@@ -1,5 +1,6 @@
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
+import { classCapacity } from './capacity';
 import { appendPackEvent, packServiceEligible } from './pack-credits';
 
 export const latestWaiver = (state: State) => list(state,'waiver').at(-1) ?? null;
@@ -27,7 +28,7 @@ function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: Rec
 export function promote(tx: Transaction, entry: RecordData) {
   if (entry.start <= now()) return;
   const all = list(tx.state,'booking').filter(b => b.classId === entry.id);
-  let vacancies = entry.capacity - all.filter(b => b.status === 'booked').length;
+  let vacancies = classCapacity(entry,all).onlineOpen;
   const waiting = all.filter(b => b.status === 'waitlisted').sort((a,b) => a.sequence-b.sequence || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   for (const candidate of waiting) {
     if (vacancies <= 0) break;
@@ -47,12 +48,33 @@ export function book(tx: Transaction, input: Record<string,unknown>) {
   insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   promote(tx,entry);
-  const full = list(tx.state,'booking').filter(b => b.classId === entry.id && b.status === 'booked').length >= entry.capacity;
-  const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',createdAt:now(),sequence:tx.state.version+1};
+  const full = classCapacity(entry,list(tx.state,'booking')).onlineOpen === 0;
+  const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:'online',createdAt:now(),sequence:tx.state.version+1};
   if (full) { tx.put('booking',booking); return booking; }
   const pack = eligiblePack(tx.state,member.id,entry);
   insist(pack,'eligible_credit_required',409);
   return seat(tx,booking,entry,pack);
+}
+/** The owner operates the desk until STAFF-001 introduces scoped staff roles. */
+export function deskBook(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const member = person(tx.state,input.personId), entry = record(tx.state,input.classId,'class');
+  insist(member.role === 'member','member_required');
+  insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
+  tx.future(entry.start);
+  insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
+  insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
+  // Existing eligible online waiters have priority over an unallocated online seat.
+  promote(tx,entry);
+  const capacity = classCapacity(entry,list(tx.state,'booking'));
+  insist(capacity.totalOpen > 0,'class_full',409);
+  const pack = eligiblePack(tx.state,member.id,entry);
+  insist(pack,'eligible_credit_required',409);
+  const channel = text(input.channel ?? 'desk','channel',30);
+  insist(['desk','phone','inbox'].includes(channel),'invalid_channel');
+  return seat(tx,{id:id(),classId:entry.id,personId:member.id,status:'waitlisted',
+    capacityPool:capacity.heldOpen > 0?'held':'online',bookingChannel:channel,
+    madeBy:tx.who.id,right:'booking',createdAt:now(),sequence:tx.state.version+1},entry,pack);
 }
 export function cancel(tx: Transaction, input: Record<string,unknown>) {
   const booking = record(tx.state,input.id,'booking');

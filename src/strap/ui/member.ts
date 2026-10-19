@@ -10,7 +10,7 @@ function bookAction(s: any, c: any) {
   if (Date.parse(c.start) <= Date.now()) return ''
   // A member cannot see who else booked: a full class puts them on its waitlist.
   if (!eligiblePack(s, s.actor.personId, c)) return '<span class="chip quiet">No credit for this class</span>'
-  return form('booking.book', '/app', hidden('classId', c.id), 'Book', 'primary', 'small')
+  return form('booking.book', '/app', hidden('classId', c.id), c.occupancy.onlineOpen === 0 ? 'Join waitlist' : 'Book', 'primary', 'small')
 }
 
 export function memberHome(s: any) {
