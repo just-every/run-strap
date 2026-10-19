@@ -11,9 +11,9 @@ export interface Rule {
   id: string | null; service: string | null; revision: number;
   opensHoursBefore: number | null; priorityOpensHoursBefore: number | null;
   closesMinutesBefore: number; cancelCutoffHours: number;
-  lateCancelReturnsCredit: boolean; lateCancelFeeCents: number;
+  lateCancelReturnsCredit: boolean; lateCancelFeeCents: number; noShowFeeCents: number;
 }
-const builtIn: Rule = {id:null,service:null,revision:0,opensHoursBefore:null,priorityOpensHoursBefore:null,closesMinutesBefore:0,cancelCutoffHours:0,lateCancelReturnsCredit:true,lateCancelFeeCents:0};
+const builtIn: Rule = {id:null,service:null,revision:0,opensHoursBefore:null,priorityOpensHoursBefore:null,closesMinutesBefore:0,cancelCutoffHours:0,lateCancelReturnsCredit:true,lateCancelFeeCents:0,noShowFeeCents:0};
 const ruleId = (service: string | null) => service === null ? 'booking-rule:studio' : `booking-rule:${serviceKey(service)}`;
 export const classService = (entry: RecordData) => entry.service ?? String(entry.title).split(' · ')[0];
 
@@ -32,7 +32,7 @@ export function bookingWindow(state: State, entry: RecordData) {
     priorityOpensAt:rule.priorityOpensHoursBefore === null ? null : before(entry.start,rule.priorityOpensHoursBefore*60),
     closesAt:before(entry.start,rule.closesMinutesBefore),
     cancelCutoffHours:rule.cancelCutoffHours,cutoffAt:before(entry.start,rule.cancelCutoffHours*60),
-    lateCancelReturnsCredit:rule.lateCancelReturnsCredit,lateCancelFeeCents:rule.lateCancelFeeCents};
+    lateCancelReturnsCredit:rule.lateCancelReturnsCredit,lateCancelFeeCents:rule.lateCancelFeeCents,noShowFeeCents:rule.noShowFeeCents ?? 0};
 }
 
 /** Fences the window at commit: the committing Worker's clock decides. */
@@ -53,7 +53,7 @@ export function priorityOnly(state: State, entry: RecordData) {
 /** The cancellation terms a booking keeps from the moment it was made. */
 export function cancelTerms(state: State, entry: RecordData) {
   const rule = ruleFor(state,entry);
-  return {ruleId:rule.id,ruleRevision:rule.revision,cutoffHours:rule.cancelCutoffHours,lateReturnsCredit:rule.lateCancelReturnsCredit,lateFeeCents:rule.lateCancelFeeCents};
+  return {ruleId:rule.id,ruleRevision:rule.revision,cutoffHours:rule.cancelCutoffHours,lateReturnsCredit:rule.lateCancelReturnsCredit,lateFeeCents:rule.lateCancelFeeCents,noShowFeeCents:rule.noShowFeeCents ?? 0};
 }
 
 /** What cancelling this booking now does. Bookings made before SCHED-006 carry no
@@ -79,12 +79,13 @@ export function saveBookingRule(tx: Transaction, input: Record<string,unknown>) 
   const closesMinutesBefore = integer(input.closesMinutesBefore ?? 0,'closes_minutes_before',0,10_080);
   const cancelCutoffHours = integer(input.cancelCutoffHours ?? 0,'cancel_cutoff_hours',0,720);
   const lateCancelFeeCents = integer(input.lateCancelFeeCents ?? 0,'late_cancel_fee_cents',0,100_000);
+  const noShowFeeCents = integer(input.noShowFeeCents ?? 0,'no_show_fee_cents',0,100_000);
   const lateCancelReturnsCredit = input.lateCancelReturnsCredit ?? true;
   insist(typeof lateCancelReturnsCredit === 'boolean','invalid_late_cancel_returns_credit');
   insist(priorityOpensHoursBefore === null || (opensHoursBefore !== null && priorityOpensHoursBefore > opensHoursBefore),'priority_window_must_open_before_regular_window');
   insist(opensHoursBefore === null || closesMinutesBefore < opensHoursBefore*60,'booking_window_must_close_after_it_opens');
   const key = ruleId(service), previous = tx.state.records.get(key)?.data;
-  const rule = {id:key,service,status:'active',revision:(previous?.revision ?? 0)+1,opensHoursBefore,priorityOpensHoursBefore,closesMinutesBefore,cancelCutoffHours,lateCancelReturnsCredit,lateCancelFeeCents,updatedAt:now(),updatedBy:tx.who.id};
+  const rule = {id:key,service,status:'active',revision:(previous?.revision ?? 0)+1,opensHoursBefore,priorityOpensHoursBefore,closesMinutesBefore,cancelCutoffHours,lateCancelReturnsCredit,lateCancelFeeCents,noShowFeeCents,updatedAt:now(),updatedBy:tx.who.id};
   tx.put('bookingRule',rule); return rule;
 }
 /** A service rule can be removed; the studio rule then applies to that service. */

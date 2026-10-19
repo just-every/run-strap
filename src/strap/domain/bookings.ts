@@ -114,15 +114,6 @@ export function cancel(tx: Transaction, input: Record<string,unknown>) {
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
   tx.put('booking',cancelled); promote(tx,entry); return cancelled;
 }
-export function checkin(tx: Transaction, input: Record<string,unknown>) {
-  const booking = record(tx.state,input.id,'booking'), entry = record(tx.state,booking.classId,'class');
-  insist(tx.who.role === 'owner' || (tx.who.role === 'instructor' && tx.who.personId === entry.instructorId),'instructor_required',403);
-  insist(booking.status === 'booked','confirmed_booking_required',409);
-  insist(!booking.checkedInAt,'already_checked_in',409);
-  const pack = record(tx.state,booking.packId,'pack');
-  appendPackEvent(tx,pack,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id});
-  const checked = {...booking,checkedInAt:now(),checkedInBy:tx.who.id}; tx.put('booking',checked); return checked;
-}
 export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const waiver = {id:id(),text:text(input.text,'text',20_000),createdAt:now(),createdBy:tx.who.id,version:list(tx.state,'waiver').length+1};

@@ -64,5 +64,17 @@ The class's instructor or the owner opens **Today**, opens the class's roster an
 booked person as they arrive. **Check in** in the top bar opens the class that is on now. A check-in records the time and can't be
 repeated.
 
+Once the class has started, **No-show** marks a booked person who didn't come: their credit stays used and the
+no-show fee from your booking rules, if any, is added to what they owe. Members see that fee with the class's rules before
+they book.
+
+## Correct a no-show or late cancel
+
+If a no-show or late cancel was a mistake, the owner opens the roster and uses **Correct no-show** or **Correct late cancel**
+under the person, with a reason. **Excused** or an early cancel returns the credit to its pack (extend the pack first if it
+has expired); **Attended** keeps the credit used. Either way the fee is reversed. If the member already paid the fee, add the
+reference of the refund you paid them outside Strap. The original no-show or late cancel stays in the booking's history, and a
+booking can be corrected once.
+
 When spots are open but the first person waiting has no credit that covers the class, **Today** marks the class
 **Waitlist stuck** and offers **Prepare a pack** for them.
