@@ -25,7 +25,7 @@ async function checkout(root) {
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
 }
-test('MOVE-011 / ARCHIVE-001: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure', { timeout: 240_000 }, async () => {
+test('MOVE-011 / ARCHIVE-001 / SCHED-014: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -92,17 +92,17 @@ test('MOVE-011 / ARCHIVE-001: portable exit reconstruction and public CLI archiv
     await h.cmd('waiver.acknowledge',{id:waiver.id},lee.cookie)
     const first=await h.cmd('booking.book',{classId:seat.id},await h.signIn('maya@studio.example'))
     assert.equal((await h.cmd('booking.book',{classId:seat.id},lee.cookie)).status,'waitlisted')
-    await h.cmd('booking.cancel',{id:first.id},restoredOwner)
+    await h.cmd('booking.cancel',{id:first.id,cancelReason:'Other'},restoredOwner)
     let restoredState=await h.state(restoredOwner)
     assert.equal(restoredState.bookings.find(b=>b.classId===seat.id&&b.personId===lee.id).status,'booked')
-    assert.deepEqual(restoredState.noticeDeliveries.map(d=>[d.personId,d.status]),[[lee.id,'paused']])
+    assert.deepEqual(restoredState.noticeDeliveries.map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'both cancellation and promotion email stay paused after restore')
     assert.match((await h.state(lee.cookie)).notices.map(n=>n.subject).join(),/You're booked: Restored Reformer/)
     await h.cmd('mail.connect',{},restoredOwner)
     assert.doesNotMatch((await h.send('/app/studio',undefined,restoredOwner)).text,/Member email paused/)
     const closing=await h.cmd('closure.prepare',{scope:'class',classId:seat.id,reason:'Restored test'},restoredOwner)
     await h.cmd('closure.confirm',{id:closing.id,impact:closing.impact.key},restoredOwner)
     restoredState=await h.state(restoredOwner)
-    assert.deepEqual(restoredState.noticeDeliveries.map(d=>d.status),['paused','not_configured'])
+    assert.deepEqual(restoredState.noticeDeliveries.map(d=>d.status),['paused','paused','not_configured'])
     await h.close();h=null
     await command(restored,['import','--input',old,'--yes','--no-queue'],4)
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})

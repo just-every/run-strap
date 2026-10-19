@@ -18,7 +18,7 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 `st_people` holds members and instructors, including inactive and erased rows, with their stable `id`, `name`, nullable `email`, `role`, integer `active`, `version` and nullable `erased_at`. Erased rows remain redacted as stored. `st_meta.version` is the domain revision. `st_erasure_journal` retains identity hashes and erasure times; `st_import_people_revisions` links imported people to import revision tokens.
 
-`st_notice_deliveries` holds one row per member per closure: the covered booking IDs (JSON), recipient, exact subject and text, and the recorded outcome (`accepted` by the provider with its message ID, `rejected`, `rate_limited`, `uncertain`, interrupted `queued`/`sending`, `not_configured` or `no_address`). An accepted row is the provider's acceptance, not proof of mailbox delivery.
+`st_notice_deliveries` holds one row per member per source (`closure`, `booking` for offers/promotions, or `booking_action` for a SCHED-014 action): the covered booking IDs (JSON), recipient, exact subject and text, and the recorded outcome (`accepted` by the provider with its message ID, `rejected`, `rate_limited`, `uncertain`, interrupted `queued`/`sending`, `not_configured`, `no_address` or `paused`). An accepted row is the provider's acceptance, not proof of mailbox delivery.
 
 `st_records` holds `id`, `kind`, JSON text `data` and row `version`. Rows are ordered by stable primary key. Use explicit document versions, timestamps and pack-event revisions for chronology; physical database insertion order is not portable. The data object's `id` is the record ID. Current kinds are:
 
@@ -27,13 +27,15 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 | `studio` | Location and IANA time zone; settings ID `studio`. |
 | `class` | Published occurrence, start/end, service, room/equipment, capacity, buffers, instructor person ID and source draft ID. |
 | `unavailability` | Instructor/room/equipment blocked interval and active/removed status. Instructor `resourceId` refers to a person; rooms/equipment use normalized label identities. |
-| `draft` | Exact class, pack or reminder preparation and approval metadata. Class entries are nested under `classes`; their IDs become published class IDs. Pack/reminder `personId` refers to a person. |
+| `draft` | Exact class, pack, reminder or booking-change preparation and approval metadata. Class entries are nested under `classes`; their IDs become published class IDs. Pack/reminder `personId` refers to a person. |
 | `approval` | `draftId`, type, opaque human `approvedBy` and `approvedAt`. |
 | `pack` | Person ID, draft ID, purchase credits, remaining credits, exact amount cents, expiry, eligible services and ledger revision. |
-| `packCreditEvent` | Person/pack IDs, revision, grant/reserve/restore/consume/adjust/opening event, signed credit delta, remaining/expiry after event, optional class/booking IDs and actor provenance. Legacy openings can contain reservation booking IDs. |
+| `packCreditEvent` | Person/pack IDs, revision, grant/reserve/restore/consume/adjust/transfer/opening event, signed credit delta, remaining/expiry after event, optional class/booking IDs and actor provenance. Legacy openings can contain reservation booking IDs. |
 | `charge` | Person and pack IDs, exact amount cents and creation time. |
 | `payment` | Person ID, exact received cents, unique external receipt reference and recorder. This records received money; it is not an instruction to collect it. |
 | `booking` | Person/class IDs, optional pack ID, booking/waitlist/cancellation state and times, FIFO sequence, check-in attribution (actor, role, `checkinChannel` of roster, self, kiosk, kiosk_scan or desk_scan, and the opaque `kioskId` for kiosk check-ins) and refund flag. |
+| `bookingAction` | SCHED-014 immutable cancellation, move, restore or waitlist event: booking/person/class IDs, before/after, actor/role/right/channel, reasons, fee/credit effect, notice/suppression and cancellation identity for a restore. |
+| `cancellationReasons` | Owner-configured reason labels; old actions keep their original labels. |
 | `closure` | SCHED-008 class cancellation or room/location closure: scope (class ID, or room and/or interval), reason, draft or applied status, the exact impact (classes, bookings, credits returned, waitlist spots closed) and attribution. A cancelled `class` carries `cancelReason` and `closureId`; its bookings carry `class_cancelled` or `waitlist_closed`. |
 | `notice` | One in-app cancellation notice per affected booking: person, booking, class and closure IDs, subject, text and dismissal time. |
 | `memberCheckin` | Person ID, optional 10-digit US phone used for kiosk lookup, and the member's current opaque check-in code with its revision and issue time. Paired kiosk devices are credentials and are not exported. |

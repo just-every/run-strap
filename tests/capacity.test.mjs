@@ -46,7 +46,7 @@ test('SCHED-011: online ten, two desk-held seats, truthful occupancy and pool-aw
   assert.deepEqual((await h.state()).packs, before.packs)
   page = await h.send('/app/classes', undefined, h.owner)
   assert.match(page.text, /10 \/ 10 online · 2 \/ 2 desk-held/)
-  await h.cmd('booking.cancel', { id: desk.id })
+  await h.cmd('booking.cancel', { id: desk.id, cancelReason: 'Other' })
   s = await h.state()
   assert.equal(s.bookings.find(b => b.id === waiters[0].id).status, 'waitlisted', 'desk cancellation preserves held allocation')
   assert.equal(s.classes[0].occupancy.onlineOpen, 0)

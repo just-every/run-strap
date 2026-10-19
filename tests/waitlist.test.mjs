@@ -30,7 +30,7 @@ const booking = (s, classId, personId) => s.bookings.find(b => b.classId === cla
 const roster = entry => `/app?day=${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(entry.start))}&class=${entry.id}`
 const credits = (s, personId) => s.packs.find(p => p.personId === personId).remaining
 
-test('MSG-004: a vacancy offers the next eligible waiter a timed claim, expiry moves it on, and the claim seats once with one credit debit', async () => {
+test('MSG-004 / SCHED-014: a vacancy offers the next eligible waiter a timed claim, expiry moves it on, and the claim seats once with one credit debit', async () => {
   const mails = []
   // The real Resend adapter; only its HTTPS endpoint is faked.
   const outbound = async request => {
@@ -57,7 +57,7 @@ test('MSG-004: a vacancy offers the next eligible waiter a timed claim, expiry m
     let s = await h.state()
     const fay = booking(s, flow.id, Fay.id)
     assert.deepEqual([fay.status, fay.madeBy, fay.right, fay.bookingChannel], ['waitlisted', s.actor.id, 'booking', 'phone'])
-    await h.cmd('booking.cancel', { id: fay.id })
+    await h.cmd('booking.cancel', { id: fay.id, cancelReason: 'Other' })
     assert.equal(booking(await h.state(), flow.id, Fay.id).cancellation, 'waitlist')
 
     // Ana cancels: Ben, first in line, is offered the seat; no one is booked and no credit moves.
@@ -70,10 +70,11 @@ test('MSG-004: a vacancy offers the next eligible waiter a timed claim, expiry m
     const occupancy = s.classes.find(c => c.id === flow.id).occupancy
     assert.deepEqual([occupancy.onlineOpen, occupancy.offered], [0, 1], 'the offer holds the seat')
     assert.equal((await h.cmd('booking.book', { classId: flow.id }, Eve.cookie)).status, 'waitlisted', 'a newcomer joins the waitlist behind it')
-    assert.equal(mails.length, 1)
-    assert.deepEqual([mails[0].to, mails[0].idempotencyKey, mails[0].from], [['ben@studio.example'], `mail:offer:${offer.id}`, 'auth@studio.example'])
-    assert.match(mails[0].subject, /^Spot offered: Reformer Flow, /)
-    assert.match(mails[0].text, /Claim it in Strap by .+; after that it goes to the next person waiting\. A credit is used only when you claim it\./)
+    assert.deepEqual(mails.map(m => m.to[0]), ['fay@studio.example','fay@studio.example','ana@studio.example','ben@studio.example'], 'three action notices and one offer, each sent once')
+    assert.deepEqual(s.noticeDeliveries.filter(d => d.sourceKind === 'booking_action').map(d => d.status), ['accepted','accepted','accepted'])
+    assert.deepEqual([mails[3].to, mails[3].idempotencyKey, mails[3].from], [['ben@studio.example'], `mail:offer:${offer.id}`, 'auth@studio.example'])
+    assert.match(mails[3].subject, /^Spot offered: Reformer Flow, /)
+    assert.match(mails[3].text, /Claim it in Strap by .+; after that it goes to the next person waiting\. A credit is used only when you claim it\./)
     assert.match((await h.state(Ben.cookie)).notices.map(n => n.subject).join(), /Spot offered: Reformer Flow/)
     assert.match((await h.send('/app', undefined, Ben.cookie)).text, /Spot offered[\s\S]*Claim by[\s\S]*Claim spot/)
     assert.match((await h.send(roster(flow), undefined, h.owner)).text, /Spot offered[\s\S]*Claim by .+ · Email accepted by resend; delivery not confirmed[\s\S]*Accept for member/)
@@ -92,10 +93,10 @@ test('MSG-004: a vacancy offers the next eligible waiter a timed claim, expiry m
     assert.equal(booking(s, flow.id, Dee.id).status, 'waitlisted', 'ineligible waiters keep their place')
     const next = booking(s, flow.id, Cy.id)
     assert.equal(next.status, 'offered')
-    assert.deepEqual(mails.map(m => m.to[0]), ['ben@studio.example', 'cy@studio.example'])
+    assert.deepEqual(mails.map(m => m.to[0]), ['fay@studio.example','fay@studio.example','ana@studio.example','ben@studio.example','cy@studio.example'])
     assert.match((await h.state(Ben.cookie)).notices.map(n => n.subject).join(), /Offer expired: Reformer Flow/)
     await tick(h)
-    assert.equal(mails.length, 2, 'a sweep with nothing due changes nothing')
+    assert.equal(mails.length, 5, 'a sweep with nothing due changes neither action notices nor offers')
     assert.match((await h.send(roster(flow), undefined, h.owner)).text, /Offer expired[\s\S]*Not claimed in time/)
     if (process.env.STRAP_PROOF_DIR) await (await import('./waitlist-browser.mjs')).waitlistBrowser(h, flow, Cy)
 
@@ -113,7 +114,7 @@ test('MSG-004: a vacancy offers the next eligible waiter a timed claim, expiry m
   }, { auth: { MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-key' }, outbound })
 })
 
-test('MSG-004: inside the late-cancel window promotion stops: a claim offer books no one until accepted, or no one is promoted', async () => {
+test('MSG-004 / SCHED-014: inside the late-cancel window promotion stops: a claim offer books no one until accepted, or no one is promoted', async () => {
   await run(async h => {
     const { people, publish } = await studio(h, ['Ana', 'Ben', 'Cy', 'Dee', 'Eve', 'Fay'])
     const { Ana, Ben, Cy, Dee, Eve, Fay } = people
@@ -134,7 +135,8 @@ test('MSG-004: inside the late-cancel window promotion stops: a claim offer book
     assert.equal(s.bookings.filter(b => b.classId === soon.id && b.status === 'booked').length, 0)
     assert.ok(Math.abs(Date.parse(offer.offer.expiresAt) - Date.parse(offer.offer.sentAt) - 30 * minute) < 1000)
     // No mail provider: the in-app notice is the only notice, and the record says so.
-    assert.deepEqual(s.noticeDeliveries.map(d => [d.sourceId, d.status]), [[offer.id, 'not_configured']])
+    assert.deepEqual(s.noticeDeliveries.map(d => [d.sourceKind,d.status]), [['booking_action','not_configured'],['booking','not_configured']])
+    assert.equal(s.noticeDeliveries.find(d => d.sourceKind === 'booking').sourceId,offer.id)
     assert.match((await h.send(roster(soon), undefined, h.owner)).text, /Claim by .+ · late-cancel window · Email not configured; in-app notice only/)
     // The front desk (the owner until STAFF-001) accepts it on Ben's behalf: one seat, one debit, staff-made.
     assert.equal((await form(h, 'booking.offer.accept', roster(soon), { id: offer.id })).status, 303)

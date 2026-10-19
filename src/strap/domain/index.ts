@@ -2,6 +2,9 @@ import { load, loadKiosk, loadSystem, Transaction } from './store';
 import { DomainError, insist, list, type Actor } from './types';
 import { prepareClasses, publishClasses } from './classes';
 import { acknowledgeWaiver, book, cancel, latestWaiver, publishWaiver } from './bookings';
+import { moveBooking, restoreBooking, positionWaiter } from './booking-actions';
+import { bookingActions, cancellationReasons, saveCancellationReasons } from './booking-history';
+import { prepareBookingChange, approveBookingChange } from './booking-drafts';
 import { deskBook } from './desk';
 import { checkin, correctAttendance, markNoShow } from './attendance';
 import { closureImpact, confirmClosure, dismissNotice, prepareClosure } from './closures';
@@ -23,13 +26,14 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
-  if (who.role === 'agent') insist(['classes.prepare','pack.prepare','reminder.prepare'].includes(name),'agents_can_only_prepare',403);
+  if (who.role === 'agent') insist(['classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const handlers = {
     'person.save':savePerson, 'person.erase':erasePerson,
     'classes.prepare':prepareClasses, 'classes.publish':publishClasses,
     'scheduling.unavailable.save':saveUnavailability, 'scheduling.unavailable.remove':removeUnavailability,
     'pack.prepare':preparePack, 'pack.approve':approvePack, 'pack.adjust':adjustPack,
     'payment.record':recordPayment, 'reminder.prepare':prepareReminder, 'reminder.approve':approveReminder,
+    'booking.change.prepare':prepareBookingChange, 'booking.change.approve':approveBookingChange, 'booking.move':moveBooking, 'booking.restore':restoreBooking, 'booking.waitlist.position':positionWaiter, 'cancellationReasons.save':saveCancellationReasons,
     'booking.book':book, 'booking.desk':deskBook, 'booking.cancel':cancel, 'attendance.checkin':checkin,
     'attendance.noshow':markNoShow, 'attendance.correct':correctAttendance,
     'closure.prepare':prepareClosure, 'closure.confirm':confirmClosure, 'notice.dismiss':dismissNotice,
@@ -72,12 +76,13 @@ export async function snapshot(db: D1Database, who: Actor) {
   // The cancellation effect is shown to the member and to staff, never to an instructor.
   const bookings = list(state,'booking').filter(b => owner || b.personId === who.personId || (who.role === 'instructor' && assigned.has(b.classId)))
     .map(b => b.status !== 'cancelled' && (owner || b.personId === who.personId) && classOf.get(b.classId)?.start > at ? {...b,cancelEffect:cancellationEffect(b,classOf.get(b.classId)!,at)} : b)
+    .map(b => b.moveFromBookingId && b.status === 'offered' ? {...b,moveEffect:state.records.get(b.moveFromBookingId)?.data.status === 'booked' ? cancellationEffect(state.records.get(b.moveFromBookingId)!.data,classOf.get(state.records.get(b.moveFromBookingId)!.data.classId)!,at) : null} : b)
     .map(b => b.status !== 'booked' ? b : {...b,checkinOpen:inWindow(state,classOf.get(b.classId)!),...(who.role === 'owner' || who.role === 'instructor' ? {alerts:checkinAlerts(state,b,who)} : {})});
   const visibleIds = new Set([who.personId,...(who.role === 'instructor' ? bookings.map(b => b.personId) : [])]);
   const people = state.people.filter(p => !p.erasedAt && (owner || visibleIds.has(p.id))).map(p =>
     owner || p.id === who.personId ? {...p,phone:memberCheckin(state,p.id)?.phone ?? null} : {id:p.id,name:p.name,role:p.role,active:p.active});
   const own = (kind: string) => list(state,kind).filter(r => owner || r.personId === who.personId);
-  return {actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
+  return {bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
     drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],

@@ -7,6 +7,7 @@ import { clock, dayOf, datePlain, money } from './format'
 import { icon } from './icons'
 import { avatar, form, h, hidden, owner, person, rows, select } from './shared'
 import { staffCancel } from './booking-rules'
+import { bookingActionRow, bulkCancel } from './booking-actions'
 import { correctionNote, correctionRow } from './attendance'
 import { deskSpot, spotLine, staffSpotRow } from './spots'
 import { alertNotes } from './checkin'
@@ -19,6 +20,7 @@ function state(s: any, c: any, b: any, started: boolean) {
   const signed = (yes: string, no: string) => owner(s) ? (waiverSigned(s, b.personId) ? yes : no) : ''
   const line = (tone: string, glyph: string, title: string, sub: string) => `<div class="state ${tone}"><span class="mark">${icon(glyph)}</span><div><strong>${h(title)}</strong><span>${sub}</span></div></div>`
   if (b.cancellation === 'class_cancelled' || b.cancellation === 'waitlist_closed') return line('', 'cross', 'Class cancelled', b.refunded ? 'Credit returned' : 'Waitlist closed')
+  if (['move_replaced','move_completed'].includes(b.cancellation)) return line('', 'dot', 'Move request closed', b.cancellation === 'move_completed' ? 'Moved to this class' : 'Moved elsewhere')
   if (b.cancellation === 'offer_expired') return line('', 'cross', 'Offer expired', 'Not claimed in time · No credit used')
   if (b.status === 'cancelled') return line('', 'cross', b.cancellation === 'late' ? 'Late cancel' : 'Cancelled', `${b.cancellation === 'waitlist' || (!b.refunded && b.cancellation !== 'late') ? 'No credit used' : b.refunded ? 'Credit returned' : 'Credit kept'}${owner(s) && b.feeCents ? ` · ${money(b.feeCents)} fee` : ''}${owner(s) && b.waiver ? ` · Waived: ${h(b.waiver.reason)}` : ''}`)
   if (b.status === 'offered') return line('pending', 'wait', 'Spot offered', owner(s) ? offerLine(s, b) : 'Waiting for them to claim it')
@@ -56,9 +58,10 @@ export function roster(s: any, c: any, back: string) {
   const canCheckIn = owner(s) || s.actor.personId === c.instructorId
   const line = (b: any, n: string) => `<tr><td class="n">${n}</td><td class="who-cell"><div class="who">${avatar(person(s, b.personId))}${owner(s) ? `<a href="/app/people?person=${encodeURIComponent(b.personId)}#person">${h(person(s, b.personId))}</a>` : `<span>${h(person(s, b.personId))}</span>`}</div></td>`
     + `<td data-label="Status">${state(s, c, b, started)}${b.spot && b.status === 'booked' ? `<small>Spot: ${h(b.spot)}</small>` : ''}${owner(s) ? correctionNote(b) : ''}${owner(s) && b.status === 'booked' ? `<small>${b.capacityPool === 'held' ? 'Desk-held' : 'Online'} spot · ${h(b.bookingChannel ?? 'online')}${deskNote(b)}</small>` : ''}</td><td data-label="Pack">${packChip(s, c, b)}</td><td data-label="Notes">${note(s, b)}</td>`
-    + `<td class="act">${owner(s) && b.status === 'offered' && !started ? acceptForMember(b, back) : ''}${b.status === 'booked' && !b.checkedInAt && !b.attendance && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') + (started ? form('attendance.noshow', back, hidden('id', b.id), 'No-show', 'quiet', 'small') : '') : ''}</td></tr>${owner(s) && !started && b.status !== 'cancelled' ? staffCancel(person(s, b.personId), b, back) : ''}${owner(s) ? staffSpotRow(s, c, b, back) : ''}${correctionRow(s, person(s, b.personId), b, back)}`
+    + `<td class="act">${owner(s) && b.status === 'offered' && !started ? acceptForMember(s, b, back) : ''}${b.status === 'booked' && !b.checkedInAt && !b.attendance && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') + (started ? form('attendance.noshow', back, hidden('id', b.id), 'No-show', 'quiet', 'small') : '') : ''}</td></tr>${owner(s) && !started && b.status !== 'cancelled' ? staffCancel(s, person(s, b.personId), b, back) : ''}${bookingActionRow(s, c, b, back)}${owner(s) ? staffSpotRow(s, c, b, back) : ''}${correctionRow(s, person(s, b.personId), b, back)}`
   const body = [...booked.map((b, i) => line(b, String(i + 1))), ...waiting.map((b, i) => line(b, `W${i + 1}`)), ...cancelled.map(b => line(b, '—'))].join('')
   return `<div class="roster" id="roster"><table><thead><tr><th>#</th><th>Member</th><th>Status</th><th>Pack</th><th>Notes</th><th><span class="visually-hidden">Action</span></th></tr></thead><tbody>${body || `<tr><td colspan="6" class="note">No one has booked this class yet.</td></tr>`}</tbody></table>`
+    + bulkCancel(s, c, booked, back)
     + spotLine(s, c)
     + `<p class="roster-foot"><span>${c.occupancy.booked - c.occupancy.offered} / ${c.occupancy.total} booked${c.occupancy.offered ? ` · ${c.occupancy.offered} held for an offer` : ''} · ${c.occupancy.onlineBooked} / ${c.occupancy.online} online · ${c.occupancy.heldBooked} / ${c.occupancy.held} desk-held</span></p>`
     + (owner(s) && !started ? deskForm(s, c, back) : '')

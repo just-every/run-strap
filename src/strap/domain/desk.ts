@@ -4,6 +4,7 @@ import { acknowledged, eligiblePack, seat } from './bookings';
 import { bookingWindow, cancelTerms, classService, insistBookingOpen, priorityOnly } from './booking-policy';
 import { appendPackEvent, packServiceEligible } from './pack-credits';
 import { chooseSpot, seatCapacity } from './spots';
+import { bookingHistory } from './booking-history';
 import { promote } from './waitlist';
 
 // SCHED-010 front-desk booking. Until STAFF-001 the human owner operates the
@@ -94,7 +95,7 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   if (capacity.totalOpen === 0 && !override) {
     // MSG-004: a full class takes the member onto the end of its online waitlist.
     insist(input.waitlist === true,'class_full',409);
-    const waiter = {...base,capacityPool:'online'}; tx.put('booking',waiter); return waiter;
+    const waiter = {...base,capacityPool:'online'}; tx.put('booking',waiter); bookingHistory(tx,'waitlist',waiter,waiter,input); return waiter;
   }
   if (capacity.totalOpen === 0) bypassed.push(`class full (${capacity.booked} of ${capacity.total})`);
   if (chosen) insist(usable(tx,chosen,member.id,entry),'pack_not_eligible',409);

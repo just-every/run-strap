@@ -115,9 +115,9 @@ test('SCHED-006: front desk sees the late fee before choosing a late cancel or a
   const key = await h.cmd('agent.create', { label: 'Planner' })
   assert.equal((await h.send('/api/strap/agent/command', { name: 'booking.cancel', input: { id: dee.id, mode: 'late' } }, '', { authorization: `Bearer ${key.token}` })).status, 403)
 
-  const late = await h.cmd('booking.cancel', { id: dee.id, mode: 'late', terms: effect.key })
+  const late = await h.cmd('booking.cancel', { id: dee.id, mode: 'late', terms: effect.key, cancelReason: 'Sick' })
   assert.deepEqual([late.cancellation, late.refunded, late.feeCents, late.cancelledByRole], ['late', false, 1500, 'owner'])
-  assert.equal((await form(h, 'booking.cancel', `/app?day=${studioDay(near.start)}&class=${near.id}`, { id: eve.id, terms: effect.key, mode: 'early', reason: 'Studio heater failed' })).status, 303)
+  assert.equal((await form(h, 'booking.cancel', `/app?day=${studioDay(near.start)}&class=${near.id}`, { id: eve.id, terms: effect.key, mode: 'early', reason: 'Studio heater failed', cancelReason: 'Other' })).status, 303)
   s = await h.state()
   const waived = s.bookings.find(b => b.id === eve.id)
   assert.deepEqual([waived.cancellation, waived.refunded, waived.feeCents, waived.waiver.reason, waived.waiver.right, waived.waiver.waivedFeeCents], ['early', true, 0, 'Studio heater failed', 'fee-waiver', 1500])

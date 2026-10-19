@@ -3,7 +3,7 @@
 // late-or-early choice at the desk, and the rules editor in Studio settings.
 // The no-show fee (ATT-002) is disclosed with the rule and kept in its terms.
 import { money, when } from './format'
-import { body, cell, emptyLine, field, form, h, hidden, panel, rows, select, table } from './shared'
+import { body, cell, emptyLine, field, form, h, hidden, owner, panel, rows, select, table } from './shared'
 
 const span = (minutes: number) => minutes % 60 ? `${minutes} min` : `${minutes / 60} hr`
 const now = () => Date.now(), time = (value: unknown) => Date.parse(String(value))
@@ -43,16 +43,28 @@ export function memberCancel(b: any, back: string) {
   return `<small class="effect">${h(effectText(e, waitlisted))}</small>${form('booking.cancel', back, hidden('id', b.id) + hidden('terms', e.key), waitlisted ? 'Leave waitlist' : 'Cancel', 'quiet', 'small')}`
 }
 
-/** Front desk, in a full-width roster row: the same effect, then a late cancel
- * under the rule or an early cancel that waives it with a reason. */
-export function staffCancel(name: string, b: any, back: string) {
+/** Staff records how the request arrived and an explicit notice suppression. */
+export const actionChannel = () => select('channel', 'Request channel', [['desk', 'Front desk'], ['phone', 'Phone'], ['inbox', 'Inbox']], 'desk')
+export const actionNotice = () => '<label class="check"><input name="suppressNotice" type="checkbox" value="true"> Suppress the member notice</label>'
+  + field('suppressionReason', 'Suppression reason (required when suppressing)', '', 'text', 'maxlength="500"')
+export const cancellationReason = (s: any) => select('cancelReason', 'Cancellation reason', [['', 'Choose a reason'], ...rows(s, 'cancellationReasons').map(reason => [reason, reason] as [unknown, unknown])])
+
+/** The same recorded policy effect appears before either desk choice. */
+export function staffCancelControls(s: any, b: any, back: string) {
   const e = b.cancelEffect
-  if (!e) return ''
-  const waitlisted = b.status !== 'booked', id = hidden('id', b.id) + hidden('terms', e.key)
-  const choice = !e.waivable ? form('booking.cancel', back, id, waitlisted ? 'Remove from waitlist' : 'Cancel booking', 'quiet', 'small')
-    : form('booking.cancel', back, id + hidden('mode', 'late'), 'Late cancel', 'quiet', 'small')
-      + form('booking.cancel', back, id + hidden('mode', 'early') + field('reason', 'Waiver reason (early cancel)', '', 'text', 'required maxlength="500"'), 'Early cancel: credit back, no fee', 'quiet', 'small')
-  return `<tr class="cancel-row"><td colspan="6"><details class="more"><summary>Cancel for ${h(name)}</summary><div class="panel-body"><p class="meta">${h(effectText(e, waitlisted))}${e.waivable ? ' Or waive it: an early cancel returns the credit with no fee and records your reason.' : ''}</p>${choice}</div></details></td></tr>`
+  if (!owner(s) || !e) return ''
+  const waitlisted = b.status !== 'booked'
+  const fields = hidden('id', b.id) + hidden('terms', e.key) + cancellationReason(s) + actionChannel()
+  const choice = !e.waivable ? form('booking.cancel', back, fields + (e.timing === 'early' ? actionNotice() : ''), waitlisted ? 'Remove from waitlist' : 'Cancel booking', 'quiet', 'small')
+    : form('booking.cancel', back, fields + hidden('mode', 'late'), 'Late cancel', 'quiet', 'small')
+      + form('booking.cancel', back, fields + hidden('mode', 'early') + actionNotice() + field('reason', 'Waiver reason (early cancel)', '', 'text', 'required maxlength="500"'), 'Early cancel: credit back, no fee', 'quiet', 'small')
+  return `<p class="meta">${h(effectText(e, waitlisted))}${e.waivable ? ' Or waive it: an early cancel returns the credit with no fee and records your reason.' : ''}</p>${choice}`
+}
+
+/** Front desk, in a full-width roster row. */
+export function staffCancel(s: any, name: string, b: any, back: string) {
+  const controls = staffCancelControls(s, b, back)
+  return controls ? `<tr class="cancel-row"><td colspan="6"><details class="more"><summary>Cancel for ${h(name)}</summary><div class="panel-body">${controls}</div></details></td></tr>` : ''
 }
 
 const ruleRow = (r: any) => `<tr>${cell('Applies to', h(r.service ?? 'All services (studio rule)'))}${cell('Booking opens', r.opensHoursBefore ? `${r.opensHoursBefore} hr before${r.priorityOpensHoursBefore ? `<small>Priority packs ${r.priorityOpensHoursBefore} hr before</small>` : ''}` : 'Any time')}${cell('Closes', r.closesMinutesBefore ? `${span(r.closesMinutesBefore)} before` : 'At start')}`

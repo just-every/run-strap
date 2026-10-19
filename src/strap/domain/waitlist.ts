@@ -1,7 +1,11 @@
+import { acceptPendingMove } from './booking-actions';
+import { packServiceEligible } from './pack-credits';
+import { cancellationEffect, priorityOnly } from './booking-policy';
 import { humanOwner, id, insist, integer, list, now, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { acknowledged, eligiblePack, seat } from './bookings';
 import { chooseSpot, seatCapacity } from './spots';
+import { bookingHistory } from './booking-history';
 import { putNotice, reserveMail, titleOf, whenText } from './notices';
 
 // MSG-004 waitlist offers and expiry. The studio policy says what a vacancy
@@ -52,21 +56,25 @@ export function promote(tx: Transaction, entry: RecordData) {
   for (const candidate of all.filter(b => b.status === 'waitlisted').sort(fifo)) {
     if (vacancies <= 0) break;
     if (!tx.state.people.some(p => p.id === candidate.personId && p.active && !p.erasedAt) || !acknowledged(tx.state,candidate.personId)) continue;
-    const pack = eligiblePack(tx.state,candidate.personId,entry);
-    if (!pack) continue;
+    const source = candidate.moveFromBookingId ? tx.state.records.get(candidate.moveFromBookingId)?.data : null;
+    const sourceEntry = source ? tx.state.records.get(source.classId)?.data : null;
+    const sourcePack = source?.packId ? tx.state.records.get(source.packId)?.data : null;
+    if (candidate.moveFromBookingId && (!source || source.status !== 'booked' || sourceEntry?.start <= now())) continue;
+    const pack = candidate.moveFromBookingId ? sourcePack : eligiblePack(tx.state,candidate.personId,entry);
+    if (candidate.moveFromBookingId ? !(source?.unpaid || (pack && pack.expiresAt > entry.start && pack.expiresAt > now() && packServiceEligible(pack,entry) && (!priorityOnly(tx.state,entry) || pack.priorityBooking === true))) : !pack) continue;
     const cutoff = lateCutoff(candidate,entry), late = now() >= cutoff;
     if (policy.lateWindow !== 'promote') { if (late) tx.reached(cutoff); else tx.future(cutoff); }
     if (late && policy.lateWindow === 'none') continue;
     const title = titleOf(entry), when = whenText(tx.state,entry.start);
-    if ((late && policy.lateWindow === 'offer') || policy.mode === 'offer') {
+    if (candidate.moveFromBookingId || (late && policy.lateWindow === 'offer') || policy.mode === 'offer') {
       const expiresAt = new Date(Math.min(Date.parse(now())+policy.claimMinutes*60_000,Date.parse(entry.start))).toISOString();
-      const offer = {id:id(),sentAt:now(),expiresAt,claimMinutes:policy.claimMinutes,reason:late && policy.lateWindow === 'offer' ? 'late_window' : 'policy',policyRevision:policy.revision};
+      const offer = {id:id(),sentAt:now(),expiresAt,claimMinutes:policy.claimMinutes,...(source ? {sourceTerms:cancellationEffect(source,sourceEntry!).key} : {}),reason:late && policy.lateWindow === 'offer' ? 'late_window' : 'policy',policyRevision:policy.revision};
       tx.put('booking',{...candidate,status:'offered',offer});
-      const body = `A spot opened in ${title} on ${when}. Claim it in Strap by ${whenText(tx.state,expiresAt)}; after that it goes to the next person waiting. A credit is used only when you claim it.`;
+      const body = `A spot opened in ${title} on ${when}. Claim it in Strap by ${whenText(tx.state,expiresAt)}; after that it goes to the next person waiting. ${candidate.moveFromBookingId ? source?.packId ? 'Your original seat and credit stay reserved until you confirm the move. Claiming carries that credit; it does not use another.' : 'Your original unpaid visit stays booked until you confirm the move; no credit is used.' : 'A credit is used only when you claim it.'}`;
       putNotice(tx,{id:`notice:offer:${candidate.id}`,personId:candidate.personId,bookingId:candidate.id,classId:entry.id,subject:`Spot offered: ${title}, ${when}`,body});
       reserveMail(tx,tx.notices,{id:`mail:offer:${candidate.id}`,sourceKind:'booking',sourceId:candidate.id,personId:candidate.personId,bookingIds:[candidate.id],subject:`Spot offered: ${title}, ${when}`,body});
     } else {
-      seat(tx,candidate,entry,pack);
+      seat(tx,candidate,entry,pack!);
       const body = `A spot opened in ${title} on ${when} and you moved up from the waitlist. You are booked; one credit from your pack is reserved.`;
       putNotice(tx,{id:`notice:promoted:${candidate.id}`,personId:candidate.personId,bookingId:candidate.id,classId:entry.id,subject:`You're booked: ${title}, ${when}`,body});
       reserveMail(tx,tx.notices,{id:`mail:promoted:${candidate.id}`,sourceKind:'booking',sourceId:candidate.id,personId:candidate.personId,bookingIds:[candidate.id],subject:`You're booked: ${title}, ${when}`,body});
@@ -91,8 +99,11 @@ export function acceptOffer(tx: Transaction, input: Record<string,unknown>) {
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(current.offer.expiresAt); tx.future(entry.start);
   insist(acknowledged(tx.state,current.personId),'waiver_acknowledgement_required',409);
+  if (current.moveFromBookingId) return acceptPendingMove(tx,current,input);
   const pack = eligiblePack(tx.state,current.personId,entry);
   insist(pack,'eligible_credit_required',409);
   const accepted = {...current,offer:{...current.offer,acceptedAt:now(),acceptedBy:tx.who.id,acceptedByRole:tx.who.role,...(staff ? {staffMade:true,right:'booking'} : {})}};
-  return seat(tx,accepted,entry,pack,chooseSpot(tx.state,entry,input.spot));
+  const seated = seat(tx,accepted,entry,pack,chooseSpot(tx.state,entry,input.spot));
+  if (staff) bookingHistory(tx,'accept',current,seated,input);
+  return seated;
 }

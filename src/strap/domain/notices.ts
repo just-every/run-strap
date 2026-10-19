@@ -24,7 +24,7 @@ export function putNotice(tx: Transaction, notice: RecordData) {
 }
 
 /** Reserves one email for a member about one source record (a closure or a booking). */
-export function reserveMail(tx: Transaction, context: NoticeContext, mail: {id: string; sourceKind: 'closure' | 'booking'; sourceId: string; personId: string; bookingIds: string[]; subject: string; body: string}) {
+export function reserveMail(tx: Transaction, context: NoticeContext, mail: {id: string; sourceKind: 'closure' | 'booking' | 'booking_action'; sourceId: string; personId: string; bookingIds: string[]; subject: string; body: string}) {
   const member = tx.state.people.find(p => p.id === mail.personId);
   const connection = memberMail(tx.state);
   if (!connection && context.origin) tx.put('mailConnection',{id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:'first-use'});

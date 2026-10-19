@@ -1,6 +1,7 @@
 // MSG-004 on screen: the studio's waitlist policy in Studio settings, a
 // member's open claim offer, and the desk's view of an offer with its email
 // outcome and the accept-for-member action.
+import { effectText, cancellationReason, actionChannel } from './booking-rules'
 import { when } from './format'
 import { body, field, form, h, hidden, panel, rows, select } from './shared'
 import { delivery } from './closures'
@@ -22,12 +23,18 @@ export function waitlistPanel(s: any) {
 }
 
 /** A member's own open offer: claim it, or decline (leaving the waitlist costs nothing). */
-export const memberOffer = (s: any, b: any, back: string) => `<span class="pill pending">Spot offered</span> <small class="effect">Claim by ${when(s, b.offer.expiresAt)}; a credit is used only when you claim.</small>`
-  + form('booking.offer.accept', back, hidden('id', b.id), 'Claim spot', 'primary', 'small') + form('booking.cancel', back, hidden('id', b.id), 'Decline', 'quiet', 'small')
+const moveEffect = (b: any) => b.moveFromBookingId ? b.moveEffect
+  ? `<small class="effect">Move from your original class: ${b.moveEffect.timing === 'late' ? `${b.moveEffect.feeCents ? `$${(b.moveEffect.feeCents / 100).toFixed(2)} fee added; ` : ''}` : ''}your original credit moves to the new class. Confirm this current effect to claim.</small>`
+  : '<small class="effect">The original booking is no longer available to move.</small>' : ''
+export const memberOffer = (s: any, b: any, back: string) => `<span class="pill pending">Spot offered</span> <small class="effect">Claim by ${when(s, b.offer.expiresAt)}; ${b.moveFromBookingId ? 'your original seat stays booked until you claim.' : 'a credit is used only when you claim.'}</small>${moveEffect(b)}`
+  + (b.moveFromBookingId && !b.moveEffect ? '' : form('booking.offer.accept', back, hidden('id', b.id) + (b.moveEffect ? hidden('terms', b.moveEffect.key) : ''), 'Claim spot', 'primary', 'small')) + form('booking.cancel', back, hidden('id', b.id), 'Decline', 'quiet', 'small')
 
 /** The desk's line for an offered seat, with the offer email's recorded outcome. */
 export function offerLine(s: any, b: any) {
   const mail = rows(s, 'noticeDeliveries').find(d => d.sourceKind === 'booking' && d.sourceId === b.id)
   return `Claim by ${when(s, b.offer.expiresAt)}${b.offer.reason === 'late_window' ? ' · late-cancel window' : ''}${mail ? ` · ${h(delivery(mail))}` : ''}`
 }
-export const acceptForMember = (b: any, back: string) => form('booking.offer.accept', back, hidden('id', b.id), 'Accept for member', 'quiet', 'small')
+export const acceptForMember = (s: any, b: any, back: string) => b.moveFromBookingId
+  ? `<p class="meta">${moveEffect(b)}</p>` + (b.moveEffect ? form('booking.offer.accept',back,hidden('id',b.id)+hidden('terms',b.moveEffect.key)+cancellationReason(s)+actionChannel()
+    + (b.moveEffect.waivable ? select('mode','Source move choice',[['late',`Late move: $${(b.moveEffect.feeCents/100).toFixed(2)} fee; credit carries`],['early','Early move: waive fee; credit carries']],'late')+field('reason','Move waiver reason (required for early)','','text','maxlength="500"') : '') , 'Accept move for member','quiet','small') : '')
+  : form('booking.offer.accept', back, hidden('id', b.id), 'Accept for member', 'quiet', 'small')

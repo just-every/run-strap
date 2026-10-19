@@ -38,6 +38,10 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'booking.bulk.cancel') input.ids = Object.keys(input).filter(key => key.startsWith('b_') && input[key] === 'true').map(key => key.slice(2))
+  if (name === 'booking.waitlist.position') input.position = Number(input.position)
+  if (name === 'cancellationReasons.save') input.reasons = String(input.reasons ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+  if ('suppressNotice' in input) input.suppressNotice = input.suppressNotice === 'true'
   if ('credits' in input) input.credits = Number(input.credits)
   if ('creditsDelta' in input) input.creditsDelta = Number(input.creditsDelta)
   if ('revision' in input) input.revision = Number(input.revision)

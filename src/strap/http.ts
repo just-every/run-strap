@@ -1,4 +1,5 @@
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
+import { cancellationsCsv } from './cancellations'
 import { command, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
@@ -12,18 +13,30 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
 const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio'])
-const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare']
+const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-  return { ...await snapshot(env.DB, who), agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: await noticeDeliveries(env, who.role), origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
+  const current = await snapshot(env.DB, who), deliveries = await noticeDeliveries(env, who.role)
+  const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
+  return { ...current, bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
   if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
   if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
+  if (name === 'booking.bulk.cancel') {
+    if (who.role !== 'owner') fail('owner_required',403)
+    if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > 200) fail('Choose 1–200 bookings')
+    const outcomes = []
+    for (const id of [...new Set(input.ids as unknown[])]) {
+      try { await execute(request,env,who,'booking.cancel',{...input,id,mode:'early'}); outcomes.push({id,ok:true}) }
+      catch (error) { if (Number((error as any).status) >= 500 || !(error as any).status) throw error; outcomes.push({id,ok:false,error:(error as Error).message}) }
+    }
+    return {bulk:{outcomes}}
+  }
   const context = { mailConfigured: memberMailConfigured(env), origin: env.AUTH_ORIGIN, queued: [] as string[] }
   const result = await command(env.DB, who, name, input, context)
   // Emails go out only after the change and their reservations commit.
@@ -58,13 +71,17 @@ export async function strapResponse(request: Request, original: Bindings): Promi
   let who: Actor | undefined
   // Back to the page (and its view, such as one person or one class) the form came from.
   const returnTo = url.searchParams.get('returnTo') ?? ''
-  const back = /^\/app[\w/-]*(?:\?[\w=&%.-]*)?$/.test(returnTo) && pages.has(returnTo.split('?')[0]) ? returnTo : '/app'
+  const back = /^\/app[\w/-]*(?:\?[\w=&%+.-]*)?(?:#[\w-]+)?$/.test(returnTo) && pages.has(returnTo.split(/[?#]/)[0]) ? returnTo : '/app'
   try {
     if (url.origin !== env.AUTH_ORIGIN || (request.headers.has('host') && request.headers.get('host') !== url.host)) fail('Wrong application origin', 403)
     if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      if (path === '/api/strap/cancellations.csv') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        return new Response(cancellationsCsv(await state(env,who),url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-cancellations.csv'}})
+      }
       if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
       if (pages.has(path)) return renderApp(await state(env, who), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
@@ -92,7 +109,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).
-        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair', 'booking.bulk.cancel'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await state(env, who), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {

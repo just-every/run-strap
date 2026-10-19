@@ -44,6 +44,7 @@ const relationships = [
   { from: 'st_notice_deliveries.person_id', to: 'st_people.id' },
   { from: 'st_notice_deliveries.source_id', to: 'st_records.id', kind: 'closure', when: 'source_kind=closure' },
   { from: 'st_notice_deliveries.source_id', to: 'st_records.id', kind: 'booking', when: 'source_kind=booking' },
+  { from: 'st_notice_deliveries.source_id', to: 'st_records.id', kind: 'bookingAction', when: 'source_kind=booking_action' },
   { from: 'import tables.job_id', to: 'ik_jobs.id' },
   { from: 'ik_d1_entries.owner_job_id', to: 'ik_jobs.id' },
   { from: 'ik_d1_stream_pages.stream_id', to: 'ik_d1_streams.id' },

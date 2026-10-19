@@ -3,6 +3,7 @@ import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
 import { appendPackEvent, bookingCredit, packServiceEligible } from './pack-credits';
+import { bookingHistory, staffReason } from './booking-history';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
 
@@ -72,10 +73,12 @@ export function cancel(tx: Transaction, input: Record<string,unknown>) {
   if (booking.status === 'booked') {
     bookingCredit(tx,booking,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
   }
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',createdAt:now(),createdBy:tx.who.id});
-  const cancelled = {...booking,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
+  const cancellationId = id();
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
+  const cancelled = {...booking,cancellationId,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
-  tx.put('booking',cancelled); promote(tx,entry); return cancelled;
+  if (staff) staffReason(tx,input);
+  tx.put('booking',cancelled); bookingHistory(tx,'cancel',booking,cancelled,input,{id:cancellationId}); promote(tx,entry); return cancelled;
 }
 export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
