@@ -13,8 +13,9 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   const member = person(tx.state,input.personId), expiresAt = instant(input.expiresAt,'expiresAt');
   insist(expiresAt > now(),'expiry_must_be_future');
   tx.future(expiresAt);
-  const eligibleServices = packServices(input.eligibleServices);
-  const draft = {eligibleServices,id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits:integer(input.credits,'credits',1,10_000),amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const eligibleServices = packServices(input.eligibleServices), priorityBooking = input.priorityBooking ?? false;
+  insist(typeof priorityBooking === 'boolean','invalid_priorityBooking');
+  const draft = {eligibleServices,priorityBooking,id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits:integer(input.credits,'credits',1,10_000),amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -26,7 +27,7 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});

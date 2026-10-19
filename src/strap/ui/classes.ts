@@ -7,6 +7,7 @@ import { approvalHistory, draftRecords } from './drafts'
 import { body, cell, emptyLine, emptyState, field, form, h, hidden, owner, panel, person, rows, select, table, textarea } from './shared'
 import { addDays, mondayOf, zoneName } from '../zone'
 import { allocationDetails, availabilityPanel } from './scheduling'
+import { ruleLine } from './booking-rules'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -18,7 +19,7 @@ export function weekTable(s: any, list: any[], action: (c: any) => string = () =
     const date = dayOf(s, c.start), a = attendance(s, c.id), full = staff ? c.occupancy.totalOpen === 0 : c.occupancy.onlineOpen === 0
     const heading = date !== day ? `<tr class="day-row"><td colspan="5">${h(dayShort(s, date))}${date === studioToday(s) ? ' · Today' : ''}</td></tr>` : ''
     day = date
-    return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${staff ? allocationDetails(c) : ''}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
+    return heading + `<tr>${cell('Time', `<a href="/app?day=${date}&amp;class=${encodeURIComponent(c.id)}#class-${h(c.id)}">${h(clock(s, c.start))}</a><small>${h(length(c.start, c.end))}</small>`)}${cell('Class', `<strong>${h(classTitle(c))}</strong>${classRoom(c) ? `<small>${h(classRoom(c))}</small>` : ''}${staff ? allocationDetails(c) : ruleLine(s, c)}`, 'bare')}${cell('Instructor', h(c.instructorName ?? person(s, c.instructorId)), 'bare')}`
       + `${cell('Spots', staff ? `<span class="pill${full ? ' full' : ''}">${c.occupancy.booked} of ${c.capacity}</span><small>${c.occupancy.onlineBooked} / ${c.occupancy.online} online · ${c.occupancy.heldBooked} / ${c.occupancy.held} desk-held</small>${a.waiting.length ? ` <span class="pill wait">Waitlist <b>${a.waiting.length}</b></span>` : ''}` : full ? `<span class="pill full">Full${a.waiting.length ? ` · waitlist ${a.waiting.length}` : ''}</span>` : `<span class="pill quiet">${c.occupancy.onlineOpen} open</span>`, 'bare')}${cell('', action(c), 'right')}</tr>`
   }).join(''))
 }

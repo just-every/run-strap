@@ -39,6 +39,9 @@ export class Transaction {
     // SQLite's clock is evaluated by the committing Worker, after any queue wait.
     this.sql.push(this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN julianday(?)>julianday('now') THEN 1 ELSE 0 END",value));
   }
+  reached(value: string) {
+    this.sql.push(this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN julianday(?)<=julianday('now') THEN 1 ELSE 0 END",value));
+  }
   put(kind: string, data: RecordData) {
     this.state.records.set(data.id,{kind,data});
     this.sql.push(this.statement('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,version=excluded.version', data.id,kind,JSON.stringify(data),this.state.version+1));

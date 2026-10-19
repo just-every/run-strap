@@ -60,6 +60,13 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     }
     delete input.expiresDate; delete input.expiresTime
   }
+  if (name === 'pack.prepare') input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
+  if (name === 'bookingRule.save') {
+    const whole = (key: string) => { const value = String(input[key] ?? '').trim(); return value === '' ? null : Number(value) }
+    return { service: String(input.service ?? '').trim(), opensHoursBefore: whole('opensHoursBefore'), priorityOpensHoursBefore: whole('priorityOpensHoursBefore'),
+      closesMinutesBefore: whole('closesMinutesBefore') ?? 0, cancelCutoffHours: whole('cancelCutoffHours') ?? 0,
+      lateCancelReturnsCredit: input.lateCancelReturnsCredit === 'true', lateCancelFeeCents: cents(input.lateFee ?? '0', 'the late-cancel fee') }
+  }
   if (name === 'classes.prepare') {
     const week = String(input.week ?? ''), zone = zoneOf(timeZone)
     if (!date.test(week)) fail('Choose the Monday that starts the week')

@@ -5,12 +5,13 @@ import { attendance, balance, eligiblePack, packName, waiverSigned } from './fac
 import { clock, dayOf, datePlain, money } from './format'
 import { icon } from './icons'
 import { avatar, form, h, hidden, owner, person, rows, select } from './shared'
+import { staffCancel } from './booking-rules'
 
 // Instructors see who is in their class, not members' packs, balances or waivers.
 function state(s: any, c: any, b: any, started: boolean) {
   const signed = (yes: string, no: string) => owner(s) ? (waiverSigned(s, b.personId) ? yes : no) : ''
   const line = (tone: string, glyph: string, title: string, sub: string) => `<div class="state ${tone}"><span class="mark">${icon(glyph)}</span><div><strong>${h(title)}</strong><span>${sub}</span></div></div>`
-  if (b.status === 'cancelled') return line('', 'cross', 'Cancelled', b.refunded ? 'Credit returned' : 'No credit used')
+  if (b.status === 'cancelled') return line('', 'cross', b.cancellation === 'late' ? 'Late cancel' : 'Cancelled', `${b.cancellation === 'waitlist' || (!b.refunded && b.cancellation !== 'late') ? 'No credit used' : b.refunded ? 'Credit returned' : 'Credit kept'}${owner(s) && b.feeCents ? ` · ${money(b.feeCents)} fee` : ''}${owner(s) && b.waiver ? ` · Waived: ${h(b.waiver.reason)}` : ''}`)
   if (b.status === 'waitlisted') {
     const pack = eligiblePack(s, b.personId, c)
     return line('pending', 'wait', 'Waitlist', !owner(s) ? 'Moves up when a spot opens' : !waiverSigned(s, b.personId) ? 'Waiver not signed' : pack ? 'Moves up when a spot opens' : 'No credit that covers this class')
@@ -42,7 +43,7 @@ export function roster(s: any, c: any, back: string) {
   const canCheckIn = owner(s) || s.actor.personId === c.instructorId
   const line = (b: any, n: string) => `<tr><td class="n">${n}</td><td class="who-cell"><div class="who">${avatar(person(s, b.personId))}${owner(s) ? `<a href="/app/people?person=${encodeURIComponent(b.personId)}#person">${h(person(s, b.personId))}</a>` : `<span>${h(person(s, b.personId))}</span>`}</div></td>`
     + `<td data-label="Status">${state(s, c, b, started)}${owner(s) && b.status === 'booked' ? `<small>${b.capacityPool === 'held' ? 'Desk-held' : 'Online'} spot · ${h(b.bookingChannel ?? 'online')}</small>` : ''}</td><td data-label="Pack">${packChip(s, c, b)}</td><td data-label="Notes">${note(s, b)}</td>`
-    + `<td class="act">${b.status === 'booked' && !b.checkedInAt && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') : ''}</td></tr>`
+    + `<td class="act">${b.status === 'booked' && !b.checkedInAt && canCheckIn ? form('attendance.checkin', back, hidden('id', b.id), 'Check in', 'quiet', 'small') : ''}</td></tr>${owner(s) && !started && b.status !== 'cancelled' ? staffCancel(person(s, b.personId), b, back) : ''}`
   const body = [...booked.map((b, i) => line(b, String(i + 1))), ...waiting.map((b, i) => line(b, `W${i + 1}`)), ...cancelled.map(b => line(b, '—'))].join('')
   return `<div class="roster" id="roster"><table><thead><tr><th>#</th><th>Member</th><th>Status</th><th>Pack</th><th>Notes</th><th><span class="visually-hidden">Action</span></th></tr></thead><tbody>${body || `<tr><td colspan="6" class="note">No one has booked this class yet.</td></tr>`}</tbody></table>`
     + `<p class="roster-foot"><span>${c.occupancy.booked} / ${c.occupancy.total} booked · ${c.occupancy.onlineBooked} / ${c.occupancy.online} online · ${c.occupancy.heldBooked} / ${c.occupancy.held} desk-held</span></p>`

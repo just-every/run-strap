@@ -42,7 +42,15 @@ A member opens **Classes**, where each class shows how many spots are open ("11 
 - If the class is full, the member joins the waitlist. A waitlist entry spends no credit.
 - If the owner has published a waiver, the member acknowledges the current version before their first booking.
 
-A member can press **Cancel** any time before the class starts. A booked spot gives its credit back once.
+A member can cancel any time before the class starts. Beside **Cancel**, Strap shows exactly what happens: the credit returns, or, after the cancel cutoff, the credit is kept and any late fee is added to what they owe. Leaving a waitlist is always free.
+
+## Booking and cancellation rules
+
+The owner sets rules under **Studio → Booking and cancellation rules**: when booking opens (hours before class), when priority packs open (earlier), when booking closes (minutes before class), the cancel cutoff (hours before class), and whether a late cancel keeps the credit and adds a fee. A rule for a service, such as `Reformer`, replaces the studio rule for that service. Hours count back from the class start. Each class shows its rule to members before they book, and a booking keeps the cancellation rule in force when it was made.
+
+A pack prepared with **Priority booking** lets its member book inside the priority window, using that pack.
+
+After the cutoff, the owner cancelling for a member from the roster (**Cancel for …**) sees the same fee and chooses **Late cancel**, or an early cancel that returns the credit with no fee and records a reason. The fee is added to the member's balance; Strap does not charge a card.
 
 ## The waitlist fills cancellations
 
