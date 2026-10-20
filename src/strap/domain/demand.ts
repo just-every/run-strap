@@ -27,7 +27,7 @@ export function demandEvidence(state: State, classIds?: string[]) {
 
 /** Recorded exceptions are private only as to their reasons (SCHED-003). */
 export function demandAvailability(state: State) {
-  return list(state,'unavailability').filter(r => r.status === 'active').map(({reason,updatedBy,...r}) => r);
+  return list(state,'unavailability').filter(r => r.status === 'active').map(r => ({id:r.id,resourceKind:r.resourceKind,resourceId:r.resourceId,resourceName:r.resourceName,start:r.start,end:r.end}));
 }
 async function demandBasis(state: State) {
   return JSON.stringify({schedule:await seriesBasis(state),
