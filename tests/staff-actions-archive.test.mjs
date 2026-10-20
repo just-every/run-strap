@@ -46,6 +46,10 @@ test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver
     const visitStart=new Date(Date.now()+86400_000).toISOString(),visitDate=new Date(visitStart)
     const visitWeek=new Date(Date.UTC(visitDate.getUTCFullYear(),visitDate.getUTCMonth(),visitDate.getUTCDate()-(visitDate.getUTCDay()+6)%7)).toISOString().slice(0,10)
     const visit=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:visitWeek,classes:[{title:'Flow',start:visitStart,end:new Date(Date.parse(visitStart)+3600_000).toISOString(),capacity:10,instructorId:coach.id}]})).id})).classes[0]
+    assert.equal((await h.state()).acknowledgements.length,0,'staff waiver launch alone never acknowledges')
+    await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
+    const originalAcknowledgements=(await h.state()).acknowledgements
+    assert.equal(originalAcknowledgements[0].actorId,(await h.state(member.cookie)).actor.id,'the booked visit uses the member-owned waiver step')
     const reservation=await h.cmd('booking.book',{classId:visit.id},member.cookie)
     await h.cmd('attendance.checkin',{id:reservation.id},coach.cookie)
     const originalRecognition=(await h.state()).recognition
@@ -81,6 +85,6 @@ test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver
     assert.equal(after.waiverLaunches.length,2);assert.equal(after.staffActions.filter(a=>a.command==='waiver.launch').length,2)
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM st_waiver_launch_dispatches').first()).n,1)
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n,mailCount+1,'explicit reconnect permits one new send, never a replay of history')
-    assert.equal(after.acknowledgements.length,0,'staff request never acknowledges for the member')
+    assert.deepEqual(after.acknowledgements,originalAcknowledgements,'restored staff requests never add or rewrite the member-owned acknowledgement')
   } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
 })

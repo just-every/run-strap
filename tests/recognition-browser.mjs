@@ -18,11 +18,28 @@ export async function recognitionBrowser(h,{ana,ben}) {
         const index=cookie.indexOf('=')
         await context.addCookies([{name:cookie.slice(0,index),value:cookie.slice(index+1),url:h.origin}])
         const page=await context.newPage()
+        if(role==='owner') {
+          const current=(await h.state(ana.cookie)).recognition.preferences[0]
+          if(!current.optedIn) await h.cmd('recognition.preference.save',{optedIn:true,version:current.version},ana.cookie)
+        }
         await page.goto(h.origin+'/app/recognition')
         await page.getByRole('heading',{name:'Visit recognition',exact:true}).waitFor()
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-${role}-${width}.png`),fullPage:true})
         if(role==='owner') {
+          const threshold=width===1440?25:10
+          const add=page.locator('form').filter({has:page.getByRole('button',{name:'Add milestone',exact:true})})
+          await add.getByLabel('Visit milestone',{exact:true}).fill(String(threshold))
+          await add.getByLabel('Recognition label',{exact:true}).fill(threshold+' visits')
+          await add.getByRole('button',{name:'Add milestone',exact:true}).click()
+          const task=(await h.state()).recognition.recognitions.find(r=>r.personId===ana.id&&r.threshold===threshold)
+          assert.equal(task.status,'open')
+          const taskRow=page.locator(`[data-recognition-id="${task.id}"]`)
+          await taskRow.getByRole('button',{name:'Complete private follow-up',exact:true}).waitFor()
+          await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-open-${width}.png`),fullPage:true})
+          await taskRow.getByRole('button',{name:'Complete private follow-up',exact:true}).click()
+          assert.equal((await h.state()).recognition.recognitions.find(r=>r.id===task.id).status,'completed')
+          await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-complete-${width}.png`),fullPage:true})
           const launch=page.locator('form[action*="name=recognition.launch"]')
           await launch.getByLabel('Member',{exact:true}).selectOption(ana.id)
           await launch.getByRole('button',{name:'Open member preferences door',exact:true}).click()
