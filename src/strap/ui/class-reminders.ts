@@ -15,7 +15,7 @@ export function classRemindersPanel(s: any) {
     + cell('Timing',`${h(rule.leadMinutes)} minutes before class · ${rule.enabled ? 'Enabled' : 'Disabled'} · revision ${h(rule.revision)}`)
     + cell('Edit',`<details><summary>Edit reminder rule</summary>${form('reminder.rule.save','/app/studio',ruleFields(rule),'Save reminder rule','quiet')}</details>`)
     + '</tr>').join('');
-  return panel('Class reminders',body('<p>Email reminders use the current class time and member message choice. In-app reminders remain available when a member stops these emails. SMS and push reminders are not available.</p><p>A service rule overrides the studio default, including when disabled. A reminder is reserved once for each booked class and start time; a rule edit does not send it again. Provider acceptance does not confirm delivery.</p>')
+  return panel('Class reminders',body('<p>Email reminders use the current class time and member message choice. In-app reminders remain available when a member stops these emails. SMS and push reminders are not available.</p><p>A service rule overrides the studio default, including when disabled. A reminder is reserved once for each booked class and start time; a rule edit does not send it again. If a reminder runs late, it can still send until the class starts. Provider acceptance does not confirm delivery.</p>')
     + `<div class="table-wrap">${table(['Service','Timing','Edit'],current || '<tr><td colspan="3">No reminder rules configured.</td></tr>')}</div>`
     + body(`<details><summary>Add a reminder rule</summary>${form('reminder.rule.save','/app/studio',ruleFields(),'Save reminder rule')}</details>`),{id:'class-reminders'});
 }
