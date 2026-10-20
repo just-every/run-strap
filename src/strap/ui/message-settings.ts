@@ -4,7 +4,7 @@ export function messagePreferencePanel(s: any) {
   if (s.actor.role !== 'member') return '';
   return panel('Message preferences',body(
     '<p>You can stop booking and class confirmation emails and class reminder emails. Your notices remain available in the app.</p>'
-    + '<p>Sign-in and security emails, payment receipts, failed-payment emails and required legal emails continue. This choice does not change marketing consent. Only you can change this choice from your signed-in member account.</p>'
+    + '<p>Sign-in and security emails, payment receipts, failed-payment emails and required legal emails continue. Waitlist offers continue. This choice does not change marketing consent. Only you can change this choice from your signed-in member account.</p>'
     + form('mail.preference.save','/app#message-preferences',
       hidden('requestId',crypto.randomUUID())
       + select('optedOut','Booking and class emails',[

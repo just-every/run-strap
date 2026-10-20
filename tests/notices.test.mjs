@@ -161,3 +161,29 @@ test('MSG-002: only the member changes email opt-out; in-app notices and mandato
     return sent.length===1 ? Response.json({message:'Provider rejected'},{status:422}) : Response.json({id:'accepted-'+sent.length})
   }})
 })
+
+test('MSG-002: the confirmation/reminder opt-out leaves waitlist-offer preferences to MSG-008 while templates apply to the offer and the accepted-booking confirmation stays opted out',async()=>{
+ const sent=[]
+ await run(async h=>{
+  await h.cmd('studio.save',{location:'Brooklyn Studio',timeZone:'America/New_York'})
+  await h.cmd('mail.templates.save',{prefix:'Your Brooklyn Studio update',suffix:'Please contact the studio for help.',requestId:'offer-template'})
+  const coach=await h.person('Maya','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
+  for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await h.cmd('waitlist.save',{mode:'offer',claimMinutes:30,lateWindow:'promote'})
+  await h.cmd('mail.preference.save',{optedOut:true,requestId:'confirmation-optout'},ana.cookie)
+  const entry=await publish(h,coach,'Held Mat',new Date(Date.now()+86400000).toISOString(),'Main',1)
+  const incumbent=await h.cmd('booking.book',{classId:entry.id},ben.cookie)
+  const waiter=await h.cmd('booking.book',{classId:entry.id},ana.cookie)
+  assert.equal(sent.filter(m=>m.to.includes(ana.email)).length,0)
+  await h.cmd('booking.cancel',{id:incumbent.id},ben.cookie)
+  const offers=sent.filter(m=>m.to.includes(ana.email))
+  assert.equal(offers.length,1,'this setting does not add the broader offer preference before MSG-008')
+  assert.match(offers[0].subject,/Spot offered:/);assert.match(offers[0].text,/Your Brooklyn Studio update/)
+  await h.cmd('booking.offer.accept',{id:waiter.id},ana.cookie)
+  assert.equal(sent.filter(m=>m.to.includes(ana.email)).length,1,'the new booking confirmation honors the member opt-out')
+  const deliveries=await rows(h)
+  assert.deepEqual(deliveries.filter(d=>d.person_id===ana.id).map(d=>d.status).sort(),['accepted','opted_out','opted_out'])
+ },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'network-edge-test-key'},outbound:async request=>{
+  assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'offer-message-'+sent.length})
+ }})
+})

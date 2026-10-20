@@ -72,7 +72,7 @@ export function promote(tx: Transaction, entry: RecordData) {
       tx.put('booking',{...candidate,status:'offered',offer});
       const body = `A spot opened in ${title} on ${when}. Claim it in Strap by ${whenText(tx.state,expiresAt)}; after that it goes to the next person waiting. ${candidate.moveFromBookingId ? source?.packId ? 'Your original seat and credit stay reserved until you confirm the move. Claiming carries that credit; it does not use another.' : 'Your original unpaid visit stays booked until you confirm the move; no credit is used.' : 'A credit is used only when you claim it.'}`;
       putNotice(tx,{id:`notice:offer:${candidate.id}`,personId:candidate.personId,bookingId:candidate.id,classId:entry.id,subject:`Spot offered: ${title}, ${when}`,body});
-      reserveMail(tx,tx.notices,{id:`mail:offer:${candidate.id}`,sourceKind:'booking',sourceId:candidate.id,personId:candidate.personId,bookingIds:[candidate.id],subject:`Spot offered: ${title}, ${when}`,body});
+      reserveMail(tx,tx.notices,{id:`mail:offer:${candidate.id}`,category:'waitlist_offer',sourceKind:'booking',sourceId:candidate.id,personId:candidate.personId,bookingIds:[candidate.id],subject:`Spot offered: ${title}, ${when}`,body});
     } else {
       seat(tx,candidate,entry,pack!);
       const body = `A spot opened in ${title} on ${when} and you moved up from the waitlist. You are booked; one credit from your pack is reserved.`;
