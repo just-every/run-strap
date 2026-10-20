@@ -12,10 +12,10 @@ export const siteTheme = '/site/theme.css'
 const shareImage = `${identity.runSite}/site/share.jpg`
 
 export const lockup = (size = 44) => html`<a class="site-lockup" href="/"><img src="${identity.mark}" alt="" width="${size}" height="${size}"><span>${identity.product}</span></a>`
-const links = (current?: 'docs') => html`<nav class="site-links" aria-label="Site"><a href="/docs"${current === 'docs' ? raw(' aria-current="page"') : ''}>Docs</a><a href="${repository}">Source</a></nav>`
+const links = (current?: 'docs') => html`<nav class="site-links" aria-label="Site"><a href="/docs"${current === 'docs' ? raw(' aria-current="page"') : ''}>Docs</a><a href="/contract">Contract</a><a href="${repository}">Source</a></nav>`
 
 export const siteHeader = (current?: 'docs') => html`<header class="site-bar"><div class="site-bar-inner">${lockup()}${links(current)}</div></header>`
-export const siteFooter = () => html`<footer class="site-foot"><div class="site-foot-inner"><p class="site-foot-brand">${lockup(40)}<span class="site-foot-line">Free, open source studio management</span></p><nav class="site-links" aria-label="Footer"><a href="/docs">Docs</a><a href="${repository}">Source</a><a href="${repository}/blob/main/LICENSE">MIT licensed</a></nav></div></footer>`
+export const siteFooter = () => html`<footer class="site-foot"><div class="site-foot-inner"><p class="site-foot-brand">${lockup(40)}<span class="site-foot-line">Free, open source studio management</span></p><nav class="site-links" aria-label="Footer"><a href="/docs">Docs</a><a href="/contract">Contract</a><a href="${repository}">Source</a><a href="${repository}/blob/main/LICENSE">MIT licensed</a></nav></div></footer>`
 
 /** One complete static page: the site theme, the compiled site stylesheet and the share card. */
 export function sitePage(title: string, description: string, styles: string[], body: Markup, script = '', preload: Markup | string = ''): string {

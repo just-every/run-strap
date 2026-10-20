@@ -67,4 +67,9 @@ img { display: block; max-width: 100%; height: auto; }
   .eyebrow .dot { width: 9px; height: 9px; }
   .text-link { font-size: 17px; }
 }
+@media (max-width: 360px) {
+  .site-bar .site-links { gap: 14px; font-size: 15px; }
+  .site-foot .site-links { gap: 14px; }
+  .site-links a { white-space: nowrap; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
