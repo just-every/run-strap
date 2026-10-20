@@ -9,7 +9,7 @@ export function substitutionsPage(s: any, _notice: any = {}) {
   const data = s.substitutions, isOwner = owner(s);
   const classes = rows(s,'classes').filter(c => c.status === 'published' && c.start > new Date().toISOString() && (isOwner || c.instructorId === s.actor.personId));
   const request = panel('Request coverage',body(form('substitution.request',path,
-    select('classId','Class',[['','Choose a class'],...classes.map(c => [c.id,`${c.title} · ${when(s,c.start)} · ${c.instructorName}`])])
+    select('classId','Class',[['','Choose a class'],...classes.map(c => [c.id,`${c.title} · ${when(s,c.start)} · ${c.instructorName}`] as [unknown,unknown])])
     + field('reason','Coverage request reason','','text','required maxlength="300"') + hidden('requestId',crypto.randomUUID()),'Request substitute')));
   const requests = data.requests.map((r: any) => {
     const c = rows(s,'classes').find(c => c.id === r.classId), candidates = data.candidates.filter((p: any) => p.requestId === r.id);
