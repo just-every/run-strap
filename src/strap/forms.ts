@@ -38,6 +38,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'reminder.rule.save') { input.enabled = input.enabled === 'true'; input.leadMinutes = Number(input.leadMinutes) }
   if (name === 'mail.preference.save') input.optedOut = input.optedOut === 'true'
   if (name==='substitution.qualification.save') input.qualified=input.qualified==='true'
   if (name==='plan.change.prepare') {

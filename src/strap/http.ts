@@ -1,3 +1,4 @@
+import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
 import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
@@ -67,6 +68,7 @@ export async function strapScheduled(original: Bindings) {
   const env = runtimeBindings(original), context = { mailConfigured: memberMailConfigured(env), origin: env.AUTH_ORIGIN, queued: [] as string[] }
   await sweep(env.DB, context)
   await sendNotices(env, context.queued)
+  await reconcileReminderFailures(env.DB)
 }
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {

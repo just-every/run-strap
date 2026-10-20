@@ -18,12 +18,15 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 `st_people` holds members and instructors, including inactive and erased rows, with their stable `id`, `name`, nullable `email`, `role`, integer `active`, `version` and nullable `erased_at`. Erased rows remain redacted as stored. `st_meta.version` is the domain revision. `st_erasure_journal` retains identity hashes and erasure times; `st_import_people_revisions` links imported people to import revision tokens.
 
-`st_notice_deliveries` holds one row per member per source (`closure`, `confirmation` for initial booking/waitlist confirmations, `booking` for offers/promotions, or `booking_action` for a SCHED-014 action): the covered booking IDs (JSON), recipient, exact subject and text, and the recorded outcome (`accepted` by the provider with its message ID, `rejected`, `rate_limited`, `uncertain`, interrupted `queued`/`sending`, `not_configured`, `no_address`, `opted_out` or `paused`). An accepted row is the provider's acceptance, not proof of mailbox delivery.
+`st_notice_deliveries` holds one row per member per source (`reminder` for scheduled class reminders, `closure`, `confirmation` for initial booking/waitlist confirmations, `booking` for offers/promotions, or `booking_action` for a SCHED-014 action): the covered booking IDs (JSON), recipient, exact subject and text, and the recorded outcome (`accepted` by the provider with its message ID, `rejected`, `rate_limited`, `uncertain`, interrupted `queued`/`sending`, `not_configured`, `no_address`, `opted_out` or `paused`). An accepted row is the provider's acceptance, not proof of mailbox delivery.
 
 `st_records` holds `id`, `kind`, JSON text `data` and row `version`. Rows are ordered by stable primary key. Use explicit document versions, timestamps and pack-event revisions for chronology; physical database insertion order is not portable. The data object's `id` is the record ID. Current kinds are:
 
 | Kind | Meaning and links |
 | --- | --- |
+| `classReminderRule` / `classReminderRuleEvent` | MSG-003 versioned studio/service email timing, enabled state and immutable owner/request provenance. |
+| `classReminder` | Once-only current booking/class/start reminder identity, rule/revision, delivery ID, reservation status and system provenance; never dispatch authority. |
+| `reminderTask` / `reminderTaskEvent` | Private failed/unavailable-channel observation, delivery/reminder/member/class links and reasoned owner follow-up completion; no retry or receipt claim. |
 | `messagePreference` / `messagePreferenceEvent` | MSG-002 member-owned booking/class email opt-out and immutable member-session before/after provenance; mandatory authentication, security, receipt, failed-payment and legal email are outside this choice. |
 | `messageTemplates` / `messageTemplateEvent` | Studio plain-text opening/closing controls, owner and before/after provenance. Required local class facts and self-service links cannot be replaced. |
 | `messagePreferenceLaunch` | Audited ordinary sign-in door intent; no token, session, consent or delegated authority. |
