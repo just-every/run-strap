@@ -24,6 +24,7 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 | Kind | Meaning and links |
 | --- | --- |
+| `substitutionQualification` / `substitutionRequest` / `substitutionDraft` | SCHED-004 immutable service approval versions, original instructor coverage request, exact assignment/pay/notice preview, approval and class substitution history. Requests/drafts retain actor/time and stable identities. Restore never repeats notices or approval. |
 | `lead` / `leadEvent` | LEAD-002 linked member, active-owner assignment, stage, next action and exact due instant; insert-only before/after and conversation provenance, stable request identities and explicit external membership reference. No plan activation, send, payment or consent authority. |
 | `payRule` | STAFF-002 immutable instructor/service-scoped rate version, exact effective instant, cents, attendance tiers, minimum, cancellation/substitute terms and owner provenance. |
 | `payAdjustment` | STAFF-002 additive signed cents, instructor/class/rule IDs, source booking IDs, exact original calculation, reason, owner, time and replay identity. This is compensation evidence, not payroll execution; see [Envelope](https://github.com/just-every/run-envelope) for payroll. |

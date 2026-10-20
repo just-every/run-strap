@@ -1,3 +1,4 @@
+import { substitutionsPage } from './substitutions'
 import { leadsPage } from './leads'
 import { recognitionPage } from './recognition'
 import { teachingPayPage } from './teaching-pay'
@@ -28,7 +29,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
     ? `<div class="page single"><section class="panel">${emptyState('alert', 'Page unavailable', 'Your role cannot open this page.', '<a class="btn" href="/app">Back to Today</a>')}</section></div>`
     : current === '/app' ? (desk ? today(state, query, owner(state) ? successRail(state, query) : '') : memberHome(state))
       : current === '/app/classes' ? classesPage(state, query)
-        : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
+        : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
           : current === '/app/packs' ? packsPage(state, query)
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)

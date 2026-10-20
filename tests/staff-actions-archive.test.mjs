@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -57,6 +57,13 @@ test('LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore car
     const lead=await h.cmd('lead.create',inquiry)
     await h.cmd('lead.update',{id:lead.id,version:lead.version,requestId:'archive-first-visit',stage:'first-visit',bookingId:reservation.id,nextAction:'Discuss a membership offer',dueAt:inquiry.dueAt})
     const originalPipeline=(await h.state()).pipeline
+    const substitute=await h.person('Noor','instructor')
+    await h.cmd('substitution.qualification.save',{instructorId:substitute.id,service:visit.service,qualified:true,requestId:'archive-qualification'})
+    const cover=await h.cmd('substitution.request',{classId:visit.id,reason:'Coverage for a workshop',requestId:'archive-coverage'},coach.cookie)
+    const substitution=await h.cmd('substitution.prepare',{requestId:cover.id,instructorId:substitute.id})
+    const approvedSubstitution=await h.cmd('substitution.approve',{id:substitution.id,impact:substitution.impact.key})
+    const originalSubstitutions=(await h.state()).substitutions
+    const originalAssignment=(await h.state()).classes.find(c=>c.id===visit.id)
     assert.equal(originalRecognition.recognitions.length,1)
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
@@ -67,7 +74,10 @@ test('LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore car
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     await h.cmd('recognition.process',{},owner)
     assert.deepEqual(await h.cmd('lead.create',inquiry,owner),lead,'LEAD-002 restore preserves request identity and never duplicates inquiry')
+    assert.deepEqual(await h.cmd('substitution.approve',{id:substitution.id,impact:substitution.impact.key},owner),approvedSubstitution,'SCHED-004 restore replays the approved identity without repeating notices')
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
+    assert.deepEqual(before.substitutions,originalSubstitutions,'SCHED-004 qualifications, requests and exact approved preview survive native restore')
+    assert.deepEqual(before.classes.find(c=>c.id===visit.id),originalAssignment,'SCHED-004 roster assignment, pay provenance and history survive native restore')
     assert.deepEqual(before.pipeline.leads,originalPipeline.leads,'LEAD-002 linked lead, assignment, stage and next action survive native restore')
     assert.deepEqual(before.pipeline.events,originalPipeline.events,'LEAD-002 conversation and stage provenance survive native restore')
     assert.deepEqual(before.recognition,originalRecognition,'LEAD-006 consent, milestones, source evidence and permanent issuance identities survive native restore')

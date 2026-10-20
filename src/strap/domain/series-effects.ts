@@ -1,3 +1,4 @@
+import { studioSettings } from './studio';
 import { id, insist, list, now, record, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { layoutFor, seatCapacity } from './spots';
@@ -6,7 +7,7 @@ import { putNotice, reserveMail, titleOf, whenText, type NoticeContext } from '.
 import { resourceLabel } from './scheduling';
 
 const spotKey = (v: string) => resourceLabel(v).toLowerCase();
-const description = (state: State, c: RecordData) => `${titleOf(c)} on ${whenText(state,c.start)}, ${c.instructorName}, ${c.location}${c.room ? `, ${c.room}` : ''}`;
+const description = (state: State, c: RecordData) => `${titleOf(c)} on ${whenText(state,c.start)}, ${c.instructorName}, ${c.location ?? studioSettings(state)?.location ?? 'Studio'}${c.room ? `, ${c.room}` : ''}`;
 /** Existing seats survive timetable changes, including their own pools, credits,
  * cancellation terms and spot identities; a new room gets explicit spot moves. */
 export function changeImpact(state: State, before: RecordData[], after: RecordData[]) {

@@ -38,6 +38,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name==='substitution.qualification.save') input.qualified=input.qualified==='true'
   if (name.startsWith('lead.')) {
     if ('version' in input) input.version=Number(input.version)
     if (input.dueAt) input.dueAt=String(input.dueAt)+'Z'
