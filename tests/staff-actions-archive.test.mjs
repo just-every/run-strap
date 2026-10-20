@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -53,6 +53,10 @@ test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver
     const reservation=await h.cmd('booking.book',{classId:visit.id},member.cookie)
     await h.cmd('attendance.checkin',{id:reservation.id},coach.cookie)
     const originalRecognition=(await h.state()).recognition
+    const inquiry={requestId:'archive-inquiry',personId:member.id,ownerId:(await h.state()).actor.id,nextAction:'Call after the first visit',dueAt:new Date(Date.now()+86400000).toISOString(),note:'Member asked about ongoing classes.'}
+    const lead=await h.cmd('lead.create',inquiry)
+    await h.cmd('lead.update',{id:lead.id,version:lead.version,requestId:'archive-first-visit',stage:'first-visit',bookingId:reservation.id,nextAction:'Discuss a membership offer',dueAt:inquiry.dueAt})
+    const originalPipeline=(await h.state()).pipeline
     assert.equal(originalRecognition.recognitions.length,1)
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
@@ -62,7 +66,10 @@ test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver
     const memberCookie=await h.signIn(member.email)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     await h.cmd('recognition.process',{},owner)
+    assert.deepEqual(await h.cmd('lead.create',inquiry,owner),lead,'LEAD-002 restore preserves request identity and never duplicates inquiry')
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
+    assert.deepEqual(before.pipeline.leads,originalPipeline.leads,'LEAD-002 linked lead, assignment, stage and next action survive native restore')
+    assert.deepEqual(before.pipeline.events,originalPipeline.events,'LEAD-002 conversation and stage provenance survive native restore')
     assert.deepEqual(before.recognition,originalRecognition,'LEAD-006 consent, milestones, source evidence and permanent issuance identities survive native restore')
     assert.equal(before.recognition.recognitions.length,1,'restored processing cannot repeat recognition')
     assert.deepEqual(before.payRules,[payRule],'STAFF-002 immutable rate versions survive native restore')

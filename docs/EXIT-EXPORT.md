@@ -24,8 +24,9 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 | Kind | Meaning and links |
 | --- | --- |
+| `lead` / `leadEvent` | LEAD-002 linked member, active-owner assignment, stage, next action and exact due instant; insert-only before/after and conversation provenance, stable request identities and explicit external membership reference. No plan activation, send, payment or consent authority. |
 | `payRule` | STAFF-002 immutable instructor/service-scoped rate version, exact effective instant, cents, attendance tiers, minimum, cancellation/substitute terms and owner provenance. |
-| `payAdjustment` | STAFF-002 additive signed cents, instructor/class/rule IDs, source booking IDs, exact original calculation, reason, owner, time and replay identity. This is compensation evidence, not payroll execution. |
+| `payAdjustment` | STAFF-002 additive signed cents, instructor/class/rule IDs, source booking IDs, exact original calculation, reason, owner, time and replay identity. This is compensation evidence, not payroll execution; see [Envelope](https://github.com/just-every/run-envelope) for payroll. |
 | `milestone` / `milestoneRevision` | LEAD-006 stable visit-threshold rule and immutable definition versions; label and enabled state do not reset issuance identity. |
 | `recognitionPreference` / `recognitionPreferenceEvent` | Member-owned current consent and immutable choice provenance, fixed to the signed-in member account. |
 | `recognition` | One permanent member/threshold private task, source booking IDs, rule/consent versions, actor/time, completion or suppression history. Restores retain issued identities; these records carry no send, reward or public-sharing authority. |

@@ -38,6 +38,16 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name.startsWith('lead.')) {
+    if ('version' in input) input.version=Number(input.version)
+    if (input.dueAt) input.dueAt=String(input.dueAt)+'Z'
+    for (const key of ['bookingId','externalMembershipReference','lostReason','note']) if (input[key]==='') delete input[key]
+    if (name==='lead.update') {
+      if (!['intro-booked','first-visit'].includes(String(input.stage))) delete input.bookingId
+      if (input.stage!=='membership') delete input.externalMembershipReference
+      if (input.stage!=='lost') delete input.lostReason
+    }
+  }
   if (name.startsWith('recognition.')) {
     for (const key of ['threshold','version']) if (key in input) input[key]=Number(input[key])
     for (const key of ['enabled','optedIn']) if (key in input) input[key]=input[key]==='true'

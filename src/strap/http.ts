@@ -16,7 +16,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition', '/app/leads'])
 const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -25,7 +25,8 @@ async function state(env: Bindings, who: Actor) {
   const current = await snapshot(env.DB, who), deliveries = await noticeDeliveries(env, who.role)
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
-  return { ...current, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
+  const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
+  return { ...current, leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {

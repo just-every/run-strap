@@ -13,6 +13,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'Classes', glyph: 'calendar', count: waiting(['classes']) },
     { href: '/app/people', label: 'People', glyph: 'users' },
+    { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
     { href: '/app/packs', label: 'Packs and payments', glyph: 'card', count: waiting(['pack', 'reminder']) },
     { href: '/app/reports', label: 'Attendance reports', glyph: 'report' },
