@@ -24,6 +24,12 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 | Kind | Meaning and links |
 | --- | --- |
+| `payRule` | STAFF-002 immutable instructor/service-scoped rate version, exact effective instant, cents, attendance tiers, minimum, cancellation/substitute terms and owner provenance. |
+| `payAdjustment` | STAFF-002 additive signed cents, instructor/class/rule IDs, source booking IDs, exact original calculation, reason, owner, time and replay identity. This is compensation evidence, not payroll execution. |
+| `milestone` / `milestoneRevision` | LEAD-006 stable visit-threshold rule and immutable definition versions; label and enabled state do not reset issuance identity. |
+| `recognitionPreference` / `recognitionPreferenceEvent` | Member-owned current consent and immutable choice provenance, fixed to the signed-in member account. |
+| `recognition` | One permanent member/threshold private task, source booking IDs, rule/consent versions, actor/time, completion or suppression history. Restores retain issued identities; these records carry no send, reward or public-sharing authority. |
+| `recognitionLaunch` | Audited request for the ordinary member sign-in/preferences door; no token, session, consent or delegated authority. |
 | `studio` | Location and IANA time zone; settings ID `studio`. |
 | `class` | Published occurrence, start/end, service, room/equipment, capacity, buffers, instructor person ID and source draft ID. |
 | `unavailability` | Instructor/room/equipment blocked interval and active/removed status. Instructor `resourceId` refers to a person; rooms/equipment use normalized label identities. |

@@ -13,17 +13,20 @@ export function tabs(s: any): Tab[] {
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'Classes', glyph: 'calendar', count: waiting(['classes']) },
     { href: '/app/people', label: 'People', glyph: 'users' },
+    { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
     { href: '/app/packs', label: 'Packs and payments', glyph: 'card', count: waiting(['pack', 'reminder']) },
     { href: '/app/reports', label: 'Attendance reports', glyph: 'report' },
+    { href: '/app/teaching-pay', label: 'Teaching pay', glyph: 'report' },
     { href: '/app/import', label: 'Import', glyph: 'upload' },
     { href: '/app/agent', label: 'Agent access', glyph: 'sparkles' },
   ]
   if (s.actor.role === 'instructor') return [
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'My classes', glyph: 'calendar' },
+    { href: '/app/teaching-pay', label: 'My teaching pay', glyph: 'report' },
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
   ]
-  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }]
+  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }]
 }
 
 const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member' } as Record<string, string>)[s.actor.role] ?? s.actor.role

@@ -46,6 +46,7 @@ function effect(s: any, value: any) {
   if (typeof value.issued === 'boolean') return value.issued ? `Check-in code revision ${h(value.codeRevision)}${value.codeIssuedAt ? ` · issued ${when(s,value.codeIssuedAt)}` : ''}` : 'No check-in code issued'
   if (typeof value.acknowledged === 'boolean') return value.acknowledged ? 'Current waiver acknowledged by the member' : 'Current waiver awaiting the member’s acknowledgement'
   if (value.waiverId && value.status) return 'Waiver sign-in link requested; delivery and acknowledgement not confirmed'
+  if (value.preferenceDoor) return 'Member recognition sign-in door opened; no consent granted'
   if ('dismissedAt' in value && !value.classId) return value.dismissedAt ? `Notice marked read ${when(s,value.dismissedAt)}` : 'Notice unread'
   if (value.classId) {
     const c = rows(s,'classes').find(c => c.id === value.classId)
@@ -54,14 +55,14 @@ function effect(s: any, value: any) {
   throw new Error('Unsupported staff action effect')
 }
 
-const actionLabels: Record<string,string> = {'booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read'}
+const actionLabels: Record<string,string> = {'booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences'}
 const actionLabel = (action: string) => { if (!actionLabels[action]) throw new Error('Staff action needs a display label'); return actionLabels[action] }
 
 /** The canonical staff audit stays focused on the selected person, when any. */
 export function staffActionHistory(s: any, chosen?: any) {
   if (!owner(s)) return ''
   const events = rows(s, 'staffActions').filter(a => !chosen || a.personId === chosen.id).sort((a, b) => b.at.localeCompare(a.at))
-  const list = events.map(a => `<tr>${cell('When / member', `${when(s, a.at)}<small>${h(person(s, a.personId))}</small>`)}${cell('Staff / channel', `${h(a.actorId === s.actor.id ? s.displayName : a.actorId)}<small>${h(a.actorRole)} · ${h(a.channel)}</small>`)}${cell('Action', `${h(actionLabel(a.action))}<small>Right: ${h(a.right)}</small>${a.reason ? `<small>Reason: ${h(a.reason)}</small>` : ''}`)}</tr>`
+  const list = events.map(a => `<tr data-staff-command="${h(a.command ?? a.action)}">${cell('When / member', `${when(s, a.at)}<small>${h(person(s, a.personId))}</small>`)}${cell('Staff / channel', `${h(a.actorId === s.actor.id ? s.displayName : a.actorId)}<small>${h(a.actorRole)} · ${h(a.channel)}</small>`)}${cell('Action', `${h(actionLabel(a.action))}<small>Right: ${h(a.right)}</small>${a.reason ? `<small>Reason: ${h(a.reason)}</small>` : ''}`)}</tr>`
     + `<tr><td colspan="3"><details class="more"><summary>Recorded change</summary><div class="panel-body"><dl><dt>Before</dt><dd>${effect(s,a.before)}</dd><dt>After</dt><dd>${effect(s,a.after)}</dd></dl></div></details></td></tr>`).join('')
   return panel('Staff action history', body(`<p class="meta">${chosen ? `Actions for ${h(chosen.name)}.` : 'Actions for all members. Select a person to focus their history.'}</p>`)
     + (list ? `<div class="table-wrap">${table(['When / member', 'Staff / channel', 'Action'], list)}</div>` : emptyLine('No staff actions recorded.')), { id: 'staff-actions', icon: 'users' })

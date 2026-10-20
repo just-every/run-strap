@@ -1,3 +1,5 @@
+import { teachingPay } from './domain/teaching-pay'
+import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
@@ -14,7 +16,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition'])
 const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -81,6 +83,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      if (path === '/api/strap/teaching-pay') {
+        if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
+        const loaded = await load(env.DB,who)
+        return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
+      }
       if (path === '/api/strap/reports/attendance') {
         if (who.role !== 'owner') fail('owner_required',403)
         return json(attendanceReport(await state(env,who),url.searchParams))
@@ -116,7 +123,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).
-        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair', 'booking.bulk.cancel'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await state(env, who), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {

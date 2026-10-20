@@ -17,7 +17,7 @@ async function refused(h, name, input, cookie, status, code) {
   assert.equal((await h.state()).version, before, `${code}: no writes`)
 }
 
-test('ATT-001: members check in from their account, a paired kiosk by name, phone or scanned code, and staff at the desk, once each, with role-scoped alerts', () => run(async h => {
+test('LEAD-006 / ATT-001: members check in from their account, a paired kiosk by name, phone or scanned code, and staff at the desk, once each, with role-scoped alerts', () => run(async h => {
   await h.mf.dispatchFetch(h.origin + '/setup', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes', redirect: 'manual' })
   await h.cmd('studio.save', { location: 'Main studio', timeZone: zone })
   const coach = await h.person('Maya', 'instructor'), other = await h.person('Rae', 'instructor'), m = {}
@@ -28,6 +28,8 @@ test('ATT-001: members check in from their account, a paired kiosk by name, phon
     if (paid) await h.cmd('payment.record', { personId: made.id, amountCents: 5000, reference: `PACK-${name}` })
   }
   const { Ana, Ben, Cy, Dee, Eve, Fay } = m
+  await h.cmd('recognition.milestone.save',{threshold:1,label:'First visit',enabled:true})
+  for (const member of Object.values(m)) await h.cmd('recognition.preference.save',{optedIn:true,version:0},member.cookie)
   // The owner records Ben's mobile in his People card form; the kiosk matches its 10 digits.
   assert.equal((await form(h, 'person.save', '/app/people', { id: Ben.id, name: 'Ben Ortiz', email: Ben.email, role: 'member', active: 'true', phone: '(615) 555-0142' })).status, 303)
   await refused(h, 'person.save', { id: Cy.id, name: 'Cy Park', email: Cy.email, phone: '555-0142' }, h.owner, 400, 'invalid_phone')
@@ -138,6 +140,18 @@ test('ATT-001: members check in from their account, a paired kiosk by name, phon
   const seats = s.bookings.filter(b => b.classId === entry.id)
   assert.deepEqual(Object.fromEntries(seats.map(b => [s.people.find(p => p.id === b.personId).name.split(' ')[0], b.checkinChannel])), { Ana: 'kiosk', Ben: 'roster', Cy: 'self', Dee: 'kiosk_scan', Eve: 'desk_scan' })
   assert.ok(seats.filter(b => b.checkinChannel.startsWith('kiosk')).every(b => b.kioskId === pairing.id))
+  const recognitions=s.recognition.recognitions
+  assert.equal(recognitions.length,5,'LEAD-006: each current attendance door produces one private first-visit task')
+  for (const booking of seats) {
+    const task=recognitions.find(r=>r.personId===booking.personId)
+    assert.deepEqual(task.sourceBookingIds,[booking.id])
+    assert.equal(task.status,'open')
+  }
+  await (await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+  assert.deepEqual((await h.state()).recognition.recognitions.map(r=>r.id).sort(),recognitions.map(r=>r.id).sort(),'LEAD-006: the minute sweep preserves all once-only issuances')
+  assert.equal((await h.state(coach.cookie)).recognition.recognitions.length,0)
+  assert.equal((await h.state(coach.cookie)).recognition.preferences.length,0)
+
   for (const b of seats) assert.deepEqual(s.packCreditEvents.filter(e => e.bookingId === b.id).map(e => [e.type, e.credits]), [['reserve', -1], ['consume', 0]])
   assert.deepEqual(Object.values(m).map(p => s.packs.find(x => x.personId === p.id).remaining), [0, 3, 4, 4, 4, 4])
   desk = (await h.send(roll, undefined, h.owner)).text
