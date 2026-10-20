@@ -6,6 +6,7 @@ import { approvalHistory, draftRecords } from './drafts'
 import { avatar, body, cell, emptyLine, field, form, h, owner, panel, person, personSelect, rows, select, table, textarea } from './shared'
 import { addDays } from '../zone'
 import { packCreditCounts, packExpiration, packHistory } from './pack-history'
+import { planChangesPanel } from './plan-changes'
 
 /** How long a pack lasts, each with the last day it can be used. */
 const terms = (s: any): [unknown, unknown][] => [30, 60, 90, 120, 180, 365].map(days => { const last = addDays(studioToday(s), days); return [last, `${days === 365 ? '1 year' : `${days} days`} · through ${dayLong(last).replace(/^(\w{3})\w*/, '$1')}`] })
@@ -23,7 +24,7 @@ export function packsPage(s: any, query: URLSearchParams) {
   const payLine = (p: any) => `<tr>${cell('Recorded', when(s, p.createdAt))}${mine ? '' : cell('Member', h(person(s, p.personId)))}${cell('Reference', `${h(p.reference)}${p.kind === 'refund' ? '<small>Refund paid back outside Strap</small>' : ''}`)}${cell('Amount', money(p.amountCents), 'right')}</tr>`
   const paymentTable = payments.length ? `<div class="table-wrap">${table(payHeads, payments.slice(0, 10).map(payLine).join(''))}</div>${payments.length > 10 ? `<details class="more"><summary>Show ${payments.length - 10} earlier payments</summary><div class="table-wrap">${table(payHeads, payments.slice(10).map(payLine).join(''))}</div></details>` : ''}` : emptyLine('No payments recorded yet.')
   const myBalance = mine ? panel('My balance', body(`<p class="credits-big"><b>${money(balance(s, s.actor.personId))}</b> owed</p>`), { icon: 'card' }) : ''
-  if (mine) return `<div class="page"><div class="page-main"><div class="page-title"><h1>My packs</h1></div>${panel('Class packs', packTable, { icon: 'card' })}${creditHistory}${panel('Payments', paymentTable, { icon: 'report' })}</div><aside class="rail">${myBalance}</aside></div>`
+  if (mine) return `<div class="page"><div class="page-main"><div class="page-title"><h1>My packs</h1></div>${panel('Class packs', packTable, { icon: 'card' })}${planChangesPanel(s)}${creditHistory}${panel('Payments', paymentTable, { icon: 'report' })}</div><aside class="rail">${myBalance}</aside></div>`
 
   const forms = panel('Prepare a pack', body(`<p>A pack gives a member class credits and adds its price to what they owe. Review and approve it before the credits appear.</p>${form('pack.prepare', '/app/packs', `${personSelect(s, chosen)}<div class="row2">${field('credits', 'Class credits', '10', 'number', 'required min="1" max="10000" step="1"')}${field('amount', 'Price', '', 'text', 'required inputmode="decimal" placeholder="$189.00"')}</div>${textarea('eligibleServices', 'Eligible services (one per line; blank means all classes)', '', 'maxlength="16000" placeholder="Mat"')}${select('expiresOn', 'Good for', terms(s), addDays(studioToday(s), 90))}<label class="check"><input type="checkbox" name="priorityBooking" value="true"> Priority booking: books in a service’s priority window</label>`, 'Prepare pack')}`), { id: 'prepare-pack', icon: 'plus', className: 'desk-form' })
     + panel('Record a payment', body(`<p>Record money you received through your own processor. A reference is used once, so the same payment is never recorded twice.</p>${form('payment.record', '/app/packs', `${personSelect(s, chosen)}<div class="row2">${field('amount', 'Amount received', '', 'text', 'required inputmode="decimal" placeholder="$189.00"')}${field('reference', 'Payment reference', '', 'text', 'required maxlength="160" placeholder="SQ-4821"')}</div>`, 'Record payment')}`), { id: 'record-payment', icon: 'card', className: 'desk-form' })
@@ -32,6 +33,6 @@ export function packsPage(s: any, query: URLSearchParams) {
   // Below 1280px the columns stack; pages.css puts the desk's forms after the prepared drafts.
   return `<div class="page desk"><div class="page-main"><div class="page-title"><h1>Packs and payments</h1><p>${packs.filter(live).length} active packs · ${owed.length} members owe</p></div>`
     + panel('Prepared packs and reminders', drafts.html, { count: drafts.waiting, icon: 'clock', id: 'drafts' })
-    + panel('Class packs', packTable, { icon: 'card', className: 'history' }) + creditHistory + panel('Payment history', paymentTable, { icon: 'report', className: 'history' }) + panel('Approval history', approvalHistory(s, ['pack', 'reminder']), { icon: 'check', className: 'history' })
+    + planChangesPanel(s, chosen) + panel('Class packs', packTable, { icon: 'card', className: 'history' }) + creditHistory + panel('Payment history', paymentTable, { icon: 'report', className: 'history' }) + panel('Approval history', approvalHistory(s, ['pack', 'reminder']), { icon: 'check', className: 'history' })
     + `</div><aside class="rail">${panel('Member balances', balances, { icon: 'users', className: 'balances' })}${forms}</aside></div>`
 }

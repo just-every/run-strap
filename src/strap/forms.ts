@@ -39,6 +39,14 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
   if (name==='substitution.qualification.save') input.qualified=input.qualified==='true'
+  if (name==='plan.change.prepare') {
+    for (const key of ['planRequestId','exceptionReason']) if (input[key]==='') delete input[key]
+    if (input.mode==='now') {
+      if (!date.test(String(input.effectiveDate)) || !clock.test(String(input.effectiveTime))) fail('Choose the effective date and time')
+      input.effectiveAt=localInstant(String(input.effectiveDate),String(input.effectiveTime),zoneOf(timeZone)); delete input.expiresOn
+    }
+    delete input.effectiveDate; delete input.effectiveTime
+  }
   if (name.startsWith('lead.')) {
     if ('version' in input) input.version=Number(input.version)
     if (input.dueAt) input.dueAt=String(input.dueAt)+'Z'

@@ -12,6 +12,7 @@ const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personI
 export function staffBefore(tx: Transaction, name: string, input: Record<string,unknown>) {
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));
   if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
+  if (name === 'plan.change.prepare') { const pack = tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
   const target = typeof input.id === 'string' ? tx.state.records.get(input.id)?.data : null;
   if (name === 'notice.dismiss.staff') return target ? noticeEffect(target) : null;
   return target ? structuredClone(target) : null;

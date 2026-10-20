@@ -1,4 +1,5 @@
 import { saveQualification, requestSubstitution, prepareSubstitution, approveSubstitution, substitutionSnapshot } from './substitutions';
+import { requestPlanChange, preparePlanChange, acceptPlanChange, applyDuePlanChanges, planChangeSnapshot } from './plan-changes';
 import { createLead, updateLead, appendLeadNote, leadSnapshot } from './leads';
 import { saveMilestone, saveRecognitionPreference, processRecognition, completeRecognition, recognitionSnapshot } from './recognition';
 import { launchRecognition } from './recognition-launch';
@@ -37,6 +38,9 @@ export const handlers = {
   'substitution.request':defineCommand(requestSubstitution,['owner','instructor']),
   'substitution.prepare':defineCommand(prepareSubstitution,['owner']),
   'substitution.approve':defineCommand(approveSubstitution,['owner']),
+  'plan.change.request':defineCommand(requestPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change'}}),
+  'plan.change.accept':defineCommand(acceptPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change',ownStep:true}}),
+  'plan.change.prepare':defineCommand(preparePlanChange,['owner'],{staffRight:'contract-change'}),
   'lead.create':defineCommand(createLead,['owner']),
   'lead.update':defineCommand(updateLead,['owner']),
   'lead.note':defineCommand(appendLeadNote,['owner']),
@@ -112,6 +116,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set(list(tx.state,'bookingAction').map(a => a.id));
+  applyDuePlanChanges(tx);
   const result = await spec.run(tx,input,context);
   if (staff) retainStaffAction(tx,name,spec.staffRight!,input,result,before,priorIds);
   processRecognition(tx);
@@ -121,7 +126,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
 export async function sweep(db: D1Database, context: NoticeContext) {
   const loaded = await loadSystem(db), tx = new Transaction(db,loaded.state,loaded.who);
-  tx.notices = context; promoteAll(tx); processRecognition(tx);
+  tx.notices = context; applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx);
   if (tx.sql.length) await tx.commit();
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -157,7 +162,7 @@ export async function snapshot(db: D1Database, who: Actor) {
   const timetableBasis = owner ? await seriesBasis(state) : null;
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
-  return {substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
+  return {planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
     drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],

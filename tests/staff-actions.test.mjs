@@ -39,7 +39,7 @@ test('STAFF-006: every current member command has a real staff door, identical m
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     const actions={
       'recognition.preference.save':async door=>{
@@ -113,6 +113,21 @@ test('STAFF-006: every current member command has a real staff door, identical m
         assert.equal(own.dismissedByStaff.actorId,r.after.actor.id);assert.equal(r.event.right,'member-record')
         assert.match((await h.send('/app',undefined,ana.cookie)).text,/Marked read by staff/)
         await h.cmd(door,input);assert.equal((await h.state()).staffActions.length,r.after.staffActions.length)
+      },
+      'plan.change.request':async door=>{
+        const pack=(await h.state(ana.cookie)).packs[0]
+        const input={packId:pack.id,mode:'renewal',credits:6,amountCents:12000,expiresAt:'2100-06-30T00:00:00.000Z',channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.status,'preview');assert.equal(r.event.before.id,pack.id);assert.equal(r.event.after.id,r.result.id)
+        assert.deepEqual((await h.state(ana.cookie)).planChanges.changes.find(c=>c.id===r.result.id),r.after.planChanges.changes.find(c=>c.id===r.result.id),'staff and member read the same preview')
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1)
+      },
+      'plan.change.accept':async door=>{
+        const preview=(await h.state(ana.cookie)).planChanges.changes.find(c=>c.status==='preview')
+        await refused(h,'plan.change.accept',{id:preview.id,key:preview.key},h.owner)
+        assert.equal((await h.state(ana.cookie)).planChanges.changes.find(c=>c.id===preview.id).status,'preview','the staff preview never accepts for the member')
+        const accepted=await h.cmd('plan.change.accept',{id:preview.id,key:preview.key},ana.cookie)
+        assert.equal(accepted.acceptedBy,(await h.state(ana.cookie)).actor.id)
+        await refused(h,door,{packId:preview.packId,mode:'renewal',credits:7,amountCents:13000,expiresAt:'2100-07-30T00:00:00.000Z',requestId:randomUUID()},h.owner,409)
       },
     }
     // Work in actual action order so every pair has a real member state to change.

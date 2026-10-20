@@ -27,7 +27,7 @@ function openLegacyLedger(tx: Transaction, pack: RecordData) {
 }
 
 type CreditEvent = {
-  type: 'grant' | 'reserve' | 'restore' | 'consume' | 'adjust' | 'transfer'; credits: number;
+  type: 'grant' | 'reserve' | 'restore' | 'consume' | 'adjust' | 'transfer' | 'change'; credits: number;
   bookingId?: string; classId?: string; reason?: string; expiresAt?: string;
   requestId?: string; requestBasis?: string;
 };
