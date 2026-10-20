@@ -32,7 +32,9 @@ test('MSG-003: current-time email reminders replace obsolete schedules, obey ser
   await refused(h,'reminder.rule.save',{...input,leadMinutes:15},h.owner,409)
   const booking=await h.cmd('booking.book',{classId:original.id},ana.cookie)
   await tick(h);assert.equal(sent.length,0,'original future reminder is not due')
-  await h.cmd('booking.move',{id:booking.id,classId:revised.id,requestId:'member-reschedule'},ana.cookie)
+  const reschedule={id:booking.id,classId:revised.id,requestId:'member-reschedule'}
+  const moved=await h.cmd('booking.move',reschedule,ana.cookie)
+  assert.deepEqual(await h.cmd('booking.move',reschedule,ana.cookie),moved,'replaying the member reschedule reuses its exact effect')
   await proof(h,'rules',ana)
   await tick(h);await tick(h)
   assert.equal(sent.length,1)
@@ -44,6 +46,7 @@ test('MSG-003: current-time email reminders replace obsolete schedules, obey ser
   assert.equal((await deliveries(h)).filter(d=>d.person_id===ana.id).length,1)
   const anaNotice=(await h.state(ana.cookie)).notices.filter(n=>n.reminderId)
   assert.equal(anaNotice.length,1);assert.equal(anaNotice[0].classId,revised.id)
+  await proof(h,'member',ana)
   await h.cmd('notice.dismiss',{id:anaNotice[0].id},ana.cookie)
   assert.ok((await h.state(ana.cookie)).notices.find(n=>n.id===anaNotice[0].id).dismissedAt,'reminder notices work through the ordinary dismiss door')
   await h.cmd('booking.book',{classId:revised.id},ben.cookie)
@@ -84,7 +87,6 @@ test('MSG-003: current-time email reminders replace obsolete schedules, obey ser
   assert.ok(portable.tables.st_records.some(r=>r.kind==='reminderTaskEvent'))
   assert.ok((await deliveries(h)).every(d=>d.status==='accepted'||d.status==='rejected'||d.status==='opted_out'))
   assert.equal(new Set(sent.map(m=>m.key)).size,sent.length)
-  await proof(h,'member',ana)
  },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'network-edge-test-key'},outbound:async request=>{
   assert.equal(request.url,'https://api.resend.com/emails')
   const letter={...await request.json(),key:request.headers.get('idempotency-key')}

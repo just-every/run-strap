@@ -23,7 +23,7 @@ export async function classRemindersBrowser(h,{stage,ana}) {
     const panel=page.locator('#class-reminders')
     await panel.getByText('Add a reminder rule',{exact:true}).click()
     await panel.getByLabel('Service (blank for studio default)').last().fill('Evening Pilates')
-    await panel.getByLabel('Reminders',{exact:true}).last().selectOption('false')
+    await panel.getByLabel('Reminders').last().selectOption('false')
     await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-rules-${width}.png`)})
     if(width===390) {
      await panel.getByRole('button',{name:'Save reminder rule',exact:true}).last().click()
