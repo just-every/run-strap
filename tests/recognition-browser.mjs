@@ -32,7 +32,7 @@ export async function recognitionBrowser(h,{ana,ben}) {
           await page.goto(h.origin+'/app/people?person='+ana.id+'#staff-actions')
           await page.getByRole('heading',{name:'Staff action history',exact:true}).waitFor()
           assert.ok(await page.getByText('Open member recognition preferences',{exact:true}).first().isVisible())
-          await page.locator('#staff-actions').screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-audit-${width}.png`)})
+          await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-audit-${width}.png`)})
         } else {
           assert.equal(await page.getByRole('heading',{name:'Private milestone tasks',exact:true}).count(),0)
           await page.getByLabel('Private visit recognition',{exact:true}).selectOption('false')
