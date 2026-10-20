@@ -72,6 +72,17 @@ test('STAFF-002: versioned teaching compensation, corrected attendance, minimums
   assert.equal(privateQuery.value.rows.every(r=>r.instructorId===maya.id),true,'query parameters cannot widen instructor authority')
   for(const bad of [{...spec('Bad','tiered'),tiers:[{upTo:1,rateCents:100}]},{...spec('Bad','flat-class'),effectiveAt:new Date(Date.now()-1000).toISOString()},{...spec('Bad','hourly'),rateCents:0.5}])assert.ok((await h.send('/api/strap/command',{name:'pay.rule.save',input:bad},h.owner)).status>=400)
 
+  const policyEffective=new Date(Date.now()+3000).toISOString(),policyStart=new Date(Date.now()+3*86400_000).toISOString()
+  for(const [service,treatment,expected] of [['Paid cancellation','full',5400],['Unpaid cancellation','none',0]]) {
+    const configured=await h.cmd('pay.rule.save',{service,effectiveAt:policyEffective,mode:'hourly',rateCents:3600,minimumCents:0,cancellation:{treatment},substitute:{mode:'flat-class',rateCents:6500,minimumCents:0}})
+    assert.equal(configured.substitute.rateCents,6500,'the agreed substitute rate remains in the immutable version for SCHED-004')
+    const c=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(policyStart),classes:[{title:service,service,start:policyStart,end:new Date(Date.parse(policyStart)+90*60_000).toISOString(),capacity:2,room:service,instructorId:maya.id}]})).id})).classes[0]
+    const close=await h.cmd('closure.prepare',{scope:'class',classId:c.id,reason:'Weather closure'})
+    await h.cmd('closure.confirm',{id:close.id,impact:close.impact.key})
+    const current=await report(h.owner),r=current.rows.find(r=>r.classId===c.id)
+    assert.equal(r.totalCents,expected)
+    assert.equal(r.calculation.elapsedMinutes,90)
+  }
   const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
   const records=portable.tables.st_records.map(r=>({kind:r.kind,data:JSON.parse(r.data)}))
   assert.ok(records.some(r=>r.kind==='payRule'&&r.data.id===rules[0].id))
