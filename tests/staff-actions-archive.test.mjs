@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -79,6 +79,10 @@ test('ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-0
       await h.cmd('fee.'+action,{id:charge.id,reference:'ARCHIVE-FEE-RECEIPT',reason:'Courtesy fee waiver',requestId:'archive-fee-'+action})
     }
     const originalFees=(await h.state()).fees,originalFeeAudit=(await h.state()).staffActions.filter(a=>a.command?.startsWith('fee.'))
+    await h.cmd('mail.templates.save',{prefix:'Brooklyn Studio booking',suffix:'Please contact the studio for help.',requestId:'archive-message-template'})
+    const messagePreference=await h.cmd('mail.preference.save',{optedOut:true,requestId:'archive-message-optout'},member.cookie)
+    const messagePortable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
+    const originalMessageRecords=messagePortable.tables.st_records.filter(r=>r.kind.startsWith('message')).map(r=>JSON.parse(r.data)).sort((a,b)=>a.id.localeCompare(b.id))
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,...identity})
@@ -106,6 +110,9 @@ test('ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-0
     assert.deepEqual(before.payRules,[payRule],'STAFF-002 immutable rate versions survive native restore')
     assert.deepEqual(before.teachingPay.rows,originalPay.rows,'STAFF-002 pay sources, arithmetic and adjustment history survive native restore')
     assert.equal(before.teachingPay.rows[0].adjustments[0].id,payAdjustment.id)
+    assert.deepEqual((await h.state(memberCookie)).messagePreference,messagePreference,'MSG-002 member opt-out and source survive native restore')
+    const restoredMessageRecords=(await h.send('/api/strap/exit.json',undefined,owner)).value.tables.st_records.filter(r=>r.kind.startsWith('message')).map(r=>JSON.parse(r.data)).sort((a,b)=>a.id.localeCompare(b.id))
+    assert.deepEqual(restoredMessageRecords,originalMessageRecords,'MSG-002 templates and immutable member/owner choice provenance survive native restore')
     assert.equal(before.waiverLaunches.length,1);assert.equal(before.staffActions.filter(a=>a.command==='waiver.launch').length,1)
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM st_waiver_launch_dispatches').first()).n,0,'restore has no dispatch authority')
     const input={personId:member.id,waiverId:waiver.id,requestId:'restored-link',channel:'phone'}

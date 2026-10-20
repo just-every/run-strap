@@ -45,7 +45,7 @@ export const classWeek = (date: string) => mondayOf(date);
 /** All facts that can affect the reviewed booking, spot, credit and notice effect.
  * Exception reasons never enter an agent's draft or error. */
 export async function seriesBasis(state: State) {
-  const kinds = ['studio','series','class','booking','pack','spotLayout','bookingRule','waitlistPolicy','closure'];
+  const kinds = ['messageTemplates','messagePreference','studio','series','class','booking','pack','spotLayout','bookingRule','waitlistPolicy','closure'];
   const facts = JSON.stringify({people:state.people,records:kinds.flatMap(kind => list(state,kind).filter(r => kind !== 'closure' || r.status === 'applied').sort((a,b) => a.id.localeCompare(b.id)).map(r => kind === 'closure' ? {id:r.id,status:r.status,scope:r.scope,room:r.room,start:r.start,end:r.end,classIds:r.classIds} : r)),
     unavailable:list(state,'unavailability').map(({reason,...r}) => r).sort((a,b) => a.id.localeCompare(b.id))});
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(facts))),byte => byte.toString(16).padStart(2,'0')).join('');

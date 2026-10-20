@@ -39,7 +39,7 @@ test('STAFF-006: every current member command has a real staff door, identical m
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     const actions={
       'recognition.preference.save':async door=>{
@@ -50,6 +50,28 @@ test('STAFF-006: every current member command has a real staff door, identical m
         const saved=await h.cmd('recognition.preference.save',{optedIn:true,version:current.version},ana.cookie)
         assert.equal(saved.optedIn,true)
         assert.equal(saved.history.at(-1).actorId,(await h.state(ana.cookie)).actor.id)
+        await h.cmd(door,input)
+        assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1)
+      },
+      'mail.preference.save':async door=>{
+        const current=(await h.state(ana.cookie)).messagePreference
+        const input={personId:ana.id,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.url,'/signin?returnTo=%2Fapp%23message-preferences')
+        assert.equal(r.result.status,'member_action_required')
+        assert.deepEqual((await h.state(ana.cookie)).messagePreference,current,'staff launch preserves the member-owned preference')
+        assert.equal((await h.cmd('mail.preference.save',{optedOut:true,requestId:randomUUID()},ana.cookie)).optedOut,true)
+        assert.equal((await h.cmd('mail.preference.save',{optedOut:false,requestId:randomUUID()},ana.cookie)).optedOut,false)
+        await h.cmd(door,input)
+        assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1)
+      },
+      'booking.move':async door=>{
+        const from=await publish('Move from',30),to=await publish('Move to',32)
+        const booked=await h.cmd('booking.book',{classId:from.id},ana.cookie)
+        const input={id:booked.id,classId:to.id,cancelReason:'Other',channel:'phone',requestId:randomUUID()}
+        const r=await checkAudit(door,input)
+        assert.equal(r.result.classId,to.id)
+        assert.equal((await h.state(ana.cookie)).bookings.find(b=>b.id===booked.id).classId,to.id)
+        assert.equal(r.event.before.classId,from.id);assert.equal(r.event.after.classId,to.id)
         await h.cmd(door,input)
         assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1)
       },
@@ -66,7 +88,7 @@ test('STAFF-006: every current member command has a real staff door, identical m
         const b=(await h.state()).bookings.find(b=>b.personId===ana.id&&b.classId===future.id&&b.status==='booked')
         assert.deepEqual((await h.state(ana.cookie)).bookings.find(x=>x.id===b.id).cancelEffect,b.cancelEffect,'staff and member read the same preview')
         const r=await checkAudit(door,{id:b.id,cancelReason:'Other',channel:'phone'})
-        assert.equal(r.result.refunded,true);assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.bookingId===b.id).length,1)
+        assert.equal(r.result.refunded,true);assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.bookingId===b.id&&n.subject.startsWith('Booking cancelled:')).length,1)
       },
       'booking.offer.accept':async door=>{
         await h.cmd('waitlist.save',{mode:'offer',claimMinutes:30,lateWindow:'promote'})
@@ -142,8 +164,9 @@ test('STAFF-006: every current member command has a real staff door, identical m
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
       // Self-capable shared commands still refuse acting for somebody else.
-      if (['booking.cancel','booking.spot','booking.offer.accept'].includes(entry.memberDoor.staff)) {
+      if (['booking.cancel','booking.spot','booking.offer.accept','booking.move'].includes(entry.memberDoor.staff)) {
         const other=(await h.state()).bookings.find(b=>b.personId===ben.id&&b.status==='booked');input.id=other.id
+        if (entry.memberDoor.staff==='booking.move') input.classId=near.id
       }
       await refused(h,entry.memberDoor.staff,input,ana.cookie)
       if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie)

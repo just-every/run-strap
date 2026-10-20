@@ -47,7 +47,7 @@ export function closureImpact(state: State, scope: Record<string,any>) {
   const bookings = classes.flatMap(c => c.bookings);
   return {classes,members:new Set(bookings.map(b => b.personId)).size,creditsReturned:bookings.filter(b => b.creditReturned).length,
     waitlistClosed:bookings.filter(b => b.status !== 'booked').length,moneyMoved:0,
-    key:JSON.stringify(classes.map(c => ({...c,source:state.records.get(c.classId)?.data})))};
+    key:JSON.stringify({classes:classes.map(c => ({...c,source:state.records.get(c.classId)?.data})),messages:[...state.records.values()].filter(r => ['messagePreference','messageTemplates'].includes(r.kind)).map(r => r.data).sort((a,b) => a.id.localeCompare(b.id))})};
 }
 
 export function prepareClosure(tx: Transaction, input: Record<string,unknown>, context: NoticeContext = {}) {

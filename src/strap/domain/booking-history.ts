@@ -26,7 +26,7 @@ export function bookingHistory(tx: Transaction, action: string, before: RecordDa
   const suppressed = input.suppressNotice === true;
   insist(!suppressed || (staff && action === 'cancel' && after.cancellation !== 'late'),'suppression_requires_courtesy_cancel',403);
   const suppressionReason = suppressed ? text(input.suppressionReason,'suppression_reason',500) : null;
-  const event = {id:id(),bookingId:after.id,personId:after.personId,classId:before.classId,targetClassId:after.classId,action,
+  const event = {id:id(),...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]))} : {}),bookingId:after.id,personId:after.personId,classId:before.classId,targetClassId:after.classId,action,
     actorId:tx.who.id,actorRole:tx.who.role,staffMade:staff,right:staff ? 'booking' : null,channel:staff ? actionChannel(input) : 'online',
     reason:staff ? String(input.cancelReason ?? input.reason ?? '') : `Member ${action}`,at:now(),type:after.cancellation ?? null,
     feeCents:after.feeCents ?? 0,creditReturned:after.refunded ?? false,waiver:after.waiver ?? null,before,after,...details,

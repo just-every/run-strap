@@ -1,3 +1,5 @@
+import { messagePreferencePanel } from './message-settings'
+import { memberMove } from './member-move'
 // A member's home: the classes they can book, their credits and the waiver.
 import { eligiblePack, livePacks, packName, upcoming, waiverSigned } from './facts'
 import { packExpiration } from './pack-history'
@@ -15,7 +17,7 @@ function bookAction(s: any, c: any) {
   const own = rows(s, 'bookings').find(b => b.classId === c.id && b.personId === s.actor.personId && b.status !== 'cancelled')
   if (c.status === 'cancelled') return '<span class="chip quiet">Class cancelled</span>'
   if (own?.status === 'offered') return memberOffer(s, own, '/app')
-  if (own) return `<span class="pill ${own.status === 'booked' ? 'done' : 'pending'}">${own.status === 'booked' ? 'Booked' : 'On the waitlist'}</span> ${ownSpot(c, own, '/app')}${memberCancel(own, '/app')}`
+  if (own) return `<span class="pill ${own.status === 'booked' ? 'done' : 'pending'}">${own.status === 'booked' ? 'Booked' : 'On the waitlist'}</span> ${ownSpot(c, own, '/app')}${memberCancel(own, '/app')}${memberMove(s,c,own)}`
   if (Date.parse(c.start) <= Date.now()) return ''
   const priority = rows(s, 'packs').some(p => p.personId === s.actor.personId && p.priorityBooking && p.remaining > 0 && packServiceEligible(p, c) && p.expiresAt > c.start && Date.parse(p.expiresAt) > Date.now())
   const open = windowState(c, priority)
@@ -33,5 +35,5 @@ export function memberHome(s: any) {
   const waiver = s.waiver ? panel('Waiver', body(`<p class="letter">${h(s.waiver.text)}</p>${signed ? '<p class="meta">You acknowledged this version. You can book a class.</p>' : form('waiver.acknowledge', '/app', hidden('id', s.waiver.id), 'I acknowledge this waiver version')}`), { id: 'waiver', icon: 'report' }) : ''
   const creditPanel = panel('My credits', body(packs.length ? `<p class="credits-big"><b>${credits}</b> credits to use</p>${packs.map(p => `<p class="meta">${h(packName(p))}: ${p.remaining} available; expires ${packExpiration(s, p.expiresAt)}${p.eligibleServices?.length ? ` · ${h(p.eligibleServices.join(', '))}` : ''}</p>`).join('')}` : '<p class="meta">You have no class credits. Ask the studio for a pack.</p>'), { icon: 'card' })
   const schedule = list.length ? `<div class="table-wrap">${weekTable(s, list, c => bookAction(s, c))}</div>` : emptyState('calendar', 'No classes open for booking', 'The studio has not published upcoming classes yet.')
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Classes</h1><p>A booking uses one credit; the waitlist holds none until you move up.</p></div>${noticesPanel(s)}${!signed ? `<p class="notice">Acknowledge the studio’s waiver before you book.</p>` : ''}${panel('Book a class', schedule, { icon: 'calendar' })}</div><aside class="rail">${memberCheckin(s)}${creditPanel}${waiver || panel('Waiver', emptyLine('The studio has not published a waiver.'), { id: 'waiver' })}</aside></div>`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Classes</h1><p>A booking uses one credit; the waitlist holds none until you move up.</p></div>${noticesPanel(s)}${!signed ? `<p class="notice">Acknowledge the studio’s waiver before you book.</p>` : ''}${panel('Book a class', schedule, { icon: 'calendar' })}</div><aside class="rail">${memberCheckin(s)}${creditPanel}${messagePreferencePanel(s)}${waiver || panel('Waiver', emptyLine('The studio has not published a waiver.'), { id: 'waiver' })}</aside></div>`
 }

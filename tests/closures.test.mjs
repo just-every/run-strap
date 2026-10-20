@@ -31,6 +31,7 @@ test('SCHED-008: closing a room cancels its classes once from an exact impact pr
   const outbound = async request => {
     assert.equal(request.url, 'https://api.resend.com/emails', 'no other network destination')
     const message = { ...await request.json(), idempotencyKey: request.headers.get('idempotency-key') }
+    if (message.idempotencyKey?.startsWith('mail:confirmation:')) return Response.json({ id: message.idempotencyKey })
     mails.push(message)
     return message.to.includes('cy@studio.example') ? Response.json({ name: 'validation_error' }, { status: 422 }) : Response.json({ id: `re_${mails.length}` })
   }
@@ -100,19 +101,19 @@ test('SCHED-008: closing a room cancels its classes once from an exact impact pr
     assert.equal(benMail.subject, 'Cancelled: 2 of your classes')
     assert.match(benMail.text, /Reformer Flow on .+ is cancelled\. Reason: Burst pipe\. Your class credit is back in your pack\.\n\nReformer Later on/)
     assert.match(mails.find(m => m.to[0] === 'cy@studio.example').text, /Your waitlist spot is closed; no credit was used\./)
-    const deliveries = (await h.state()).noticeDeliveries
+    const deliveries = (await h.state()).noticeDeliveries.filter(d => d.sourceKind === 'closure')
     assert.deepEqual(deliveries.map(d => d.status).sort(), ['accepted', 'accepted', 'accepted', 'accepted', 'rejected'])
     const done = (await h.send('/app/classes', undefined, h.owner)).text
     assert.match(done, /Ana: credit returns to their pack · in-app notice · Email accepted by resend; delivery not confirmed/)
     assert.match(done, /Cy: waitlist spot closes, no credit used · in-app notice · Email refused by resend \(provider rejected\)/)
-    const benNotices = (await h.state(Ben.cookie)).notices
+    const benNotices = (await h.state(Ben.cookie)).notices.filter(n => n.closureId === fresh.id)
     assert.deepEqual(benNotices.map(n => n.bookingId).sort(), hit.filter(b => b.personId === Ben.id).map(b => b.id).sort())
-    assert.deepEqual((await h.state(Ana.cookie)).notices.map(n => n.subject), [`Cancelled: Reformer Flow, ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(flow.start))}`])
+    assert.deepEqual((await h.state(Ana.cookie)).notices.filter(n => n.closureId === fresh.id).map(n => n.subject), [`Cancelled: Reformer Flow, ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(flow.start))}`])
     const anaHome = (await h.send('/app', undefined, Ana.cookie)).text
     assert.match(anaHome, /Notices[\s\S]*Cancelled: Reformer Flow[\s\S]*Reason: Burst pipe/)
     assert.match(anaHome, /Class cancelled/)
     await refused(h, 'notice.dismiss', { id: benNotices[0].id }, Ana.cookie, 403, 'forbidden')
-    assert.equal((await form(h, 'notice.dismiss', '/app', { id: (await h.state(Ana.cookie)).notices[0].id }, Ana.cookie)).status, 303)
+    assert.equal((await form(h, 'notice.dismiss', '/app', { id: (await h.state(Ana.cookie)).notices.find(n => n.closureId === fresh.id).id }, Ana.cookie)).status, 303)
     assert.doesNotMatch((await h.send('/app', undefined, Ana.cookie)).text, /Reason: Burst pipe/)
 
     if (process.env.STRAP_PROOF_DIR) await (await import('./closures-browser.mjs')).closuresBrowser(h, Ben)
@@ -133,9 +134,9 @@ test('SCHED-008: closing a room cancels its classes once from an exact impact pr
     assert.match((await h.send('/app/classes', undefined, h.owner)).text, /Notices: an in-app notice to each member; email not configured; members see an in-app notice only\./)
     await h.cmd('closure.confirm', { id: draft.id, impact: draft.impact.key })
     const s = await h.state()
-    assert.deepEqual(s.noticeDeliveries.map(d => d.status), ['not_configured'])
+    assert.deepEqual(s.noticeDeliveries.filter(d => d.sourceKind === 'closure').map(d => d.status), ['not_configured'])
     assert.match((await h.send('/app/classes', undefined, h.owner)).text, /Gil: credit returns to their pack · in-app notice · Email not configured; in-app notice only/)
-    assert.equal((await h.state(people.Gil.cookie)).notices.length, 1)
+    assert.equal((await h.state(people.Gil.cookie)).notices.filter(n => n.closureId === draft.id).length, 1)
     // A location closure blocks every new class in its interval.
     const start = at(50 * hour), end = at(53 * hour)
     const shut = await h.cmd('closure.prepare', { scope: 'location', start, end, reason: 'Holiday' })

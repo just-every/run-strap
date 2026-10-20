@@ -37,7 +37,8 @@ function memberNotices(s: any, p: any, back: string) {
 /** These doors never acknowledge a waiver or change a notice's contents. */
 export function staffProfileActions(s: any, p: any, back: string) {
   if (!owner(s) || p.role !== 'member') return ''
-  return `<details class="more"><summary>Member waiver link</summary><div class="panel-body">${waiverLaunch(s, p, back)}</div></details>`
+  return `<details class="more"><summary>Message preferences</summary><div class="panel-body"><p>The member signs in and changes their own booking email choice. Staff cannot opt them in or out.</p>${form('mail.preference.launch', back, staffRequestFields(p.id), 'Open member message preferences', 'quiet', 'small')}${rows(s,'messagePreferenceLaunches').some(l => l.personId === p.id) ? '<p><a href="/signin?returnTo=%2Fapp%23message-preferences">Member message sign-in</a> — open on the member’s device.</p>' : ''}</div></details>`
+    + `<details class="more"><summary>Member waiver link</summary><div class="panel-body">${waiverLaunch(s, p, back)}</div></details>`
     + `<details class="more"><summary>Plan changes</summary><div class="panel-body"><p class="meta">Preview an upgrade or downgrade of this member’s pack. The member accepts the exact charge or credit themselves.</p><a class="btn-quiet" href="/app/packs?person=${encodeURIComponent(p.id)}#plan-changes">Change this member’s plan</a></div></details>`
     + `<details class="more"><summary>Member notices</summary><div class="panel-body"><p class="meta">Marking a notice read records who acted. The member can still see the notice in their read history.</p>${memberNotices(s, p, back)}</div></details>`
 }
@@ -47,7 +48,7 @@ function effect(s: any, value: any) {
   if (typeof value.issued === 'boolean') return value.issued ? `Check-in code revision ${h(value.codeRevision)}${value.codeIssuedAt ? ` · issued ${when(s,value.codeIssuedAt)}` : ''}` : 'No check-in code issued'
   if (typeof value.acknowledged === 'boolean') return value.acknowledged ? 'Current waiver acknowledged by the member' : 'Current waiver awaiting the member’s acknowledgement'
   if (value.waiverId && value.status) return 'Waiver sign-in link requested; delivery and acknowledgement not confirmed'
-  if (value.preferenceDoor) return 'Member recognition sign-in door opened; no consent granted'
+  if (value.preferenceDoor) return 'Member preference sign-in door opened; no consent granted'
   if ('dismissedAt' in value && !value.classId) return value.dismissedAt ? `Notice marked read ${when(s,value.dismissedAt)}` : 'Notice unread'
   if (value.formula) return `Plan change preview: ${h(value.credits)} credits at ${money(value.amountCents)} · ${value.chargeCents < 0 ? `${money(-value.chargeCents)} balance credit` : `${money(value.chargeCents)} charge`} · effective ${when(s,value.effectiveAt)} · awaiting the member’s acceptance`
   if ('credits' in value && 'remaining' in value && !value.classId) return `Pack: ${h(value.remaining)} of ${h(value.credits)} credits available · ${money(value.amountCents)} · ends ${when(s,value.expiresAt)}`
@@ -59,7 +60,7 @@ function effect(s: any, value: any) {
   throw new Error('Unsupported staff action effect')
 }
 
-const actionLabels: Record<string,string> = {'fee.collect':'Record fee receipt','fee.waive':'Waive attendance fee',schedule:'Change class schedule','booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences','plan.change.prepare':'Preview plan change'}
+const actionLabels: Record<string,string> = {'mail.preference.launch':'Open member message preferences','fee.collect':'Record fee receipt','fee.waive':'Waive attendance fee',schedule:'Change class schedule','booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences','plan.change.prepare':'Preview plan change'}
 const actionLabel = (action: string) => { if (!actionLabels[action]) throw new Error('Staff action needs a display label'); return actionLabels[action] }
 
 /** The canonical staff audit stays focused on the selected person, when any. */

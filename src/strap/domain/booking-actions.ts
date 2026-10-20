@@ -28,9 +28,9 @@ function target(tx: Transaction, booking: RecordData, entry: RecordData, input: 
   insistBookingOpen(tx,entry,pack?.priorityBooking === true);
   if (!heldOffer) promote(tx,entry);
   const capacity = seatCapacity(tx.state,entry), override = input.override === undefined || input.override === '' ? null : text(input.override,'override_reason',500);
-  const full = capacity.totalOpen === 0;
+  const full = (tx.who.role === 'owner' ? capacity.totalOpen : capacity.onlineOpen) === 0;
   const spot = !full ? chooseSpot(tx.state,entry,input.spot) : override && input.spot ? chooseSpot(tx.state,entry,input.spot) : null;
-  return {pack,full,spot,capacityPool:capacity.heldOpen > 0 || full ? 'held' : 'online',override:full && override ? {by:tx.who.id,role:tx.who.role,right:'override',reason:override,bypassed:[`class full (${capacity.booked} of ${capacity.total})`],at:now()} : null};
+  return {pack,full,spot,capacityPool:tx.who.role === 'owner' && (capacity.heldOpen > 0 || full) ? 'held' : 'online',override:full && override ? {by:tx.who.id,role:tx.who.role,right:'override',reason:override,bypassed:[`class full (${capacity.booked} of ${capacity.total})`],at:now()} : null};
 }
 /** The late/early choice uses the same terms key as cancellation. A move always
  * carries the reserved credit; an assessed monetary penalty is separate. */
@@ -46,7 +46,14 @@ function movePenalty(tx: Transaction, booking: RecordData, entry: RecordData, in
   return {mode,feeCents:mode === 'late' ? effect.feeCents : 0,waiver};
 }
 export function moveBooking(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who); return performMove(tx,input);
+  insist(['owner','member','instructor'].includes(tx.who.role),'forbidden',403);
+  if (tx.who.role !== 'owner') insist(!input.override && !input.suppressNotice,'override_right_required',403);
+  if (tx.who.role !== 'owner' && input.requestId) {
+    const basis = JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
+    const prior = list(tx.state,'bookingAction').find(a => a.actorId === tx.who.id && a.requestId === input.requestId);
+    if (prior) { insist(prior.action === 'move' || prior.action === 'waitlist','booking_request_changed',409); insist(prior.requestBasis === basis,'booking_request_changed',409); return prior.after; }
+  }
+  return performMove(tx,input);
 }
 function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer = false) {
   const staff = tx.who.role === 'owner';
@@ -57,7 +64,8 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   else insist(tx.who.personId === booking.personId && ['member','instructor'].includes(tx.who.role),'forbidden',403);
   const to = target(tx,booking,entry,input,false,heldOffer);
   if (to.full && !to.override) {
-    const waiter = {id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:{cancelReason:input.cancelReason,channel:actionChannel(input)},status:'waitlisted',capacityPool:'online',bookingChannel:actionChannel(input),
+    insist(!list(tx.state,'booking').some(b => b.moveFromBookingId === booking.id && b.classId === entry.id && b.status !== 'cancelled'),'already_waitlisted',409);
+    const waiter = {id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
       madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
     tx.put('booking',waiter);
     bookingHistory(tx,'waitlist',booking,waiter,input,{keptBookingId:booking.id}); return waiter;

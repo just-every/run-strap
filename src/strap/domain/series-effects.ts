@@ -3,7 +3,7 @@ import { id, insist, list, now, record, type RecordData, type State } from './ty
 import type { Transaction } from './store';
 import { layoutFor, seatCapacity } from './spots';
 import { packServiceEligible } from './pack-credits';
-import { putNotice, reserveMail, titleOf, whenText, type NoticeContext } from './notices';
+import { messageBody, putNotice, reserveMail, titleOf, whenText, type NoticeContext } from './notices';
 import { resourceLabel } from './scheduling';
 
 const spotKey = (v: string) => resourceLabel(v).toLowerCase();
@@ -30,7 +30,7 @@ export function changeImpact(state: State, before: RecordData[], after: RecordDa
     const seats = bookings.map(b => {
       const spot = assignments.get(b.id) ?? null, subject = `Class changed: ${titleOf(entry)}`;
       const body = `${description(state,original)} has changed to ${description(state,entry)}. ${b.status === 'booked' ? `${b.packId ? 'Your booking and original credit stay reserved.' : 'Your unpaid visit stays reserved; no credit was used.'}${spot ? ` Your spot is ${spot}.` : ''}` : b.status === 'offered' ? 'Your seat offer remains available until its original expiry.' : 'Your waitlist position stays the same; no credit was used.'}`;
-      return {bookingId:b.id,personId:b.personId,status:b.status,previousSpot:b.spot ?? null,spot,subject,body};
+      return {bookingId:b.id,personId:b.personId,status:b.status,previousSpot:b.spot ?? null,spot,subject,body:messageBody(state,body,[b.id],[entry])};
     });
     return {classId:entry.id,before:original,after:entry,bookings:seats};
   });
@@ -44,8 +44,8 @@ export function applyChangeNotices(tx: Transaction, draft: RecordData, context: 
       spotHistory:[...(booking.spotHistory ?? []),{from:seat.previousSpot,to:seat.spot,by:tx.who.id,byRole:tx.who.role,staffMade:true,right:'booking',channel:'desk',at}],
     } : {})};
     tx.put('booking',moved);
-    putNotice(tx,{id:`notice:action:${actionId}`,personId:booking.personId,bookingId:booking.id,classId:c.classId,seriesChangeId:draft.id,subject:seat.subject,body:seat.body});
-    const delivery = reserveMail(tx,context,{id:`mail:action:${actionId}`,sourceKind:'booking_action',sourceId:actionId,personId:booking.personId,bookingIds:[booking.id],subject:seat.subject,body:seat.body});
+    putNotice(tx,{id:`notice:action:${actionId}`,personId:booking.personId,bookingId:booking.id,classId:c.classId,seriesChangeId:draft.id,subject:seat.subject,body:seat.body},true);
+    const delivery = reserveMail(tx,context,{id:`mail:action:${actionId}`,sourceKind:'booking_action',sourceId:actionId,personId:booking.personId,bookingIds:[booking.id],subject:seat.subject,body:seat.body,prepared:true});
     tx.put('bookingAction',{id:actionId,action:'schedule',bookingId:booking.id,personId:booking.personId,classId:c.classId,targetClassId:c.classId,seriesChangeId:draft.id,
       before:booking,after:moved,beforeClass:c.before,afterClass:c.after,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'booking',channel:'desk',reason:draft.reason,at,
       feeCents:0,creditReturned:false,notice:{status:'in_app',mailStatus:delivery.status}});

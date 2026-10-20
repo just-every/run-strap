@@ -73,8 +73,8 @@ test('SCHED-001: local-hour repeating timetable, exact occurrence/future changes
     assert.equal(movedBooking.packId,anaBooking.packId); assert.deepEqual(movedBooking.cancelTerms,anaBooking.cancelTerms)
     assert.deepEqual(s.packs.map(p=>p.remaining),beforeMove.packs.map(p=>p.remaining))
     assert.equal(mails.length,1); assert.deepEqual(mails[0].to,['ana@studio.example'])
-    assert.equal((await h.state(ben.cookie)).notices.length,0,'unaffected members receive no change notice')
-    assert.equal((await h.state(ana.cookie)).notices[0].body,moved.impact.classes[0].bookings[0].body,'previewed message is the delivered in-app message')
+    assert.equal((await h.state(ben.cookie)).notices.filter(n=>!n.id.startsWith('notice:confirmation:')).length,0,'unaffected members receive no change notice')
+    assert.equal((await h.state(ana.cookie)).notices.find(n=>n.seriesChangeId===moved.id).body,moved.impact.classes[0].bookings[0].body,'previewed message is the delivered in-app message')
 
     // An existing member change invalidates exact review; no partial class move.
     const future = {classId:c2.id,scope:'future',reason:'Evening schedule',change:{time:'17:00',instructorId:other.id}}
@@ -183,6 +183,6 @@ test('SCHED-001: local-hour repeating timetable, exact occurrence/future changes
     await refused(h,'series.change.prepare',{classId:offeredClass.id,scope:'this',reason:'Earlier session',change:{startDate:date,time:local(sooner)}},h.owner,409,/series_offer_deadline_after_start/)
     if (process.env.STRAP_PROOF_DIR) await (await import('./series-browser.mjs')).seriesBrowser(h,{coach,member:ana,startDate:plus(dates.end,35)})
   },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'test-only-key'},outbound:async request=>{
-    assert.equal(request.url,'https://api.resend.com/emails'); const message = {...await request.json(),key:request.headers.get('idempotency-key')}; mails.push(message); return Response.json({id:`series_${mails.length}`})
+    assert.equal(request.url,'https://api.resend.com/emails'); const message = {...await request.json(),key:request.headers.get('idempotency-key')}; if (message.key?.startsWith('mail:confirmation:')) return Response.json({id:message.key}); mails.push(message); return Response.json({id:`series_${mails.length}`})
   }})
 })

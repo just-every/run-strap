@@ -35,7 +35,9 @@ test('MSG-004 / SCHED-014: a vacancy offers the next eligible waiter a timed cla
   // The real Resend adapter; only its HTTPS endpoint is faked.
   const outbound = async request => {
     assert.equal(request.url, 'https://api.resend.com/emails', 'no other network destination')
-    mails.push({ ...await request.json(), idempotencyKey: request.headers.get('idempotency-key') })
+    const message = { ...await request.json(), idempotencyKey: request.headers.get('idempotency-key') }
+    if (message.idempotencyKey?.startsWith('mail:confirmation:')) return Response.json({ id: message.idempotencyKey })
+    mails.push(message)
     return Response.json({ id: `re_${mails.length}` })
   }
   await run(async h => {
@@ -135,7 +137,7 @@ test('MSG-004 / SCHED-014: inside the late-cancel window promotion stops: a clai
     assert.equal(s.bookings.filter(b => b.classId === soon.id && b.status === 'booked').length, 0)
     assert.ok(Math.abs(Date.parse(offer.offer.expiresAt) - Date.parse(offer.offer.sentAt) - 30 * minute) < 1000)
     // No mail provider: the in-app notice is the only notice, and the record says so.
-    assert.deepEqual(s.noticeDeliveries.map(d => [d.sourceKind,d.status]), [['booking_action','not_configured'],['booking','not_configured']])
+    assert.deepEqual(s.noticeDeliveries.filter(d => d.sourceKind !== 'confirmation').map(d => [d.sourceKind,d.status]), [['booking_action','not_configured'],['booking','not_configured']])
     assert.equal(s.noticeDeliveries.find(d => d.sourceKind === 'booking').sourceId,offer.id)
     assert.match((await h.send(roster(soon), undefined, h.owner)).text, /Claim by .+ · late-cancel window · Email not configured; in-app notice only/)
     // The front desk (the owner until STAFF-001) accepts it on Ben's behalf: one seat, one debit, staff-made.

@@ -6,7 +6,7 @@ import { approveDraft } from './drafts';
 
 // Preparing never reserves a seat, changes credits, assesses fees or sends a
 // notice. All relevant records and identities must still match at approval.
-const basis = (state: State) => JSON.stringify({people:state.people,records:['class','booking','pack','waiver','acknowledgement','bookingRule','spotLayout','waitlistPolicy','cancellationReasons'].flatMap(kind => list(state,kind).sort((a,b) => a.id.localeCompare(b.id)))});
+const basis = (state: State) => JSON.stringify({people:state.people,records:['messageTemplates','messagePreference','class','booking','pack','waiver','acknowledgement','bookingRule','spotLayout','waitlistPolicy','cancellationReasons'].flatMap(kind => list(state,kind).sort((a,b) => a.id.localeCompare(b.id)))});
 export function prepareBookingChange(tx: Transaction, input: Record<string,unknown>) {
   preparer(tx.who);
   const action = text(input.action,'booking_action',20);

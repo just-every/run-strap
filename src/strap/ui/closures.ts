@@ -14,6 +14,7 @@ export const delivery = (d: any) => d ? ({
   queued: 'Email reserved but not sent (interrupted)',
   not_configured: 'Email not configured; in-app notice only',
   no_address: 'No email address; in-app notice only',
+  opted_out: 'Email opted out by member; in-app notice only',
   paused: 'Email paused after restore; in-app notice only until you reconnect member email',
 } as Record<string, string>)[d.status] ?? d.status : ''
 

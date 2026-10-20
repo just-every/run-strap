@@ -84,6 +84,6 @@ test('SCHED-004: qualified substitute approval transfers roster and pay with exa
     if(process.env.STRAP_PROOF_DIR)await(await import('./substitutions-browser.mjs')).substitutionsBrowser(h,{original,cover,member:ana,publish})
     assert.ok(conflicting.id)
   },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'test-only-key'},outbound:async request=>{
-    assert.equal(request.url,'https://api.resend.com/emails');mails.push({...await request.json(),key:request.headers.get('idempotency-key')});return Response.json({id:'substitution_'+mails.length})
+    assert.equal(request.url,'https://api.resend.com/emails');const message={...await request.json(),key:request.headers.get('idempotency-key')};if(message.key?.startsWith('mail:confirmation:'))return Response.json({id:message.key});mails.push(message);return Response.json({id:'substitution_'+mails.length})
   }})
 })
