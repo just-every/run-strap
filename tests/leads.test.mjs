@@ -67,10 +67,10 @@ test('LEAD-002: assigned inquiry, overdue callback, evidenced first visit, exter
     await failed('lead.note',{id:lead.id,version:noted.version,requestId:'forbidden-'+p.id,note:'Private note'},p.cookie,403)
   }
   const key=await h.cmd('agent.create',{label:'Scheduling assistant'})
-  const token=key.token ?? key.key
+  const token=key.token
   const agent=await h.send('/api/strap/agent/context',undefined,'',{authorization:'Bearer '+token})
   assert.equal(agent.status,200,agent.text);assert.equal(agent.value.pipeline,null)
-  const exit=await h.send('/api/strap/exit.json')
+  const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
   assert.equal(exit.status,200);assert.equal(exit.value.tables.st_records.filter(r=>r.kind==='lead').length,2)
   assert.deepEqual(exit.value.tables.st_records.filter(r=>r.kind==='leadEvent').map(r=>JSON.parse(r.data)).sort((a,b)=>a.id.localeCompare(b.id)),(await h.state()).pipeline.events.sort((a,b)=>a.id.localeCompare(b.id)))
   if(process.env.STRAP_PROOF_DIR) {const {leadsBrowser}=await import('./leads-browser.mjs');await leadsBrowser(h,{ana,ben,ownerId,lead})}
