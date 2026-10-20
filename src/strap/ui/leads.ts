@@ -1,5 +1,6 @@
-import { body, cell, field, form, h, hidden, panel, person, select, table, textarea } from './shared'
+import { body, cell, field, form, h, hidden, panel, person, select as baseSelect, table, textarea } from './shared'
 import { when } from './format'
+const select=(name:string,label:string,choices:[unknown,unknown][],value:unknown='',attrs='required')=>baseSelect(name,label,choices,value,attrs+' aria-label="'+h(label)+'"')
 const path='/app/leads'
 const labels: Record<string,string>={inquiry:'Inquiry','intro-booked':'Intro booked','first-visit':'First visit',offer:'Offer',membership:'Membership',lost:'Lost'}
 const stages=Object.entries(labels)
