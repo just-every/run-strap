@@ -33,7 +33,7 @@ export async function recognitionBrowser(h,{ana,ben}) {
           assert.equal(auditResponse.status(),200,await page.locator('body').innerText())
           await page.getByRole('heading',{name:'Staff action history',exact:true}).waitFor()
           await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-006-audit-${width}.png`)})
-          await page.getByText('Open member recognition preferences',{exact:true}).first().waitFor({state:'visible'})
+          assert.ok(await page.locator('#staff-actions [data-staff-command="recognition.launch"]').first().isVisible(),'the canonical launch is visible in staff history')
         } else {
           assert.equal(await page.getByRole('heading',{name:'Private milestone tasks',exact:true}).count(),0)
           await page.getByLabel('Private visit recognition',{exact:true}).selectOption('false')
