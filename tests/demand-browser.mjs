@@ -27,6 +27,10 @@ export async function demandBrowser(h,{draft,stage,stale=false}) {
         assert.equal(await card.getByRole('button',{name:'Approve this exact recommendation',exact:true}).count(),stale?0:1)
         if(stale) await card.getByRole('alert').getByText(/Source facts changed/).waitFor()
         else await card.getByLabel('Member notification',{exact:true}).selectOption(draft.recommendation.notification)
+        if(draft.impact.bookings) {
+          await card.getByText('Review member notices',{exact:true}).click()
+          for(const c of draft.impact.classes) for(const b of c.bookings) await card.getByText(b.body,{exact:true}).waitFor()
+        }
         await card.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SUCCESS-006-${stage}-${width}.png`)})
         if(stage==='additional' && width===390) {
           await card.getByRole('button',{name:'Approve this exact recommendation',exact:true}).click()

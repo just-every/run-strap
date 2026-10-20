@@ -1,9 +1,10 @@
+import { recommendationControls, recommendationEvidence } from './demand'
 // Prepared drafts and approvals as people read them: who, what, how much and
 // when, with the exact contents a draft freezes and its one approval button.
 import { classRoom, classTitle } from './facts'
 import { clock, dayOf, dayShort, datePlain, length, money, when } from './format'
 import { icon } from './icons'
-import { cell, emptyLine, form, h, hidden, owner, person, rows, statusPill, table, select } from './shared'
+import { cell, emptyLine, form, h, hidden, owner, person, rows, statusPill, table } from './shared'
 import { packExpiration } from './pack-history'
 import { allocationDetails, conflictDetails, draftConflicts } from './scheduling'
 
@@ -46,10 +47,8 @@ export function draftRecords(s: any, path: string, types: string[]) {
   const list = items.map(d => {
     const kind = kinds[d.type]
     const conflicts = d.type === 'classes' ? draftConflicts(s, d) : []
-    const notification = d.recommendation ? select('notification', 'Member notification', [[d.recommendation.notification,d.impact.bookings ? 'Notify affected reservations in-app and configured email' : 'No affected reservations']], d.recommendation.notification, 'aria-label="Member notification"') + hidden('impact',d.impact.key) : '';
-    const evidence = d.recommendation ? `<p><strong>Demand recommendation: ${h(d.recommendation.action)}</strong> · ${h(d.recommendation.reason)}</p>${table(['Source class', 'Demand', 'Attendance', 'Coverage history'],d.recommendation.evidence.map((c: any) => `<tr>${cell('Source class',`<a href="/app?class=${encodeURIComponent(c.classId)}">${h(c.title)}</a><small>${when(s,c.start)}</small>`)}${cell('Demand',`${c.reserved} / ${c.capacity} reserved · ${c.waiting} waiting · ${c.offered} offered`)}${cell('Attendance',`${c.attended} attended · ${c.noShows} no-shows`)}${cell('Coverage history',`${c.substitutions.length} substitutions`)}</tr>`).join(''))}<p>${h(d.recommendation.email)} · ${d.impact.notices} notices · no money or credits changed.</p>${d.stale ? '<p role="alert">Source facts changed. Request a fresh recommendation before approval.</p>' : ''}` : '';
-    const approve = owner(s) && !conflicts.length && !d.stale ? `<div class="actions">${form(d.recommendation ? 'recommendation.approve' : kind.command, path, hidden('id', d.id) + notification, d.recommendation ? 'Approve this exact recommendation' : kind.approve)}</div>` : ''
-    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill(conflicts.length || d.stale ? 'Blocked' : 'Needs approval')}<div class="record-body">${evidence}${contents(s, d)}${conflictDetails(s, conflicts)}${approve}</div></article>`
+    const approve = owner(s) && !conflicts.length && !d.stale ? `<div class="actions">${form(d.recommendation ? 'recommendation.approve' : kind.command, path, hidden('id', d.id) + recommendationControls(d), d.recommendation ? 'Approve this exact recommendation' : kind.approve)}</div>` : ''
+    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill(conflicts.length || d.stale ? 'Blocked' : 'Needs approval')}<div class="record-body">${recommendationEvidence(s, d)}${contents(s, d)}${conflictDetails(s, conflicts)}${approve}</div></article>`
   }).join('')
   return { waiting: items.length, html: list ? `<div class="records">${list}</div>` : emptyLine('Nothing is waiting. A prepared draft shows its exact contents here before anyone approves it.') }
 }
