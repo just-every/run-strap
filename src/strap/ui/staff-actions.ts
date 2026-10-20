@@ -1,3 +1,4 @@
+import { delivery } from './closures'
 // STAFF-006 uses the existing member profile and the owner's command forms.
 import { actionChannel } from './booking-rules'
 import { waiverSigned } from './facts'
@@ -28,8 +29,9 @@ function waiverLaunch(s: any, p: any, back: string) {
 }
 
 function memberNotices(s: any, p: any, back: string) {
+  const mailOf = (n: any) => rows(s,'noticeDeliveries').find(d => d.id === n.id.replace(/^notice:/,'mail:') || (n.closureId && d.sourceKind === 'closure' && d.sourceId === n.closureId && d.personId === n.personId))
   const notices = rows(s, 'staffNotices').filter(n => n.personId === p.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  return notices.length ? notices.map(n => `<div class="notice"><p><strong>${h(n.subject)}</strong></p><p>${h(n.body)}</p><p class="meta">${when(s, n.createdAt)}</p>${n.dismissedAt
+  return notices.length ? notices.map(n => `<div class="notice"><p><strong>${h(n.subject)}</strong></p><p>${h(n.body)}</p><p class="meta">${when(s, n.createdAt)}${mailOf(n) ? ` · ${h(delivery(mailOf(n)))}` : ''}</p>${n.dismissedAt
     ? `<p class="meta">${n.dismissedByStaff ? 'Marked read by staff' : 'Read by member'} · ${when(s, n.dismissedAt)}</p>`
     : form('notice.dismiss.staff', back, hidden('id', n.id) + staffRequestFields(p.id), 'Mark read for this member', 'quiet', 'small')}</div>`).join('') : emptyLine('No notices for this member.')
 }

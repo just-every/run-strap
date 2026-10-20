@@ -1,5 +1,5 @@
 import { classTitle } from './facts'
-import { when } from './format'
+import { clock, dayOf, dayShort } from './format'
 import { form, hidden, select } from './shared'
 
 /** Uses the same cancellation effect and eligibility fences as the staff door. */
@@ -10,5 +10,5 @@ export function memberMove(s: any, current: any, booking: any) {
   const effect = booking.cancelEffect
   return `<details class="more"><summary>Reschedule</summary><p class="meta">Your original credit moves with you. Current late-move fee: $${(effect.feeCents / 100).toFixed(2)}. A full target keeps your original seat until you claim a vacancy.</p>`
     + form('booking.move', '/app', hidden('requestId', crypto.randomUUID()) + hidden('id', booking.id) + hidden('terms', effect.key)
-      + select('classId', 'New class', targets.map((c: any) => [c.id, `${classTitle(c)} · ${when(s, c.start)}`])), 'Confirm reschedule', 'quiet', 'small') + '</details>'
+      + select('classId', 'New class', targets.map((c: any) => [c.id, `${classTitle(c)} · ${dayShort(s, dayOf(s, c.start))} · ${clock(s, c.start)}`])), 'Confirm reschedule', 'quiet', 'small') + '</details>'
 }

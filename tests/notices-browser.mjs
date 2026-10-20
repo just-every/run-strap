@@ -17,9 +17,9 @@ export async function noticesBrowser(h,{stage,ana,booking,second}) {
       const cookie=stage==='studio'||stage==='staff'||stage==='outcome'?h.owner:ana.cookie,index=cookie.indexOf('=')
       await context.addCookies([{name:cookie.slice(0,index),value:cookie.slice(index+1),url:h.origin}])
       const page=await context.newPage()
-      const path=stage==='studio'?'/app/studio':stage==='staff'?'/app/people?person='+ana.id:stage==='outcome'?'/app/classes':'/app'
+      const path=stage==='studio'?'/app/studio':stage==='staff'||stage==='outcome'?'/app/people?person='+ana.id:'/app'
       await page.goto(h.origin+path)
-      await page.getByRole('heading',{name:stage==='studio'?'Studio':stage==='staff'?'People':'Classes',exact:true}).first().waitFor()
+      await page.getByRole('heading',{name:stage==='studio'?'Studio':stage==='staff'||stage==='outcome'?'People':'Classes',exact:true}).first().waitFor()
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,stage+' fits viewport')
       if(stage==='booked') {
         const move=page.locator('form[action*="name=booking.move"]').filter({has:page.locator(`input[name="id"][value="${booking.id}"]`)})
@@ -66,6 +66,11 @@ export async function noticesBrowser(h,{stage,ana,booking,second}) {
           await page.getByRole('link',{name:'Member message sign-in',exact:true}).waitFor()
         }
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-staff-${width}.png`),fullPage:true})
+      } else if(stage==='outcome') {
+        await page.locator('summary').getByText('Member notices',{exact:true}).click()
+        await page.getByText(/Email refused by resend/).first().waitFor()
+        const detail=page.locator('details').filter({has:page.locator('summary').getByText('Member notices',{exact:true})}).first()
+        await detail.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-${stage}-${width}.png`)})
       } else await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-${stage}-${width}.png`),fullPage:true})
       await context.close()
     }
