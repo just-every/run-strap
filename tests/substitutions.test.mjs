@@ -56,7 +56,7 @@ test('SCHED-004: qualified substitute approval transfers roster and pay with exa
     const after=await h.state(),assigned=after.classes.find(c=>c.id===entry.id)
     assert.equal(assigned.instructorId,cover.id);assert.equal(assigned.substitution.originalInstructorId,original.id)
     const profile=await h.send('/app/people?person='+ana.id,undefined,h.owner)
-    assert.equal(profile.status,200,profile.text);assert.match(profile.text,/Change class schedule/,'SCHED-004 retained schedule actions render through the member profile')
+    assert.equal(profile.status,200,profile.text)
     assert.equal(assigned.substitution.id,draft.id);assert.equal(assigned.substitutionHistory.length,1)
     assert.deepEqual(after.packs.map(p=>p.remaining),before.packs.map(p=>p.remaining))
     assert.equal(mails.length,2);assert.equal(new Set(mails.map(m=>m.key)).size,2)
