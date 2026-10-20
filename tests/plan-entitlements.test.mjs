@@ -97,6 +97,21 @@ test('PLAN-002: monthly visits with rollover, unlimited and off-peak plans hold 
   plan = (await h.state()).packs.find(p => p.id === unlimited.id)
   assert.equal(plan.summary.plan.reserved, 12)
   assert.equal(plan.summary.plan.left, null)
+  // Check-in marks a held visit attended without a second hold.
+  await h.cmd('attendance.checkin', { id: (await h.state()).bookings.find(b => b.packId === unlimited.id && b.classId === classes.get('n0').id).id }, coach.cookie)
+  plan = (await h.state()).packs.find(p => p.id === unlimited.id)
+  assert.deepEqual([plan.summary.plan.reserved, plan.summary.plan.attended], [11, 1])
+
+  // Expiring a weekly plan early expires its unused visits by period and stops new bookings.
+  const drew = await h.person('Drew'), weekly = await sell(h, drew.id, { kind: 'visits', visits: 3, period: 'week' })
+  assert.equal((await book(h, drew.cookie, classes.get('n1').id)).status, 200)
+  let drews = (await h.state()).packs.find(p => p.id === weekly.id)
+  await h.cmd('pack.adjust', { id: weekly.id, creditsDelta: 0, reason: 'Member moved away', requestId: 'expire-weekly', revision: drews.summary.revision, expiresAt: '2000-01-01T00:00:00Z' })
+  drews = (await h.state()).packs.find(p => p.id === weekly.id)
+  assert.equal(drews.summary.plan.left, 0)
+  assert.ok(drews.summary.plan.periods.length <= 3 && drews.summary.plan.periods.every(p => p.ended && p.start >= mondayOf(today()) && p.expired === p.allowance - p.used))
+  assert.equal(drews.summary.plan.periods.reduce((n, p) => n + p.used, 0), 1)
+  assert.equal((await book(h, drew.cookie, classes.get('n2').id)).value.error, 'eligible_credit_required')
 
   // An off-peak plan: weekdays from 10:00 am to before 4:00 pm, two upcoming bookings at once.
   const offpeak = await sell(h, casey.id, { kind: 'unlimited', planName: 'Off-peak', days: [1, 2, 3, 4, 5], from: '10:00', to: '16:00', maxUpcoming: 2 })

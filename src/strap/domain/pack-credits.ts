@@ -103,7 +103,9 @@ function planSummary(state: State, pack: RecordData, reservations: Map<string,st
   if (plan.kind === 'unlimited') return {kind:plan.kind,...totals,periods:[],left:null};
   const startOfClass = (classId: string) => state.records.get(classId)?.data.start as string | undefined;
   const periodOfBooking = (bookingId: string) => { const start = startOfClass(state.records.get(bookingId)?.data.classId); return start ? periodOf(plan,start,zone) : null; };
-  const rows = periods(plan,held.map(item => item.start),zone,planStart(pack),new Date(Math.min(at,expiresAt)).toISOString()).map(p => {
+  // Periods run from the plan's start through now (or its earlier expiry), never before the start.
+  const through = new Date(Math.max(Date.parse(planStart(pack)),Math.min(at,expiresAt))).toISOString();
+  const rows = periods(plan,held.map(item => item.start),zone,planStart(pack),through).map(p => {
     const endsAt = periodEndsAt(plan,p.start,zone), last = expiresAt <= Date.parse(endsAt), ended = Date.parse(endsAt) <= at || (last && expiresAt <= at);
     return {...p,endsAt,ended,...counts(held.filter(item => periodOf(plan,item.start,zone) === p.start).map(item => item.id)),
       returned:returns.filter(e => periodOfBooking(e.bookingId) === p.start).length,
