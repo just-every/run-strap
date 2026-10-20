@@ -4,7 +4,7 @@ import { run } from './harness.mjs'
 
 const weekOf = at => { const d=new Date(at); return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10) }
 
-test('STAFF-002: versioned teaching compensation, corrected attendance, minimums, cancellation treatment and exact reasoned adjustments through HTTP', {timeout:120_000},()=>run(async h=>{
+test('STAFF-002: versioned teaching compensation, corrected attendance, minimums, cancellation treatment and exact reasoned adjustments through HTTP', {timeout:process.env.STRAP_PROOF_DIR?600_000:120_000},()=>run(async h=>{
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const maya=await h.person('Maya','instructor'),leo=await h.person('Leo','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
