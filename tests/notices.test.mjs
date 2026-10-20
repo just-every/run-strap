@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
 
 const weekOf = at => {const d=new Date(at);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)}
-const publish = async(h,coach,title,start,room=title)=>(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,service:'Mat',start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity:8,room,instructorId:coach.id}]})).id})).classes[0]
+const publish = async(h,coach,title,start,room=title,capacity=8)=>(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,service:'Mat',start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity,room,instructorId:coach.id}]})).id})).classes[0]
 const rows = async h => (await h.db.prepare('SELECT * FROM st_notice_deliveries ORDER BY created_at,id').all()).results
 async function refused(h,name,input,cookie,status=403) {
   const version=(await h.state()).version,r=await h.send('/api/strap/command',{name,input},cookie)
@@ -79,6 +79,19 @@ test('MSG-002: native member and desk booking, reschedule, cancellation, restore
     assert.ok(sent.at(-1).text.includes('Morning Mat'));assert.ok(sent.at(-1).text.includes('Evening Mat'));checkLetter(sent.at(-1),second,'Noor')
     const notices=(await h.state(ana.cookie)).notices.filter(n=>n.closureId===closure.id)
     assert.equal(notices.length,2)
+    // Claiming a held offer creates a booking too, through either human door.
+    await h.cmd('waitlist.save',{mode:'offer',claimMinutes:30,lateWindow:'promote'})
+    const offerClass=await publish(h,coach,'Offer Mat',new Date(Date.parse(start)+86400000).toISOString(),'Offer room',1)
+    const incumbent=await h.cmd('booking.book',{classId:offerClass.id},ben.cookie)
+    const waiter=await h.cmd('booking.book',{classId:offerClass.id},ana.cookie)
+    assert.match(sent.at(-1).subject,/Waitlist confirmed:/)
+    await h.cmd('booking.cancel',{id:incumbent.id},ben.cookie)
+    assert.equal((await h.state(ana.cookie)).bookings.find(b=>b.id===waiter.id).status,'offered')
+    const beforeClaim=sent.length
+    await h.cmd('booking.offer.accept',{id:waiter.id},ana.cookie)
+    assert.equal(sent.length,beforeClaim+1,'member offer acceptance sends its confirmed-booking notice')
+    assert.match(sent.at(-1).subject,/Booking confirmed:/);checkLetter(sent.at(-1),offerClass)
+    await refused(h,'booking.offer.accept',{id:waiter.id},ana.cookie,409);assert.equal(sent.length,beforeClaim+1)
     const deliveries=await rows(h)
     assert.ok(deliveries.every(d=>d.status==='accepted'&&d.provider_message_id))
     assert.equal(new Set(sent.map(m=>m.key)).size,sent.length)

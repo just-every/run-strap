@@ -104,6 +104,6 @@ export function acceptOffer(tx: Transaction, input: Record<string,unknown>) {
   insist(pack,'eligible_credit_required',409);
   const accepted = {...current,offer:{...current.offer,acceptedAt:now(),acceptedBy:tx.who.id,acceptedByRole:tx.who.role,...(staff ? {staffMade:true,right:'booking'} : {})}};
   const seated = seat(tx,accepted,entry,pack,chooseSpot(tx.state,entry,input.spot));
-  if (staff) bookingHistory(tx,'accept',current,seated,input);
+  bookingHistory(tx,'accept',current,seated,input);
   return seated;
 }
