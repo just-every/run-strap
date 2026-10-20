@@ -30,10 +30,12 @@ export async function classRemindersBrowser(h,{stage,ana}) {
      await page.waitForURL(h.origin+'/app/studio')
      await page.locator('#class-reminders').getByText('Evening Pilates',{exact:true}).waitFor()
      await page.locator('#class-reminders').screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-saved-${width}.png`)})
+     await page.setViewportSize({width:1440,height:1000})
+     await page.locator('#class-reminders').screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-saved-1440.png`)})
     }
    } else if(stage==='failure') {
     const panel=page.locator('#reminder-tasks')
-    await panel.getByText('Provider refused the email',{exact:true}).waitFor()
+    await panel.getByText(/Provider refused the email/).first().waitFor()
     await panel.getByLabel('Follow-up outcome').fill('Called the member')
     await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-failure-${width}.png`)})
     if(width===390) {
@@ -41,6 +43,8 @@ export async function classRemindersBrowser(h,{stage,ana}) {
      await page.waitForURL(h.origin+'/app/studio')
      await page.locator('#reminder-tasks').getByText('No open reminder follow-up tasks.',{exact:true}).waitFor()
      await page.locator('#reminder-tasks').screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-completed-${width}.png`)})
+     await page.setViewportSize({width:1440,height:1000})
+     await page.locator('#reminder-tasks').screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-003-completed-1440.png`)})
     }
    } else {
     const notices=page.locator('.panel').filter({has:page.getByRole('heading',{name:'Notices',exact:true})})
