@@ -61,10 +61,10 @@ test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver
     const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner)
     const memberCookie=await h.signIn(member.email)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
+    await h.cmd('recognition.process',{},owner)
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
     assert.deepEqual(before.recognition,originalRecognition,'LEAD-006 consent, milestones, source evidence and permanent issuance identities survive native restore')
-    await h.cmd('recognition.process',{},owner)
-    assert.equal((await h.state(owner)).recognition.recognitions.length,1,'restored processing cannot repeat recognition')
+    assert.equal(before.recognition.recognitions.length,1,'restored processing cannot repeat recognition')
     assert.deepEqual(before.payRules,[payRule],'STAFF-002 immutable rate versions survive native restore')
     assert.deepEqual(before.teachingPay.rows,originalPay.rows,'STAFF-002 pay sources, arithmetic and adjustment history survive native restore')
     assert.equal(before.teachingPay.rows[0].adjustments[0].id,payAdjustment.id)
