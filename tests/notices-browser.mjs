@@ -71,6 +71,10 @@ export async function noticesBrowser(h,{stage,ana,booking,second}) {
         await page.getByText(/Email refused by resend/).first().waitFor()
         const detail=page.locator('details').filter({has:page.locator('summary').getByText('Member notices',{exact:true})}).first()
         await detail.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-${stage}-${width}.png`)})
+      } else if(stage==='closed') {
+        const confirmation=page.locator('.notice').filter({has:page.getByText('Booking confirmed: Offer Mat',{exact:true})})
+        await confirmation.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-claimed-${width}.png`)})
+        await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-${stage}-${width}.png`),fullPage:true})
       } else await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MSG-002-${stage}-${width}.png`),fullPage:true})
       await context.close()
     }

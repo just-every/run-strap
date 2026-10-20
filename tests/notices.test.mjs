@@ -17,7 +17,7 @@ test('MSG-002: native member and desk booking, reschedule, cancellation, restore
     await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
     await h.cmd('studio.save',{location:'Brooklyn Studio',timeZone:'America/New_York'})
     const coach=await h.person('Maya','instructor'),cover=await h.person('Noor','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
-    for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:18000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+    for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:18000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id})
     await h.cmd('bookingRule.save',{cancelCutoffHours:12,lateCancelFeeCents:1500,lateCancelReturnsCredit:false})
     const template={prefix:'Welcome to Brooklyn Studio.',suffix:'Questions? Please call your studio.',requestId:'message-text'}
     await h.cmd('mail.templates.save',template)
@@ -112,7 +112,7 @@ test('MSG-002: only the member changes email opt-out; in-app notices and mandato
     await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
     await h.cmd('studio.save',{location:'Brooklyn Studio',timeZone:'America/New_York'})
     const coach=await h.person('Maya','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
-    for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:18000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+    for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:18000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id})
     const input={optedOut:true,requestId:'member-optout'}
     const disclosure=(await h.send('/app',undefined,ana.cookie)).text
     assert.match(disclosure,/Sign-in and security emails, payment receipts, failed-payment emails and required legal emails continue/)
@@ -168,7 +168,7 @@ test('MSG-002: the confirmation/reminder opt-out leaves waitlist-offer preferenc
   await h.cmd('studio.save',{location:'Brooklyn Studio',timeZone:'America/New_York'})
   await h.cmd('mail.templates.save',{prefix:'Your Brooklyn Studio update',suffix:'Please contact the studio for help.',requestId:'offer-template'})
   const coach=await h.person('Maya','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
-  for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  for(const p of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:2,amountCents:4000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id})
   await h.cmd('waitlist.save',{mode:'offer',claimMinutes:30,lateWindow:'promote'})
   await h.cmd('mail.preference.save',{optedOut:true,requestId:'confirmation-optout'},ana.cookie)
   const entry=await publish(h,coach,'Held Mat',new Date(Date.now()+86400000).toISOString(),'Main',1)

@@ -19,7 +19,7 @@ test('MSG-003: current-time email reminders replace obsolete schedules, obey ser
   await h.cmd('studio.save',{location:'Brooklyn Studio',timeZone:'America/New_York'})
   await h.cmd('mail.templates.save',{prefix:'Class day at Brooklyn.',suffix:'See you in the studio.',requestId:'reminder-message-text'})
   const coach=await h.person('Maya','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben'),cy=await h.person('Cy'),dee=await h.person('Dee'),eve=await h.person('Eve')
-  for(const member of [ana,ben,cy,dee,eve]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  for(const member of [ana,ben,cy,dee,eve]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id})
   const publish=async(title,start,service='Mat')=>(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,service,start,end:new Date(Date.parse(start)+20*minute).toISOString(),room:title,capacity:8,instructorId:coach.id}]})).id})).classes[0]
   const original=await publish('Later Mat',at(180)),revised=await publish('Earlier Mat',at(30))
   const input={service:'',enabled:true,leadMinutes:60,revision:0,requestId:'studio-reminders'}
