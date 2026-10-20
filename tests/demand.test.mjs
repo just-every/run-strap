@@ -43,6 +43,8 @@ test('SUCCESS-006 cited demand, additional/retimed/covered classes and fresh hum
     assert.doesNotMatch(context.text,/PRIVATE APPOINTMENT/)
     const source=context.value.demand.classes.find(c=>c.classId===full.id)
     assert.deepEqual([source.capacity,source.reserved,source.waiting,source.attended],[1,1,2,1])
+    const underused=context.value.demand.classes.find(c=>c.classId===quiet.id)
+    assert.deepEqual([underused.capacity,underused.reserved,underused.waiting],[8,0,0])
     assert.equal(source.bookings.find(b=>b.id===booked.id).attendance,'attended')
     assert.equal(context.value.demand.classes.find(c=>c.classId===quiet.id).substitutions[0].id,subDraft.id)
     assert.equal(context.value.demand.availability.find(r=>r.id===unavailable.id).resourceId,cover.id)
