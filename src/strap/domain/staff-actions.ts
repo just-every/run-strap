@@ -1,3 +1,4 @@
+import { feeStatus } from './fees';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { latestWaiver } from './bookings';
@@ -14,6 +15,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
   if (name === 'plan.change.prepare') { const pack = tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
   const target = typeof input.id === 'string' ? tx.state.records.get(input.id)?.data : null;
+  if (name === 'fee.collect' || name === 'fee.waive') return target ? feeStatus(tx.state,target) : null;
   if (name === 'notice.dismiss.staff') return target ? noticeEffect(target) : null;
   return target ? structuredClone(target) : null;
 }

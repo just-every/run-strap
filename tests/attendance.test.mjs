@@ -188,5 +188,7 @@ test('ATT-002: disclosed fee assessments, grace, reasoned waivers and desk recei
   assert.equal(s.fees.find(f=>f.id===benFee.id).status,'waived')
   assert.equal(s.balances.find(b=>b.personId===Ben.id).balanceCents,-2000,'waiving a collected fee leaves member credit without sending money')
   assert.equal(s.payments.filter(p=>p.kind==='refund').length,0)
+  const waiverAudit=s.staffActions.find(a=>a.command==='fee.waive' && a.personId===Ben.id)
+  assert.deepEqual([waiverAudit.before.status,waiverAudit.before.receipt.reference,waiverAudit.after.status],['collected','CASH-BEN-ATT2','waived'])
   await refused(h,'fee.waive',{id:benFee.id,reason:'Again'},h.owner,409,'fee_already_waived')
 }))
