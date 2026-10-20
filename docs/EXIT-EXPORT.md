@@ -55,6 +55,7 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 | `cancellationReasons` | Owner-configured reason labels; old actions keep their original labels. |
 | `closure` | SCHED-008 class cancellation or room/location closure: scope (class ID, or room and/or interval), reason, draft or applied status, the exact impact (classes, bookings, credits returned, waitlist spots closed) and attribution. A cancelled `class` carries `cancelReason` and `closureId`; its bookings carry `class_cancelled` or `waitlist_closed`. |
 | `notice` | One in-app cancellation notice per affected booking: person, booking, class and closure IDs, subject, text and dismissal time. |
+| `memberProfile` / `profileChange` | APP-003 current emergency contact (name, 10-digit US phone, optional relationship) and profile revision per person; one change entry per edit with actor/role, channel (`self`, desk, phone or inbox), staff-made flag and member-record right, changed fields and exact before/after name, email, phone and contact. After erasure the contact is gone and each change keeps only its attribution, time and changed field names (`erased`). |
 | `memberCheckin` | Person ID, optional 10-digit US phone used for kiosk lookup, and the member's current opaque check-in code with its revision and issue time. Paired kiosk devices are credentials and are not exported. |
 | `waiver` | Immutable text, document version and creation attribution. |
 | `acknowledgement` | Person ID, exact waiver ID, actor and receipt time. **This is not a signature.** |

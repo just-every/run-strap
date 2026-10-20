@@ -9,6 +9,7 @@ import { personCheckin } from './checkin'
 import { staffCancelControls } from './booking-rules'
 import { bookingControls, canRestore, cancellationReasonsPanel, cancellationsPanel } from './booking-actions'
 import { staffActionHistory, staffProfileActions } from './staff-actions'
+import { contactText, phoneText, staffProfileEditor } from './profile'
 import { avatar, body, cell, emptyLine, emptyState, field, form, h, hidden, owner, panel, rows, select, statusPill, table } from './shared'
 
 const personFields = (p?: any) => `<div class="row2">${field('name', 'Full name', p?.name, 'text', 'required maxlength="160" autocomplete="name"')}${field('email', 'Email', p?.email, 'email', 'required autocomplete="email"')}</div>${field('phone', 'Mobile phone (members; for kiosk check-in)', p?.phone ? p.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3') : '', 'tel', 'autocomplete="tel" maxlength="20"')}<div class="row2">${select('role', 'Role', [['member', 'Member'], ['instructor', 'Instructor']], p?.role ?? 'member')}${select('active', 'Status', [['true', 'Active'], ['false', 'Inactive']], p ? String(p.active) : 'true')}</div>`
@@ -23,11 +24,15 @@ function card(s: any, p: any, back: string) {
   const stats = p.role === 'member' ? `<div class="stat-row"><div class="stat"><b>${credits}</b><small>credits left</small></div><div class="stat"><b>${money(balance(s, p.id))}</b><small>owed</small></div><div class="stat"><b>${visit ? h(datePlain(dayOf(s, visit)).replace(/, \d{4}$/, '')) : '—'}</b><small>last visit</small></div></div>` : ''
   const packLines = packs.map(x => `<p class="meta">${h(packName(x))}: ${countsCredits(x) ? '' : `${h(planTerms(x.entitlement))}; `}${h(packLeft(x))}, good through ${h(datePlain(dayOf(s, x.expiresAt)))}</p>`).join('')
   const actions = `<div class="actions">${p.active ? form('person.invite', back, hidden('id', p.id), 'Invite to sign in', 'quiet', 'small') : ''}${p.role === 'member' && p.active ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(p.id)}#prepare-pack">Prepare a pack</a>` : ''}</div>`
-  return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(p.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3'))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${packLines}${actions}</div>${upcomingList}`
+  const contact = p.role === 'member' ? `<p class="meta" data-emergency-contact>Emergency contact: ${h(contactText(p.emergencyContact))}</p>` : ''
+  return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(phoneText(p.phone))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${contact}${packLines}${actions}</div>${upcomingList}`
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
+    + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
-    + `<details class="more"><summary>Edit ${h(p.name.split(' ')[0])}</summary><div class="panel-body">${form('person.save', back, hidden('id', p.id) + personFields(p), 'Save changes')}</div></details>`
+    + (p.role === 'member'
+      ? `<details class="more"><summary>Sign-in and access</summary><div class="panel-body"><p class="meta">The sign-in email is an identity change only you make; Strap records it in the member’s profile changes.</p>${form('person.save', back, hidden('id', p.id) + hidden('version', p.version) + hidden('name', p.name) + `<div class="row2">${field('email', 'Sign-in email', p.email, 'email', 'required autocomplete="email"')}${select('role', 'Role', [['member', 'Member'], ['instructor', 'Instructor']], p.role)}</div>` + select('active', 'Status', [['true', 'Active'], ['false', 'Inactive']], String(p.active)), 'Save sign-in and access')}</div></details>`
+      : `<details class="more"><summary>Edit ${h(p.name.split(' ')[0])}</summary><div class="panel-body">${form('person.save', back, hidden('id', p.id) + personFields(p), 'Save changes')}</div></details>`)
     + `<details class="more"><summary>Erase personal data</summary><div class="panel-body"><p class="meta">Only people with no bookings, packs, payments, sign-in or import history can be erased. Make anyone else inactive to end their access.</p>${form('person.erase', '/app/people', hidden('id', p.id) + '<label class="check"><input type="checkbox" required>I understand this erases this person’s personal data.</label>', 'Erase this person', 'quiet')}</div></details></section>`
 }
 

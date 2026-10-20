@@ -39,9 +39,17 @@ test('STAFF-006: every current member command has a real staff door, identical m
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     const actions={
+      'profile.save':async door=>{
+        const input={personId:ana.id,emergencyName:'Rosa Diaz',emergencyPhone:'(615) 555-0123',channel:'phone',revision:0,requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.deepEqual(r.result.emergencyContact,{name:'Rosa Diaz',phone:'6155550123',relationship:null})
+        assert.deepEqual((await h.state(ana.cookie)).people.find(p=>p.id===ana.id).emergencyContact,r.result.emergencyContact,'the member reads the staff-made profile')
+        assert.deepEqual([r.event.before.emergencyContact,r.event.after.emergencyContact],[null,r.result.emergencyContact])
+        assert.equal((await h.cmd('profile.save',{emergencyRelationship:'Sister',revision:1,requestId:randomUUID()},ana.cookie)).emergencyContact.relationship,'Sister')
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.length,r.after.staffActions.length,'replay creates no second entry')
+      },
       'recognition.preference.save':async door=>{
         const current=(await h.state(ana.cookie)).recognition.preferences[0]
         const input={personId:ana.id,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)

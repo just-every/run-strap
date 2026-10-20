@@ -21,10 +21,23 @@ While Strap runs on your computer no email leaves it. Invitations land in **Loca
 yourself, open the private `RER_OPEN` link in a second browser profile, sign out there, then open the invitation from
 **Local mail** in that profile.
 
+## Member profiles
+
+A member opens **My profile** to change their own name, mobile phone and emergency contact. Their sign-in email is
+shown there, but only you change it, under **Sign-in and access** on their card.
+
+When a member calls or comes to the desk, open them in People and use **Edit profile**. Choose how the request
+arrived (front desk, phone or inbox) and save. Strap records who made each change, the channel and the exact before
+and after values. You and the member see the same details and history under **Profile changes**. No other member
+and no instructor can see a member's phone or emergency contact.
+
+An emergency contact belongs to someone else, so it follows the member: it is in your backups and exit download, and
+erasing the member removes it and keeps only who changed what and when.
+
 ## End someone's access
 
-Edit the person and set their status to **Inactive**. Their access ends on their next request, and their bookings and
-payment history stay on record.
+Open **Sign-in and access** on a member's card (or **Edit** for an instructor) and set their status to **Inactive**.
+Their access ends on their next request, and their bookings and payment history stay on record.
 
 ## Erase personal data
 

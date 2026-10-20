@@ -29,7 +29,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/substitutions', label: 'Instructor substitutions', glyph: 'users' },
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
   ]
-  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }]
+  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }]
 }
 
 const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member' } as Record<string, string>)[s.actor.role] ?? s.actor.role

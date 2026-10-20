@@ -40,6 +40,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   const input = { ...raw }
   if (name === 'reminder.rule.save') { input.enabled = input.enabled === 'true'; input.leadMinutes = Number(input.leadMinutes) }
   if (name === 'mail.preference.save') input.optedOut = input.optedOut === 'true'
+  if (name === 'profile.save' || name === 'profile.save.staff' || (name === 'person.save' && 'version' in input)) for (const key of ['revision', 'version']) if (key in input) input[key] = Number(input[key])
   if (name==='substitution.qualification.save') input.qualified=input.qualified==='true'
   if (name==='plan.change.prepare') {
     for (const key of ['planRequestId','exceptionReason']) if (input[key]==='') delete input[key]

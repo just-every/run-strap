@@ -25,7 +25,7 @@ async function checkout(root) {
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
 }
-test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure', { timeout: 240_000 }, async () => {
+test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -34,6 +34,9 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstructi
     h=await harness({root:source})
     assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
     const p=await h.cmd('person.save',{name:'Temporary joiner',email:'temporary@venue.example',role:'member',active:false})
+    // APP-003: a staff-entered emergency contact is the third party's personal data and follows the member.
+    const contact=await h.cmd('profile.save.staff',{personId:p.id,phone:'(212) 555-0144',emergencyName:'Rita Joiner',emergencyPhone:'212-555-0188',emergencyRelationship:'Mother',channel:'phone',revision:0,requestId:'archive-profile'})
+    assert.deepEqual(contact.emergencyContact,{name:'Rita Joiner',phone:'2125550188',relationship:'Mother'})
     const member = await h.person('Maya'), coach = await h.person('Priya','instructor')
     const draft = await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:'2099-12-01T00:00:00Z'})
     await h.cmd('pack.approve',{id:draft.id})
@@ -67,7 +70,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstructi
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
-    const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'))
+    const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'))
     await command(restored,['import','--input',old,'--yes','--no-queue'])
     await command(restored,['export','--output',again,'--no-queue'])
     const rows=text=>text.split('\n').filter(Boolean).map(JSON.parse).filter(r=>r.kind==='part')
@@ -79,6 +82,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstructi
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
+    assert.deepEqual((await h.state(restoredOwner)).people.find(row=>row.id===p.id).emergencyContact,contact.emergencyContact,'APP-003 the restored member keeps their emergency contact')
+    assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)
     reconstructExit(restoredDownload.value,csv)
     const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox').all()).results.map(r=>JSON.parse(r.message))
@@ -121,10 +126,19 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstructi
     await command(erased,['import','--input',corrupt,'--yes','--no-queue'],1)
     h=await harness({root:source,...identity});await h.cmd('person.erase',{id:p.id,revision:1},await h.signIn(h.auth.OWNER_EMAIL));await h.close();h=null
     await command(source,['export','--output',later,'--no-queue'])
+    const erasedBytes=await readFile(later,'utf8')
+    for(const value of ['Rita Joiner','2125550188','2125550144','temporary@venue.example']) assert.ok(!erasedBytes.includes(value),`APP-003 erasure removes ${value} from the later archive`)
+    // APP-003: the pre-erasure archive still holds the contact, so the later journal fences it.
     await command(erased,['import','--input',old,'--journal',later,'--yes','--no-queue'],4)
     await command(erased,['import','--input',later,'--yes','--no-queue'])
     const proxy=await getPlatformProxy({configPath:join(erased,'wrangler.jsonc'),persist:{path:join(erased,'.wrangler/state/v3')},remoteBindings:false})
-    try { assert.equal((await proxy.env.DB.prepare('SELECT name FROM st_people WHERE id=?').bind(p.id).first()).name,'Erased person') }
+    try {
+      assert.equal((await proxy.env.DB.prepare('SELECT name FROM st_people WHERE id=?').bind(p.id).first()).name,'Erased person')
+      const kept=(await proxy.env.DB.prepare("SELECT kind,data FROM st_records WHERE kind IN ('memberProfile','profileChange','memberCheckin') AND json_extract(data,'$.personId')=?").bind(p.id).all()).results
+      assert.deepEqual(kept.map(r=>r.kind),['profileChange'],'APP-003 erasure deletes the current contact and the check-in phone')
+      const entry=JSON.parse(kept[0].data)
+      assert.deepEqual([entry.erased,entry.changed,entry.channel,entry.staffMade,'before' in entry,'after' in entry,'requestBasis' in entry],[true,['phone','emergencyContact'],'phone',true,false,false,false],'APP-003 the change keeps who acted and when; its values are erased')
+    }
     finally { await proxy.dispose() }
   } finally { if(h)await h.close();await rm(temporary,{recursive:true,force:true}) }
 })

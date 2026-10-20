@@ -10,6 +10,7 @@ import { classesOn, currentClass } from './facts'
 import { dayLong, studioToday } from './format'
 import { importPage } from './import'
 import { memberHome } from './member'
+import { memberProfilePage } from './profile'
 import { packsPage } from './packs'
 import { peoplePage } from './people'
 import { emptyState, h, owner } from './shared'
@@ -29,7 +30,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
     ? `<div class="page single"><section class="panel">${emptyState('alert', 'Page unavailable', 'Your role cannot open this page.', '<a class="btn" href="/app">Back to Today</a>')}</section></div>`
     : current === '/app' ? (desk ? today(state, query, owner(state) ? successRail(state, query) : '') : memberHome(state))
       : current === '/app/classes' ? classesPage(state, query)
-        : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
+        : current === '/app/profile' ? memberProfilePage(state) : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
           : current === '/app/packs' ? packsPage(state, query)
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)

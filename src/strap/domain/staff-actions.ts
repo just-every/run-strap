@@ -6,7 +6,7 @@ import { memberCheckin } from './checkin';
 import { memberMail } from './notices';
 
 export const staffChannel = (input: Record<string,unknown>) => { const channel = text(input.channel ?? 'desk','channel',20); insist(['desk','phone','inbox'].includes(channel),'invalid_channel'); return channel; };
-export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
 export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
@@ -38,13 +38,14 @@ export function priorStaffRequest(tx: Transaction, name: string, input: Record<s
   }
   return prior.result ?? prior.after;
 }
-/** One canonical entry; SCHED-014 already made one, so annotate rather than duplicate it. */
+/** One canonical entry; SCHED-014 and APP-003 already made one, so annotate rather than duplicate it. */
 export function retainStaffAction(tx: Transaction, name: string, right: string, input: Record<string,unknown>, result: RecordData, before: unknown, priorIds: Set<string>) {
   const channel = staffChannel(input), after = staffAfter(name,result);
   const personId = result.personId ?? input.personId;
-  const existing = list(tx.state,'bookingAction').find(a => !priorIds.has(a.id) && a.staffMade && a.actorId === tx.who.id);
+  const existing = ['bookingAction','profileChange'].flatMap(kind => list(tx.state,kind).map(data => ({kind,data})))
+    .find(({data}) => !priorIds.has(data.id) && data.staffMade && data.actorId === tx.who.id);
   const metadata = {command:name,...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:requestBasis(input),result:after} : {})};
-  if (existing) { tx.put('bookingAction',{...existing,...metadata}); return; }
+  if (existing) { tx.put(existing.kind,{...existing.data,...metadata}); return; }
   const event = {id:id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : null,at:now(),...metadata};
   tx.put('staffAction',event);
 }
