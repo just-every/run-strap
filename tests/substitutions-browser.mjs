@@ -57,6 +57,10 @@ export async function substitutionsBrowser(h,{original,cover,member,publish}) {
         await preview.getByRole('button',{name:'Approve exact substitution',exact:true}).click()
         assert.equal((await h.state()).classes.find(c=>c.id===entry.id).instructorId,cover.id)
         await shot(owner,'owner-approved')
+        await owner.goto(h.origin+'/app/people?person='+member.id+'#staff-actions')
+        await owner.getByRole('heading',{name:'Staff action history',exact:true}).waitFor()
+        await owner.locator('#staff-actions').scrollIntoViewIfNeeded()
+        await shot(owner,'member-profile-history')
         await teacher.reload();await shot(teacher,'original-after-transfer')
         await memberPage.goto(h.origin+'/app')
         const exactNotice=draft.impact.classes[0].bookings[0].body
