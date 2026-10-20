@@ -1,4 +1,5 @@
 import { humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
+import { countsCredits } from './entitlements';
 import type { Transaction } from './store';
 import { balance } from './money';
 import { latestWaiver } from './bookings';
@@ -137,7 +138,8 @@ export function checkinAlerts(state: State, booking: RecordData, who: Actor) {
     alerts.push({type:list(state,'acknowledgement').some(a => a.personId === booking.personId) ? 'waiver_outdated' : 'waiver_missing',version:waiver.version});
   const pack = booking.packId ? state.records.get(booking.packId)?.data : null, at = now();
   if (pack) {
-    const left = list(state,'pack').filter(p => p.personId === booking.personId && p.expiresAt > at).reduce((n,p) => n+p.remaining,0);
+    // A visits or unlimited plan (PLAN-002) is never a member's last credit.
+    const left = list(state,'pack').filter(p => p.personId === booking.personId && p.expiresAt > at).reduce((n,p) => n+(countsCredits(p) ? p.remaining : 1),0);
     if (left === 0) alerts.push({type:'last_credit'});
     if (Date.parse(pack.expiresAt) - Date.parse(at) < 7 * 86_400_000) alerts.push({type:'pack_expiring',expiresAt:pack.expiresAt});
   }

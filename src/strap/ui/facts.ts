@@ -2,6 +2,7 @@
 // credit a member can use, what they owe, and who needs a follow-up. Each is
 // derived from stored records only, by the same rules the domain applies.
 import { packServiceEligible } from '../domain/pack-credits'
+import { countsCredits, heldVisits, planRefusal } from '../domain/entitlements'
 import { rows } from './shared'
 import { dayOf } from './format'
 import { roomOf } from '../domain/scheduling'
@@ -24,15 +25,30 @@ export function attendance(s: any, classId: string) {
 export const classTitle = (c: any) => String(c.title).split(' · ')[0]
 export const classRoom = (c: any) => roomOf(c)
 
-/** The credit Strap would use to seat this member in this class (bookings.ts eligiblePack). */
+/** Why a PLAN-002 plan cannot hold one more visit in this class now (pack-credits.ts planBlock). */
+export const planBlock = (s: any, p: any, c: any) => p.entitlement ? planRefusal(p, c.start, heldVisits(p, rows(s, 'bookings'), id => rows(s, 'classes').find(x => x.id === id)?.start), s.studio?.timeZone ?? 'UTC', new Date().toISOString()) : null
+/** A pack can take one more booking in this class: a credit or a plan visit. */
+export const packCanSeat = (s: any, p: any, c: any) => (!countsCredits(p) || p.remaining > 0) && !planBlock(s, p, c)
+/** The credit or plan Strap would use to seat this member in this class (bookings.ts eligiblePack). */
 export const eligiblePack = (s: any, personId: string, c: any) => rows(s, 'packs')
-  .filter(p => p.personId === personId && packServiceEligible(p, c) && p.remaining > 0 && p.expiresAt > c.start && time(p.expiresAt) > now())
+  .filter(p => p.personId === personId && packServiceEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now() && packCanSeat(s, p, c))
   .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))[0]
-export const livePacks = (s: any, personId: string) => rows(s, 'packs').filter(p => p.personId === personId && p.remaining > 0 && time(p.expiresAt) > now())
+export const livePacks = (s: any, personId: string) => rows(s, 'packs').filter(p => p.personId === personId && (!countsCredits(p) || p.remaining > 0) && time(p.expiresAt) > now())
+const planReasons: Record<string, string> = { outside_plan_hours: 'Outside your plan’s days and hours', plan_visits_used: 'Your plan’s visits for that period are used', plan_upcoming_limit_reached: 'Your plan’s upcoming-booking limit is reached' }
+/** The plan refusal a member sees when no credit or plan covers this class. */
+export const planReason = (s: any, personId: string, c: any) => {
+  const codes = rows(s, 'packs').filter(p => p.personId === personId && p.entitlement && packServiceEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now()).map(p => planBlock(s, p, c)).filter(Boolean)
+  return codes.length ? planReasons[codes[0]!] ?? null : null
+}
+/** What a pack has left now, in words. */
+export const packLeft = (p: any) => countsCredits(p) ? `${p.remaining} of ${p.credits} left`
+  : p.entitlement.kind === 'unlimited' ? 'Unlimited visits' : `${p.summary?.plan?.left ?? 0} visit${p.summary?.plan?.left === 1 ? '' : 's'} left this ${p.entitlement.period}`
+export const creditsLeft = (p: any) => countsCredits(p) ? `${p.remaining} credits left` : packLeft(p)
+export const shortLeft = (p: any) => countsCredits(p) ? `${p.remaining} left` : packLeft(p)
 export const balance = (s: any, personId: string) => rows(s, 'balances').find(b => b.personId === personId)?.balanceCents ?? 0
 export const waiverSigned = (s: any, personId: string) => !s.waiver || rows(s, 'acknowledgements').some(a => a.personId === personId && a.waiverId === s.waiver.id)
 export const lastVisit = (s: any, personId: string) => rows(s, 'bookings').filter(b => b.personId === personId && b.checkedInAt).map(b => b.checkedInAt).sort().at(-1)
-export const packName = (p: any) => p.kind === 'drop-in' ? 'Drop-in' : `${p.credits}-class pack`
+export const packName = (p: any) => p.entitlement?.name ?? (p.entitlement?.kind === 'unlimited' ? 'Unlimited plan' : p.entitlement?.kind === 'visits' ? `${p.entitlement.visits}-visit ${p.entitlement.period === 'week' ? 'weekly' : 'monthly'} plan` : p.kind === 'drop-in' ? 'Drop-in' : `${p.credits}-class pack`)
 
 /** The class that is on now, or the next to start today, or the day's last. */
 export function currentClass(s: any, list: any[]) {

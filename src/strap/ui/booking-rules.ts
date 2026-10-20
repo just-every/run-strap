@@ -19,13 +19,14 @@ export function windowState(c: any, priority: boolean): 'open' | 'not-open' | 'c
 export function ruleLine(s: any, c: any) {
   const w = c.bookingWindow
   if (!w) return ''
+  const plan = w.plan ? `Your ${h(w.plan)} plan’s rule: ` : ''
   const opens = w.opensAt ? `Booking opens ${when(s, w.opensAt)}${w.priorityOpensAt ? ` (priority packs ${when(s, w.priorityOpensAt)})` : ''}; ` : ''
   const closes = time(w.closesAt) === time(c.start) ? 'closes when class starts.' : `closes ${when(s, w.closesAt)}.`
   const late = w.lateCancelReturnsCredit ? (w.lateCancelFeeCents ? `later the credit returns and a ${money(w.lateCancelFeeCents)} late fee is added` : '') : `later the credit is kept${w.lateCancelFeeCents ? ` and a ${money(w.lateCancelFeeCents)} late fee is added` : ''}`
   const cancel = !w.cancelCutoffHours || !late ? ' Cancel any time before class for your credit back.'
     : time(w.cutoffAt) <= now() ? ` The cancel cutoff has passed: ${late.replace(/^later /, '')}.` : ` Cancel by ${when(s, w.cutoffAt)} for your credit back; ${late}.`
   const noShow = w.noShowFeeCents ? ` Missing class without cancelling uses the credit and adds a ${money(w.noShowFeeCents)} no-show fee.${w.noShowGraceMinutes ? ` No-show marking starts ${w.noShowGraceMinutes} minutes after class start.` : ''}` : ''
-  return `<small class="rule">${opens}${closes}${cancel}${noShow}</small>`
+  return `<small class="rule">${plan}${opens}${closes}${cancel}${noShow}</small>`
 }
 
 /** The exact effect of cancelling now, as the domain will apply it. */
@@ -67,15 +68,16 @@ export function staffCancel(s: any, name: string, b: any, back: string) {
   return controls ? `<tr class="cancel-row"><td colspan="6"><details class="more"><summary>Cancel for ${h(name)}</summary><div class="panel-body">${controls}</div></details></td></tr>` : ''
 }
 
-const ruleRow = (r: any) => `<tr>${cell('Applies to', h(r.service ?? 'All services (studio rule)'))}${cell('Booking opens', r.opensHoursBefore ? `${r.opensHoursBefore} hr before${r.priorityOpensHoursBefore ? `<small>Priority packs ${r.priorityOpensHoursBefore} hr before</small>` : ''}` : 'Any time')}${cell('Closes', r.closesMinutesBefore ? `${span(r.closesMinutesBefore)} before` : 'At start')}`
+const ruleRow = (r: any) => `<tr>${cell('Applies to', h(r.plan ? `Plan: ${r.plan}` : r.service ?? 'All services (studio rule)'))}${cell('Booking opens', r.opensHoursBefore ? `${r.opensHoursBefore} hr before${r.priorityOpensHoursBefore ? `<small>Priority packs ${r.priorityOpensHoursBefore} hr before</small>` : ''}` : 'Any time')}${cell('Closes', r.closesMinutesBefore ? `${span(r.closesMinutesBefore)} before` : 'At start')}`
   + `${cell('Cancel cutoff', r.cancelCutoffHours ? `${r.cancelCutoffHours} hr before` : 'None')}${cell('Late cancel', `${r.lateCancelReturnsCredit ? 'Credit returns' : 'Credit kept'}${r.lateCancelFeeCents ? ` · ${money(r.lateCancelFeeCents)} fee` : ''}`)}${cell('No-show', (r.noShowFeeCents ? `${money(r.noShowFeeCents)} fee` : 'No fee') + ` · ${r.noShowGraceMinutes ?? 0} min grace`)}${cell('', form('bookingRule.remove', '/app/studio', hidden('id', r.id), 'Remove', 'quiet', 'small'), 'right')}</tr>`
 
 export function rulesPanel(s: any) {
-  const rules = rows(s, 'bookingRules').sort((a, b) => (a.service === null ? -1 : b.service === null ? 1 : a.service.localeCompare(b.service)))
+  const order = (r: any) => r.plan ? `2${r.plan}` : r.service === null ? '0' : `1${r.service}`
+  const rules = rows(s, 'bookingRules').sort((a, b) => order(a).localeCompare(order(b)))
   const list = rules.length ? `<div class="table-wrap">${table(['Applies to', 'Booking opens', 'Closes', 'Cancel cutoff', 'Late cancel', 'No-show', ''], rules.map(ruleRow).join(''))}</div>` : emptyLine('No rules yet: booking stays open until class starts and every cancellation before class returns the credit.')
-  const editor = form('bookingRule.save', '/app/studio', `${field('service', 'Service (blank = all services)', '', 'text', 'maxlength="160" placeholder="Reformer"')}<div class="row2">${field('opensHoursBefore', 'Booking opens (hours before; blank = any time)', '', 'number', 'min="1" max="8760" step="1"')}${field('priorityOpensHoursBefore', 'Priority packs open (hours before; blank = none)', '', 'number', 'min="1" max="8760" step="1"')}</div>`
+  const editor = form('bookingRule.save', '/app/studio', `<div class="row2">${field('service', 'Service (blank = all services)', '', 'text', 'maxlength="160" placeholder="Reformer"')}${field('plan', 'Or a plan name (PLAN-002)', '', 'text', 'maxlength="80" placeholder="Off-peak unlimited"')}</div><div class="row2">${field('opensHoursBefore', 'Booking opens (hours before; blank = any time)', '', 'number', 'min="1" max="8760" step="1"')}${field('priorityOpensHoursBefore', 'Priority packs open (hours before; blank = none)', '', 'number', 'min="1" max="8760" step="1"')}</div>`
     + `<div class="row2">${field('closesMinutesBefore', 'Booking closes (minutes before)', '0', 'number', 'required min="0" max="10080" step="1"')}${field('cancelCutoffHours', 'Cancel cutoff (hours before)', '0', 'number', 'required min="0" max="720" step="1"')}</div>`
     + `<div class="row2">${select('lateCancelReturnsCredit', 'After the cutoff', [['false', 'Credit is kept'], ['true', 'Credit returns']], 'false')}${field('lateFee', 'Late-cancel fee', '0.00', 'text', 'required inputmode="decimal"')}</div>`
     + `<div class="row2">${field('noShowFee', 'No-show fee', '0.00', 'text', 'required inputmode="decimal"')}${field('noShowGraceMinutes', 'No-show grace (minutes after start)', '0', 'number', 'required min="0" max="600" step="1"')}</div>`, 'Save booking rule')
-  return panel('Booking and cancellation rules', `${list}${body(`<p class="meta">A service’s rule replaces the studio rule for that service. Hours count back from the class start, so a daylight-saving change moves the clock time. A booking keeps the cancellation rule in force when it was made.</p>${editor}`)}`, { id: 'booking-rules', icon: 'clock' })
+  return panel('Booking and cancellation rules', `${list}${body(`<p class="meta">A plan’s rule replaces the service and studio rules for the bookings that plan pays for; a service’s rule replaces the studio rule for that service. Hours count back from the class start, so a daylight-saving change moves the clock time. A booking keeps the cancellation rule in force when it was made.</p>${editor}`)}`, { id: 'booking-rules', icon: 'clock' })
 }

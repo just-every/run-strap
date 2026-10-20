@@ -1,5 +1,6 @@
 // PLAN-005 on the packs page: the member's request, the owner's exact preview
 // with its proration formula, and the member's own acceptance.
+import { countsCredits } from '../domain/entitlements'
 import { packName } from './facts'
 import { money, studioToday, when, zoneOf } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, person, rows, select, statusPill, textarea } from './shared'
@@ -35,7 +36,8 @@ function change(s: any, c: any, mine: boolean) {
 
 export function planChangesPanel(s: any, chosen = '') {
   const mine = !owner(s), data = s.planChanges ?? { requests: [], changes: [] }
-  const live = rows(s, 'packs').filter(p => Date.parse(p.expiresAt) > Date.now() && (!chosen || p.personId === chosen))
+  // PLAN-005 changes credit packs; PLAN-002 plans are not offered (the domain refuses them).
+  const live = rows(s, 'packs').filter(p => countsCredits(p) && Date.parse(p.expiresAt) > Date.now() && (!chosen || p.personId === chosen))
   const packChoices: [unknown, unknown][] = [['', 'Choose a pack'], ...live.map(p => [p.id, mine ? `${packName(p)} · ${money(p.amountCents)}` : `${person(s, p.personId)} · ${packName(p)} · ${money(p.amountCents)}`] as [unknown, unknown])]
   const changes = data.changes.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)).map((c: any) => change(s, c, mine)).join('')
   const requests = data.requests.map((r: any) => `<p class="meta" data-plan-request="${h(r.id)}">${h(mine ? 'You asked' : person(s, r.personId) + ' asked')}: ${h(r.note)} · ${statusPill(r.status)} · ${when(s, r.createdAt)}</p>`).join('')

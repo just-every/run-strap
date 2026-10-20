@@ -1,8 +1,8 @@
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
-import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from './booking-policy';
+import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly, windowOpen } from './booking-policy';
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
-import { appendPackEvent, bookingCredit, packServiceEligible } from './pack-credits';
+import { appendPackEvent, bookingCredit, packCanSeat, packServiceEligible, planBlock } from './pack-credits';
 import { bookingHistory, staffReason } from './booking-history';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
@@ -12,11 +12,30 @@ export function acknowledged(state: State, personId: string) {
   const waiver = latestWaiver(state);
   return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id);
 }
-/** Inside a priority-only window, only a pack sold with priority booking can seat. */
-export function eligiblePack(state: State, personId: string, entry: RecordData) {
-  const priority = priorityOnly(state,entry);
-  return list(state,'pack').filter(p => p.personId === personId && p.remaining > 0 && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now() && (!priority || p.priorityBooking === true))
-    .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
+/** Packs that can seat this member in this class, earliest expiring first: a
+ * credit or plan visit (PLAN-002 hours, upcoming cap and period visits), the
+ * class's service, and, inside a priority-only window, priority booking. */
+export function eligiblePacks(state: State, personId: string, entry: RecordData) {
+  return list(state,'pack').filter(p => p.personId === personId && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now()
+    && (!priorityOnly(state,entry,p) || p.priorityBooking === true) && packCanSeat(state,p,entry))
+    .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+export const eligiblePack = (state: State, personId: string, entry: RecordData) => eligiblePacks(state,personId,entry)[0];
+/** The pack a member books with now: the first eligible pack whose own booking
+ * window (its plan's rule, else the service or studio rule) is open. */
+export function bookingPack(state: State, personId: string, entry: RecordData) {
+  const packs = eligiblePacks(state,personId,entry);
+  return packs.find(p => windowOpen(state,entry,p)) ?? packs[0] ?? null;
+}
+/** When no pack can seat: the member's first live plan for this class that
+ * refuses it (PLAN-002 hours, upcoming cap or period visits), with its reason. */
+export function planRefused(state: State, personId: string, entry: RecordData) {
+  for (const pack of list(state,'pack').filter(p => p.personId === personId && p.entitlement && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now())
+    .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))) {
+    const code = planBlock(state,pack,entry);
+    if (code) return {pack,code};
+  }
+  return null;
 }
 function ownMember(tx: Transaction) {
   insist(tx.who.role === 'member' || tx.who.role === 'instructor','member_required',403);
@@ -35,15 +54,15 @@ export function book(tx: Transaction, input: Record<string,unknown>) {
   insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
-  insistBookingOpen(tx,entry,!!eligiblePack(tx.state,member.id,entry));
+  const pack = bookingPack(tx.state,member.id,entry), refused = pack ? null : planRefused(tx.state,member.id,entry);
+  insistBookingOpen(tx,entry,!!pack,pack ?? refused?.pack);
   insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   promote(tx,entry);
   const full = seatCapacity(tx.state,entry).onlineOpen === 0;
-  const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:'online',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
+  const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:'online',cancelTerms:cancelTerms(tx.state,entry,pack),createdAt:now(),sequence:tx.state.version+1};
   if (full) { tx.put('booking',booking); return booking; }
-  const pack = eligiblePack(tx.state,member.id,entry);
-  insist(pack,'eligible_credit_required',409);
+  insist(pack,refused?.code ?? 'eligible_credit_required',409);
   return seat(tx,booking,entry,pack,chooseSpot(tx.state,entry,input.spot));
 }
 /** SCHED-006: the effect shown before cancelling is the effect applied. The

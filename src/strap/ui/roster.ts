@@ -2,7 +2,7 @@
 // cancellations, each with their state, the pack that pays for the spot and
 // anything owed. Check in, and a no-show once class starts, are the desk's
 // actions here; the owner corrects a no-show or late cancel below the row.
-import { attendance, balance, eligiblePack, packName, waiverSigned } from './facts'
+import { attendance, balance, eligiblePack, packName, shortLeft, waiverSigned } from './facts'
 import { clock, dayOf, datePlain, money } from './format'
 import { icon } from './icons'
 import { avatar, form, h, hidden, owner, person, rows, select } from './shared'
@@ -39,7 +39,7 @@ function packChip(s: any, c: any, b: any) {
   if (!owner(s)) return ''
   const pack = rows(s, 'packs').find(p => p.id === b.packId) ?? (b.status !== 'booked' ? eligiblePack(s, b.personId, c) : null)
   if (!pack) return `<span class="chip quiet">${b.unpaid ? 'Unpaid visit' : 'No credit'}</span>`
-  return `<span class="chip">${h(packName(pack))} · ${pack.remaining} left</span>`
+  return `<span class="chip">${h(packName(pack))} · ${h(shortLeft(pack))}</span>`
 }
 
 function note(s: any, b: any) {

@@ -1,9 +1,9 @@
 import { acceptPendingMove } from './booking-actions';
-import { packServiceEligible } from './pack-credits';
+import { packServiceEligible, planBlock } from './pack-credits';
 import { cancellationEffect, priorityOnly } from './booking-policy';
 import { humanOwner, id, insist, integer, list, now, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { acknowledged, eligiblePack, seat } from './bookings';
+import { acknowledged, eligiblePack, planRefused, seat } from './bookings';
 import { chooseSpot, seatCapacity } from './spots';
 import { bookingHistory } from './booking-history';
 import { putNotice, reserveMail, titleOf, whenText } from './notices';
@@ -61,7 +61,7 @@ export function promote(tx: Transaction, entry: RecordData) {
     const sourcePack = source?.packId ? tx.state.records.get(source.packId)?.data : null;
     if (candidate.moveFromBookingId && (!source || source.status !== 'booked' || sourceEntry?.start <= now())) continue;
     const pack = candidate.moveFromBookingId ? sourcePack : eligiblePack(tx.state,candidate.personId,entry);
-    if (candidate.moveFromBookingId ? !(source?.unpaid || (pack && pack.expiresAt > entry.start && pack.expiresAt > now() && packServiceEligible(pack,entry) && (!priorityOnly(tx.state,entry) || pack.priorityBooking === true))) : !pack) continue;
+    if (candidate.moveFromBookingId ? !(source?.unpaid || (pack && pack.expiresAt > entry.start && pack.expiresAt > now() && packServiceEligible(pack,entry) && (!priorityOnly(tx.state,entry,pack) || pack.priorityBooking === true) && !planBlock(tx.state,pack,entry,source!.id))) : !pack) continue;
     const cutoff = lateCutoff(candidate,entry), late = now() >= cutoff;
     if (policy.lateWindow !== 'promote') { if (late) tx.reached(cutoff); else tx.future(cutoff); }
     if (late && policy.lateWindow === 'none') continue;
@@ -101,7 +101,7 @@ export function acceptOffer(tx: Transaction, input: Record<string,unknown>) {
   insist(acknowledged(tx.state,current.personId),'waiver_acknowledgement_required',409);
   if (current.moveFromBookingId) return acceptPendingMove(tx,current,input);
   const pack = eligiblePack(tx.state,current.personId,entry);
-  insist(pack,'eligible_credit_required',409);
+  insist(pack,planRefused(tx.state,current.personId,entry)?.code ?? 'eligible_credit_required',409);
   const accepted = {...current,offer:{...current.offer,acceptedAt:now(),acceptedBy:tx.who.id,acceptedByRole:tx.who.role,...(staff ? {staffMade:true,right:'booking'} : {})}};
   const seated = seat(tx,accepted,entry,pack,chooseSpot(tx.state,entry,input.spot));
   bookingHistory(tx,'accept',current,seated,input);

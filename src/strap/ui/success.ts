@@ -1,7 +1,7 @@
 // The agent's place (pick F's right panel): Member success, the members who need
 // a follow-up and the work prepared for the owner's approval. Agents prepare
 // packs, reminders and class weeks; only the signed-in owner approves them.
-import { attendance, balance, classTitle, followUps, habit, lastVisit, livePacks, packName, upcoming, type FollowUp } from './facts'
+import { attendance, balance, classTitle, followUps, habit, lastVisit, livePacks, packName, upcoming, type FollowUp, creditsLeft } from './facts'
 import { clock, dayOf, dayShort, money, when } from './format'
 import { draftGlyph, draftLine, draftPage, draftTitle, preparedBy } from './drafts'
 import { icon } from './icons'
@@ -30,7 +30,7 @@ function card(s: any, f: FollowUp, first: boolean) {
     action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a pack</a>`
   }
   if (f.kind === 'owes') {
-    facts.push(`Owes ${money(balance(s, f.personId))}`, packs.length ? `${packs[0].remaining} credits left` : 'No credits left')
+    facts.push(`Owes ${money(balance(s, f.personId))}`, packs.length ? creditsLeft(packs[0]) : 'No credits left')
     action = form('reminder.prepare', '/app', hidden('personId', f.personId), 'Prepare a reminder', 'primary', 'small')
   }
   if (f.kind === 'lapsed') {
@@ -39,7 +39,7 @@ function card(s: any, f: FollowUp, first: boolean) {
     const c = first ? openSpot(s, f.personId) : null
     if (c) extra = `<div class="offer">${icon('calendar')}<div><small>Open spot</small><b>${h(dayShort(s, dayOf(s, c.start)))} · ${h(clock(s, c.start))}</b><small>${h(classTitle(c))} · ${c.occupancy.total - attendance(s, c.id).booked.length} open</small></div></div><p>${h(packs[0].remaining)} credits left on their ${h(packName(packs[0]))}. Members book open spots themselves from Classes.</p>`
   }
-  if (f.kind === 'expiring') facts.push(`${packName(packs[0])} ends ${dayShort(s, dayOf(s, packs[0].expiresAt))}`, `${packs[0].remaining} credits left`), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a renewal</a>`
+  if (f.kind === 'expiring') facts.push(`${packName(packs[0])} ends ${dayShort(s, dayOf(s, packs[0].expiresAt))}`, creditsLeft(packs[0])), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a renewal</a>`
   if (f.kind === 'empty') facts.push(rows(s, 'packs').some(p => p.personId === f.personId) ? 'No credits left' : 'No class pack yet'), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a pack</a>`
   return `<article class="followup"><div class="followup-head">${avatar(f.name, 'large')}<div><strong>${h(f.name)}</strong>${facts.map(line => `<p>${h(line)}</p>`).join('')}</div></div>${extra}<div class="actions">${action}</div></article>`
 }

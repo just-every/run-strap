@@ -1,8 +1,9 @@
 import { humanOwner, id, instant, insist, integer, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
-import { acknowledged, eligiblePack, seat } from './bookings';
+import { acknowledged, bookingPack, planRefused, seat } from './bookings';
 import { bookingWindow, cancelTerms, classService, insistBookingOpen, priorityOnly } from './booking-policy';
-import { appendPackEvent, packServiceEligible } from './pack-credits';
+import { appendPackEvent, packCanSeat, packServiceEligible } from './pack-credits';
+import { countsCredits } from './entitlements';
 import { chooseSpot, seatCapacity } from './spots';
 import { bookingHistory } from './booking-history';
 import { promote } from './waitlist';
@@ -24,8 +25,8 @@ import { promote } from './waitlist';
 const pays = ['auto','pack','drop-in','sell-pack','unpaid'];
 
 function usable(tx: Transaction, pack: RecordData, personId: string, entry: RecordData) {
-  return pack.personId === personId && pack.remaining > 0 && packServiceEligible(pack,entry) && pack.expiresAt > entry.start && pack.expiresAt > now()
-    && (!priorityOnly(tx.state,entry) || pack.priorityBooking === true);
+  return pack.personId === personId && packCanSeat(tx.state,pack,entry) && packServiceEligible(pack,entry) && pack.expiresAt > entry.start && pack.expiresAt > now()
+    && (!priorityOnly(tx.state,entry,pack) || pack.priorityBooking === true);
 }
 
 function sell(tx: Transaction, personId: string, entry: RecordData, dropIn: boolean, input: Record<string,unknown>) {
@@ -56,8 +57,8 @@ export function settleUnpaid(tx: Transaction, pack: RecordData) {
     .sort((a,b) => classes.get(a.classId)!.start.localeCompare(classes.get(b.classId)!.start) || a.id.localeCompare(b.id));
   for (const visit of open) {
     const entry = classes.get(visit.classId)!, current = record(tx.state,pack.id,'pack');
-    if (current.remaining <= 0 || !packServiceEligible(current,entry) || current.expiresAt <= entry.start) continue;
-    appendPackEvent(tx,current,{type:'reserve',credits:-1,bookingId:visit.id,classId:entry.id,reason:'unpaid_visit_settled'});
+    if (!packCanSeat(tx.state,current,entry) || !packServiceEligible(current,entry) || current.expiresAt <= entry.start) continue;
+    appendPackEvent(tx,current,{type:'reserve',credits:countsCredits(current) ? -1 : 0,bookingId:visit.id,classId:entry.id,reason:'unpaid_visit_settled'});
     if (visit.attendance === 'attended' || visit.attendance === 'no_show') appendPackEvent(tx,current,{type:'consume',credits:0,bookingId:visit.id,classId:entry.id,reason:'unpaid_visit_settled'});
     tx.put('booking',{...visit,packId:pack.id,settledAt:now(),settledByPackId:pack.id});
   }
@@ -80,18 +81,19 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   const bypassed: string[] = [];
   const sold = pay === 'drop-in' || pay === 'sell-pack' ? sell(tx,member.id,entry,pay === 'drop-in',input) : null;
   const chosen = pay === 'pack' ? record(tx.state,input.packId,'pack') : null;
-  // The booking window, as members meet it, unless the owner overrides it.
-  const window = bookingWindow(tx.state,entry), at = now();
-  const priority = sold ? false : chosen ? chosen.priorityBooking === true : !!eligiblePack(tx.state,member.id,entry);
+  // The booking window, as members meet it (the paying plan's rule first), unless the owner overrides it.
+  const planned = sold ?? chosen ?? (pay === 'auto' ? bookingPack(tx.state,member.id,entry) : null);
+  const window = bookingWindow(tx.state,entry,planned), at = now();
+  const priority = sold ? false : planned?.priorityBooking === true;
   const opensAt = priority && window.priorityOpensAt ? window.priorityOpensAt : window.opensAt;
   const outside = at >= window.closesAt ? `booking window closed at ${window.closesAt}` : opensAt && at < opensAt ? `booking window opens at ${opensAt}` : null;
   if (outside && override) { bypassed.push(outside); if (at >= window.closesAt) tx.reached(window.closesAt); else tx.future(opensAt!); }
-  else insistBookingOpen(tx,entry,priority);
+  else insistBookingOpen(tx,entry,priority,planned);
   // Existing eligible online waiters keep priority over an unallocated online seat.
   promote(tx,entry);
   const capacity = seatCapacity(tx.state,entry);
   const base = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',bookingChannel:channel,madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',
-    cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
+    cancelTerms:cancelTerms(tx.state,entry,planned),createdAt:now(),sequence:tx.state.version+1};
   if (capacity.totalOpen === 0 && !override) {
     // MSG-004: a full class takes the member onto the end of its online waitlist.
     insist(input.waitlist === true,'class_full',409);
@@ -99,8 +101,8 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   }
   if (capacity.totalOpen === 0) bypassed.push(`class full (${capacity.booked} of ${capacity.total})`);
   if (chosen) insist(usable(tx,chosen,member.id,entry),'pack_not_eligible',409);
-  const pack = sold ?? chosen ?? (pay === 'auto' ? eligiblePack(tx.state,member.id,entry) : null);
-  insist(pack || pay === 'unpaid','eligible_credit_required',409);
+  const pack = planned;
+  insist(pack || pay === 'unpaid',(pay === 'auto' ? planRefused(tx.state,member.id,entry)?.code : null) ?? 'eligible_credit_required',409);
   // Past a full roster a spot is assigned only when one is named and free.
   const spot = capacity.totalOpen === 0 ? (input.spot ? chooseSpot(tx.state,entry,input.spot) : null) : chooseSpot(tx.state,entry,input.spot);
   const booking = {...base,capacityPool:capacity.heldOpen > 0 || capacity.totalOpen === 0 ? 'held' : 'online',payment:pay,...(sold ? {soldPackId:sold.id} : {}),

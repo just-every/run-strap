@@ -107,10 +107,20 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   }
   if (name === 'waitlist.save') input.claimMinutes = Number(input.claimMinutes)
   if (name === 'booking.desk') input.waitlist = input.waitlist === 'true'
-  if (name === 'pack.prepare') input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
+  if (name === 'pack.prepare') {
+    input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
+    // PLAN-002 plan terms: a visits or unlimited plan has no credit count.
+    const kind = String(input.kind ?? 'credits'), days = [1, 2, 3, 4, 5, 6, 7].filter(day => input[`day_${day}`] === 'true')
+    for (let day = 1; day <= 7; day++) delete input[`day_${day}`]
+    if (kind !== 'credits') delete input.credits
+    if (kind !== 'visits') { delete input.visits; delete input.period; delete input.rollover }
+    for (const key of ['visits', 'rollover', 'maxUpcoming']) if (key in input) input[key] = String(input[key]).trim() === '' ? undefined : Number(input[key])
+    for (const key of ['planName', 'from', 'to', 'period']) if (input[key] === '') delete input[key]
+    if (days.length) input.days = days
+  }
   if (name === 'bookingRule.save') {
     const whole = (key: string) => { const value = String(input[key] ?? '').trim(); return value === '' ? null : Number(value) }
-    return { service: String(input.service ?? '').trim(), opensHoursBefore: whole('opensHoursBefore'), priorityOpensHoursBefore: whole('priorityOpensHoursBefore'),
+    return { service: String(input.service ?? '').trim(), plan: String(input.plan ?? '').trim(), opensHoursBefore: whole('opensHoursBefore'), priorityOpensHoursBefore: whole('priorityOpensHoursBefore'),
       noShowGraceMinutes: whole('noShowGraceMinutes') ?? 0, closesMinutesBefore: whole('closesMinutesBefore') ?? 0, cancelCutoffHours: whole('cancelCutoffHours') ?? 0,
       lateCancelReturnsCredit: input.lateCancelReturnsCredit === 'true', lateCancelFeeCents: cents(input.lateFee ?? '0', 'the late-cancel fee'), noShowFeeCents: cents(input.noShowFee ?? '0', 'the no-show fee') }
   }

@@ -2,14 +2,14 @@
 // earliest-expiring credit, a chosen pack, a drop-in or pack sold now, or an
 // unpaid visit their next purchase settles), with an override reason to book
 // past a full roster or outside the booking window.
-import { packName } from './facts'
+import { packCanSeat, packName, shortLeft } from './facts'
 import { packServiceEligible } from '../domain/pack-credits'
 import { field, form, h, hidden, rows, select } from './shared'
 import { deskSpot } from './spots'
 
 export function deskForm(s: any, c: any, back: string) {
   const members = rows(s, 'people').filter(p => p.active && p.role === 'member')
-  const packs = members.flatMap(p => rows(s, 'packs').filter(k => k.personId === p.id && packServiceEligible(k, c) && k.remaining > 0 && Date.parse(k.expiresAt) > Date.now() && k.expiresAt > c.start).map(k => [k.id, `${p.name} · ${packName(k)} · ${k.remaining} left`] as [unknown, unknown]))
+  const packs = members.flatMap(p => rows(s, 'packs').filter(k => k.personId === p.id && packServiceEligible(k, c) && packCanSeat(s, k, c) && Date.parse(k.expiresAt) > Date.now() && k.expiresAt > c.start).map(k => [k.id, `${p.name} · ${packName(k)} · ${shortLeft(k)}`] as [unknown, unknown]))
   const full = c.occupancy.totalOpen === 0
   const fields = hidden('classId',c.id) + select('personId', 'Member or walk-in profile', members.map(p => [p.id, p.name]), '')
     + select('channel', 'Request channel', [['desk', 'At the desk'], ['phone', 'Phone'], ['inbox', 'Inbox']], 'desk')

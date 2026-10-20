@@ -4,6 +4,7 @@ import { approveDraft } from './drafts';
 import { promoteAll } from './bookings';
 import { settleUnpaid } from './desk';
 import { appendPackEvent, packEvents } from './pack-credits';
+import { countsCredits, parsePlan } from './entitlements';
 
 export function balance(state: State, personId: string) {
   return list(state,'charge').filter(r => r.personId === personId).reduce((sum,r) => sum+r.amountCents,0)
@@ -16,7 +17,10 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   tx.future(expiresAt);
   const eligibleServices = packServices(input.eligibleServices), priorityBooking = input.priorityBooking ?? false;
   insist(typeof priorityBooking === 'boolean','invalid_priorityBooking');
-  const draft = {eligibleServices,priorityBooking,id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits:integer(input.credits,'credits',1,10_000),amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  // PLAN-002: a visits or unlimited plan holds visits, never a credit count.
+  const entitlement = parsePlan(input), credits = !entitlement || entitlement.kind === 'credits' ? integer(input.credits,'credits',1,10_000) : 0;
+  if (entitlement && entitlement.kind !== 'credits') insist(input.credits === undefined || input.credits === null || input.credits === '','plan_has_no_credit_count');
+  const draft = {eligibleServices,priorityBooking,...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -28,7 +32,7 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
@@ -50,6 +54,7 @@ export function adjustPack(tx: Transaction, input: Record<string,unknown>) {
   const pack = record(tx.state,input.id,'pack');
   const requestId = text(input.requestId,'requestId',100), reason = text(input.reason,'reason',2_000);
   const creditsDelta = integer(input.creditsDelta,'creditsDelta',-10_000,10_000);
+  insist(creditsDelta === 0 || countsCredits(pack),'plan_has_no_credit_balance',409);
   const expiresAt = input.expiresAt === undefined ? undefined : instant(input.expiresAt,'expiresAt');
   const requestBasis = JSON.stringify({creditsDelta,reason,expiresAt:expiresAt ?? null});
   const prior = packEvents(tx.state,pack).find(event => event.requestId === requestId);

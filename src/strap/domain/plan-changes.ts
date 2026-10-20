@@ -1,6 +1,7 @@
 import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent } from './pack-credits';
+import { countsCredits } from './entitlements';
 import { settleUnpaid } from './desk';
 import { promoteAll } from './bookings';
 
@@ -20,6 +21,8 @@ const basis = (state: State, pack: RecordData) => JSON.stringify({pack:pack.id,r
 const pending = (state: State, packId: string) => list(state,'planChange').find(c => c.packId === packId && c.status === 'accepted');
 
 function preview(state: State, pack: RecordData, input: Record<string,unknown>) {
+  // PLAN-005 changes a credit pack; PLAN-001 carries changes between memberships.
+  insist(countsCredits(pack),'plan_change_needs_credit_pack',409);
   const mode = text(input.mode,'mode',20);
   insist(mode === 'now' || mode === 'renewal','invalid_mode');
   const credits = integer(input.credits,'credits',1,10_000), amountCents = integer(input.amountCents,'amountCents',0,100_000_000);
@@ -48,6 +51,7 @@ export function requestPlanChange(tx: Transaction, input: Record<string,unknown>
   insist(tx.who.role === 'member','member_required',403);
   const pack = record(tx.state,input.packId,'pack'), requestId = text(input.requestId,'requestId',100), note = text(input.note,'note',500);
   insist(pack.personId === tx.who.personId,'pack_not_found',404);
+  insist(countsCredits(pack),'plan_change_needs_credit_pack',409);
   const prior = list(tx.state,'planChangeRequest').find(r => r.personId === tx.who.personId && r.requestId === requestId);
   if (prior) { insist(prior.packId === pack.id && prior.note === note,'plan_request_changed',409); return prior; }
   const request = {id:id(),personId:pack.personId,packId:pack.id,note,requestId,status:'requested',createdAt:now(),actorId:tx.who.id};

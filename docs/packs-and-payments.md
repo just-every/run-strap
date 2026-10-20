@@ -20,6 +20,17 @@ Open **Packs and payments** and use **Prepare a pack**:
 are ready at once and the pack's amount is added to what the member owes. If a member was waiting for a spot and now
 has an eligible credit, the waitlist moves for them. A mat-only pack cannot book or promote into a reformer class.
 
+## Plans: visits each week or month, unlimited and off-peak
+
+**Prepare a pack** also sells a membership plan. Choose **What it gives**:
+
+- **Visits each week or month**: set **Visits per period**, the **Period** and how many unused visits roll over. Weeks start Monday and months on the 1st, at midnight on the studio clock; a class counts in the period it starts, and the first and last periods grant full visits. Unused visits roll into the next period only, up to the limit; rolled visits are used first and never roll again. A booking that would take back a visit already rolled into a later booked period is refused.
+- **Unlimited visits**: no visit count.
+
+Under **Plan terms** any pack or plan can also name the plan, limit the days and the class start times (from inclusive, before exclusive, such as weekdays from 10:00 am to before 4:00 pm for an off-peak plan) and cap how many upcoming bookings it holds at once. Eligible services work as they do for packs. A plan holds one visit per booking: check-in or a no-show marks it attended, a late cancel that keeps the visit still counts, and an early cancel returns it. Members see what is left this period, and why a class is refused (outside the plan's hours, the period's visits used, or the upcoming limit). A plan has no credits: you can change its expiration with a reason, not add credits, and plan changes (PLAN-005) apply to class-credit packs. Plans do not renew automatically.
+
+A booking rule in **Studio settings** can target a plan name: it then replaces the service and studio rules for the bookings that plan pays for, such as a longer booking window or a stricter cancel cutoff.
+
 ## Credit history and adjustments
 
 Owners and members open a pack’s **Credit history** from the pack table. Remaining credits are available now; a booked seat reserves one, check-in marks it consumed, and cancellation returns it. Restored is the cumulative number returned, while reserved and consumed describe current allocations. Expired counts unused credits whose exact expiration has passed. Every grant, reservation, check-in, restoration and adjustment retains its actor and time; a later action adds an event and preserves the earlier entries.

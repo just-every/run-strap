@@ -2,7 +2,8 @@ import { humanOwner, id, insist, integer, list, now, person, record, text, type 
 import type { Transaction } from './store';
 import { acknowledged } from './bookings';
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly } from './booking-policy';
-import { appendPackEvent, packServiceEligible } from './pack-credits';
+import { appendPackEvent, planBlock, packServiceEligible } from './pack-credits';
+import { countsCredits } from './entitlements';
 import { chooseSpot, seatCapacity } from './spots';
 import { promote } from './waitlist';
 import { actionChannel, bookingHistory, staffReason } from './booking-history';
@@ -16,7 +17,10 @@ function availablePack(tx: Transaction, booking: RecordData, entry: RecordData, 
   if (!booking.packId) { insist(booking.unpaid,'eligible_credit_required',409); return null; }
   const pack = record(tx.state,booking.packId,'pack');
   insist(pack.personId === booking.personId && packServiceEligible(pack,entry) && pack.expiresAt > entry.start && pack.expiresAt > now()
-    && (!needsAvailable || pack.remaining > 0) && (!priorityOnly(tx.state,entry) || pack.priorityBooking === true),'pack_not_eligible',409);
+    && (!needsAvailable || !countsCredits(pack) || pack.remaining > 0) && (!priorityOnly(tx.state,entry,pack) || pack.priorityBooking === true),'pack_not_eligible',409);
+  // PLAN-002: the same visit carries over only into a class its plan allows.
+  const refusal = planBlock(tx.state,pack,entry,booking.id);
+  insist(!refusal,refusal!,409);
   tx.future(pack.expiresAt); return pack;
 }
 /** A target must meet every ordinary eligibility fence; only capacity can be overridden. */
@@ -25,7 +29,7 @@ function target(tx: Transaction, booking: RecordData, entry: RecordData, input: 
   insist(acknowledged(tx.state,booking.personId),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.id !== booking.id && b.personId === booking.personId && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   const pack = availablePack(tx,booking,entry,needsAvailable);
-  insistBookingOpen(tx,entry,pack?.priorityBooking === true);
+  insistBookingOpen(tx,entry,pack?.priorityBooking === true,pack);
   if (!heldOffer) promote(tx,entry);
   const capacity = seatCapacity(tx.state,entry), override = input.override === undefined || input.override === '' ? null : text(input.override,'override_reason',500);
   const full = (tx.who.role === 'owner' ? capacity.totalOpen : capacity.onlineOpen) === 0;
@@ -66,12 +70,12 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   if (to.full && !to.override) {
     insist(!list(tx.state,'booking').some(b => b.moveFromBookingId === booking.id && b.classId === entry.id && b.status !== 'cancelled'),'already_waitlisted',409);
     const waiter = {id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
-      madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),sequence:tx.state.version+1};
+      madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',cancelTerms:cancelTerms(tx.state,entry,to.pack),createdAt:now(),sequence:tx.state.version+1};
     tx.put('booking',waiter);
     bookingHistory(tx,'waitlist',booking,waiter,input,{keptBookingId:booking.id}); return waiter;
   }
   const penalty = movePenalty(tx,booking,source,input);
-  const moved = {...booking,classId:entry.id,spot:to.spot,capacityPool:to.capacityPool,cancelTerms:cancelTerms(tx.state,entry),
+  const moved = {...booking,classId:entry.id,spot:to.spot,capacityPool:to.capacityPool,cancelTerms:cancelTerms(tx.state,entry,to.pack),
     movedAt:now(),movedBy:tx.who.id,bookingChannel:staff ? actionChannel(input) : 'online',override:to.override,feeCents:penalty.feeCents};
   if (booking.packId) appendPackEvent(tx,to.pack!,{type:'transfer',credits:0,bookingId:booking.id,classId:entry.id,reason:`Moved from ${source.id}`});
   tx.put('booking',moved);
@@ -89,7 +93,7 @@ export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
   insist(booking.status === 'cancelled' && ['early','late'].includes(booking.cancellation),'cancellation_not_restorable',409);
   const reason = text(input.reason,'restore_reason',500), to = target(tx,booking,entry,input,booking.refunded === true);
   insist(!to.full || to.override,'class_full',409);
-  if (booking.refunded && to.pack) appendPackEvent(tx,to.pack,{type:'reserve',credits:-1,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
+  if (booking.refunded && to.pack) appendPackEvent(tx,to.pack,{type:'reserve',credits:countsCredits(to.pack) ? -1 : 0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
   const charges = list(tx.state,'charge').filter(c => c.bookingId === booking.id), fees = charges.filter(c => c.reason === 'late_cancel_fee' && (!booking.cancellationId || c.cancellationId === booking.cancellationId) && !charges.some(r => r.reversesChargeId === c.id));
   for (const fee of fees) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
   const {cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents,waiver,cancellationId,...active} = booking;
