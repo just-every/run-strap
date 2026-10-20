@@ -14,6 +14,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/classes', label: 'Classes', glyph: 'calendar', count: waiting(['classes']) },
     { href: '/app/people', label: 'People', glyph: 'users' },
     { href: '/app/packs', label: 'Packs and payments', glyph: 'card', count: waiting(['pack', 'reminder']) },
+    { href: '/app/reports', label: 'Attendance reports', glyph: 'report' },
     { href: '/app/import', label: 'Import', glyph: 'upload' },
     { href: '/app/agent', label: 'Agent access', glyph: 'sparkles' },
   ]

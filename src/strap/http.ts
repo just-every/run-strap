@@ -1,4 +1,5 @@
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
+import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
 import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
 import { commandCatalogue, command, snapshot, sweep, type Actor } from './domain'
@@ -13,7 +14,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports'])
 const preparations = ['classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -80,6 +81,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      if (path === '/api/strap/reports/attendance') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        return json(attendanceReport(await state(env,who),url.searchParams))
+      }
       if (path === '/api/strap/cancellations.csv') {
         if (who.role !== 'owner') fail('owner_required',403)
         return new Response(cancellationsCsv(await state(env,who),url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-cancellations.csv'}})
