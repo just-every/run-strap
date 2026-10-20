@@ -25,7 +25,7 @@ async function checkout(root) {
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
 }
-test('MOVE-011 / ARCHIVE-001 / SCHED-014: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure', { timeout: 240_000 }, async () => {
+test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -37,12 +37,15 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-014: portable exit reconstruction and publi
     const member = await h.person('Maya'), coach = await h.person('Priya','instructor')
     const draft = await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:'2099-12-01T00:00:00Z'})
     await h.cmd('pack.approve',{id:draft.id})
+    await h.cmd('studio.save',{location:'New York studio',timeZone:'America/New_York'})
     const week='2099-11-02', timetable=await h.cmd('classes.prepare',{week,classes:[{title:'Restored Pilates',start:week+'T10:00:00Z',end:week+'T11:00:00Z',capacity:12,instructorId:coach.id}]})
     await h.cmd('classes.publish',{id:timetable.id})
     await h.cmd('waiver.publish',{text:'Earlier studio waiver.'})
     const waiver=await h.cmd('waiver.publish',{text:'Studio waiver, "current"\nKeep your own limits.'})
     await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
     await h.cmd('booking.book',{classId:(await h.state()).classes[0].id},member.cookie)
+    const repeating=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:'2099-11-03',endDate:'2099-11-10',time:'09:00',minutes:50,title:'Restored weekly mobility',service:'Mobility',room:'Movement',capacity:2,instructorId:coach.id})).id})
+    const seriesBooking=await h.cmd('booking.book',{classId:repeating.classes[0].id},member.cookie)
     await h.cmd('payment.record',{personId:member.id,amountCents:5000,reference:'Processor-backup-1'})
     const csv=await readFile('tests/fixtures/members.csv','utf8'),preview=await h.cmd('import.preview',{csv})
     await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})
@@ -85,6 +88,12 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-014: portable exit reconstruction and publi
     assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:restoredOwner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
     const studioPage=await h.send('/app/studio',undefined,restoredOwner)
     assert.match(studioPage.text,/Member email paused[\s\S]*Reconnect member email/,`${studioPage.status} ${studioPage.headers.get('location')}`)
+    const seriesEdit=await h.cmd('series.change.prepare',{classId:repeating.classes[0].id,scope:'this',reason:'Recovery studio review',change:{time:'10:00'}},restoredOwner)
+    await h.cmd('series.change.approve',{id:seriesEdit.id,impact:seriesEdit.impact.key},restoredOwner)
+    const recoveredSeries=await h.state(restoredOwner)
+    assert.equal(recoveredSeries.series.find(row=>row.id===repeating.series.id).classIds[0],repeating.classes[0].id)
+    assert.equal(recoveredSeries.bookings.find(row=>row.id===seriesBooking.id).seriesChangeId,seriesEdit.id)
+    assert.equal(recoveredSeries.noticeDeliveries.find(row=>recoveredSeries.bookingActions.some(a=>a.id===row.sourceId&&a.seriesChangeId===seriesEdit.id)).status,'paused','SCHED-001 changes remain paused after native restore')
     const lee=await h.cmd('person.save',{name:'Lee',email:'lee@studio.example',role:'member',active:true},restoredOwner)
     await h.cmd('person.invite',{id:lee.id},restoredOwner);lee.cookie=await h.signIn('lee@studio.example')
     const seat=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Restored Reformer',start:week+'T13:00:00Z',end:week+'T14:00:00Z',capacity:1,instructorId:coach.id}]},restoredOwner)).id},restoredOwner)).classes[0]
@@ -95,14 +104,14 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-014: portable exit reconstruction and publi
     await h.cmd('booking.cancel',{id:first.id,cancelReason:'Other'},restoredOwner)
     let restoredState=await h.state(restoredOwner)
     assert.equal(restoredState.bookings.find(b=>b.classId===seat.id&&b.personId===lee.id).status,'booked')
-    assert.deepEqual(restoredState.noticeDeliveries.map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'both cancellation and promotion email stay paused after restore')
+    assert.deepEqual(restoredState.noticeDeliveries.map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',member.id,'paused'],['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'series changes, cancellation and promotion email stay paused after restore')
     assert.match((await h.state(lee.cookie)).notices.map(n=>n.subject).join(),/You're booked: Restored Reformer/)
     await h.cmd('mail.connect',{},restoredOwner)
     assert.doesNotMatch((await h.send('/app/studio',undefined,restoredOwner)).text,/Member email paused/)
     const closing=await h.cmd('closure.prepare',{scope:'class',classId:seat.id,reason:'Restored test'},restoredOwner)
     await h.cmd('closure.confirm',{id:closing.id,impact:closing.impact.key},restoredOwner)
     restoredState=await h.state(restoredOwner)
-    assert.deepEqual(restoredState.noticeDeliveries.map(d=>d.status),['paused','paused','not_configured'])
+    assert.deepEqual(restoredState.noticeDeliveries.map(d=>d.status),['paused','paused','paused','not_configured'])
     await h.close();h=null
     await command(restored,['import','--input',old,'--yes','--no-queue'],4)
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})

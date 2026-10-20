@@ -80,6 +80,14 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
       closesMinutesBefore: whole('closesMinutesBefore') ?? 0, cancelCutoffHours: whole('cancelCutoffHours') ?? 0,
       lateCancelReturnsCredit: input.lateCancelReturnsCredit === 'true', lateCancelFeeCents: cents(input.lateFee ?? '0', 'the late-cancel fee'), noShowFeeCents: cents(input.noShowFee ?? '0', 'the no-show fee') }
   }
+  if (name === 'series.prepare' || name === 'series.change.prepare') {
+    const values: Record<string, unknown> = { ...input }
+    for (const key of ['minutes', 'capacity', 'onlineCapacity', 'intervalWeeks', 'bufferBeforeMinutes', 'bufferAfterMinutes']) if (key in values) values[key] = Number(values[key])
+    values.equipment = String(values.equipment ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+    if (name === 'series.prepare') return values
+    const { classId, scope, reason, ...change } = values
+    return { classId, scope, reason, change }
+  }
   if (name === 'classes.prepare') {
     const week = String(input.week ?? ''), zone = zoneOf(timeZone)
     if (!date.test(week)) fail('Choose the Monday that starts the week')

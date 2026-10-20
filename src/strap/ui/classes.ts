@@ -9,6 +9,7 @@ import { addDays, mondayOf, zoneName } from '../zone'
 import { allocationDetails, availabilityPanel } from './scheduling'
 import { ruleLine } from './booking-rules'
 import { closuresPanel } from './closures'
+import { seriesPanel } from './series'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -60,5 +61,5 @@ export function classesPage(s: any, query: URLSearchParams) {
     + panel(mine ? 'My teaching schedule' : 'Upcoming classes', week, { icon: 'calendar', note: s.studio ? h(zoneName(s.studio.timeZone)) : 'Times in UTC until the studio sets its zone' })
     + (owner(s) ? panel('Prepare a class week', body(editor(s, count)), { id: 'prepare-week', icon: 'plus' }) : '')
     + (drafts ? panel('Prepared class weeks', drafts.html, { count: drafts.waiting, icon: 'clock' }) + panel('Approval history', approvalHistory(s, ['classes']), { icon: 'check' }) : '')
-    + closuresPanel(s) + (owner(s) ? availabilityPanel(s) : '') + waiver(s) + `</div></div>`
+    + seriesPanel(s, query) + closuresPanel({...s,closures:rows(s,'closures').filter(c => c.scope !== 'series'),classes:rows(s,'classes').filter(c => !c.seriesId)}) + (owner(s) ? availabilityPanel(s) : '') + waiver(s) + `</div></div>`
 }

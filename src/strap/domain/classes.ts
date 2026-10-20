@@ -16,30 +16,36 @@ function weekStart(value: unknown) {
   insist(/^\d{4}-\d\d-\d\d$/.test(day) && Number.isFinite(Date.parse(day)) && new Date(day).toISOString().slice(0,10) === day && weekdayForDate(day) === 1,'week_must_be_monday');
   return day;
 }
-function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
-  const published = list(tx.state,'class').filter(c => c.status !== 'cancelled');
-  const weekEnd = new Date(Date.parse(week)+7*86_400_000).toISOString().slice(0,10);
+export function checkAllocations(tx: Transaction, classes: RecordData[], excluded: string[] = []) {
+  const published = list(tx.state,'class').filter(c => c.status !== 'cancelled' && !excluded.includes(c.id));
   for (const item of classes) {
     const instructor = person(tx.state,item.instructorId);
     insist(instructor.role === 'instructor','instructor_required');
     insist(instructor.version === item.instructorVersion,'instructor_changed',409);
     insist(item.start > now() && item.end > item.start,'class_must_be_future');
     tx.future(item.start);
-    // Compare the supplied civil date, retained with the frozen draft, so offsets
-    // do not move an evening class into a different timetable week.
-    insist(item.localDate >= week && item.localDate < weekEnd,'class_outside_week');
   }
-  refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')), tx.who.role === 'owner');
+  refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')),tx.who.role === 'owner');
   refuseLocationClosures(tx.state,classes);
 }
+function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
+  const weekEnd = new Date(Date.parse(week)+7*86_400_000).toISOString().slice(0,10);
+  for (const item of classes) insist(item.localDate >= week && item.localDate < weekEnd,'class_outside_week');
+  checkAllocations(tx,classes);
+}
+/** Shared class normalization for week and recurring timetable doors. */
+export function classFields(tx: Transaction, entry: Record<string,unknown>): RecordData {
+  const instructor = person(tx.state,entry.instructorId);
+  return {id:id(),title:text(entry.title,'title',160),service:text(entry.service || entry.title,'service',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),onlineCapacity:integer(entry.onlineCapacity ?? entry.capacity,'online_capacity',0,integer(entry.capacity,'capacity',1,1000)),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
+}
+
 export function prepareClasses(tx: Transaction, input: Record<string, unknown>) {
   preparer(tx.who);
   const week = weekStart(input.week);
   insist(Array.isArray(input.classes) && input.classes.length > 0 && input.classes.length <= 100,'classes_required');
   const classes = input.classes.map((raw: unknown): RecordData => {
     insist(raw && typeof raw === 'object','invalid_class');
-    const entry = raw as Record<string,unknown>, instructor = person(tx.state,entry.instructorId);
-    return {id:id(),title:text(entry.title,'title',160),service:text(entry.service || entry.title,'service',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),onlineCapacity:integer(entry.onlineCapacity ?? entry.capacity,'online_capacity',0,integer(entry.capacity,'capacity',1,1000)),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
+    return classFields(tx,raw as Record<string,unknown>);
   });
   checkClasses(tx,classes,week);
   const draft = {id:id(),type:'classes',status:'draft',week,classes,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};

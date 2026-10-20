@@ -3,13 +3,16 @@ import { dismissForMember, launchWaiver, priorStaffRequest, retainStaffAction, s
 import { load, loadKiosk, loadSystem, Transaction } from './store';
 import { DomainError, insist, list, type Actor } from './types';
 import { prepareClasses, publishClasses } from './classes';
+import { prepareSeries, publishSeries, prepareSeriesChange, approveSeriesChange } from './series';
+import { prepareSeriesCancellation, confirmSeriesCancellation, prepareScopedClosure, confirmScopedClosure } from './series-cancellation';
+import { seriesBasis } from './series-model';
 import { acknowledgeWaiver, book, cancel, latestWaiver, publishWaiver } from './bookings';
 import { moveBooking, restoreBooking, positionWaiter } from './booking-actions';
 import { bookingActions, cancellationReasons, saveCancellationReasons } from './booking-history';
 import { prepareBookingChange, approveBookingChange } from './booking-drafts';
 import { deskBook } from './desk';
 import { checkin, correctAttendance, markNoShow } from './attendance';
-import { closureImpact, confirmClosure, dismissNotice, prepareClosure } from './closures';
+import { closureImpact, dismissNotice } from './closures';
 import { connectMemberMail, memberMail, type NoticeContext } from './notices';
 import { acceptOffer, promoteAll, saveWaitlistPolicy, waitlistPolicy } from './waitlist';
 import { checkinAlerts, staffCode, inWindow, kioskCheckin, kioskLookup, memberCheckin, ownCode, rotateCode, scanCheckin, selfCheckin } from './checkin';
@@ -27,6 +30,12 @@ export type { Actor, Person } from './types';
 export const handlers = {
   'person.save':defineCommand(savePerson,['owner']),
   'person.erase':defineCommand(erasePerson,['owner']),
+  'series.prepare':defineCommand(prepareSeries,['owner','agent']),
+  'series.publish':defineCommand(publishSeries,['owner']),
+  'series.change.prepare':defineCommand(prepareSeriesChange,['owner','agent']),
+  'series.change.approve':defineCommand(approveSeriesChange,['owner']),
+  'series.cancel.prepare':defineCommand(prepareSeriesCancellation,['owner']),
+  'series.cancel.confirm':defineCommand(confirmSeriesCancellation,['owner']),
   'classes.prepare':defineCommand(prepareClasses,['owner','agent']),
   'classes.publish':defineCommand(publishClasses,['owner']),
   'scheduling.unavailable.save':defineCommand(saveUnavailability,['owner']),
@@ -49,8 +58,8 @@ export const handlers = {
   'attendance.checkin':defineCommand(checkin,['owner','instructor'],{staffRight:'check-in',denial:'instructor_required'}),
   'attendance.noshow':defineCommand(markNoShow,['owner','instructor'],{denial:'instructor_required'}),
   'attendance.correct':defineCommand(correctAttendance,['owner']),
-  'closure.prepare':defineCommand(prepareClosure,['owner','agent']),
-  'closure.confirm':defineCommand(confirmClosure,['owner']),
+  'closure.prepare':defineCommand(prepareScopedClosure,['owner','agent']),
+  'closure.confirm':defineCommand(confirmScopedClosure,['owner']),
   'notice.dismiss':defineCommand(dismissNotice,['owner','member','instructor'],{member:{staff:'notice.dismiss.staff',right:'member-record'}}),
   'attendance.self':defineCommand(selfCheckin,['member'],{member:{staff:'attendance.checkin',right:'check-in'}}),
   'attendance.scan':defineCommand(scanCheckin,['owner','instructor'],{denial:'forbidden'}),
@@ -76,7 +85,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
-  if (who.role === 'agent') insist(['classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare'].includes(name),'agents_can_only_prepare',403);
+  if (who.role === 'agent') insist(['classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = handlers[name as keyof typeof handlers];
   if (!spec) throw new DomainError('unknown_command',404);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
@@ -124,7 +133,9 @@ export async function snapshot(db: D1Database, who: Actor) {
   const people = state.people.filter(p => !p.erasedAt && (owner || visibleIds.has(p.id))).map(p =>
     owner || p.id === who.personId ? {...p,phone:memberCheckin(state,p.id)?.phone ?? null} : {id:p.id,name:p.name,role:p.role,active:p.active});
   const own = (kind: string) => list(state,kind).filter(r => owner || r.personId === who.personId);
-  return {staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
+  const timetableBasis = owner ? await seriesBasis(state) : null;
+  const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
+  return {series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
     drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],
