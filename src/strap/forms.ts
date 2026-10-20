@@ -38,6 +38,10 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name.startsWith('recognition.')) {
+    for (const key of ['threshold','version']) if (key in input) input[key]=Number(input[key])
+    for (const key of ['enabled','optedIn']) if (key in input) input[key]=input[key]==='true'
+  }
   if (name === 'pay.rule.save') {
     const mode = String(input.mode), cancellation = {treatment:String(input.cancellation),...(input.cancellation === 'flat' ? {amountCents:cents(input.cancellationAmount,'canceled-class pay')} : {})}
     const rate = mode === 'tiered' ? {tiers:String(input.tiers ?? '').split(/\r?\n/).filter(line=>line.trim()).map(line=>{const [limit,amount,...extra]=line.split(',');if(extra.length || !amount) fail('Enter one inclusive limit and USD amount per tier'); return {upTo:limit.trim()==='*'?null:Number(limit.trim()),rateCents:cents(amount,'the tier rate')}})} : {rateCents:cents(input.rate,'the teaching rate')}

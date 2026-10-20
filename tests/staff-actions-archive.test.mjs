@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -40,6 +40,16 @@ test('STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch his
     const payAdjustment=await h.cmd('pay.adjust',{classId:payClass.id,amountCents:500,reason:'Agreed holiday preparation',requestId:'holiday-preparation'})
     const originalPay=(await h.send('/api/strap/teaching-pay',undefined,h.owner)).value
     assert.equal(originalPay.totalCents,2000)
+    await h.cmd('recognition.milestone.save',{threshold:1,label:'First visit',enabled:true})
+    await h.cmd('recognition.preference.save',{optedIn:true,version:0},member.cookie)
+    await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:1,amountCents:2000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+    const visitStart=new Date(Date.now()+86400_000).toISOString(),visitDate=new Date(visitStart)
+    const visitWeek=new Date(Date.UTC(visitDate.getUTCFullYear(),visitDate.getUTCMonth(),visitDate.getUTCDate()-(visitDate.getUTCDay()+6)%7)).toISOString().slice(0,10)
+    const visit=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:visitWeek,classes:[{title:'Flow',start:visitStart,end:new Date(Date.parse(visitStart)+3600_000).toISOString(),capacity:10,instructorId:coach.id}]})).id})).classes[0]
+    const reservation=await h.cmd('booking.book',{classId:visit.id},member.cookie)
+    await h.cmd('attendance.checkin',{id:reservation.id},coach.cookie)
+    const originalRecognition=(await h.state()).recognition
+    assert.equal(originalRecognition.recognitions.length,1)
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,...identity})
@@ -48,6 +58,9 @@ test('STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch his
     const memberCookie=await h.signIn(member.email)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
+    assert.deepEqual(before.recognition,originalRecognition,'LEAD-006 consent, milestones, source evidence and permanent issuance identities survive native restore')
+    await h.cmd('recognition.process',{},owner)
+    assert.equal((await h.state(owner)).recognition.recognitions.length,1,'restored processing cannot repeat recognition')
     assert.deepEqual(before.payRules,[payRule],'STAFF-002 immutable rate versions survive native restore')
     assert.deepEqual(before.teachingPay.rows,originalPay.rows,'STAFF-002 pay sources, arithmetic and adjustment history survive native restore')
     assert.equal(before.teachingPay.rows[0].adjustments[0].id,payAdjustment.id)

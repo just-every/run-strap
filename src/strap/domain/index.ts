@@ -1,3 +1,5 @@
+import { saveMilestone, saveRecognitionPreference, processRecognition, completeRecognition, recognitionSnapshot } from './recognition';
+import { launchRecognition } from './recognition-launch';
 import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
 import { defineCommand } from './command-catalogue';
 import { dismissForMember, launchWaiver, priorStaffRequest, retainStaffAction, staffActions, staffBefore } from './staff-actions';
@@ -29,6 +31,11 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'recognition.milestone.save':defineCommand(saveMilestone,['owner']),
+  'recognition.preference.save':defineCommand(saveRecognitionPreference,['member'],{member:{staff:'recognition.launch',right:'member-record',ownStep:true}}),
+  'recognition.launch':defineCommand(launchRecognition,['owner'],{staffRight:'member-record'}),
+  'recognition.process':defineCommand((tx) => { insist(tx.who.role === 'owner' && tx.who.isOwner,'owner_required',403); return processRecognition(tx); },['owner']),
+  'recognition.complete':defineCommand(completeRecognition,['owner']),
   'pay.rule.save':defineCommand(savePayRule,['owner']),
   'pay.adjust':defineCommand(adjustTeachingPay,['owner']),
   'person.save':defineCommand(savePerson,['owner']),
@@ -98,13 +105,14 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set(list(tx.state,'bookingAction').map(a => a.id));
   const result = await spec.run(tx,input,context);
   if (staff) retainStaffAction(tx,name,spec.staffRight!,input,result,before,priorIds);
+  processRecognition(tx);
   await tx.commit(); return result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
 export async function sweep(db: D1Database, context: NoticeContext) {
   const loaded = await loadSystem(db), tx = new Transaction(db,loaded.state,loaded.who);
-  tx.notices = context; promoteAll(tx);
+  tx.notices = context; promoteAll(tx); processRecognition(tx);
   if (tx.sql.length) await tx.commit();
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -114,6 +122,7 @@ export async function kioskRead(db: D1Database, kioskId: string, query: unknown)
 export async function kioskCommand(db: D1Database, kioskId: string, name: 'checkin' | 'scan', input: Record<string,unknown>) {
   const loaded = await loadKiosk(db,kioskId), tx = new Transaction(db,loaded.state,loaded.who);
   const result = name === 'scan' ? scanCheckin(tx,input) : kioskCheckin(tx,input);
+  processRecognition(tx);
   await tx.commit();
   const person = loaded.state.people.find(p => p.id === result.personId)!, entry = loaded.state.records.get(result.classId)!.data;
   const [first,...rest] = person.name.trim().split(/\s+/);
@@ -139,7 +148,7 @@ export async function snapshot(db: D1Database, who: Actor) {
   const timetableBasis = owner ? await seriesBasis(state) : null;
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
-  return {teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
+  return {recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),payments:own('payment'),charges:own('charge'),
     drafts:owner?list(state,'draft'):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],

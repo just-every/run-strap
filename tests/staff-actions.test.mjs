@@ -39,9 +39,20 @@ test('STAFF-006: every current member command has a real staff door, identical m
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('booking.')?'booking':name==='notice.dismiss.staff'?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     const actions={
+      'recognition.preference.save':async door=>{
+        const current=(await h.state(ana.cookie)).recognition.preferences[0]
+        const input={personId:ana.id,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.preferenceDoor,true)
+        assert.deepEqual((await h.state(ana.cookie)).recognition.preferences[0],current,'staff launch preserves the member-owned choice')
+        const saved=await h.cmd('recognition.preference.save',{optedIn:true,version:current.version},ana.cookie)
+        assert.equal(saved.optedIn,true)
+        assert.equal(saved.history.at(-1).actorId,(await h.state(ana.cookie)).actor.id)
+        await h.cmd(door,input)
+        assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1)
+      },
       'booking.book':async door=>{
         const r=await checkAudit(door,{personId:ana.id,classId:future.id,channel:'phone'})
         assert.equal(r.result.status,'booked');assert.equal((await h.state(ana.cookie)).bookings.find(b=>b.id===r.result.id).status,'booked');return r.result

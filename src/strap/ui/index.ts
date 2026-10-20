@@ -1,3 +1,4 @@
+import { recognitionPage } from './recognition'
 import { teachingPayPage } from './teaching-pay'
 import { bulkResult } from './booking-actions'
 import { reportsPage } from './reports'
@@ -30,7 +31,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
           : current === '/app/packs' ? packsPage(state, query)
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)
-                : current === '/app/teaching-pay' ? teachingPayPage(state) : current === '/app/reports' ? reportsPage(state, query) : studioPage(state, notice)
+                : current === '/app/recognition' ? recognitionPage(state,notice) : current === '/app/teaching-pay' ? teachingPayPage(state) : current === '/app/reports' ? reportsPage(state, query) : studioPage(state, notice)
   const todays = classesOn(state, studioToday(state)), now = currentClass(state, todays)
   const day = current === '/app' && desk ? dayNav(state, query) : `<p class="today-date"><span>${h(dayLong(studioToday(state)))}</span></p>`
   const checkIn = now ? `/app?class=${encodeURIComponent(now.id)}#class-${now.id}` : '/app'
