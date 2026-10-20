@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -30,6 +30,16 @@ test('STAFF-006 / MOVE-011: native restore carries waiver launch history without
     assert.equal((await h.state()).memberMail.origin,h.origin,'the first explicit member link records its source installation')
     const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
     assert.ok(!('st_waiver_launch_dispatches'in portable.tables))
+    const coach=await h.person('Leo','instructor')
+    const effectiveAt=new Date(Date.now()+3000).toISOString(),start=new Date(Date.now()+60_000).toISOString(),d=new Date(start)
+    const week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
+    const payRule=await h.cmd('pay.rule.save',{effectiveAt,mode:'flat-class',rateCents:4500,minimumCents:0,cancellation:{treatment:'flat',amountCents:1500}})
+    const payClass=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Morning Flow',start,end:new Date(Date.parse(start)+3600_000).toISOString(),capacity:10,instructorId:coach.id}]})).id})).classes[0]
+    const closure=await h.cmd('closure.prepare',{scope:'class',classId:payClass.id,reason:'Studio holiday'})
+    await h.cmd('closure.confirm',{id:closure.id,impact:closure.impact.key})
+    const payAdjustment=await h.cmd('pay.adjust',{classId:payClass.id,amountCents:500,reason:'Agreed holiday preparation',requestId:'holiday-preparation'})
+    const originalPay=(await h.send('/api/strap/teaching-pay',undefined,h.owner)).value
+    assert.equal(originalPay.totalCents,2000)
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,...identity})
@@ -38,6 +48,9 @@ test('STAFF-006 / MOVE-011: native restore carries waiver launch history without
     const memberCookie=await h.signIn(member.email)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
+    assert.deepEqual(before.payRules,[payRule],'STAFF-002 immutable rate versions survive native restore')
+    assert.deepEqual(before.teachingPay.rows,originalPay.rows,'STAFF-002 pay sources, arithmetic and adjustment history survive native restore')
+    assert.equal(before.teachingPay.rows[0].adjustments[0].id,payAdjustment.id)
     assert.equal(before.waiverLaunches.length,1);assert.equal(before.staffActions.filter(a=>a.command==='waiver.launch').length,1)
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM st_waiver_launch_dispatches').first()).n,0,'restore has no dispatch authority')
     const input={personId:member.id,waiverId:waiver.id,requestId:'restored-link',channel:'phone'}

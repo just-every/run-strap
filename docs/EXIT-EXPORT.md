@@ -24,6 +24,8 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 
 | Kind | Meaning and links |
 | --- | --- |
+| `payRule` | STAFF-002 immutable instructor/service-scoped rate version, exact effective instant, cents, attendance tiers, minimum, cancellation/substitute terms and owner provenance. |
+| `payAdjustment` | STAFF-002 additive signed cents, instructor/class/rule IDs, source booking IDs, exact original calculation, reason, owner, time and replay identity. This is compensation evidence, not payroll execution. |
 | `studio` | Location and IANA time zone; settings ID `studio`. |
 | `class` | Published occurrence, start/end, service, room/equipment, capacity, buffers, instructor person ID and source draft ID. |
 | `unavailability` | Instructor/room/equipment blocked interval and active/removed status. Instructor `resourceId` refers to a person; rooms/equipment use normalized label identities. |

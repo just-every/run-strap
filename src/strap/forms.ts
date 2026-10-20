@@ -38,6 +38,15 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'pay.rule.save') {
+    const mode = String(input.mode), cancellation = {treatment:String(input.cancellation),...(input.cancellation === 'flat' ? {amountCents:cents(input.cancellationAmount,'canceled-class pay')} : {})}
+    const rate = mode === 'tiered' ? {tiers:String(input.tiers ?? '').split(/\r?\n/).filter(line=>line.trim()).map(line=>{const [limit,amount,...extra]=line.split(',');if(extra.length || !amount) fail('Enter one inclusive limit and USD amount per tier'); return {upTo:limit.trim()==='*'?null:Number(limit.trim()),rateCents:cents(amount,'the tier rate')}})} : {rateCents:cents(input.rate,'the teaching rate')}
+    return {instructorId:input.instructorId,service:input.service,effectiveAt:String(input.effectiveAt)+'Z',mode,...rate,minimumCents:cents(input.minimum,'the guaranteed minimum'),cancellation,...(String(input.substituteRate ?? '').trim() ? {substitute:{mode:'flat-class',rateCents:cents(input.substituteRate,'the substitute rate'),minimumCents:0}} : {})}
+  }
+  if (name === 'pay.adjust') {
+    const amount=String(input.adjustment ?? '').trim(), negative=amount.startsWith('-')
+    return {...input,amountCents:cents(negative?amount.slice(1):amount,'the teaching-pay adjustment')*(negative?-1:1)}
+  }
   if (name === 'booking.bulk.cancel') input.ids = Object.keys(input).filter(key => key.startsWith('b_') && input[key] === 'true').map(key => key.slice(2))
   if (name === 'booking.waitlist.position') input.position = Number(input.position)
   if (name === 'cancellationReasons.save') input.reasons = String(input.reasons ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
