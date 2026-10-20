@@ -11,7 +11,7 @@ export function feeStatus(state: State, charge: RecordData): RecordData & {statu
   const reversal = list(state,'charge').find(c => c.reversesChargeId === charge.id);
   return {...charge,status:reversal ? 'waived' : receipt ? 'collected' : 'pending',receipt:receipt ?? null,reversal:reversal ?? null};
 }
-export const fees = (state: State) => list(state,'charge').filter(isFee).map(c => feeStatus(state,c));
+export const fees = (state: State) => list(state,'charge').filter(isFee).sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map(c => feeStatus(state,c));
 
 function assessedFee(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
