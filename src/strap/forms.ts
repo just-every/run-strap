@@ -109,7 +109,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'bookingRule.save') {
     const whole = (key: string) => { const value = String(input[key] ?? '').trim(); return value === '' ? null : Number(value) }
     return { service: String(input.service ?? '').trim(), opensHoursBefore: whole('opensHoursBefore'), priorityOpensHoursBefore: whole('priorityOpensHoursBefore'),
-      closesMinutesBefore: whole('closesMinutesBefore') ?? 0, cancelCutoffHours: whole('cancelCutoffHours') ?? 0,
+      noShowGraceMinutes: whole('noShowGraceMinutes') ?? 0, closesMinutesBefore: whole('closesMinutesBefore') ?? 0, cancelCutoffHours: whole('cancelCutoffHours') ?? 0,
       lateCancelReturnsCredit: input.lateCancelReturnsCredit === 'true', lateCancelFeeCents: cents(input.lateFee ?? '0', 'the late-cancel fee'), noShowFeeCents: cents(input.noShowFee ?? '0', 'the no-show fee') }
   }
   if (name === 'series.prepare' || name === 'series.change.prepare') {

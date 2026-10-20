@@ -34,7 +34,9 @@ export function markNoShow(tx: Transaction, input: Record<string,unknown>) {
   insist(booking.status === 'booked','confirmed_booking_required',409);
   insist(!booking.checkedInAt && !booking.attendance,'attendance_already_recorded',409);
   insist(entry.start <= now(),'class_not_started',409);
-  tx.reached(entry.start);
+  const graceEndsAt = new Date(Date.parse(entry.start)+(booking.cancelTerms?.noShowGraceMinutes ?? 0)*60_000).toISOString();
+  insist(graceEndsAt <= now(),'no_show_grace_active',409);
+  tx.reached(graceEndsAt);
   bookingCredit(tx,booking,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'no_show'});
   const feeCents = booking.cancelTerms?.noShowFeeCents ?? 0;
   if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});

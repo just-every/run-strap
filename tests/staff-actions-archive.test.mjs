@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -65,6 +65,20 @@ test('SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native
     const originalSubstitutions=(await h.state()).substitutions
     const originalAssignment=(await h.state()).classes.find(c=>c.id===visit.id)
     assert.equal(originalRecognition.recognitions.length,1)
+    // ATT-002: explicit receipts and reasoned reversals are retained data, never collection instructions.
+    await h.cmd('bookingRule.save',{service:'Fee rehearsal',cancelCutoffHours:12,lateCancelFeeCents:1500,noShowGraceMinutes:10})
+    await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:0,expiresAt:'2099-12-31T00:00:00Z'})).id})
+    const feeStart=new Date(Date.now()+3*3600_000).toISOString(),feeDate=new Date(feeStart)
+    const feeWeek=new Date(Date.UTC(feeDate.getUTCFullYear(),feeDate.getUTCMonth(),feeDate.getUTCDate()-(feeDate.getUTCDay()+6)%7)).toISOString().slice(0,10)
+    const feeClass=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:feeWeek,classes:[{title:'Fee rehearsal',service:'Fee rehearsal',start:feeStart,end:new Date(Date.parse(feeStart)+3600_000).toISOString(),capacity:5,instructorId:coach.id}]})).id})).classes[0]
+    for(const action of ['collect','waive']) {
+      const seat=await h.cmd('booking.book',{classId:feeClass.id},member.cookie)
+      const effect=(await h.state(member.cookie)).bookings.find(b=>b.id===seat.id).cancelEffect
+      await h.cmd('booking.cancel',{id:seat.id,terms:effect.key},member.cookie)
+      const charge=(await h.state()).fees.find(f=>f.bookingId===seat.id)
+      await h.cmd('fee.'+action,{id:charge.id,reference:'ARCHIVE-FEE-RECEIPT',reason:'Courtesy fee waiver',requestId:'archive-fee-'+action})
+    }
+    const originalFees=(await h.state()).fees,originalFeeAudit=(await h.state()).staffActions.filter(a=>a.command?.startsWith('fee.'))
     const identity={auth:h.auth,owner:h.owner};await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,...identity})
@@ -76,6 +90,13 @@ test('SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native
     assert.deepEqual(await h.cmd('lead.create',inquiry,owner),lead,'LEAD-002 restore preserves request identity and never duplicates inquiry')
     assert.deepEqual(await h.cmd('substitution.approve',{id:substitution.id,impact:substitution.impact.key},owner),approvedSubstitution,'SCHED-004 restore replays the approved identity without repeating notices')
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
+    assert.deepEqual(before.fees,originalFees,'ATT-002 linked external receipts, grace terms and waived fee reversals survive native restore')
+    assert.deepEqual(before.staffActions.filter(a=>a.command?.startsWith('fee.')),originalFeeAudit,'ATT-002 canonical collection and waiver audits survive')
+    for(const fee of originalFees) assert.equal(before.bookings.find(b=>b.id===fee.bookingId).cancelTerms.noShowGraceMinutes,10,'ATT-002 booked grace survives native restore')
+    const receipt=originalFees.find(f=>f.status==='collected')
+    const receiptCount=before.payments.length
+    await h.cmd('fee.collect',{id:receipt.id,reference:'ARCHIVE-FEE-RECEIPT',reason:'Courtesy fee waiver',requestId:'archive-fee-collect'},owner)
+    assert.equal((await h.state(owner)).payments.length,receiptCount,'ATT-002 replay after restore records no second receipt')
     assert.deepEqual(before.substitutions,originalSubstitutions,'SCHED-004 qualifications, requests and exact approved preview survive native restore')
     assert.deepEqual(before.classes.find(c=>c.id===visit.id),originalAssignment,'SCHED-004 roster assignment, pay provenance and history survive native restore')
     assert.deepEqual(before.pipeline.leads,originalPipeline.leads,'LEAD-002 linked lead, assignment, stage and next action survive native restore')

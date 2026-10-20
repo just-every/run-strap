@@ -1,3 +1,4 @@
+import { feesPanel } from './fees'
 // People: members and instructors in a searchable list beside one person's own
 // card (credits, balance, visits and bookings), editing, invitations and erasure.
 import { draftRecords } from './drafts'
@@ -22,6 +23,7 @@ function card(s: any, p: any, back: string) {
   const packLines = packs.map(x => `<p class="meta">${h(packName(x))}: ${x.remaining} of ${x.credits} left, good through ${h(datePlain(dayOf(s, x.expiresAt)))}</p>`).join('')
   const actions = `<div class="actions">${p.active ? form('person.invite', back, hidden('id', p.id), 'Invite to sign in', 'quiet', 'small') : ''}${p.role === 'member' && p.active ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(p.id)}#prepare-pack">Prepare a pack</a>` : ''}</div>`
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(p.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3'))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${packLines}${actions}</div>${upcomingList}`
+    + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
     + staffProfileActions(s, p, back)
     + `<details class="more"><summary>Edit ${h(p.name.split(' ')[0])}</summary><div class="panel-body">${form('person.save', back, hidden('id', p.id) + personFields(p), 'Save changes')}</div></details>`
