@@ -12,6 +12,7 @@ function qualification(state: State, instructorId: string, service: unknown) {
   if (typeof service !== 'string' || !service.trim()) return undefined;
   return qualifications(state).filter(q => q.instructorId === instructorId && q.service === service.trim()).sort((a,b) => b.version-a.version)[0];
 }
+export const qualifiedForService = (state: State, instructorId: string, service: unknown) => !!qualification(state,instructorId,service)?.qualified;
 function futureClass(state: State, classId: unknown) {
   const entry = record(state,classId,'class');
   insist(entry.status === 'published' && entry.start > now(),'substitution_class_must_be_future',409);

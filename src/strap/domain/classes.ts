@@ -54,7 +54,7 @@ export function prepareClasses(tx: Transaction, input: Record<string, unknown>) 
 export function publishClasses(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const draft = record(tx.state,input.id,'draft');
-  insist(draft.type === 'classes','wrong_draft_type');
+  insist(draft.type === 'classes' && !draft.recommendation,'wrong_draft_type');
   checkClasses(tx,draft.classes,draft.week);
   approveDraft(tx,draft);
   const published = draft.classes.map((entry: RecordData) => ({...entry,week:draft.week,status:'published',draftId:draft.id,publishedAt:now()}));

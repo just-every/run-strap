@@ -29,3 +29,11 @@ Only native human owners manage unavailable intervals, using `scheduling.unavail
 ## STAFF-006 member/staff command catalogue
 
 `GET /api/strap/commands` publishes the actual studio dispatch registry’s roles, member-door mapping and staff right. Every member-role command has a current staff counterpart; current grants belong to the human owner. Agents retain only the listed preparation commands and cannot execute any staff action. Native authentication and member-owned acknowledgment remain the member’s own acts.
+
+## SUCCESS-006 demand and coverage recommendations
+
+The agent context includes `demand.classes`: source class and booking IDs, usable capacity, reservations (including held offers), waiting count, recorded attendance/no-shows and substitution history. `demand.availability` exposes active unavailable resource intervals without private reasons. These are observations, not forecasts; an unblocked calendar is not an instructor confirmation.
+
+`recommendation.prepare` accepts `action` (`additional`, `retime`, `coverage`), `sourceClassIds` (1–100 published classes, including the target for changes), `reason`, and `proposal`. An additional proposal has the ordinary class fields; a retime names the target `classId` and only new ISO `start`/`end`; coverage names `classId` and only the new `instructorId`, with a current studio service qualification. At least one cited source has the target service. Existing buffers, rooms, spots, closures, booked credits and offer deadlines are checked. Preparation publishes nothing and sends nothing.
+
+The recommendation appears in Prepared class weeks with the cited counts, exact class and member notification. Only the native owner approves with `recommendation.approve`, supplying its `id`, exact `impact` key and displayed `notification` (`in-app-and-email` for affected reservations, otherwise `no-affected-reservations`). No suppression choice is offered. Provider/origin changes or any source, booking, availability or qualification change require a fresh recommendation. Repeating the same approval repeats no publication or notice. The ordinary `classes.publish` command refuses recommendation drafts.

@@ -9,7 +9,7 @@ export function allocationDetails(c: any) {
 }
 
 export function draftConflicts(s: any, d: any) {
-  return schedulingConflicts(d.classes, rows(s, 'classes'), rows(s, 'unavailability'))
+  return schedulingConflicts(d.classes, rows(s, 'classes').filter(c => !d.recommendation || c.id !== d.before?.id), rows(s, 'unavailability'))
 }
 
 /** The exact blocking records remain visible after another request wins a race. */
