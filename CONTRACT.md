@@ -257,6 +257,7 @@ The previous contract had no clause IDs. Its positive guarantees receive publish
 | --- | --- | --- | --- | --- |
 | Create an account and sign up | APP-001, APP-002 | MEM-001 | member-record | profile created, invitation sent |
 | Update profile, contact details and emergency contact | APP-003, MEM-001 | MEM-001 | member-record | fields before and after |
+| Choose private visit recognition | LEAD-006 (`recognition.preference.save`) | LEAD-006 (`recognition.launch`; member acts after native sign-in) | member-record | launch only, actor/member/channel/before/after; member-owned consent event |
 | Change contact channels, marketing consent and preferences | MEM-006 | MEM-006 | member-record | preference before and after, consent source |
 | Manage household members, guardians and payer | MEM-002, APP-003 | MEM-002 (payer authorizes own method, BILL-004) | member-record | household change, payer authorization |
 | Complete an intake form | MEM-004 | MEM-004 | member-record; sensitive-notes for restricted answers | answers entered, provenance |

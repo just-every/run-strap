@@ -1,4 +1,4 @@
-import { body, cell, emptyLine, field, form, h, hidden, owner, panel, person, personSelect, select, table } from './shared'
+import { body, cell, emptyLine, field, form, h, hidden, owner, panel, person, select, table } from './shared'
 import { actionChannel } from './booking-rules'
 import { when } from './format'
 const path='/app/recognition'
@@ -15,7 +15,7 @@ export function recognitionPage(s: any,notice: any={}) {
     const progress=r.progress.find((p: any)=>p.personId===s.actor.personId)
     return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Visit recognition</h1><p>Your choice controls private milestone follow-up.</p></div>`
       + panel('My choice',body(`<p>When you opt in, the studio owner can receive a private task when your recorded attendance reaches a milestone. Nothing is shared publicly and no email, reward or congratulations is sent automatically. Your current recorded visits count toward milestones.</p><p>Opting out suppresses outstanding tasks immediately. Opting in again, changing a milestone label, or correcting attendance never issues the same milestone twice.</p><p class="meta">Recorded attended visits: ${h(progress?.count ?? 0)} · ${me?.optedIn?'Opted in':'Not opted in'}</p>`
-      + form('recognition.preference.save',path,hidden('version',me?.version ?? 0)+select('optedIn','Private visit recognition',[['false','Do not create milestone tasks'],['true','Allow private milestone tasks']],String(me?.optedIn ?? false)),'Save recognition choice')))
+      + form('recognition.preference.save',path,hidden('version',me?.version ?? 0)+select('optedIn','Private visit recognition',[['false','Do not create milestone tasks'],['true','Allow private milestone tasks']],String(me?.optedIn ?? false),'required aria-label="Private visit recognition"'),'Save recognition choice')))
       + panel('Studio milestones',body(r.milestones.filter((m: any)=>m.enabled).map((m: any)=>`<p>${h(m.label)} · ${h(m.threshold)} attended visits</p>`).join('')||emptyLine('No milestones configured.')))
       + panel('My choice history',body((me?.history ?? []).map((e: any)=>`<p class="meta">${when(s,e.at)} · ${e.optedIn?'Opted in':'Opted out'} · member account</p>`).join('')||emptyLine('No recognition choice saved.')))+'</div></div>'
   }
@@ -30,5 +30,5 @@ export function recognitionPage(s: any,notice: any={}) {
     + panel('Private milestone tasks',`<div class="panel-body"><p>No public sharing, messages or rewards are sent by these tasks.</p>${form('recognition.process',path,'','Refresh milestone tasks','quiet')}</div><div class="table-wrap">${table(['Member','Milestone','Task','Attendance sources'],taskRows||'<tr><td colspan="4">No milestone tasks.</td></tr>')}</div>`)
     + panel('Milestone rules',body(r.milestones.map((m: any)=>`<details><summary>${h(m.label)} · ${h(m.threshold)} visits · ${m.enabled?'Enabled':'Paused'}</summary>${form('recognition.milestone.save',path,milestoneFields(m),'Update milestone','quiet')}</details>`).join('')||emptyLine('No milestones configured.')))
     + '</div><aside class="rail">'+panel('Add a milestone',body(form('recognition.milestone.save',path,milestoneFields(),'Add milestone')))
-    + panel('Member-owned choice',body(`<p>Only the member can opt in from their signed-in account. Staff can open the ordinary sign-in door for them; doing so is audited.</p>${form('recognition.launch',path,personSelect(s)+hidden('requestId',crypto.randomUUID())+actionChannel(),'Open member preferences door','quiet')}`))+'</aside></div>'
+    + panel('Member-owned choice',body(`<p>Only the member can opt in from their signed-in account. Staff can open the ordinary sign-in door for them; doing so is audited.</p>${form('recognition.launch',path,select('personId','Member',[['','Choose a member'],...s.people.filter((p: any)=>p.active&&p.role==='member').map((p: any)=>[p.id,p.name])],'','required aria-label="Member"')+hidden('requestId',crypto.randomUUID())+actionChannel(),'Open member preferences door','quiet')}`))+'</aside></div>'
 }
