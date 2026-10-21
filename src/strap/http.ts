@@ -1,4 +1,5 @@
 import { retentionReport } from './retention-report'
+import { leadReport } from './lead-report'
 import { renewalWorklist } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
@@ -38,8 +39,9 @@ async function state(env: Bindings, who: Actor) {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
-  if (who.role !== 'owner' || !['/app/renewals','/app/retention'].includes(url.pathname)) return state(env,who)
+  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
+  if (url.pathname === '/app/leads') return {...await state(env,who),leadReport:leadReport(loaded.state,loaded.who,url.searchParams)}
   return {...await state(env,who),...(url.pathname === '/app/renewals' ? {renewalWorklist:renewalWorklist(loaded.state,loaded.who,url.searchParams)} : {retentionReport:retentionReport(loaded.state,loaded.who,url.searchParams)})}
 }
 
@@ -116,6 +118,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)
         return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
+      }
+      if (path === '/api/strap/reports/leads') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        const loaded = await load(env.DB,who)
+        return json(leadReport(loaded.state,loaded.who,url.searchParams))
       }
       if (path === '/api/strap/reports/retention') {
         if (who.role !== 'owner') fail('owner_required',403)
