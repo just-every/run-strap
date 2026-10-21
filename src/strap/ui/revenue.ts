@@ -1,0 +1,20 @@
+import { revenueReport } from '../revenue-report'
+import { money, when } from './format'
+import { body, cell, field, h, panel, person, select, table, textarea } from './shared'
+
+export function revenuePage(s: any, query: URLSearchParams) {
+  const report = revenueReport(s,query), t = report.totals
+  const filters = `<form method="get" class="form" action="/app/revenue">${field('from','From date',query.get('from'),'date')}${field('to','Through date',query.get('to'),'date')}${select('plan','Plan',[['','All plans'],...report.plans.map(plan => [plan,plan] as [string,string]),['Unallocated','Unallocated']],query.get('plan') ?? '')}${select('location','Location',[['','All locations'],[report.location,report.location]],query.get('location') ?? '')}<button class="btn" type="submit">Apply revenue filters</button><a href="/app/revenue">Clear filters</a></form>`
+  const metrics = [['Gross sales',t.grossSalesCents],['Sales credits',t.salesCreditsCents],['Net sales',t.netSalesCents],['Assessed fees',t.feesCents],['Total assessed',t.assessedCents],['External collections',t.collectionsCents],['External refunds',t.refundsCents],['Net collections',t.netCollectionsCents],['Outstanding balances (all time)',t.outstandingCents],['Member credit (all time)',t.memberCreditCents]] as const
+  const totals = `<div class="stat-row">${metrics.map(([label,value]) => `<div class="stat"><b>${value === null ? 'Unavailable' : money(value)}</b><small>${h(label)}</small></div>`).join('')}</div><p><a href="#revenue-sources">Inspect ledger sources</a></p><p>${t.newPlans} new plans · ${t.bookingCancellations} booking cancellations · ${t.activeMembers} active members now</p>`
+  const rows = report.sources.map(row => `<tr data-source-id="${h(row.id)}">${cell('Recorded',when(s,row.at))}${cell('Member',`<a href="${h(row.memberUrl)}">${h(person(s,row.personId))}</a>`)}${cell('Kind / plan',`${h(row.kind)}<small>${h(row.plan)}</small>`)}${cell('Amount',row.amountCents === null ? '—' : money(row.amountCents))}${cell('Source',`<a href="${h(row.sourceUrl)}">Inspect record</a>`)}</tr>`).join('')
+  const selected = report.selectedSource
+  const detail = query.has('sourceId') ? panel('Source record',body(selected ? `<p>${h(selected.kind)} · ${h(selected.id)}</p>${textarea("source","Retained source record",JSON.stringify(selected.record,null,2),"readonly rows=12")}` : '<p>No source record matches these filters.</p>'),{id:'source-record'}) : ''
+  const balances = report.balanceRows.filter((r: any) => r.balanceCents !== 0).map((r: any) => `<tr>${cell('Member',`<a href="/app/people?person=${h(r.personId)}#person">${h(person(s,r.personId))}</a>`)}${cell('Balance',money(r.balanceCents))}${cell('Sources',r.sourceIds.map((id: string) => `<a href="/app/revenue?sourceId=${h(id)}#source-record">Inspect record</a>`).join('<br>'))}</tr>`).join('')
+  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Revenue and collections</h1><p>${h(report.timeZone)} · current snapshot ${when(s,report.generatedAt)}</p></div>`
+    + panel('Revenue filters',body(filters),{icon:'report'}) + panel('Selected totals',body(totals),{id:'revenue-totals'})
+    + detail + panel('Ledger sources',`<div class="table-wrap">${table(['Recorded','Member','Kind / plan','Amount','Source'],rows || '<tr><td colspan="5">No events match these filters.</td></tr>')}</div>`,{id:'revenue-sources'})
+    + panel('Current member balances',`<div class="table-wrap">${table(['Member','Balance','Sources'],balances || '<tr><td colspan="3">No balances to display. Plan-filtered balances are unavailable.</td></tr>')}</div>`)
+    + panel('Active members now',body(report.activeMemberIds.map((id: string) => `<p><a href="/app/people?person=${h(id)}#person">${h(person(s,id))}</a></p>`).join('') || '<p>No active members with available plans.</p>'))
+    + panel('Metric definitions',body(report.definitions.map(d => `<p>${h(d)}</p>`).join('')+'<p>Overdue balances, membership cancellations, returned ACH and processor fees: unavailable.</p>'))+'</div></div>'
+}

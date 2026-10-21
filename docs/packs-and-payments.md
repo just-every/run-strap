@@ -56,3 +56,9 @@ For a member who owes money, **Prepare a balance reminder** (or **Prepare a remi
 and the exact message. Approve it, then use **Download** in **Approval history** to get the text and send it from your own
 email. Strap does not send reminders itself. If the member's balance changes before you approve, Strap asks you to
 prepare the reminder again.
+
+## Revenue and collections
+
+Open **Revenue reports** as the owner to compare assessed sales and fees with money received and refunded outside Strap. Filter events by studio-local inclusive dates, named plan/type and the current studio location. **Inspect record** opens the exact retained source; member links open the member profile. The JSON door is `GET /api/strap/reports/revenue`, with `from`, `to`, `plan`, `location` and optional `sourceId` filters. It requires your native owner session.
+
+Ordinary receipts have no plan allocation and stay **Unallocated**. A balance credit is different from an external cash refund. Current member counts and all-time balances have their own labels; balances are unavailable under a plan filter. The definitions on the report explain every total. Missing due dates, historical membership states, processor costs and ACH returns remain unavailable rather than appearing as zero or claiming provider verification.

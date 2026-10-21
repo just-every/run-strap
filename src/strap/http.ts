@@ -2,6 +2,7 @@ import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
 import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
+import { revenueReport } from './revenue-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
 import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
@@ -19,7 +20,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -94,6 +95,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)
         return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
+      }
+      if (path === '/api/strap/reports/revenue') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        return json(revenueReport(await state(env,who),url.searchParams))
       }
       if (path === '/api/strap/reports/attendance') {
         if (who.role !== 'owner') fail('owner_required',403)

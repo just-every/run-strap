@@ -15,7 +15,7 @@ test('RPT-002: attendance, usable-seat occupancy and historical member/staff can
   }
   const {Ana,Ben,Cy,Dee,Eli} = people
   await h.cmd('spots.save',{room:'Reformer room',spots:['R1','R2','R3'],disabled:['R3']})
-  await h.cmd('bookingRule.save',{cancelCutoffHours:12,lateCancelReturnsCredit:true,lateCancelFeeCents:1500})
+  await h.cmd('bookingRule.save',{cancelCutoffHours:12,lateCancelReturnsCredit:true,lateCancelFeeCents:1500,noShowFeeCents:700})
   const start = new Date(Date.now()+20_000).toISOString()
   const publish = async (title,offset,room,instructorId=coach.id,service='Reformer') => {
     const date = new Date(Date.parse(start)+offset).toISOString()
@@ -86,6 +86,102 @@ test('RPT-002: attendance, usable-seat occupancy and historical member/staff can
   assert.ok(page.text.includes(`data-class-id="${flow.id}"`))
   if (process.env.STRAP_PROOF_DIR) await (await import('./reports-browser.mjs')).reportsBrowser(h,{flow,later,report})
   await h.cmd('attendance.correct',{id:b.id,outcome:'attended',reason:'The instructor confirmed Ben attended'})
+  const revenue = await h.send('/api/strap/reports/revenue',undefined,h.owner)
+  assert.equal(revenue.status,200)
+  assert.ok(revenue.value.sources.some(r=>r.record.reason==='fee_reversal' && r.record.amountCents===-700),'RPT-001: corrected no-show fee remains a signed ledger reversal')
   const corrected = await read('')
   assert.deepEqual([corrected.totals.attended,corrected.totals.noShow,corrected.totals.uniqueVisitors,corrected.totals.lateCancelled],[3,0,2,1])
+}))
+
+test('RPT-001: current sales, collections, refunds, fee reversals and member snapshots reconcile to public ledgers with plan, period and location filters and exact source drill-through', () => run(async h => {
+  await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const coach = await h.person('Maya','instructor'), ana = await h.person('Ana'), ben = await h.person('Ben'), cy = await h.person('Cy')
+  const buy = async (p,amountCents,extra={}) => h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents,expiresAt:'2099-12-31T00:00:00Z',...extra})).id})
+  const pack = await buy(ana,20000), second = await buy(ben,15000,{kind:'unlimited',credits:undefined,planName:'Monthly mat'})
+  await buy(cy,5000)
+  await h.cmd('pack.prepare',{personId:ana.id,credits:100,amountCents:99999,expiresAt:'2099-12-31T00:00:00Z'}) // unapproved draft is not a purchase
+  await h.cmd('payment.record',{personId:ana.id,amountCents:20000,reference:'bank-transfer-ana'})
+  await h.cmd('payment.record',{personId:cy.id,amountCents:6000,reference:'cash-cy'})
+  await h.cmd('bookingRule.save',{cancelCutoffHours:100,lateCancelReturnsCredit:false,lateCancelFeeCents:1500})
+  const start = new Date(Date.now()+48*hour).toISOString()
+  const flow = (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Morning Mat',service:'Mat',start,end:new Date(Date.parse(start)+hour).toISOString(),capacity:6,instructorId:coach.id}]})).id})).classes[0]
+  const first = await h.cmd('booking.book',{classId:flow.id},ana.cookie)
+  const cancel = async (booking,p) => {
+    const terms = (await h.state(p.cookie)).bookings.find(b=>b.id===booking.id).cancelEffect.key
+    return h.cmd('booking.cancel',{id:booking.id,terms},p.cookie)
+  }
+  await cancel(first,ana)
+  const fee = (await h.state()).fees.find(f=>f.bookingId===first.id)
+  await h.cmd('fee.collect',{id:fee.id,reference:'cash-fee-ana',channel:'desk',requestId:'fee-receipt'})
+  await h.cmd('attendance.correct',{id:first.id,outcome:'early_cancel',reason:'Fee was assessed in error',refundReference:'cash-refund-ana'})
+  const other = await h.cmd('booking.book',{classId:flow.id},ben.cookie)
+  await cancel(other,ben)
+  // A second fee stays assessed, distinguishing collections from assessments.
+  const preview = await h.cmd('plan.change.prepare',{packId:pack.id,mode:'now',credits:8,amountCents:10000,effectiveAt:new Date(Math.ceil((Date.now()+3000)/1000)*1000).toISOString(),exceptionReason:'Agreed smaller pack',requestId:'downsize'})
+  await h.cmd('plan.change.accept',{id:preview.id,key:preview.key},ana.cookie)
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(preview.effectiveAt)-Date.now()+30)))
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'}) // ordinary command applies due change
+  const read = async (query='') => {
+    const r = await h.send('/api/strap/reports/revenue'+(query?'?'+query:''),undefined,h.owner)
+    assert.equal(r.status,200,r.text); return r.value
+  }
+  const state = await h.state(), report = await read(), t = report.totals
+  const feeReasons = ['late_cancel_fee','no_show_fee','late_move_fee','fee_reversal']
+  const sales = state.charges.filter(c=>!feeReasons.includes(c.reason)), fees = state.charges.filter(c=>feeReasons.includes(c.reason))
+  const sum = rows => rows.reduce((n,r)=>n+r.amountCents,0)
+  assert.equal(t.grossSalesCents,40000)
+  assert.equal(t.salesCreditsCents,preview.chargeCents)
+  assert.equal(t.netSalesCents,sum(sales)); assert.equal(t.feesCents,sum(fees)); assert.equal(t.feesCents,1500)
+  assert.equal(t.assessedCents,sum(state.charges))
+  assert.equal(t.collectionsCents,27500); assert.equal(t.refundsCents,1500)
+  assert.equal(t.netCollectionsCents,sum(state.payments)); assert.equal(t.netCollectionsCents,26000)
+  assert.equal(t.newPlans,3); assert.equal(t.bookingCancellations,2); assert.equal(t.activeMembers,3)
+  assert.equal(t.outstandingCents,16500)
+  assert.equal(t.memberCreditCents,1000-preview.chargeCents)
+  for (const key of ['overdueCents','membershipCancellations','returnedAchCents','processorFeesCents']) assert.equal(t[key],null)
+  assert.deepEqual(new Set(report.sources.filter(r=>['sale','fee'].includes(r.kind)).map(r=>r.id)),new Set(state.charges.map(r=>r.id)))
+  assert.deepEqual(new Set(report.sources.filter(r=>['receipt','refund'].includes(r.kind)).map(r=>r.id)),new Set(state.payments.map(r=>r.id)))
+  for (const row of report.sources) {
+    const source = await h.send(row.sourceUrl,undefined,h.owner)
+    assert.equal(source.status,200); assert.ok(source.text.includes(row.id))
+    const detail = await read('sourceId='+encodeURIComponent(row.id))
+    assert.deepEqual(detail.selectedSource.record,row.record)
+    if (row.amountCents !== null) assert.equal(row.record.amountCents,row.amountCents)
+    assert.equal((await h.send(row.memberUrl,undefined,h.owner)).status,200)
+  }
+  for (const row of report.balanceRows) {
+    const ledger = [...state.charges,...state.payments].filter(r=>r.personId===row.personId)
+    assert.deepEqual(new Set(row.sourceIds),new Set(ledger.map(r=>r.id)))
+    assert.equal(row.balanceCents,sum(state.charges.filter(r=>r.personId===row.personId))-sum(state.payments.filter(r=>r.personId===row.personId)))
+  }
+  const date = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date())
+  const period = await read(`from=${date}&to=${date}&location=${encodeURIComponent('Brooklyn studio')}`)
+  assert.deepEqual(period.totals,t)
+  assert.ok(period.sources.every(r=>r.date===date))
+  assert.equal((await read('from=2099-01-01&to=2099-01-31')).sources.length,0)
+  assert.equal((await read('location=Elsewhere')).sources.length,0)
+  assert.equal((await read('location=Elsewhere')).totals.activeMembers,0)
+  const filtered = await read('plan='+encodeURIComponent('unlimited: Monthly mat'))
+  assert.equal(filtered.totals.newPlans,1); assert.equal(filtered.totals.netSalesCents,15000); assert.equal(filtered.totals.feesCents,1500)
+  assert.equal(filtered.totals.collectionsCents,0); assert.equal(filtered.totals.outstandingCents,null)
+  const unallocated = await read('plan=Unallocated')
+  assert.equal(unallocated.totals.collectionsCents,26000); assert.equal(unallocated.totals.netSalesCents,0)
+  for (const query of ['from=2026-02-30','from=2026-11-02&to=2026-11-01']) assert.equal((await h.send('/api/strap/reports/revenue?'+query,undefined,h.owner)).status,400)
+  const version = state.version
+  for (const cookie of [ana.cookie,coach.cookie,'']) {
+    for (const path of ['/api/strap/reports/revenue','/app/revenue','/app/revenue?sourceId='+fee.id]) {
+      const r = await h.send(path,undefined,cookie)
+      assert.equal(r.status,cookie ? 403 : path.startsWith('/app/') ? 303 : 401)
+      if (r.status===303) assert.equal(r.headers.get('location'),'/signin?returnTo=%2Fapp%2Frevenue')
+    }
+  }
+  const agent = await h.cmd('agent.create',{label:'Report preparation'})
+  assert.equal((await h.send('/api/strap/reports/revenue',undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
+  // Repeated reads never change the ledger or replay any money effect.
+  assert.equal((await h.state()).version,version)
+  assert.deepEqual((await read()).totals,t)
+  if (process.env.STRAP_PROOF_DIR) await (await import('./revenue-browser.mjs')).revenueBrowser(h,{report,ana,coach,date})
+  await h.cmd('person.save',{id:cy.id,name:'Cy',email:cy.email,role:'member',active:false,version:state.people.find(p=>p.id===cy.id).version})
+  assert.equal((await read()).totals.activeMembers,2)
 }))
