@@ -27,6 +27,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "RETENTION-REPORT.md", "reason": "Native owner HTTP/CSV retention report schema and metric definitions for maintainers and API users" },
     { "file": "EXIT-EXPORT.md", "reason": "Portable exit schema and reconstruction instructions for independent receivers and maintainers" },
     { "file": "SOURCES.md", "reason": "Where Strap's code was adapted from, for maintainers" }
   ]

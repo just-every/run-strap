@@ -1,3 +1,4 @@
+import { retentionReport, retentionCsv } from './retention-report'
 import { renewalWorklist, renewalCsv } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
@@ -109,6 +110,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)
         return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
+      }
+      if (path === '/api/strap/reports/retention' || path === '/api/strap/reports/retention.csv') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        const loaded = await load(env.DB,who), report = retentionReport(loaded.state,loaded.who,url.searchParams)
+        return path.endsWith('.csv') ? new Response(retentionCsv(report),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-retention.csv'}}) : json(report)
       }
       if (path === '/api/strap/reports/renewals' || path === '/api/strap/reports/renewals.csv') {
         if (who.role !== 'owner') fail('owner_required',403)

@@ -292,3 +292,104 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,start,'corrected attendance becomes the authoritative last visit')
 
 }))
+
+test('RPT-003: native finite-pack acquisition cohorts reconcile applied, scheduled, failed and absent renewals to exact pack/change/charge evidence through owner HTTP and matching CSV', () => run(async h => {
+  await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const ana = await h.person('CohortAna'), ben = await h.person('CohortBen'), cy = await h.person('CohortCy'), dax = await h.person('CohortDax'), coach = await h.person('CohortCoach','instructor')
+  const base = Date.now(), expiry = new Date(base+12_000).toISOString(), later = new Date(base+86400_000).toISOString()
+  const buy = async (member,expiresAt,planName='Mat five',extra={}) => h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt,planName,...extra})).id})
+  const first = await buy(ana,expiry), second = await buy(ana,later,'Different later offer'), unrenewed = await buy(ben,later,'Mat five'), failedPack = await buy(dax,expiry,'Failed renewal')
+  await buy(cy,later,'Unlimited',{kind:'unlimited',credits:undefined})
+  await h.cmd('pack.prepare',{personId:cy.id,credits:99,amountCents:99999,expiresAt:later,planName:'Draft only'})
+  const renew = async (member,pack) => {
+    const preview = await h.cmd('plan.change.prepare',{packId:pack.id,mode:'renewal',credits:5,amountCents:12000,expiresAt:new Date(base+2*86400_000).toISOString(),requestId:'cohort-'+pack.id})
+    await h.cmd('plan.change.accept',{id:preview.id,key:preview.key},member.cookie)
+    return preview
+  }
+  const applied = await renew(ana,first), scheduled = await renew(ana,second), failed = await renew(dax,failedPack)
+  const expire = async pack => {
+    const current = (await h.state()).packs.find(row=>row.id===pack.id)
+    await h.cmd('pack.adjust',{id:pack.id,revision:current.creditRevision,creditsDelta:0,expiresAt:'2020-01-01T00:00:00Z',reason:'Corrected original expiration',requestId:'expired-'+pack.id})
+  }
+  const unaccepted = await h.cmd('plan.change.prepare',{packId:unrenewed.id,mode:'renewal',credits:5,amountCents:12000,expiresAt:new Date(base+2*86400_000).toISOString(),requestId:'unaccepted-cohort'})
+  const future = (await h.send('/api/strap/reports/retention',undefined,h.owner)).value
+  assert.ok(future.cohorts.every(cohort=>cohort.completedTerms===0&&cohort.renewalRatePercent===null),'RPT-003: no completed terms means an unavailable rate, never zero')
+  assert.equal(future.rows.find(row=>row.packId===unrenewed.id).renewalStatus,'not-recorded','RPT-003: an unaccepted preview is not a renewal')
+  const anotherExpired = await buy(ben,later,'Mat five')
+  await expire(unrenewed); await expire(anotherExpired); await expire(failedPack)
+  // A recorded receipt is deliberately unallocated; it cannot prove renewal collection.
+  await h.cmd('payment.record',{personId:ana.id,amountCents:10000,reference:'unallocated-cohort-receipt'})
+  const path = '/api/strap/reports/retention'
+  const read = async (query='') => {
+    const response = await h.send(path+(query?'?'+query:''),undefined,h.owner)
+    assert.equal(response.status,200,response.text); assert.equal(response.headers.get('cache-control'),'no-store'); return response.value
+  }
+  let report = await read()
+  assert.deepEqual(report.rows.filter(row=>row.personId===ana.id).map(row=>row.renewalStatus),['scheduled','scheduled'])
+  assert.ok(report.cohorts.every(cohort=>cohort.renewedTerms===0),'acceptance before the effective date is not applied renewal')
+  const futureOnly = await read('offer=Different+later+offer')
+  assert.deepEqual(futureOnly.rows,[],'a later offer does not create a second acquisition cohort')
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(expiry)-Date.now()+40)))
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'}) // ordinary public command applies due renewals
+  const state = await h.state(), version = state.version
+  report = await read()
+  const row = report.rows.find(row=>row.packId===first.id), successor = state.packs.find(pack=>pack.renewedFromPackId===first.id)
+  assert.ok(successor)
+  assert.deepEqual([row.completed,row.renewalStatus,row.renewalChangeId,row.successorPackId],[true,'applied',applied.id,successor.id])
+  assert.deepEqual(row.renewalAttemptIds,[applied.id])
+  const successorRow = report.rows.find(row=>row.packId===successor.id)
+  assert.deepEqual([successorRow.firstPackId,successorRow.initialOffer],[first.id,'Mat five'])
+  assert.equal(report.rows.find(row=>row.packId===second.id).renewalChangeId,scheduled.id)
+  assert.equal(report.rows.find(row=>row.packId===second.id).renewalStatus,'scheduled')
+  assert.deepEqual(report.rows.find(row=>row.packId===unrenewed.id).renewalAttemptIds,[unaccepted.id])
+  assert.equal(state.planChanges.changes.find(change=>change.id===failed.id).status,'failed')
+  assert.equal(report.rows.find(row=>row.packId===failedPack.id).renewalStatus,'expired-without-linked-renewal')
+  assert.deepEqual(report.rows.find(row=>row.packId===failedPack.id).renewalAttemptIds,[failed.id])
+  const mat = report.cohorts.find(cohort=>cohort.initialOffer==='Mat five')
+  assert.deepEqual([mat.members,mat.terms,mat.completedTerms,mat.renewedTerms,mat.scheduledRenewals,mat.expiredWithoutLinkedRenewal,mat.renewalRatePercent],[2,5,3,1,1,2,33.33])
+  const localMonth = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(state.packs.find(pack=>pack.id===first.id).createdAt)).slice(0,7)
+  assert.equal(mat.acquisitionMonth,localMonth)
+  assert.deepEqual(new Set(report.rows.map(row=>row.packId)),new Set([first.id,second.id,unrenewed.id,anotherExpired.id,failedPack.id,successor.id]))
+  for (const item of report.rows) {
+    assert.equal(item.collectedRenewalCents,null); assert.equal(item.paymentIds,null)
+    const charges = state.charges.filter(charge=>charge.packId===item.packId)
+    assert.deepEqual(item.chargeIds,charges.map(charge=>charge.id))
+    assert.equal(item.assessedCents,charges.reduce((sum,charge)=>sum+charge.amountCents,0))
+    const packPage = await h.send(item.packUrl,undefined,h.owner)
+    assert.equal(packPage.status,200); assert.ok(packPage.text.includes('id="pack-'+item.packId+'"'))
+    if (item.renewalUrl) {
+      const page = await h.send(item.renewalUrl,undefined,h.owner)
+      assert.equal(page.status,200); assert.ok(page.text.includes('data-plan-change="'+item.renewalChangeId+'"'))
+    }
+    for (const [i,url] of item.chargeUrls.entries()) {
+      const page = await h.send(url,undefined,h.owner)
+      assert.equal(page.status,200); assert.ok(page.text.includes(item.chargeIds[i]))
+      const source = (await h.send('/api/strap/reports/revenue?sourceId='+item.chargeIds[i],undefined,h.owner)).value.selectedSource.record
+      assert.deepEqual(source,charges[i])
+    }
+  }
+  assert.ok(Object.values(report.unavailable).every(value=>value===null))
+  assert.deepEqual((await read('month=1900-01')).rows,[])
+  for (const query of ['',`month=${localMonth}&offer=Mat+five`,'offer=Failed+renewal','month=1900-01']) {
+    const expected = await read(query), response = await h.send(path+'.csv?'+query,undefined,h.owner)
+    assert.equal(response.status,200); assert.equal(response.headers.get('cache-control'),'no-store')
+    assert.match(response.headers.get('content-disposition'),/attachment;/)
+    const {parseCsv} = await import('./report-downloads.mjs'), [keys,...values] = parseCsv(response.text)
+    assert.deepEqual(values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]]))),expected.rows)
+    for (const cohort of expected.cohorts) assert.deepEqual(cohort.packIds,expected.rows.filter(row=>row.acquisitionMonth===cohort.acquisitionMonth&&row.initialOffer===cohort.initialOffer).map(row=>row.packId))
+  }
+  for (const query of ['month=','month=2026-00','month=2026-13','month=2026-1','month=2026-01-01','offer=','offer='+encodeURIComponent('x'.repeat(81))]) {
+    for (const suffix of ['','.csv']) assert.equal((await h.send(path+suffix+'?'+query,undefined,h.owner)).status,400)
+  }
+  for (const cookie of [ana.cookie,coach.cookie,'']) for (const suffix of ['','.csv']) assert.equal((await h.send(path+suffix,undefined,cookie)).status,cookie ? 403 : 401)
+  const agent = await h.cmd('agent.create',{label:'No cohort access'})
+  for (const suffix of ['','.csv']) assert.equal((await h.send(path+suffix,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
+  assert.equal((await h.state()).version,version,'report/download/evidence reads have no domain side effects')
+  if (process.env.STRAP_PROOF_DIR || process.env.CI) await (await import('./reports-browser.mjs')).retentionEvidenceBrowser(h,row,'month='+localMonth+'&offer=Mat+five')
+  // Deactivation is not churn and does not erase retained cohort history.
+  const member = (await h.state()).people.find(person=>person.id===ben.id)
+  await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false,version:member.version})
+  assert.deepEqual((await read()).cohorts,report.cohorts)
+  assert.equal((await h.send(path,undefined,ben.cookie)).status,403)
+}))

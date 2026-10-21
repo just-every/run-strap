@@ -54,3 +54,52 @@ export async function reportsBrowser(h,{flow,later,report}) {
     }
   } finally { await browser.close() }
 }
+
+// RPT-003 adds HTTP/CSV doors; its evidence links reuse the native pack/charge screens.
+export async function retentionEvidenceBrowser(h,row,query) {
+  const proof = process.env.STRAP_PROOF_DIR
+  if (proof) await mkdir(proof,{recursive:true})
+  const browser = await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000}})
+      try {
+        await context.route(h.origin+'/**',async route => {
+          const path = new URL(route.request().url()).pathname
+          if (!path.includes('..') && /\.(css|svg|woff2|png|ico)$/.test(path)) return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+          return route.continue()
+        })
+        const index = h.owner.indexOf('=')
+        await context.addCookies([{name:h.owner.slice(0,index),value:h.owner.slice(index+1),url:h.origin}])
+        const page = await context.newPage()
+        const capture = async name => {
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`RPT-003 ${name} fits ${width}`)
+          if (proof) await page.screenshot({path:join(proof,`RPT-003-${name}-${width}.png`),fullPage:true})
+        }
+        await page.goto(h.origin+row.packUrl)
+        await page.locator('#pack-'+row.packId+' > summary').click()
+        await capture('pack-evidence')
+        await page.goto(h.origin+row.renewalUrl)
+        const change = page.locator(`[data-plan-change="${row.renewalChangeId}"]`)
+        await change.waitFor(); assert.ok((await change.innerText()).includes('applied'))
+        await change.scrollIntoViewIfNeeded()
+        await capture('renewal-evidence')
+        await page.goto(h.origin+row.chargeUrls[0])
+        await page.locator('#source-record').waitFor()
+        const record = JSON.parse(await page.getByLabel('Retained source record',{exact:true}).inputValue())
+        assert.equal(record.id,row.chargeIds[0]); assert.equal(record.packId,row.packId)
+        await capture('charge-evidence')
+        const expected = (await context.request.get(h.origin+'/api/strap/reports/retention?'+query))
+        assert.equal(expected.status(),200)
+        const report = await expected.json()
+        const pending = page.waitForEvent('download')
+        await page.goto(h.origin+'/api/strap/reports/retention.csv?'+query).catch(error=>assert.match(error.message,/Download is starting|ERR_ABORTED/))
+        const download = await pending
+        const {parseCsv} = await import('./report-downloads.mjs')
+        const [keys,...values] = parseCsv(await readFile(await download.path(),'utf8'))
+        assert.deepEqual(values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]]))),report.rows,`RPT-003 authenticated filtered browser download agrees at ${width}`)
+        if (proof) await download.saveAs(join(proof,`RPT-003-filtered-${width}.csv`))
+      } finally { await context.close() }
+    }
+  } finally { await browser.close() }
+}
