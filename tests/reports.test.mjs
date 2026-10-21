@@ -266,6 +266,12 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
   const version = (await h.state()).version
   await h.cmd('renewal.followup.create',{...task,packId:far.id,basis:stale.basis},h.owner,409)
   assert.equal((await h.state()).version,version)
+  if (process.env.STRAP_PROOF_DIR || process.env.CI) {
+    const taskMembers = [await h.person('JordanLane'),await h.person('AveryChen')]
+    for (const [member,name] of [[ana,'Ana Lopez'],[ben,'Ben Walker'],[taskMembers[0],'Jordan Lane'],[taskMembers[1],'Avery Chen']]) await h.cmd('person.save',{id:member.id,name,email:member.email,role:'member',active:true})
+    const packs = []; for (const member of taskMembers) packs.push({...await buy(member,20,1,{planName:'Mat five-class pack'}),personId:member.id})
+    await (await import('./renewals-browser.mjs')).renewalsBrowser(h,{packs})
+  }
   // Corrected attendance alone controls the last-visit field; future check-in is not a past visit.
   const cy = await h.person('RenewCy'), cyPack = await buy(cy,40,1)
   const start = new Date(Date.now()+2500).toISOString()
@@ -280,10 +286,5 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,null,'a no-show is not a visit')
   await h.cmd('attendance.correct',{id:cyBooking.id,outcome:'attended',reason:'Instructor confirmed attendance'})
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,start,'corrected attendance becomes the authoritative last visit')
-  if (process.env.STRAP_PROOF_DIR || process.env.CI) {
-    const taskMembers = [await h.person('JordanLane'),await h.person('AveryChen')]
-    for (const [member,name] of [[ana,'Ana Lopez'],[ben,'Ben Walker'],[cy,'Cy Morgan'],[taskMembers[0],'Jordan Lane'],[taskMembers[1],'Avery Chen']]) await h.cmd('person.save',{id:member.id,name,email:member.email,role:'member',active:true})
-    const packs = []; for (const member of taskMembers) packs.push({...await buy(member,20,1,{planName:'Mat five-class pack'}),personId:member.id})
-    await (await import('./renewals-browser.mjs')).renewalsBrowser(h,{packs})
-  }
+
 }))
