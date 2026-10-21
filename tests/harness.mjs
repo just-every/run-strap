@@ -17,7 +17,10 @@ export async function harness(options = {}) {
   const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r))
   const dir = options.root ? join(options.root, '.wrangler/state/v3') : await mkdtemp(join(tmpdir(), 'strap-test-')), origin = `http://${options.hostname ?? '127.0.0.1'}:${port}`, setup = randomBytes(32).toString('hex')
   const auth = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@studio.example', SESSION_SECRET: randomBytes(32).toString('hex'), SETUP_TOKEN: setup, MFA_KEY: randomBytes(32).toString('hex'), MAIL_PROVIDER: 'development', MAIL_FROM: 'auth@studio.example', ...options.auth, AUTH_ORIGIN: origin }
-  const mf = new Miniflare({ ...convertV4MiniflareOptions({ host: '127.0.0.1', port, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'], d1Databases: { DB: 'local-foundation-only' }, bindings: auth, ...(options.entry ? { outboundService: () => { throw new Error('Unexpected demo outbound request') } } : options.outbound ? { outboundService: options.outbound } : {}) }), resourcePersistencePath: dir })
+  const runtimeOptions = () => ({ ...convertV4MiniflareOptions({ host: '127.0.0.1', port, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'], d1Databases: { DB: 'local-foundation-only' }, bindings: auth, ...(options.entry ? { outboundService: () => { throw new Error('Unexpected demo outbound request') } } : options.outbound ? { outboundService: options.outbound } : {}) }), resourcePersistencePath: dir })
+  const mf = new Miniflare(runtimeOptions())
+  // Failure transports are activated after prerequisite authentication through the public doors.
+  const setAuth = async values => { Object.assign(auth, values); await mf.setOptions(runtimeOptions()) }
   try {
     const db = await mf.getD1Database('DB')
     if (!options.root) for (const file of (await readdir('migrations/core')).filter(f => f.endsWith('.sql')).sort()) await db.batch(unstable_splitSqlQuery(await readFile('migrations/core/' + file, 'utf8')).map(sql => db.prepare(sql)))
@@ -56,7 +59,7 @@ export async function harness(options = {}) {
     // The owner reaches reports, pay and exports only through a second factor (SEC-004): enroll one unless a test asks to start without it.
     const mfaOwner = options.mfa === false || options.owner || options.unclaimed ? null : await enrollTotp({ cmd, send, db }, owner)
     const enroll = cookie => enrollTotp({ cmd, send, db }, cookie)
-    return { db, mf, origin, owner, mfaOwner, auth, send, confirmSetup, enroll, cmd, state, person, signIn, close: async () => { await mf.dispose(); if (!options.root) await rm(dir, { recursive: true, force: true }) } }
+    return { db, mf, setAuth, origin, owner, mfaOwner, auth, send, confirmSetup, enroll, cmd, state, person, signIn, close: async () => { await mf.dispose(); if (!options.root) await rm(dir, { recursive: true, force: true }) } }
   } catch (error) { await mf.dispose(); if (!options.root) await rm(dir, { recursive: true, force: true }); throw error }
 }
 

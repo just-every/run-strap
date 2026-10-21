@@ -27,8 +27,14 @@ export async function emailStepUp(h, cookie, action = 'credentials:mint') {
 }
 /** Enrolls an authenticator app for the session in `cookie`; returns its secret and the recovery codes. */
 export async function enrollTotp(h, cookie, label = 'Authenticator app') {
-  await emailStepUp(h, cookie)
-  const started = await h.cmd('mfa.totp.start', { label }, cookie)
+  const start = () => h.send('/api/strap/command', { name: 'mfa.totp.start', input: { label } }, cookie)
+  let response = await start()
+  if (response.status === 403 && response.value.error === 'step_up_required') {
+    await emailStepUp(h, cookie)
+    response = await start()
+  }
+  assert.equal(response.status, 200, JSON.stringify(response.value))
+  const started = response.value.result ?? response.value
   const done = await h.cmd('mfa.totp.confirm', { factor: started.factor, code: totp(started.secret) }, cookie)
   return { secret: started.secret, factor: started.factor, recoveryCodes: done.recovery_codes }
 }

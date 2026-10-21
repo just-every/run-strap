@@ -308,12 +308,14 @@ test('STAFF-006: invitation launch is an audited request, the new member alone a
     await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
     const cy=await h.cmd('person.save',{name:'Cy',email:'cy@studio.example',role:'member',active:true})
     const w=await h.cmd('waiver.publish',{text:'An uncertain email cannot stand in for this person’s acknowledgment.'})
+    await h.setAuth({TEST_MAIL_FAILURE:'unknown'})
+    const beforeMails=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
     const input={personId:cy.id,waiverId:w.id,requestId:randomUUID(),channel:'desk'}
     const first=await h.cmd('waiver.launch',input),again=await h.cmd('waiver.launch',input)
     assert.equal(first.status,'uncertain');assert.equal(again.status,'uncertain')
-    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n,1,'uncertainty never automatically mints/sends a second link')
+    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n,beforeMails+1,'uncertainty never automatically mints/sends a second link')
     assert.equal((await h.state()).staffActions.filter(a=>a.command==='waiver.launch').length,1)
     assert.equal((await h.state()).acknowledgements.length,0)
     assert.match((await h.send('/app/people?person='+cy.id,undefined,h.owner)).text,/Outcome unknown; delivery not confirmed/)
-  },{auth:{TEST_MAIL_FAILURE:'unknown'}})
+  })
 })

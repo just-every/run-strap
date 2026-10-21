@@ -115,6 +115,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   const earned = (await h.cmd('classes.publish', { id: timetable.id })).classes[0]
   const closure = await h.cmd('closure.prepare', { scope: 'class', classId: earned.id, reason: 'Studio closed' })
   await h.cmd('closure.confirm', { id: closure.id, impact: closure.impact.key })
+  const waiver = await h.cmd('waiver.publish', { text: 'synthetic-strap-7' })
   const adjustment = { classId: earned.id, instructorId: teacher.id, amountCents: 350, reason: 'Agreed setup time', requestId: 'synthetic-strap-3' }
   const before = async () => (await h.db.batch((await h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results.map(r => h.db.prepare(`SELECT * FROM ${r.name} ORDER BY rowid`)))).map(r => r.results)
   const unchanged = async (act, label) => { const saved = await before(); await act(); assert.deepEqual(await before(), saved, label + ': nothing written (including auth mail, audit and rate counters)') }
@@ -130,6 +131,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
     ['person.save', { ...member, role: 'instructor' }],
     ['person.save', { ...member, active: false }],
     ['person.save', { ...inactive, active: true }],
+    ['waiver.launch', { personId: member.id, waiverId: waiver.id, channel: 'desk', requestId: 'synthetic-strap-8' }],
   ]
   for (const [name, input] of staffChanges) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
   for (const [path, input] of [
