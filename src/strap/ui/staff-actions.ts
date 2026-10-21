@@ -48,6 +48,10 @@ export function staffProfileActions(s: any, p: any, back: string) {
 
 function effect(s: any, value: any) {
   if (!value) return 'No previous record'
+  if (Array.isArray(value.outcomes)) {
+    const items = value.cancellationEffects ?? value.outcomes;
+    return `Recurring reservation · ${h(value.status)}<br>` + items.map((o: any) => `${when(s,o.start)} · ${h(value.status === 'cancelled' ? 'Cancelled' : value.operation === 'cancel' ? 'To cancel' : o.status)}${o.reason ? ` · ${h(o.reason.replace(/_/g,' '))}` : ''}${o.effect ? ` · ${o.effect.creditReturned ? 'credit returns' : 'no credit returned'} · ${money(o.effect.feeCents)} fee` : ''}`).join('<br>');
+  }
   if ('emergencyContact' in value) return profileText(value)
   if (typeof value.issued === 'boolean') return value.issued ? `Check-in code revision ${h(value.codeRevision)}${value.codeIssuedAt ? ` · issued ${when(s,value.codeIssuedAt)}` : ''}` : 'No check-in code issued'
   if (typeof value.acknowledged === 'boolean') return value.acknowledged ? 'Current waiver acknowledged by the member' : 'Current waiver awaiting the member’s acknowledgement'
@@ -64,7 +68,7 @@ function effect(s: any, value: any) {
   throw new Error('Unsupported staff action effect')
 }
 
-const actionLabels: Record<string,string> = {'mail.preference.launch':'Open member message preferences','fee.collect':'Record fee receipt','fee.waive':'Waive attendance fee',schedule:'Change class schedule','booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences','plan.change.prepare':'Preview plan change','profile.save.staff':'Edit member profile','person.save':'Change name, email or phone'}
+const actionLabels: Record<string,string> = {'reservation.prepare':'Preview recurring reservation','reservation.confirm':'Confirm recurring reservation','reservation.cancel.prepare':'Preview future cancellations','reservation.cancel.confirm':'Cancel future reservations','mail.preference.launch':'Open member message preferences','fee.collect':'Record fee receipt','fee.waive':'Waive attendance fee',schedule:'Change class schedule','booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences','plan.change.prepare':'Preview plan change','profile.save.staff':'Edit member profile','person.save':'Change name, email or phone'}
 const actionLabel = (action: string) => { if (!actionLabels[action]) throw new Error('Staff action needs a display label'); return actionLabels[action] }
 
 /** The canonical staff audit stays focused on the selected person, when any. */

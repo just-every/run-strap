@@ -37,3 +37,21 @@ The agent context includes `demand.classes`: source class and booking IDs, usabl
 `recommendation.prepare` accepts `action` (`additional`, `retime`, `coverage`), `sourceClassIds` (1–100 published classes, including the target for changes), `reason`, and `proposal`. An additional proposal has the ordinary class fields; a retime names the target `classId` and only new ISO `start`/`end`; coverage names `classId` and only the new `instructorId`, with a current studio service qualification. At least one cited source has the target service. Existing buffers, rooms, spots, closures, booked credits and offer deadlines are checked. Preparation publishes nothing and sends nothing.
 
 The recommendation appears in Prepared class weeks with the cited counts, exact class and member notification. Only the native owner approves with `recommendation.approve`, supplying its `id`, exact `impact` key and displayed `notification` (`in-app-and-email` for affected reservations, otherwise `no-affected-reservations`). No suppression choice is offered. Provider/origin changes or any source, booking, availability or qualification change require a fresh recommendation. Repeating the same approval repeats no publication or notice. The ordinary `classes.publish` command refuses recommendation drafts.
+
+## SCHED-005 recurring class reservations
+
+Native members and owners use `reservation.prepare` with the first timetable
+`classId` and an inclusive `throughDate` within the published series. Owners also
+supply `personId` and the request `channel` (`desk`, `phone`, `inbox`). The preview
+lists booked, waitlisted and skipped dates and reasons without booking or spending
+credits. `reservation.confirm` takes its exact `id` and `key`; changed facts require
+a fresh preview. Each occurrence uses the ordinary class rules and waitlist order.
+
+`reservation.cancel.prepare` takes the retained `reservationId` and shows each
+future, unstarted booking's credit and fee effect. `reservation.cancel.confirm`
+takes the preview `id` and `key`; owners also choose a configured `cancelReason`.
+Repeating a confirmation creates no duplicate booking, credit return, fee or
+notice. Past/started visits remain, and a moved booking keeps its series identity.
+Members use **Recurring reservations** on Classes; owners use the same controls on
+the member's People card. The owner acts for the booking right until STAFF-001.
+Agent keys cannot use these reservation commands.

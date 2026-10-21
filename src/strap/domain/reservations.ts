@@ -113,7 +113,7 @@ export async function confirmReservationCancellation(tx: Transaction, input: Rec
   insist(draft.basis === await basis(tx.state,tx) && JSON.stringify(outcomes) === JSON.stringify(draft.outcomes),'reservation_facts_changed',409);
   const staffActionId = tx.who.role === 'owner' ? id() : undefined;
   for (const o of outcomes) cancel(tx,{...input,id:o.id,terms:o.effect.key,mode:'late'},staffActionId);
-  const saved = {...reservation,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledBookingIds:outcomes.map((o: RecordData) => o.id),staffActionId:staffActionId ?? null};
+  const saved = {...reservation,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledBookingIds:outcomes.map((o: RecordData) => o.id),cancellationEffects:outcomes,staffActionId:staffActionId ?? null};
   tx.put('reservation',saved); tx.put('reservationPreview',{...draft,status:'confirmed'}); return saved;
 }
 export function reservationSnapshot(state: State, who: {role:string;personId?:string}) {

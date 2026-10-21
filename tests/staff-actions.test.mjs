@@ -196,6 +196,7 @@ test('STAFF-006: every current member command has a real staff door, identical m
       assert.ok(entry,`${name}: discovered as a member command`)
       assert.ok(catalogue.some(c=>c.name===entry.memberDoor.staff),`${name}: registered staff command`)
       await actions[name](entry.memberDoor.staff);covered.add(name)
+      if (name.startsWith('reservation.')) assert.equal((await h.send(`/app/people?person=${seriesMember.id}`,undefined,h.owner)).status,200,'the staff history renders the recurring action and its before/after effects')
     }
     for (const entry of memberCommands) assert.ok(covered.has(entry.name),`${entry.name}: a new member action needs a tested staff pair`)
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
