@@ -37,7 +37,7 @@ export function whenLabel(s: any, value: unknown) {
   const instant = at(value), date = dayOf(s, instant), today = studioToday(s)
   const yesterday = localDate(Date.parse(today + 'T12:00:00Z') - 86_400_000, 'UTC')
   const label = date === today ? 'Today' : date === yesterday ? 'Yesterday' : dayShort(s, date) + ' ·'
-  return `<time datetime="${h(instant.toISOString())}">${h(label)} ${h(clock(s, instant))}</time>`
+  return `${label} ${clock(s, instant)}`
 }
 export function when(s: any, value: unknown) {
   if (value === null || value === undefined || value === '') return '—'
