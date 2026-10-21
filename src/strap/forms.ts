@@ -73,6 +73,10 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     const amount=String(input.adjustment ?? '').trim(), negative=amount.startsWith('-')
     return {...input,amountCents:cents(negative?amount.slice(1):amount,'the teaching-pay adjustment')*(negative?-1:1)}
   }
+  if (name === 'integration.create' || name === 'integration.events') {
+    input.events = Object.keys(input).filter(key => key.startsWith('ev_') && input[key] === 'true').map(key => key.slice(3))
+    if (name === 'integration.create') input.scopes = Object.keys(input).filter(key => key.startsWith('sc_') && input[key] === 'true').map(key => key.slice(3))
+  }
   if (name === 'booking.bulk.cancel') input.ids = Object.keys(input).filter(key => key.startsWith('b_') && input[key] === 'true').map(key => key.slice(2))
   if (name === 'booking.waitlist.position') input.position = Number(input.position)
   if (name === 'cancellationReasons.save') input.reasons = String(input.reasons ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)

@@ -25,7 +25,8 @@ async function checkout(root) {
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
 }
-test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
+const integrationRead = (h, token) => h.mf.dispatchFetch(h.origin + '/api/strap/integration/roster', { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
+test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -53,6 +54,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003: portable exit re
     const csv=await readFile('tests/fixtures/members.csv','utf8'),preview=await h.cmd('import.preview',{csv})
     await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})
     const key=await h.cmd('agent.create',{label:'Excluded secret'})
+    const integration=await h.cmd('integration.create',{label:'Excluded integration',scopes:['roster:read'],location:'studio',events:['booking.changed']})
+    assert.equal((await integrationRead(h,integration.token)).status,200)
     await h.cmd('mail.connect',{})
     assert.equal((await h.send('/api/strap/exit.json')).status,401)
     for(const cookie of [member.cookie,coach.cookie]) assert.equal((await h.send('/api/strap/exit.json',undefined,cookie)).status,403)
@@ -63,14 +66,14 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003: portable exit re
     assert.equal(download.headers.get('cache-control'),'no-store')
     const portable=download.value
     reconstructExit(portable,csv)
-    for(const value of [key.token,h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner]) assert.ok(!download.text.includes(value))
-    assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')))
+    for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner]) assert.ok(!download.text.includes(value))
+    assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
     const identity={auth:h.auth,owner:h.owner}
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
-    const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'))
+    const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'));assert.ok(!bytes.includes('Excluded integration'),'API-002 integration keys never travel in the native archive')
     await command(restored,['import','--input',old,'--yes','--no-queue'])
     await command(restored,['export','--output',again,'--no-queue'])
     const rows=text=>text.split('\n').filter(Boolean).map(JSON.parse).filter(r=>r.kind==='part')
@@ -79,6 +82,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003: portable exit re
     h=await harness({root:restored,...identity})
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
+    assert.equal((await integrationRead(h,integration.token)).status,401,'API-002 a restored studio refuses the old integration secret')
+    assert.deepEqual((await h.state(restoredOwner)).integrations,[],'API-002 integration keys never restore')
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)

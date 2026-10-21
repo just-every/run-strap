@@ -8,6 +8,8 @@ import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
 import { commandCatalogue, command, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
+import { integrationCommand, integrationKeys } from './integrations'
+import { integrationResponse } from './integration-api'
 import { renderApp } from './ui'
 import { formInput } from './forms'
 import { exitExport } from './exit-export'
@@ -17,7 +19,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -27,11 +29,12 @@ async function state(env: Bindings, who: Actor) {
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
-  return { ...current, leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
+  return { ...current, leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
   if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
+  if (name.startsWith('integration.')) return integrationCommand(env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
   if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
   if (name === 'booking.bulk.cancel') {
@@ -74,6 +77,7 @@ export async function strapScheduled(original: Bindings) {
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
   if (path === '/kiosk' || path.startsWith('/kiosk/')) return kioskResponse(request, runtimeBindings(original))
+  if (path.startsWith('/api/strap/integration/')) return integrationResponse(request, runtimeBindings(original))
   if (!path.startsWith('/api/strap/') && path !== '/app' && !path.startsWith('/app/')) return null
   const env = runtimeBindings(original), isAgent = path.startsWith('/api/strap/agent/')
   let who: Actor | undefined
@@ -126,7 +130,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).
-        if (!['import.preview', 'import.journal', 'agent.create', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        if (!['import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await state(env, who), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {

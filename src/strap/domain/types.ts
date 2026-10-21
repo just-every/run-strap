@@ -47,3 +47,8 @@ export function person(state: State, key: unknown, active = true): Person {
 }
 export const humanOwner = (who: Actor) => insist(who.role === 'owner' && who.isOwner, 'owner_required', 403);
 export const preparer = (who: Actor) => insist(who.isOwner && ['owner', 'agent'].includes(who.role), 'owner_required', 403);
+/** "Ana Maria Lopez" → "Ana L."; a one-word name stays as it is. */
+export function shortName(name: string) {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  return rest.length ? `${first} ${rest.at(-1)![0].toUpperCase()}.` : first;
+}

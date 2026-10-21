@@ -14,7 +14,8 @@
         { "slug": "packs-and-payments", "file": "packs-and-payments.md", "title": "Packs, credits and payments", "summary": "Give members class credits, record the payments you receive and see what every member owes." },
         { "slug": "people", "file": "people.md", "title": "People and access", "summary": "Add members and instructors, invite them to sign in, and end someone's access at once." },
         { "slug": "waivers", "file": "waivers.md", "title": "Waivers", "summary": "Publish a waiver version that members acknowledge before they book." },
-        { "slug": "agent-access", "file": "AGENT-COMMANDS.md", "title": "Agent access", "summary": "Let an assistant prepare next week's classes, packs and reminders for you to approve." }
+        { "slug": "agent-access", "file": "AGENT-COMMANDS.md", "title": "Agent access", "summary": "Let an assistant prepare next week's classes, packs and reminders for you to approve." },
+        { "slug": "integrations", "file": "INTEGRATIONS.md", "title": "Integrations", "summary": "Give another application read-only access to your class rosters, then rotate, revoke and watch its key." }
       ]
     },
     {

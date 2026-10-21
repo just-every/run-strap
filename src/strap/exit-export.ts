@@ -138,7 +138,7 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
         acknowledgementMeaning: 'Receipt of an exact waiver version; not a signature or signed waiver.' },
       providers: { connections: [], status: 'No studio billing or message-delivery connections exist in the current schema.',
         receiver: 'Import records as data only. Configure and review any receiver billing or delivery connections separately before enabling outbound work.' },
-      excluded: ['native authentication tables', 'sessions', 'sign-in links', 'agent keys', 'kiosk device tokens', 'secrets and provider credentials',
+      excluded: ['native authentication tables', 'sessions', 'sign-in links', 'agent keys', 'integration keys with their subscriptions and request logs', 'kiosk device tokens', 'secrets and provider credentials',
         'development outbox', 'import leases and transient staging/coordination tables'],
       recovery: 'Portable data for an independent receiver; native rer export/import remains a separate archive and guarded restore workflow.',
     },

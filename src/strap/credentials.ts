@@ -2,7 +2,7 @@ import { operatorAuth, type Bindings } from '../auth.server'
 import { actor, type Actor } from './domain'
 
 export const fail = (message: string, status = 400): never => { throw Object.assign(new Error(message), { status }) }
-const hash = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('')
+export const hash = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('')
 
 // Adapted from Lanyard's native invitation and owner-bound preparation keys.
 export async function principal(request: Request, env: Bindings, agent = false): Promise<Actor> {

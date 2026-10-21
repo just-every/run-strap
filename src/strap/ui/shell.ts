@@ -21,6 +21,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/substitutions', label: 'Instructor substitutions', glyph: 'users' },
     { href: '/app/import', label: 'Import', glyph: 'upload' },
     { href: '/app/agent', label: 'Agent access', glyph: 'sparkles' },
+    { href: '/app/integrations', label: 'Integrations', glyph: 'key' },
   ]
   if (s.actor.role === 'instructor') return [
     { href: '/app', label: 'Today', glyph: 'today' },

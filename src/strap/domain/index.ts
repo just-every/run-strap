@@ -11,7 +11,7 @@ import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
 import { defineCommand } from './command-catalogue';
 import { dismissForMember, launchWaiver, priorStaffRequest, retainStaffAction, staffActions, staffBefore } from './staff-actions';
 import { load, loadKiosk, loadSystem, Transaction } from './store';
-import { DomainError, insist, list, type Actor, type RecordData } from './types';
+import { DomainError, insist, list, shortName, type Actor, type RecordData } from './types';
 import { prepareClasses, publishClasses } from './classes';
 import { prepareSeries, publishSeries, prepareSeriesChange, approveSeriesChange } from './series';
 import { prepareSeriesCancellation, confirmSeriesCancellation, prepareScopedClosure, confirmScopedClosure } from './series-cancellation';
@@ -156,8 +156,7 @@ export async function kioskCommand(db: D1Database, kioskId: string, name: 'check
   processRecognition(tx);
   await tx.commit();
   const person = loaded.state.people.find(p => p.id === result.personId)!, entry = loaded.state.records.get(result.classId)!.data;
-  const [first,...rest] = person.name.trim().split(/\s+/);
-  return {name:rest.length ? `${first} ${rest.at(-1)![0].toUpperCase()}.` : first,classTitle:String(entry.title).split(' · ')[0],start:entry.start};
+  return {name:shortName(person.name),classTitle:String(entry.title).split(' · ')[0],start:entry.start};
 }
 export async function snapshot(db: D1Database, who: Actor) {
   const loaded = await load(db,who), {state} = loaded;
