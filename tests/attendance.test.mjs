@@ -197,7 +197,8 @@ test('SCHED-009: eligible absences issue one linked expiring makeup; participant
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Park Slope',timeZone:'America/New_York'})
   const coach=await h.person('Priya','instructor'), child=await h.person('Isla'), guardian=await h.person('Rosa'), stranger=await h.person('Noah')
-  const childPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:child.id,credits:7,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:child.id,credits:7,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const childPack=(await h.state()).packs.find(p=>p.personId===child.id)
   const publish=async(service,start,capacity=2)=> (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:service,service,start,end:new Date(Date.parse(start)+30*minute).toISOString(),capacity,instructorId:coach.id,room:start}]})).id})).classes[0]
   const original=await publish('Youth Mat',at(24*hour)), replacement=await publish('Youth Mat',at(48*hour),1), wrong=await publish('Reformer',at(50*hour)), secondOriginal=await publish('Youth Mat',at(72*hour)), otherTarget=await publish('Youth Mat',at(96*hour))
   const booked=await h.cmd('booking.book',{classId:original.id},child.cookie), second=await h.cmd('booking.book',{classId:secondOriginal.id},child.cookie)

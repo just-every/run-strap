@@ -47,9 +47,9 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
             assert.equal(await cancel.evaluate(f=>f.checkValidity()),false);
             const comment=width===1440 ? 'Guest called the desk about a migraine' : 'Guest requested an early cancellation after the room changed';
             const timing=width===390 && seat.cancelEffect.waivable ? 'early' : seat.cancelEffect.timing;
-            await cancel.getByLabel('Cancellation reason',{exact:true}).selectOption('Sick');
+            await cancel.locator('select[name=cancelReason]').selectOption('Sick');
             await cancel.getByLabel('Cancellation comment',{exact:true}).fill(comment);
-            await cancel.getByLabel('Cancellation timing',{exact:true}).selectOption(timing);
+            await cancel.locator('select[name=mode]').selectOption(timing);
             assert.equal(await cancel.evaluate(f=>f.checkValidity()),true);
             await cancel.scrollIntoViewIfNeeded();
             assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
