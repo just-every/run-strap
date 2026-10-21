@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile, mkdir } from 'node:fs/promises'
 import { join, extname } from 'node:path'
+import { downloadPair, downloadReport } from './report-downloads-browser.mjs'
 import { chromium } from '@playwright/test'
 
 export async function reportsBrowser(h,{flow,later,report}) {
@@ -26,7 +27,8 @@ export async function reportsBrowser(h,{flow,later,report}) {
       const row = page.locator(`[data-class-id="${flow.id}"]`)
       assert.equal(await page.locator('[data-class-id]').count(),1)
       await row.getByText('1 attended · 1 no-show · 1 visitors',{exact:true}).waitFor()
-      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-002-filtered-${width}.png`),fullPage:true})
+      assert.equal((await downloadPair(page,'attendance-filtered',width)).length,1)
+      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-006-attendance-filtered-${width}.png`),fullPage:true})
       await row.getByRole('link',{name:'Roster and bookings'}).click()
       await page.locator('#roster').waitFor()
       assert.ok(await page.getByText('Ana',{exact:true}).first().isVisible())
@@ -34,11 +36,20 @@ export async function reportsBrowser(h,{flow,later,report}) {
       await page.locator(`[data-class-id="${later.id}"]`).getByRole('link',{name:'Cancellation actions (2)'}).click()
       await page.locator('#cancellations').waitFor()
       assert.ok((await page.locator('#cancellations').innerText()).includes('2 cancellations'))
+      const cancellations = await downloadReport(page,'Download filtered XLSX','cancellations',width)
+      assert.equal(cancellations.length-1,2,'RPT-006: cancellation source link carries the selected class filter')
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'cancellation screen fits')
+      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-006-cancellations-${width}.png`),fullPage:true})
+      await page.goto(h.origin+'/app/people?classId=missing#cancellations')
+      await page.getByText('No cancellations match these filters.',{exact:true}).waitFor()
+      assert.equal((await downloadReport(page,'Download filtered XLSX','cancellations-empty',width)).length,1)
+      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-006-cancellations-empty-${width}.png`),fullPage:true})
       await page.goto(h.origin+'/app/reports')
       await page.getByLabel('From date',{exact:true}).fill('2099-01-01')
       await page.getByRole('button',{name:'Apply report filters'}).click()
       await page.getByText('No sessions match these filters.',{exact:true}).waitFor()
-      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-002-empty-${width}.png`),fullPage:true})
+      assert.equal((await downloadPair(page,'attendance-empty',width)).length,0)
+      await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-006-attendance-empty-${width}.png`),fullPage:true})
       await context.close()
     }
   } finally { await browser.close() }

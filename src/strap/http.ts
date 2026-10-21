@@ -3,6 +3,7 @@ import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
 import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
+import { reportDownload } from './report-exports'
 import { revenueReport } from './revenue-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
@@ -99,6 +100,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      const exportPath = path.match(/^\/api\/strap\/reports\/(revenue|attendance)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(cancellations)\.(xlsx)$/)
+      if (exportPath) {
+        if (who.role !== 'owner') fail('owner_required',403)
+        return reportDownload(await state(env,who),exportPath[1],exportPath[2],url.searchParams)
+      }
       if (path === '/api/strap/teaching-pay') {
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)

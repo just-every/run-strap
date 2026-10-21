@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
+import { assertReportDownloads, assertCancellationDownload } from './report-downloads.mjs'
 
 const hour = 3_600_000
 const monday = start => { const d = new Date(start); return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10) }
 
-test('RPT-002: attendance, usable-seat occupancy and historical member/staff cancellations drill to their public source records', () => run(async h => {
+test('RPT-002 / RPT-006: attendance, usable-seat occupancy and historical member/staff cancellations drill to their public source records', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Nashville',timeZone:'America/Chicago'})
   const coach = await h.person('Maya','instructor'), other = await h.person('Rae','instructor'), people = {}
@@ -84,6 +85,8 @@ test('RPT-002: attendance, usable-seat occupancy and historical member/staff can
   const page = await h.send('/app/reports',undefined,h.owner)
   assert.equal(page.status,200)
   assert.ok(page.text.includes(`data-class-id="${flow.id}"`))
+  await assertReportDownloads(h,'attendance',['',`from=${day.slice(0,7)}-01&to=${day.slice(0,7)}-28`,`room=Reformer+room`,`instructorId=${coach.id}&service=Reformer&location=Nashville`,`time=${encodeURIComponent(row.time)}`,'location=Elsewhere','from=2099-01-01&to=2099-01-31'],[Ana.cookie,coach.cookie,''])
+  await assertCancellationDownload(h,['',`classId=${later.id}`,`date=${day}`,`staffId=${state.actor.id}`,'type=early','type=late','classId=missing'],[Ana.cookie,coach.cookie,''])
   if (process.env.STRAP_PROOF_DIR) await (await import('./reports-browser.mjs')).reportsBrowser(h,{flow,later,report})
   await h.cmd('attendance.correct',{id:b.id,outcome:'attended',reason:'The instructor confirmed Ben attended'})
   const revenue = await h.send('/api/strap/reports/revenue',undefined,h.owner)
@@ -93,7 +96,7 @@ test('RPT-002: attendance, usable-seat occupancy and historical member/staff can
   assert.deepEqual([corrected.totals.attended,corrected.totals.noShow,corrected.totals.uniqueVisitors,corrected.totals.lateCancelled],[3,0,2,1])
 }))
 
-test('RPT-001: current sales, collections, refunds, fee reversals and member snapshots reconcile to public ledgers with plan, period and location filters and exact source drill-through', () => run(async h => {
+test('RPT-001 / RPT-006: current sales, collections, refunds, fee reversals and member snapshots reconcile to public ledgers with plan, period and location filters and exact source drill-through', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const coach = await h.person('Maya','instructor'), ana = await h.person('Ana'), ben = await h.person('Ben'), cy = await h.person('Cy')
@@ -177,10 +180,11 @@ test('RPT-001: current sales, collections, refunds, fee reversals and member sna
     }
   }
   const agent = await h.cmd('agent.create',{label:'Report preparation'})
-  assert.equal((await h.send('/api/strap/reports/revenue',undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
+  for (const path of ['/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance.xlsx','/api/strap/cancellations.xlsx']) assert.equal((await h.send(path,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
   // Repeated reads never change the ledger or replay any money effect.
   assert.equal((await h.state()).version,version)
   assert.deepEqual((await read()).totals,t)
+  await assertReportDownloads(h,'revenue',['',`from=${date.slice(0,7)}-01&to=${date.slice(0,7)}-28&location=Brooklyn+studio`,'plan='+encodeURIComponent('unlimited: Monthly mat'),'plan=Unallocated','location=Elsewhere','from=2099-01-01&to=2099-01-31'],[ana.cookie,coach.cookie,''])
   if (process.env.STRAP_PROOF_DIR) await (await import('./revenue-browser.mjs')).revenueBrowser(h,{report,ana,coach,date})
   await h.cmd('person.save',{id:cy.id,name:'Cy',email:cy.email,role:'member',active:false,version:state.people.find(p=>p.id===cy.id).version})
   assert.equal((await read()).totals.activeMembers,2)

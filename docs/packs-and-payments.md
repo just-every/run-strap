@@ -70,3 +70,9 @@ The signed-in owner can read `/api/strap/reports/renewals?days=30&lowCredits=1` 
 The owner posts `renewal.followup.create` through `/api/strap/command` with the row’s `packId` and exact `basis`, the report’s `days` and `lowCredits`, and `ownerId`, `nextAction` and an ISO `dueAt`. It creates an assigned internal inquiry in Lead follow-up once per pack. Changed source facts require a fresh report. Identical repeats return the existing task; changed assignment details refuse and must be edited in Lead follow-up. No message is sent and no consent is granted.
 
 Other plan kinds, worklist screens, monetary remaining value, marketing permission and approved sequences remain unfinished; the complete RPT-007 acceptance still applies.
+
+## Report downloads
+
+In Revenue, apply the date, plan and location filters, then choose Download CSV or Download XLSX. Attendance has the same download choices for its own filters; the cancellation list also offers filtered XLSX alongside CSV. Downloads are available to the owner under the same access checks as the reports.
+
+CSV data cells contain JSON values, matching the portable exit: decode text cells as JSON when importing programmatically. XLSX opens as a workbook with Sources, Totals (revenue and attendance) and Context sheets. Money stays in exact USD cents; blank unavailable cells are distinct from zero. Context keeps the filters, studio time zone and definitions. Source references remain literal text. Scheduled email delivery and reports for unimplemented billing, retention and payroll capabilities remain unavailable.

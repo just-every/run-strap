@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile,mkdir } from 'node:fs/promises'
 import { join,extname } from 'node:path'
+import { downloadPair } from './report-downloads-browser.mjs'
 import { chromium } from '@playwright/test'
 
 export async function revenueBrowser(h,{report,date}) {
@@ -33,6 +34,7 @@ export async function revenueBrowser(h,{report,date}) {
         await page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()
         await page.getByRole('heading',{name:'Revenue and collections',exact:true}).waitFor()
         assert.equal(await page.locator('[data-source-id]').count(),report.sources.filter(r=>r.plan==='unlimited: Monthly mat').length)
+        assert.equal((await downloadPair(page,'revenue-filtered',width)).length,report.sources.filter(r=>r.plan==='unlimited: Monthly mat').length)
         await capture('plan-filter')
         const refund = report.sources.find(r=>r.kind==='refund')
         await page.goto(h.origin+refund.sourceUrl)
@@ -43,6 +45,7 @@ export async function revenueBrowser(h,{report,date}) {
         await page.goto(h.origin+'/app/revenue?from=2099-01-01&to=2099-01-31')
         await page.getByText('No events match these filters.',{exact:true}).waitFor()
         assert.equal(await page.locator('[data-source-id]').count(),0)
+        assert.equal((await downloadPair(page,'revenue-empty',width)).length,0)
         await capture('empty-period')
       } finally { await context.close() }
     }
