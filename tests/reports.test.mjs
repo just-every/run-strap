@@ -370,6 +370,11 @@ test('RPT-003: native finite-pack acquisition cohorts reconcile applied, schedul
     }
   }
   assert.ok(Object.values(report.unavailable).every(value=>value===null))
+  const screen = await h.send('/app/retention?month='+localMonth+'&offer=Mat+five',undefined,h.owner), filtered = await read('month='+localMonth+'&offer=Mat+five')
+  assert.equal(screen.status,200)
+  assert.deepEqual([...screen.text.matchAll(/data-pack-id="([^"]+)"/g)].map(m=>m[1]),filtered.rows.map(r=>r.packId),'RPT-003: the screen lists the same filtered terms as HTTP and CSV')
+  assert.equal((await h.send('/app/retention?month=2026-13',undefined,h.owner)).status,400)
+  assert.equal((await h.send('/app/retention',undefined,ana.cookie)).status,403); assert.equal((await h.send('/app/retention',undefined,'')).status,303)
   assert.deepEqual((await read('month=1900-01')).rows,[])
   for (const query of ['',`month=${localMonth}&offer=Mat+five`,'offer=Failed+renewal','month=1900-01']) {
     const expected = await read(query), response = await h.send(path+'.csv?'+query,undefined,h.owner)
@@ -392,4 +397,48 @@ test('RPT-003: native finite-pack acquisition cohorts reconcile applied, schedul
   await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false,version:member.version})
   assert.deepEqual((await read()).cohorts,report.cohorts)
   assert.equal((await h.send(path,undefined,ben.cookie)).status,403)
+}))
+
+test('RPT-003: tenure and attendance frequency count only corrected attended visits inside each member\'s retained-pack span, per member and pooled per cohort, in HTTP and CSV', () => run(async h => {
+  await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const coach = await h.person('SpanCoach','instructor'), tia = await h.person('SpanTia'), xan = await h.person('SpanXan'), uma = await h.person('SpanUma'), wes = await h.person('SpanWes')
+  const day = 86_400_000, base = Date.now(), at = offset => new Date(base+offset).toISOString()
+  const edit = (id,fields) => h.db.prepare(`UPDATE st_records SET data=json_set(data,${Object.keys(fields).map(k=>`'$.${k}',?`).join(',')}) WHERE id=?`).bind(...Object.values(fields),id).run()
+  const buy = async (member,planName,expiresAt='2099-12-31T00:00:00Z') => h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:10000,expiresAt,planName})).id})
+  const tiaPack = await buy(tia,'Mat five'), xanPack = await buy(xan,'Mat five'), umaPack = await buy(uma,'Reformer ten'), wesPack = await buy(wes,'Wes offer')
+  const sessions = [], visit = async (member,offset,outcome='attended') => {
+    const start = new Date(Date.now()+3_600_000*(sessions.length+2)).toISOString()
+    const session = (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Span visit '+sessions.length,start,end:new Date(Date.parse(start)+60_000).toISOString(),capacity:5,instructorId:coach.id}]})).id})).classes[0]
+    const booking = await h.cmd('booking.book',{classId:session.id},member.cookie)
+    if (outcome === 'attended') await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+    sessions.push({session,booking,offset,outcome})
+  }
+  // Tia: 60-day span (pack created 100 days ago, expired 40 days ago); two visits inside it, three outside it or not attended.
+  for (const [offset,outcome] of [[-70*day],[-50*day],[-101*day],[-39*day],[-60*day,'noshow']]) await visit(tia,offset,outcome)
+  for (const offset of [-80*day,-75*day]) await visit(xan,offset)
+  await visit(uma,-20*day)
+  for (const entry of sessions) await edit(entry.session.id,{start:at(entry.offset),end:at(entry.offset+60_000)})
+  for (const entry of sessions.filter(entry=>entry.outcome==='noshow')) await h.cmd('attendance.noshow',{id:entry.booking.id},coach.cookie)
+  await edit(tiaPack.id,{createdAt:at(-100*day),expiresAt:at(-40*day)})
+  await edit(xanPack.id,{createdAt:at(-100*day),expiresAt:at(-70*day)})
+  await edit(umaPack.id,{createdAt:at(-45*day-12*3_600_000)}) // later expiry, so the span ends at the report instant
+  await edit(wesPack.id,{createdAt:at(-3_600_000)})
+  const path = '/api/strap/reports/retention', read = async query => (await h.send(path+(query?'?'+query:''),undefined,h.owner)).value
+  const report = await read(), version = (await h.state()).version
+  const row = member => report.rows.find(r=>r.personId===member.id)
+  assert.deepEqual([row(tia).tenureDays,row(tia).attendedVisits,row(tia).visitsPer30Days],[60,2,1],'RPT-003: only attended visits whose class started inside the span count')
+  assert.deepEqual([row(xan).tenureDays,row(xan).attendedVisits,row(xan).visitsPer30Days],[30,2,2])
+  assert.deepEqual([row(uma).tenureDays,row(uma).attendedVisits,row(uma).visitsPer30Days],[45,1,0.67],'RPT-003: span ends at the report instant when a pack is still running')
+  assert.deepEqual([row(wes).tenureDays,row(wes).attendedVisits,row(wes).visitsPer30Days],[0,0,null],'RPT-003: zero tenure has an unavailable frequency, never zero')
+  const mat = report.cohorts.find(cohort=>cohort.initialOffer==='Mat five')
+  assert.deepEqual([mat.members,mat.meanTenureDays,mat.attendedVisits,mat.visitsPer30Days],[2,45,4,1.33],'RPT-003: cohort frequency pools visits over pooled tenure days rather than averaging member rates')
+  assert.deepEqual(report.cohorts.find(cohort=>cohort.initialOffer==='Wes offer').visitsPer30Days,null)
+  assert.ok(!('tenure' in report.unavailable)&&!('attendanceFrequency' in report.unavailable))
+  const {parseCsv} = await import('./report-downloads.mjs'), csv = await h.send(path+'.csv?offer=Mat+five',undefined,h.owner)
+  const [keys,...values] = parseCsv(csv.text), exported = values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]])))
+  assert.deepEqual(exported,(await read('offer=Mat+five')).rows,'RPT-003: CSV carries the same tenure and frequency columns as HTTP')
+  assert.deepEqual(exported.map(r=>[r.tenureDays,r.attendedVisits,r.visitsPer30Days]).sort(),[[30,2,2],[60,2,1]])
+  assert.equal((await h.send(path,undefined,tia.cookie)).status,403)
+  assert.equal((await h.state()).version,version,'tenure and frequency reads have no domain side effects')
 }))

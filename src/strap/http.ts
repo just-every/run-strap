@@ -23,7 +23,7 @@ import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-ma
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 async function state(env: Bindings, who: Actor) {
@@ -38,9 +38,9 @@ async function state(env: Bindings, who: Actor) {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
-  if (url.pathname !== '/app/renewals' || who.role !== 'owner') return state(env,who)
+  if (who.role !== 'owner' || !['/app/renewals','/app/retention'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
-  return {...await state(env,who),renewalWorklist:renewalWorklist(loaded.state,loaded.who,url.searchParams)}
+  return {...await state(env,who),...(url.pathname === '/app/renewals' ? {renewalWorklist:renewalWorklist(loaded.state,loaded.who,url.searchParams)} : {retentionReport:retentionReport(loaded.state,loaded.who,url.searchParams)})}
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {

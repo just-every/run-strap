@@ -1,6 +1,7 @@
 # Native finite-pack acquisition and renewal report
 
-RPT-003 is partial. There is no retention screen or scheduled retention delivery.
+RPT-003 is partial. The owner Retention cohorts screen (`/app/retention`, same `month` and
+`offer` filters) shows the same cohorts and terms; there is no scheduled retention delivery.
 Use a native owner session on the installed studio, through the existing same-origin
 sign-in door. Preparation and integration keys cannot read this report.
 
@@ -42,7 +43,17 @@ completed terms means null, never 0%. The month/offer filters select acquisition
 cohorts rather than renewal event dates. `packIds` explains every cohort total;
 CSV contains the same term rows rather than a second inconsistent aggregation.
 
-Member and revenue churn, tenure, attendance frequency, imported 18-month history,
+**Tenure and attendance frequency.** A member's tenure is the span from their first
+retained finite pack's creation instant to the earlier of the report instant and the latest
+retained pack expiry, in whole elapsed 24-hour days, never below zero. It is not churn.
+Attended visits are current corrected attended bookings whose class started within that
+span, inclusive. `visitsPer30Days` is visits × 30 ÷ tenure days rounded half-up to two
+decimals, null at zero tenure days. Every term row repeats its member's `tenureDays`,
+`attendedVisits` and `visitsPer30Days`; a cohort reports `meanTenureDays` (average over
+its members), pooled `attendedVisits` and `visitsPer30Days` (pooled visits × 30 ÷ pooled
+tenure days).
+
+Member and revenue churn, imported 18-month history,
 freeze/reactivation, PLAN-011 termination reasons/freeze types, and collected
 renewal attribution are unavailable. Recurring contracts, payment providers and
 migration records are not reconstructed from finite packs. The complete RPT-003

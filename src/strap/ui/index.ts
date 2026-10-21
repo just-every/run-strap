@@ -5,6 +5,7 @@ import { teachingPayPage } from './teaching-pay'
 import { bulkResult } from './booking-actions'
 import { revenuePage } from './revenue'
 import { renewalsPage } from './renewals'
+import { retentionPage } from './retention'
 import { reportsPage } from './reports'
 import { agentPage } from './agent'
 import { integrationsPage } from './integrations'
@@ -36,6 +37,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
         : current === '/app/profile' ? memberProfilePage(state) : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
           : current === '/app/packs' ? packsPage(state, query)
             : current === '/app/renewals' ? renewalsPage(state, query)
+            : current === '/app/retention' ? retentionPage(state)
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)
               : current === '/app/integrations' ? integrationsPage(state, notice)
