@@ -222,6 +222,6 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   await h.cmd('booking.book',{classId:series.classes[0].id},sofia.cookie);
   const seriesFreeze=await h.cmd('freeze.prepare',{packId:sofiaPack.id,freezeTypeId:type.id,startAt:'2098-01-07T00:00:00.000Z',endAt:'2098-01-08T00:00:00.000Z',reason:'Planned absence',requestId:'synthetic-strap-series-freeze'});
   await h.cmd('freeze.confirm',{id:seriesFreeze.id,key:seriesFreeze.key,requestId:'synthetic-strap-series-confirm'});
-  await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{date:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
+  await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
   if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
 },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})
