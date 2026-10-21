@@ -231,8 +231,16 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const status = Number((error as any)?.status) || 500
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
-    if (path === '/app/action' && who) return renderApp(await appState(env, who, held ? '/app/security' : back), held ? '/app/security' : back, { error: message.replace(/_/g, ' ') })
-    if (pages.has(path) && held) return new Response(null, { status: 303, headers: { ...headers, location: `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}` } })
+    if (path === '/app/action' && who) {
+      const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
+      const page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') })
+      return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
+    }
+    if (pages.has(path) && held && who) {
+      const target = `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}`
+      const page = await renderApp(await appState(env, who, target), target)
+      return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
+    }
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
     return json({ error: message }, status)
   }

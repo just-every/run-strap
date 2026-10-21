@@ -33,7 +33,8 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   // Before enrollment: refused at the report, its downloads and its page; nothing else opens for finance either.
   await get(h, '/api/strap/reports/revenue', fiona.cookie, 403, 'mfa_enrollment_required')
   await get(h, '/api/strap/reports/revenue.csv', fiona.cookie, 403, 'mfa_enrollment_required')
-  assert.equal((await h.send('/app/revenue', undefined, fiona.cookie)).headers.get('location').startsWith('/app/security?returnTo=%2Fapp%2Frevenue'), true)
+  const pageHold = await h.send('/app/revenue', undefined, fiona.cookie)
+  assert.equal(pageHold.status, 403); assert.equal(pageHold.headers.get('x-strap-refusal'), 'mfa_enrollment_required'); assert.match(pageHold.text, /Confirm your email/)
   for (const path of ['/api/strap/state', '/api/strap/reports/attendance', '/api/strap/teaching-pay', '/app/people', '/app/integrations']) await get(h, path, fiona.cookie, 403, 'finance_reports_only')
   for (const [name, input] of [['person.save', { name: 'Eve', email: 'eve@studio.example', role: 'member', active: true }], ['booking.cancel', { id: 'x' }], ['integration.create', { label: 'x' }], ['finance.grant', { id: fiona.id }]]) await refused(h, name, input, fiona.cookie, 403, 'finance_reports_only')
   // An authenticator app: enroll (the session is then checked), recovery codes shown once.
@@ -115,7 +116,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   assert.deepEqual([held.teachingPay, held.integrations, held.agentKeys, held.memberMail], [null, [], [], null])
   assert.equal((await get(h, '/api/strap/mfa', second, 200)).value.required, true)
   for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
-  for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) assert.equal((await h.send(page, undefined, second)).status, 303, page)
+  for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) await unchanged(async () => { const r = await h.send(page, undefined, second); assert.equal(r.status, 403, page); assert.equal(r.headers.get('x-strap-refusal'), 'mfa_enrollment_required') }, page)
   assert.equal((await h.send('/app/people', undefined, second)).status, 200)
   for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['pay.adjust', { classId: 'synthetic-strap-1', instructorId: 'synthetic-strap-2', amountCents: 350, reason: 'Agreed setup time', requestId: 'synthetic-strap-3' }], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
   const staffChanges = [
@@ -133,8 +134,11 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
     ['/auth/invite/cancel', { operatorId: pendingId }],
   ]) await unchanged(async () => { const r = await h.send(path, input, second); assert.equal(r.status, 403); assert.equal(r.value.error, 'mfa_enrollment_required') }, path)
   // Forms take the same guard, including parsed role and activation changes.
+  const beforeForm = await before()
   const form = await h.mf.dispatchFetch(h.origin + '/app/action?name=person.save&returnTo=%2Fapp%2Fpeople', { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: member.id, name: member.name, email: member.email, role: 'instructor', active: 'true' }).toString() })
+  assert.equal(form.status, 403); assert.equal(form.headers.get('x-strap-refusal'), 'mfa_enrollment_required')
   assert.match(await form.text(), /mfa enrollment required/)
+  assert.deepEqual(await before(), beforeForm, 'refused form writes nothing')
   assert.equal((await h.state()).people.find(p => p.id === member.id).role, 'member')
   // First enrollment needs Base's fresh email proof; neither starting method writes before that proof.
   await h.db.prepare('UPDATE oa_sessions SET created_at=? WHERE operator_id=?').bind(Date.now() - 660_000, secondId).run()
