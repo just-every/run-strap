@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile,mkdir } from 'node:fs/promises'
 import { join,extname } from 'node:path'
 import { chromium } from '@playwright/test'
+import { downloadNativePair } from './report-downloads-browser.mjs'
 import { run } from './harness.mjs'
 
 export async function teachingPayBrowser() {
@@ -45,6 +46,8 @@ async function captureTeachingPay(h,maya) {
         await page.getByRole('heading',{name:'Teaching pay',exact:true}).waitFor()
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
         if(role==='owner') {
+          const exported = await downloadNativePair(page,'teaching-pay',width,'Download pay CSV','Download pay XLSX')
+          assert.deepEqual(exported.map(row=>row.classId),await page.locator('[data-pay-class]').evaluateAll(rows=>rows.map(row=>row.dataset.payClass)))
           await page.getByLabel('Service (blank for all)',{exact:true}).fill('Evening Yoga')
           await page.getByLabel('Effective from (UTC)',{exact:true}).fill(new Date(Date.now()+86400_000+width*1000).toISOString().slice(0,19))
           await page.getByLabel('Rate in USD',{exact:true}).fill('45.00')
@@ -52,6 +55,7 @@ async function captureTeachingPay(h,maya) {
           await page.getByRole('heading',{name:'Teaching pay',exact:true}).waitFor()
           assert.ok((await h.state()).payRules.some(r=>r.service==='Evening Yoga'&&r.rateCents===4500))
         } else {
+          assert.equal(await page.getByRole('link',{name:'Download pay XLSX',exact:true}).count(),0)
           assert.equal(await page.getByRole('button',{name:'Publish pay rule',exact:true}).count(),0)
           assert.equal(await page.getByText('Pilates Foundations',{exact:true}).count(),0)
         }

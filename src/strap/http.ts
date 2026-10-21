@@ -1,10 +1,10 @@
-import { retentionReport, retentionCsv } from './retention-report'
-import { renewalWorklist, renewalCsv } from './domain/renewals'
+import { retentionReport } from './retention-report'
+import { renewalWorklist } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
 import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
-import { reportDownload } from './report-exports'
+import { reportDownload, nativeReportDownload } from './report-exports'
 import { revenueReport } from './revenue-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
@@ -106,20 +106,26 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (who.role !== 'owner') fail('owner_required',403)
         return reportDownload(await state(env,who),exportPath[1],exportPath[2],url.searchParams)
       }
+      const nativeExport = path.match(/^\/api\/strap\/reports\/(retention|renewals)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(teaching-pay)\.(csv|xlsx)$/)
+      if (nativeExport) {
+        if (who.role !== 'owner') fail('owner_required',403)
+        const loaded = await load(env.DB,who)
+        return nativeReportDownload(loaded.state,loaded.who,nativeExport[1],nativeExport[2],url.searchParams)
+      }
       if (path === '/api/strap/teaching-pay') {
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)
         return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
       }
-      if (path === '/api/strap/reports/retention' || path === '/api/strap/reports/retention.csv') {
+      if (path === '/api/strap/reports/retention') {
         if (who.role !== 'owner') fail('owner_required',403)
         const loaded = await load(env.DB,who), report = retentionReport(loaded.state,loaded.who,url.searchParams)
-        return path.endsWith('.csv') ? new Response(retentionCsv(report),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-retention.csv'}}) : json(report)
+        return json(report)
       }
-      if (path === '/api/strap/reports/renewals' || path === '/api/strap/reports/renewals.csv') {
+      if (path === '/api/strap/reports/renewals') {
         if (who.role !== 'owner') fail('owner_required',403)
         const loaded = await load(env.DB,who), report = renewalWorklist(loaded.state,loaded.who,url.searchParams)
-        return path.endsWith('.csv') ? new Response(renewalCsv(report),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-renewals.csv'}}) : json(report)
+        return json(report)
       }
       if (path === '/api/strap/reports/revenue') {
         if (who.role !== 'owner') fail('owner_required',403)

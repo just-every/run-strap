@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile, mkdir } from 'node:fs/promises'
 import { join, extname } from 'node:path'
-import { downloadPair, downloadReport } from './report-downloads-browser.mjs'
+import { downloadPair, downloadReport, downloadNativePair } from './report-downloads-browser.mjs'
 import { chromium } from '@playwright/test'
 
 export async function reportsBrowser(h,{flow,later,report}) {
@@ -107,6 +107,8 @@ export async function retentionEvidenceBrowser(h,row,query) {
         const cohort = report.cohorts[0], card = page.locator('[data-cohort="'+cohort.acquisitionMonth+'"]')
         assert.ok((await card.innerText()).includes(String(cohort.meanTenureDays)+' days mean'))
         assert.equal(new URL(await page.getByRole('link',{name:'Download retention CSV',exact:true}).getAttribute('href'),h.origin).search,'?'+query.replace(/\+/g,'+'))
+        const exported = await downloadNativePair(page,'retention-filtered',width,'Download retention CSV','Download retention XLSX')
+        assert.deepEqual(exported,report.rows)
         await capture('screen-filtered')
         const pending = page.waitForEvent('download')
         await page.goto(h.origin+'/api/strap/reports/retention.csv?'+query).catch(error=>assert.match(error.message,/Download is starting|ERR_ABORTED/))
@@ -115,6 +117,10 @@ export async function retentionEvidenceBrowser(h,row,query) {
         const [keys,...values] = parseCsv(await readFile(await download.path(),'utf8'))
         assert.deepEqual(values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]]))),report.rows,`RPT-003 authenticated filtered browser download agrees at ${width}`)
         if (proof) await download.saveAs(join(proof,`RPT-003-filtered-${width}.csv`))
+        await page.getByLabel('Acquisition month (YYYY-MM)',{exact:true}).fill('1900-01')
+        await page.getByRole('button',{name:'Apply cohort filters',exact:true}).click()
+        assert.equal((await downloadNativePair(page,'retention-empty',width,'Download retention CSV','Download retention XLSX')).length,0)
+        await capture('empty')
       } finally { await context.close() }
     }
   } finally { await browser.close() }

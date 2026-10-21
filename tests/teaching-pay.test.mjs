@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { assertNativeDownloads } from './report-downloads.mjs'
 import { run } from './harness.mjs'
 
 const weekOf = at => { const d=new Date(at); return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10) }
 
-test('STAFF-002: versioned teaching compensation, corrected attendance, minimums, cancellation treatment and exact reasoned adjustments through HTTP', {timeout:process.env.STRAP_PROOF_DIR?600_000:120_000},()=>run(async h=>{
+test('STAFF-002 / RPT-006: versioned teaching compensation, corrected attendance, minimums, cancellation treatment and exact reasoned adjustments through HTTP', {timeout:process.env.STRAP_PROOF_DIR?600_000:120_000},()=>run(async h=>{
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const maya=await h.person('Maya','instructor'),leo=await h.person('Leo','instructor'),ana=await h.person('Ana'),ben=await h.person('Ben')
@@ -83,6 +84,7 @@ test('STAFF-002: versioned teaching compensation, corrected attendance, minimums
     assert.equal(r.totalCents,expected)
     assert.equal(r.calculation.elapsedMinutes,90)
   }
+  await assertNativeDownloads(h,'/api/strap/teaching-pay',['','instructorId='+maya.id,'from='+encodeURIComponent(start)+'&to='+encodeURIComponent(classes[3].end),'from=2099-01-01T00%3A00%3A00Z'],[ana.cookie,maya.cookie,leo.cookie,''],['from=not-a-date','from=2099-01-02T00%3A00%3A00Z&to=2099-01-01T00%3A00%3A00Z'])
   const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
   const records=portable.tables.st_records.map(r=>({kind:r.kind,data:JSON.parse(r.data)}))
   assert.ok(records.some(r=>r.kind==='payRule'&&r.data.id===rules[0].id))

@@ -31,7 +31,7 @@ export function renewalsPage(s: any, query: URLSearchParams) {
     + panel('Worklist filters',body(`<form class="form" method="get" action="${path}"><div class="row2">`
       + field('days','Next days',report.days,'number','required min="1" max="366" step="1"')
       + field('lowCredits','Low-credit threshold',report.lowCredits,'number','required min="0" max="10000" step="1"')
-      + `</div><button class="btn" type="submit">Apply worklist filters</button></form><p><a href="/api/strap/reports/renewals.csv?${h(filters.toString())}">Download worklist CSV</a></p>`
+      + `</div><button class="btn" type="submit">Apply worklist filters</button></form><p><a href="/api/strap/reports/renewals.csv?${h(filters.toString())}">Download worklist CSV</a> · <a href="/api/strap/reports/renewals.xlsx?${h(filters.toString())}">Download worklist XLSX</a></p>`
       + `<p>Expiring after ${when(s,report.asOf)} through ${when(s,report.through)}, or currently at or below ${h(report.lowCredits)} credits. Expired and renewed packs are excluded.</p>`))
     + task + panel('Packs needing review',`<div class="table-wrap">${table(['Member / plan','Expires','Remaining','Last visit','Renewal / contact','Follow-up'],rows || '<tr><td colspan="6">No packs match these filters.</td></tr>')}</div>`)
     + panel('Coverage',body(`<p>${h(report.coverage)}</p><p>Accepted renewals leave this list without claiming payment collection. Existing follow-ups remain in <a href="/app/leads">Lead follow-up</a>. Fixed-term memberships, canceling auto-renewals, scheduled terminations, freezes, intro offers and approved renewal sequences are not available.</p>`))

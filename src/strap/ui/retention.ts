@@ -31,7 +31,7 @@ export function retentionPage(s: any) {
     + panel('Cohort filters',body(`<form class="form" method="get" action="${path}"><div class="row2">`
       + field('month','Acquisition month (YYYY-MM)',report.filters.month ?? '','text','pattern="\\d{4}-(0[1-9]|1[0-2])" placeholder="2026-10"')
       + field('offer','Initial offer',report.filters.offer ?? '','text','maxlength="80"')
-      + `</div><button class="btn" type="submit">Apply cohort filters</button></form><p><a href="/api/strap/reports/retention.csv${h(query)}">Download retention CSV</a></p>`))
+      + `</div><button class="btn" type="submit">Apply cohort filters</button></form><p><a href="/api/strap/reports/retention.csv${h(query)}">Download retention CSV</a> · <a href="/api/strap/reports/retention.xlsx${h(query)}">Download retention XLSX</a></p>`))
     + panel('Cohorts',`<div class="table-wrap">${table(['Cohort','Members / terms','Renewal','Tenure','Attendance'],cohorts || '<tr><td colspan="5">No cohorts match these filters.</td></tr>')}</div>`)
     + panel('Terms behind the cohorts',`<div class="table-wrap">${table(['Member / offer','Term','Renewal','Tenure / visits','Evidence'],terms || '<tr><td colspan="5">No terms match these filters.</td></tr>')}</div>`)
     + panel('Definitions',body(report.definitions.map(text => `<p>${h(text)}</p>`).join('')+'<p>Member and revenue churn, imported continuity, freezes, termination reasons and collected renewal revenue are not available yet.</p>'))

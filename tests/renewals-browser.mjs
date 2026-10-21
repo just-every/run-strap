@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile,mkdir } from 'node:fs/promises'
 import { join,extname } from 'node:path'
+import { downloadNativePair } from './report-downloads-browser.mjs'
 import { chromium } from '@playwright/test'
 
 // RPT-007: the existing real Worker, native session, HTML forms and downloaded CSV.
@@ -48,6 +49,7 @@ export async function renewalsBrowser(h,{packs}) {
           assert.equal(await entry.locator('time').first().getAttribute('datetime'),row.expiresAt)
           if (row.lastVisit) assert.equal(await entry.locator('time').nth(1).getAttribute('datetime'),row.lastVisit)
         }
+        assert.deepEqual(await downloadNativePair(page,'renewals-filtered',width,'Download worklist CSV','Download worklist XLSX'),csv)
         await capture('filtered-csv')
         const pack = packs[i]
         await page.locator(`[data-pack-id="${pack.id}"]`).getByRole('link',{name:'Assign follow-up',exact:true}).click()
@@ -80,6 +82,7 @@ export async function renewalsBrowser(h,{packs}) {
         await page.goto(h.origin+'/app/renewals?days=1&lowCredits=0')
         await page.getByText('No packs match these filters.',{exact:true}).waitFor()
         assert.equal(await page.locator('[data-pack-id]').count(),0)
+        assert.equal((await downloadNativePair(page,'renewals-empty',width,'Download worklist CSV','Download worklist XLSX')).length,0)
         await capture('empty')
       } finally { await context.close() }
     }

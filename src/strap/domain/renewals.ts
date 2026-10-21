@@ -38,11 +38,12 @@ export function renewalWorklist(state: State, who: Actor, query: URLSearchParams
   return {asOf,through,days,lowCredits,rows,coverage:'Finite credit packs only; other plan kinds, monetary remaining value and marketing permission are unavailable.'};
 }
 
+export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','lastVisit','renewalStatus','contactPermission','reasons','followup'];
+
 export function renewalCsv(report: ReturnType<typeof renewalWorklist>) {
-  const columns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','lastVisit','renewalStatus','contactPermission','reasons','followup'];
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"';
   // As in the portable exit, JSON-valued cells preserve types and keep formula-shaped names inert.
-  return [columns.map(quote).join(','),...report.rows.map(row => columns.map(key => quote(JSON.stringify(row[key as keyof typeof row]))).join(','))].join('\r\n')+'\r\n';
+  return [renewalColumns.map(quote).join(','),...report.rows.map(row => renewalColumns.map(key => quote(JSON.stringify(row[key as keyof typeof row]))).join(','))].join('\r\n')+'\r\n';
 }
 
 /** An internal assigned LEAD-002 task, never permission to contact or send a sequence. */

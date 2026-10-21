@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
-import { assertReportDownloads, assertCancellationDownload } from './report-downloads.mjs'
+import { assertReportDownloads, assertCancellationDownload, assertNativeDownloads } from './report-downloads.mjs'
 
 const hour = 3_600_000
 const monday = start => { const d = new Date(start); return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10) }
@@ -190,7 +190,7 @@ test('RPT-001 / RPT-006: current sales, collections, refunds, fee reversals and 
   assert.equal((await read()).totals.activeMembers,2)
 }))
 
-test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
+test('RPT-007 / RPT-006: finite-pack expiry and low-credit screen/HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   const ana = await h.person('RenewAna'), ben = await h.person('RenewBen'), coach = await h.person('RenewCoach','instructor')
   const day = 86_400_000, base = Date.now()
@@ -256,6 +256,7 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
   const agent = await h.cmd('agent.create',{label:'Renewal reader denied'})
   for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv']) assert.equal((await h.send(path,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
   assert.equal((await h.send('/api/strap/agent/command',{name:'renewal.followup.create',input:task},'',{authorization:`Bearer ${agent.token}`})).status,403)
+  await assertNativeDownloads(h,'/api/strap/reports/renewals',['','days=45&lowCredits=0','days=1&lowCredits=0'],[ana.cookie,coach.cookie,''],['days=0','days=367','lowCredits=-1','lowCredits=10001'])
   const screen = await h.send('/app/renewals?days=45&lowCredits=0',undefined,h.owner)
   assert.equal(screen.status,200)
   assert.deepEqual([...screen.text.matchAll(/data-pack-id="([^"]+)"/g)].map(m=>m[1]),(await read('days=45&lowCredits=0')).rows.map(r=>r.packId))
@@ -293,7 +294,7 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
 
 }))
 
-test('RPT-003: native finite-pack acquisition cohorts reconcile applied, scheduled, failed and absent renewals to exact pack/change/charge evidence through owner HTTP and matching CSV', () => run(async h => {
+test('RPT-003 / RPT-006: native finite-pack acquisition cohorts reconcile applied, scheduled, failed and absent renewals to exact pack/change/charge evidence through owner HTTP and matching CSV', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const ana = await h.person('CohortAna'), ben = await h.person('CohortBen'), cy = await h.person('CohortCy'), dax = await h.person('CohortDax'), coach = await h.person('CohortCoach','instructor')
@@ -384,6 +385,7 @@ test('RPT-003: native finite-pack acquisition cohorts reconcile applied, schedul
     assert.deepEqual(values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]]))),expected.rows)
     for (const cohort of expected.cohorts) assert.deepEqual(cohort.packIds,expected.rows.filter(row=>row.acquisitionMonth===cohort.acquisitionMonth&&row.initialOffer===cohort.initialOffer).map(row=>row.packId))
   }
+  await assertNativeDownloads(h,path,['','month='+localMonth+'&offer=Mat+five','month=1900-01'],[ana.cookie,coach.cookie,''],['month=2026-13','offer='])
   for (const query of ['month=','month=2026-00','month=2026-13','month=2026-1','month=2026-01-01','offer=','offer='+encodeURIComponent('x'.repeat(81))]) {
     for (const suffix of ['','.csv']) assert.equal((await h.send(path+suffix+'?'+query,undefined,h.owner)).status,400)
   }

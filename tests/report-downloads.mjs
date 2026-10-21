@@ -58,3 +58,42 @@ export async function assertCancellationDownload(h,queries,denied) {
   }
   for (const cookie of denied) assert.equal((await h.send('/api/strap/cancellations.xlsx',undefined,cookie)).status,cookie ? 403 : 401)
 }
+
+// Read the workbook with an independent spreadsheet parser, including nested source facts.
+export async function assertNativeDownloads(h,path,queries,denied,invalid=[]) {
+  const version = (await h.state()).version
+  const normalize = (rows,reference) => rows.map((row,i)=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,reference[i]?.[key] !== null && typeof reference[i]?.[key] === 'object' ? JSON.parse(value) : value])))
+  for (const query of queries) {
+    const report = (await h.send(path+'?'+query,undefined,h.owner)).value
+    const response = await h.send(path+'.csv?'+query,undefined,h.owner)
+    assert.equal(response.status,200); assert.equal(response.headers.get('cache-control'),'no-store')
+    const csvRows = objects(parseCsv(response.text)), sheets = await readDownload(h,path+'.xlsx?'+query)
+    const xlsxRows = normalize(objects(sheets.find(s=>s.sheet==='Sources').data),csvRows)
+    assert.deepEqual(xlsxRows,csvRows,'RPT-006: XLSX preserves every CSV value, including structured evidence and nulls')
+    assert.equal(csvRows.length,report.rows.length)
+    for (const [i,row] of csvRows.entries()) for (const [key,value] of Object.entries(row)) assert.deepEqual(value,report.rows[i][key] ?? null,`RPT-006: ${key} agrees with the filtered report`)
+    const context = sheets.find(s=>s.sheet==='Context').data
+    assert.ok(context.some(r=>r[0]==='timeZone'&&r[1]==='America/New_York'))
+    assert.ok(context.some(r=>r[0]==='definition'&&r[1].length>0))
+    const filters = JSON.parse(context.find(r=>r[0]==='filters')[1])
+    for (const [key,value] of new URLSearchParams(query)) assert.equal(String(filters[key]),['from','to'].includes(key) ? new Date(value).toISOString() : value,'RPT-006: workbook retains effective filters')
+    if (report.cohorts) {
+      assert.deepEqual(normalize(objects(sheets.find(s=>s.sheet==='Cohorts').data),report.cohorts),report.cohorts,'RPT-006: cohort metrics and source terms survive the workbook')
+      assert.deepEqual(Object.fromEntries(sheets.find(s=>s.sheet==='Unavailable').data.slice(1)),report.unavailable)
+    }
+    if ('configuredTotalCents' in report) {
+      const totals = Object.fromEntries(sheets.find(s=>s.sheet==='Totals').data.slice(1))
+      for (const [key,value] of Object.entries(totals)) assert.equal(value,report[key],'RPT-006: pay totals retain unavailable versus zero')
+      assert.equal(csvRows.reduce((sum,row)=>sum+(row.totalCents ?? 0),0),totals.configuredTotalCents)
+    }
+  }
+  const agent = await h.cmd('agent.create',{label:'Report export denied'})
+  const unchanged = (await h.state()).version
+  for (const format of ['csv','xlsx']) {
+    for (const cookie of denied) assert.equal((await h.send(path+'.'+format,undefined,cookie)).status,cookie ? 403 : 401)
+    assert.equal((await h.send(path+'.'+format,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
+    for (const query of invalid) assert.equal((await h.send(path+'.'+format+'?'+query,undefined,h.owner)).status,400)
+  }
+  assert.equal((await h.state()).version,unchanged,'RPT-006: refused downloads cannot change records')
+  assert.equal(unchanged,version,'RPT-006: downloads and credential creation cannot change domain records')
+}

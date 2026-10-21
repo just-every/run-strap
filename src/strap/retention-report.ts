@@ -72,8 +72,9 @@ export function retentionReport(state: State, who: Actor, query: URLSearchParams
     unavailable:{memberChurn:null,revenueChurn:null,freezeReactivation:null,churnByReason:null,importedHistory:null,collectedRenewalRevenue:null}}
 }
 
+export const retentionColumns = ['personId','member','acquisitionMonth','initialOffer','firstPackId','acquiredAt','tenureDays','attendedVisits','visitsPer30Days','packId','termStartAt','expiresAt','completed','renewalStatus','renewalAttemptIds','renewalChangeId','successorPackId','chargeIds','assessedCents','collectedRenewalCents','paymentIds','packUrl','renewalUrl','chargeUrls'] as const
+
 export function retentionCsv(report: ReturnType<typeof retentionReport>) {
-  const columns = ['personId','member','acquisitionMonth','initialOffer','firstPackId','acquiredAt','tenureDays','attendedVisits','visitsPer30Days','packId','termStartAt','expiresAt','completed','renewalStatus','renewalAttemptIds','renewalChangeId','successorPackId','chargeIds','assessedCents','collectedRenewalCents','paymentIds','packUrl','renewalUrl','chargeUrls'] as const
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"'
-  return [columns.map(quote).join(','),...report.rows.map(row => columns.map(key => quote(JSON.stringify(row[key]))).join(','))].join('\r\n')+'\r\n'
+  return [retentionColumns.map(quote).join(','),...report.rows.map(row => retentionColumns.map(key => quote(JSON.stringify(row[key]))).join(','))].join('\r\n')+'\r\n'
 }
