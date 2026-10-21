@@ -1,4 +1,4 @@
-// Integrations (API-002): read-only keys another application uses to read class rosters and, with explicit permission, boolean attendance.
+// Integrations (API-002, API-003): read-only keys another application uses to read class rosters and, with explicit permission, attendance outcomes.
 // The owner creates, rotates and revokes them, sets their event subscriptions and reads
 // each key's usage and failures. Strap stores only hashes of the secrets.
 import { scopeCatalogue } from '../integrations'
@@ -28,13 +28,13 @@ export function integrationsPage(s: any, notice: any) {
   const secret = created?.token ? panel('Save your integration secret', body(`<p>This secret for <strong>${h(created.label)}</strong> is shown once. Store it in the other application's secret settings before you leave this page. Strap keeps only a hash, and any earlier secret for this key has stopped working.</p><p class="token">${h(created.token)}</p>`), { icon: 'key' }) : ''
   const keys = rows(s, 'integrations')
   const list = keys.length ? `<div class="table-wrap">${table(['Label', 'Scope', 'Location', 'Events', 'Last used', 'Status', ''], keys.map(key => keyRow(s, key, location)).join(''))}</div>` : emptyLine('No integration keys yet. Create one to grant another application the selected read scopes.')
-  const scopes = group('Scope', Object.entries(scopeCatalogue).map(([name, scope]) => check(`sc_${name}`, `${h(scope.label)} (<code>${h(name)}</code>)`, name === 'roster:read') + `<p class="meta">${h(scope.reads)}. No money, contact details or notes.</p>`).join(''))
+  const scopes = group('Scope', Object.entries(scopeCatalogue).map(([name, scope]) => check(`sc_${name}`, `${h(scope.label)} (<code>${h(name)}</code>)`, name === 'roster:read') + `<p class="meta">${h(scope.reads)}. ${h(scope.never)}</p>`).join(''))
   const create = form('integration.create', '/app/integrations', field('label', 'Key label', '', 'text', 'required maxlength="80" placeholder="Front desk display"')
     + scopes + '<p class="meta">Attendance is optional and off by default. Scopes are fixed when the key is created; rotation never adds permission.</p>' + select('location', 'Location', [['studio', location]], 'studio') + '<p class="meta">Your studio has one location; a key reads all of it.</p>'
     + eventChoices(permitted(Object.keys(scopeCatalogue)), []), 'Create integration key')
   const guide = body(`<p>Send <code>GET /api/strap/integration/roster</code> for roster scope or <code>GET /api/strap/integration/attendance</code> for attendance scope with <code>Authorization: Bearer SECRET</code> and <code>strap-schema-version: ${h(schemaVersions.at(-1))}</code>. Pages hold 1–100 classes (<code>limit</code>, default 50); pass the returned <code>page.next</code> as <code>cursor</code> for the next page.</p>`
     + `<p>Each key may make ${rateLimit.requests} requests in any ${rateLimit.windowSeconds} seconds. Beyond that Strap answers <code>429</code> with <code>Retry-After</code> in seconds. Writes and every other kind of data are refused.</p><p><a href="https://github.com/just-every/run-strap/blob/main/docs/INTEGRATIONS.md">Read the integration guide</a></p>`)
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Integrations</h1></div><p class="lede">Integration keys let another application read the rosters or boolean attendance you explicitly select. Rotate a secret or revoke a key at any time; each request it makes appears under its usage and failures.</p>${secret}`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Integrations</h1></div><p class="lede">Integration keys let another application read the rosters or attendance outcomes you explicitly select. Rotate a secret or revoke a key at any time; each request it makes appears under its usage and failures.</p>${secret}`
     + panel('Integration keys', list, { icon: 'key' })
     + panel('How an integration connects', guide, { icon: 'report' })
     + `</div><aside class="rail">${panel('Create an integration key', body(create), { icon: 'plus' })}</aside></div>`

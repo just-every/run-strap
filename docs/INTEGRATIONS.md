@@ -1,6 +1,6 @@
 # Integrations
 
-An integration key lets another application, such as a front-desk display, a signage screen or a studio dashboard, read the rosters or boolean attendance you explicitly grant. A key reads only its selected scopes and changes nothing.
+An integration key lets another application, such as a front-desk display, a signage screen or a studio dashboard, read the rosters or attendance outcomes you explicitly grant. A key reads only its selected scopes and changes nothing.
 
 ## Create a key
 
@@ -17,7 +17,7 @@ The catalogue has two separate read-only scopes. Scopes are fixed when a key is 
 | Scope | Reads | Never includes |
 | --- | --- | --- |
 | `roster:read` | Classes (id, title, service, start and end in UTC, capacity, published or cancelled) with each booking's id and status (booked, waitlisted, offered or cancelled) and the attendee's first name and last initial | Attendance, money, packs, payments, fees, balances, email addresses, phone numbers, emergency contacts, notes, cancellation reasons and instructor names |
-| `attendance:read` | Class ids and currently booked booking ids, each with an `attended` boolean | Names; no-show/excused labels; times, actors, channels, kiosk ids, fees, credits, reasons, corrections or notes |
+| `attendance:read` | Per seat: booking id, a member reference only this key can use, first name and last initial, outcome (booked, attended, no-show, excused, late cancel or early cancel), check-in time and channel, cancellation time and who cancelled, and whether the owner corrected it | Correction, cancellation or waiver reasons, notes, health answers, contact details, full names, person ids, kiosk ids, money, fees, credits, packs, instructor names or pay |
 
 A key covers your studio's one location. Keys for chosen locations arrive with multiple locations (STUDIO-002). Other read scopes, such as contact details or money, and any write scope each need their own approved addition before Strap offers them. People you have erased never appear.
 
@@ -52,13 +52,37 @@ Classes come in order of start time, then id. A page holds 1 to 100 classes; `li
 
 `GET /api/strap/integration/key` describes the key itself: its scopes, location, event subscriptions and rate limit.
 
-## Read boolean attendance
+## Read attendance
 
-With an explicitly granted `attendance:read` key, send `GET /api/strap/integration/attendance` using the same Bearer secret, schema version and paging parameters as the roster. The result has `scope: "attendance:read"` and `data: [{ "id": "CLASS_ID", "attendance": [{ "bookingId": "BOOKING_ID", "attended": true }] }]`, plus the same location and page envelope.
+Select **Read attendance** (`attendance:read`) only when you create a new key; the form lists the fields it shares. Send `GET /api/strap/integration/attendance` with the same Bearer secret, schema version and paging parameters as the roster.
 
-`true` means the booking's current outcome is attended, through check-in or an owner correction. `false` covers not yet recorded, no-show and excused without distinguishing them. Waitlisted, offered and cancelled bookings are absent, as are erased people. A roster-only key receives 403 here and its roster remains free of attendance. A key with both scopes can join on `bookingId`. Further named outcome labels need a later owner-approved clause.
+```json
+{
+  "schemaVersion": "1",
+  "scope": "attendance:read",
+  "location": { "id": "studio", "name": "Brooklyn Studio" },
+  "data": [
+    {
+      "id": "CLASS_ID", "title": "Morning Flow", "service": "Morning Flow",
+      "start": "2026-11-02T14:00:00.000Z", "end": "2026-11-02T14:45:00.000Z", "status": "published",
+      "attendance": [
+        { "bookingId": "BOOKING_ID", "memberRef": "mref_0f3a…", "attendee": "Ana L.", "outcome": "attended",
+          "checkedInAt": "2026-11-02T13:52:10.000Z", "checkInChannel": "roster",
+          "cancelledAt": null, "cancelledBy": null, "corrected": false, "correctedFrom": null, "correctedAt": null, "source": "native" }
+      ]
+    }
+  ],
+  "page": { "limit": 50, "next": null }
+}
+```
 
-All lifecycle, check-order, rate, log, location, erasure and restore rules below apply to both scopes. Rate usage is shared per key across resources.
+`outcome` is the booking's current state: `booked` (a confirmed seat nobody has checked in or marked), `attended`, `no_show`, `excused`, `late_cancel` or `early_cancel`. Late arrival is not a state: compare `checkedInAt` with the class `start`. Waitlisted and offered places are absent, as are cancellations that were not a late or early cancel (a move, an expired offer, or the studio cancelling the class: its `status` says so). `checkedInAt` and `checkInChannel` are set only for a real check-in and are `null` when the owner corrected the seat to attended. `cancelledBy` is `member`, `staff` or `system`. When the owner corrects an outcome, `corrected` is true, `correctedFrom` is the outcome before the correction (`no_show` or `late_cancel`) and `correctedAt` is when; the owner's reason is never shared. `source` is `native` or `imported`.
+
+`memberRef` is the first 128 bits of an HMAC-SHA-256 of the person id under a random secret held only by this key. It is the same for a member in every class and after you rotate the secret, differs between members, and cannot be matched across two keys or to a person id. Names are first name plus last initial. People you have erased are absent. A roster-only key receives 403 here and its roster stays free of attendance. A key with both scopes may join on `bookingId`.
+
+Keys created with `attendance:read` before outcomes were available keep their original resource, which returns only `{ "bookingId", "attended" }` booleans for booked seats, and gain no fields. Create a new key for outcome rows.
+
+All lifecycle, check-order, rate, log, location, erasure and restore rules apply to both scopes. Rate usage is shared per key across resources. No member-level sharing choice exists yet: your explicit grant on a new key is the consent step.
 
 ## Schema versions
 

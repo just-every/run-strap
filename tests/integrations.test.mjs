@@ -171,13 +171,14 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   if (process.env.STRAP_PROOF_DIR) await (await import('./integrations-browser.mjs')).integrationsBrowser(h, { api, member: ana })
 }))
 
-test('API-002: attendance requires a new explicit scope, exposes only current booked-seat booleans, and inherits the integration fences', () => run(async h => {
+test('API-002 / API-003: attendance requires a new explicit scope on a new key and returns booked, attended, no_show, excused, late_cancel and early_cancel rows with a per-key member reference, short names and no reasons or money, under every integration fence', () => run(async h => {
   await h.mf.dispatchFetch(h.origin + '/setup', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes', redirect: 'manual' })
   await h.cmd('studio.save', { location: 'Brooklyn Studio', timeZone: 'America/New_York' })
-  await h.cmd('bookingRule.save', { service: 'Reformer', noShowFeeCents: 2000, noShowGraceMinutes: 0 })
+  await h.cmd('bookingRule.save', { service: 'Reformer', noShowFeeCents: 2000, noShowGraceMinutes: 0, cancelCutoffHours: 60, lateCancelFeeCents: 500 })
   const coach = await h.person('Maya', 'instructor'), members = {}
   for (const name of ['Ana', 'Ben', 'Cy', 'Dee', 'Eve']) {
     members[name] = await h.person(name)
+    if (name === 'Ana') await h.cmd('person.save', { id: members.Ana.id, name: 'Ana Lopez', email: members.Ana.email, role: 'member', active: true, phone: '(212) 555-0142' })
     await h.cmd('pack.approve', { id: (await h.cmd('pack.prepare', { personId: members[name].id, credits: 8, amountCents: 10000, expiresAt: '2099-12-31T00:00:00Z' })).id })
   }
   const publish = async (title, hours, capacity) => {
@@ -230,21 +231,59 @@ test('API-002: attendance requires a new explicit scope, exposes only current bo
   const rosterPage = await api(h, both.token, '/api/strap/integration/roster?limit=2')
   assert.equal(pageOne.value.page.next, rosterPage.value.page.next, 'both resources page the same classes')
   const pageTwo = await api(h, both.token, `/api/strap/integration/attendance?limit=2&cursor=${encodeURIComponent(rosterPage.value.page.next)}`)
-  assert.deepEqual([pageTwo.value.data, pageTwo.value.page.next], [[{ id: third.id, attendance: [] }], null])
+  assert.deepEqual([pageTwo.value.data.map(c => [c.id, c.attendance.map(r => r.outcome)]), pageTwo.value.page.next], [[[third.id, ['early_cancel']]], null])
   const attendance = await api(h, both.token, '/api/strap/integration/attendance')
-  assert.deepEqual(attendance.value, {
-    schemaVersion: '1', scope: 'attendance:read', location: { id: 'studio', name: 'Brooklyn Studio' },
-    data: [{ id: first.id, attendance: Object.entries(seats).map(([name, seat]) => ({ bookingId: seat.id, attended: ['Ana', 'Dee'].includes(name) })) }, { id: second.id, attendance: [] }, { id: third.id, attendance: [] }],
-    page: { limit: 50, next: null },
-  }, 'check-in and corrected attendance are true; no-show, excused and unrecorded are indistinguishable false; other booking states are omitted')
-  for (const entry of attendance.value.data) {
-    assert.deepEqual(Object.keys(entry), ['id', 'attendance'], 'attendance carries no class names, times or instructor data')
-    for (const booking of entry.attendance) assert.deepEqual(Object.keys(booking), ['bookingId', 'attended'], 'bookings carry no names, money, reasons, actors or attendance history')
+  const rowFor = (response, booking) => response.value.data.flatMap(c => c.attendance).find(r => r.bookingId === booking.id)
+  const [firstClass, secondClass] = attendance.value.data
+  assert.deepEqual(Object.keys(firstClass), ['id', 'title', 'service', 'start', 'end', 'status', 'attendance'])
+  assert.deepEqual([firstClass.title, firstClass.service, firstClass.status, Date.parse(firstClass.start) < Date.now(), Date.parse(firstClass.end) > Date.now()], ['Attendance Flow', 'Reformer', 'published', true, true])
+  assert.deepEqual(firstClass.attendance.map(r => [r.attendee, r.outcome, r.corrected, r.correctedFrom]), [['Ana L.', 'attended', false, null], ['Ben', 'no_show', false, null], ['Cy', 'excused', true, 'no_show'], ['Dee', 'attended', true, 'no_show'], ['Eve', 'booked', false, null]],
+    'booked, attended, no_show, excused and corrected outcomes; correctedFrom names the earlier outcome without its reason')
+  assert.deepEqual(firstClass.attendance.map(r => r.bookingId), Object.values(seats).map(seat => seat.id))
+  assert.deepEqual(secondClass.attendance.map(r => [r.attendee, r.outcome, r.cancelledBy, r.checkedInAt]), [['Ana L.', 'late_cancel', 'member', null]], 'a late cancel appears; the offered and waitlisted places have no outcome and are omitted')
+  assert.deepEqual(attendance.value.data[2].attendance.map(r => [r.outcome, r.cancelledBy]), [['early_cancel', 'member']])
+  assert.ok(secondClass.attendance[0].cancelledAt && Date.parse(secondClass.attendance[0].cancelledAt) <= Date.now())
+  const [ana, ben, , dee, eve] = firstClass.attendance
+  assert.deepEqual([ana.checkInChannel, Date.parse(ana.checkedInAt) <= Date.now(), ben.checkedInAt, dee.checkedInAt, dee.checkInChannel, dee.correctedAt && Date.parse(dee.correctedAt) <= Date.now()], ['roster', true, null, null, null, true], 'an owner correction to attended is not a check-in')
+  for (const row of firstClass.attendance) {
+    assert.deepEqual(Object.keys(row), ['bookingId', 'memberRef', 'attendee', 'outcome', 'checkedInAt', 'checkInChannel', 'cancelledAt', 'cancelledBy', 'corrected', 'correctedFrom', 'correctedAt', 'source'], 'API-003 the exact allowlist of fields')
+    assert.deepEqual([row.source, row.cancelledAt, row.cancelledBy], ['native', null, null])
   }
-  for (const hidden of [...Object.keys(members), coach.name, 'Private correction reason', 'Private paper roster note', 'no_show', 'excused', cancelled.id, offered.id, waiting.id, cancelledThird.id]) assert.ok(!attendance.text.includes(hidden), `attendance omits ${hidden}`)
+  assert.deepEqual([eve.outcome, eve.checkedInAt, eve.corrected], ['booked', null, false])
+  // memberRef: a per-key HMAC, the same for one member everywhere, different between members and between keys.
+  const refs = rows => rows.map(r => r.memberRef), anaRefs = [ana, secondClass.attendance[0], attendance.value.data[2].attendance[0]].map(r => r.memberRef)
+  assert.ok(refs(firstClass.attendance).every(ref => /^mref_[0-9a-f]{32}$/.test(ref)) && new Set(refs(firstClass.attendance)).size === 5, 'one distinct reference per member')
+  assert.equal(new Set(anaRefs).size, 1, 'the same member has the same reference in every class')
+  const otherKey = await createKey(h, { label: 'Second attendance display', 'sc_attendance:read': 'true', location: 'studio' })
+  const otherAttendance = await api(h, otherKey.token, '/api/strap/integration/attendance')
+  assert.notEqual(otherAttendance.value.data[0].attendance[0].memberRef, ana.memberRef, 'two keys cannot link the same member')
+  assert.equal(new Set([...refs(firstClass.attendance), ...refs(otherAttendance.value.data[0].attendance)]).size, 10)
+  for (const hidden of [...Object.values(members).flatMap(m => [m.id, m.email]), 'Lopez', '2125550142', coach.name, 'Private correction reason', 'Private paper roster note', 'checkedInBy', 'kiosk', 'noShowFee', 'amountCents', 'feeCents', 'credit', 'pack', 'refund', 'waiver', 'note', 'balance'])
+    assert.ok(!attendance.text.includes(hidden), `API-003 attendance omits ${hidden}`)
+  assert.deepEqual(keysOf(attendance.value).filter(key => /reason|note|health|cents|amount|fee|credit|pack|payment|email|phone|contact|instructor|kiosk|personId|waiver/i.test(key)), [], 'API-003 never carries reasons, notes, health, money or contacts')
   const combinedRoster = await api(h, both.token, '/api/strap/integration/roster')
-  assert.deepEqual(keysOf(combinedRoster.value).filter(key => /attendance|attended|checked|noshow/i.test(key)), [], 'even a combined key receives attendance only from its separate resource')
+  assert.deepEqual(keysOf(combinedRoster.value).filter(key => /attendance|attended|checked|noshow|outcome|memberRef/i.test(key)), [], 'even a combined key receives attendance only from its separate resource')
   for (const query of ['limit=0', 'limit=101', 'limit=bad', 'cursor=bad']) assert.equal((await api(h, both.token, `/api/strap/integration/attendance?${query}`)).value.error, query.startsWith('limit') ? 'invalid_limit' : 'invalid_cursor')
+
+  // An owner correction of the late cancel changes the outcome and keeps the earlier one readable.
+  await h.cmd('attendance.correct', { id: cancelled.id, outcome: 'early_cancel', reason: 'Private late reason' })
+  const afterFix = await api(h, both.token, '/api/strap/integration/attendance')
+  const fixed = rowFor(afterFix, cancelled)
+  assert.deepEqual([fixed.outcome, fixed.corrected, fixed.correctedFrom, fixed.cancelledBy, fixed.memberRef], ['early_cancel', true, 'late_cancel', 'member', secondClass.attendance[0].memberRef])
+  assert.ok(!afterFix.text.includes('Private late reason'))
+  // Rows from an import (MOVE-009) say so; a studio-cancelled class and a move are not cancellations the member chose.
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.source','imported') WHERE id=?").bind(seats.Eve.id).run()
+  assert.equal(rowFor(await api(h, both.token, '/api/strap/integration/attendance'), seats.Eve).source, 'imported')
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.cancellation','class_cancelled') WHERE id=?").bind(cancelledThird.id).run()
+  assert.deepEqual((await api(h, both.token, '/api/strap/integration/attendance')).value.data[2].attendance, [])
+
+  // A key created under API-002 alone (no member-reference key) keeps exactly the boolean-only resource.
+  const legacy = await createKey(h, { label: 'API-002 attendance key', 'sc_attendance:read': 'true', location: 'studio' })
+  await h.db.prepare('UPDATE st_integrations SET member_ref_key=NULL WHERE id=?').bind(legacy.id).run()
+  const booleans = await api(h, legacy.token, '/api/strap/integration/attendance')
+  assert.deepEqual(booleans.value.data[0], { id: first.id, attendance: Object.entries(seats).map(([name, seat]) => ({ bookingId: seat.id, attended: ['Ana', 'Dee'].includes(name) })) })
+  assert.ok(!booleans.text.includes('memberRef') && !booleans.text.includes('outcome'))
+  assert.match((await api(h, legacy.token, '/api/strap/integration/key')).value.scopes[0].reads, /true or false only/)
 
   const unused = await h.cmd('person.save', { name: 'Unused Identity', email: 'unused@studio.example', role: 'member', active: true })
   await h.cmd('person.erase', { id: unused.id })

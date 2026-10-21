@@ -1,14 +1,17 @@
-// API-002: owner-created integration keys. Each key holds scopes from a fixed read-only
+// API-002/API-003: owner-created integration keys. Each key holds scopes from a fixed read-only
 // catalogue for the studio's one location; Strap keeps only hashes of its secrets.
 import type { Bindings } from '../auth.server'
 import type { Actor } from './domain'
 import { fail, hash } from './credentials'
+import { newRefKey } from './integration-attendance'
 
 /** The whole catalogue. A scope lists the events a key holding it may subscribe to. */
 export const scopeCatalogue = {
-  'roster:read': { label: 'Read class rosters', reads: 'Classes, each booking’s status and each attendee’s first name and last initial', events: ['class.changed', 'booking.changed'] },
-  'attendance:read': { label: 'Read attendance', reads: 'Class ids and booked booking ids with attended true or false only', events: ['attendance.changed'] },
+  'roster:read': { label: 'Read class rosters', reads: 'Classes, each booking’s status and each attendee’s first name and last initial', never: 'No attendance, money, contact details or notes.', events: ['class.changed', 'booking.changed'] },
+  'attendance:read': { label: 'Read attendance', reads: 'Per seat: booking id, a member reference only this key can use, first name and last initial, outcome (booked, attended, no-show, excused, late cancel or early cancel), check-in time and channel, cancellation time and who cancelled, and whether and from which outcome the owner corrected it', never: 'No reasons, notes, health answers, money, contact details or full names.', events: ['attendance.changed'] },
 } as const
+/** What attendance:read returns for a key created under API-002 alone, before outcomes shipped. */
+export const booleanAttendanceReads = 'Class ids and booked booking ids with attended true or false only'
 type Scope = keyof typeof scopeCatalogue
 /** Until STUDIO-002 adds locations, the studio has exactly one, and every key covers it. */
 export const locations = ['studio']
@@ -45,9 +48,11 @@ export async function integrationCommand(env: Bindings, who: Actor, name: string
     if (!scopes.length || scopes.some(scope => !(scope in scopeCatalogue))) fail('scope_not_in_catalogue')
     if (!locations.includes(String(input.location))) fail('unknown_location')
     const events = eventsFor(scopes, input.events), id = crypto.randomUUID(), token = secret()
+    // Only a key granted attendance:read holds a member-reference key; it is fixed with the scopes.
+    const refKey = scopes.includes('attendance:read') ? newRefKey() : null
     const results = await env.DB.batch([
-      env.DB.prepare(`INSERT INTO st_integrations(id,owner_id,owner_version,label,scopes,location,events,created_at,updated_at)
-        SELECT ?,id,version,?,?,?,?,?,? FROM oa_operators WHERE id=? AND role='owner' AND status='active'`).bind(id, label, JSON.stringify(scopes), String(input.location), JSON.stringify(events), at, at, who.id),
+      env.DB.prepare(`INSERT INTO st_integrations(id,owner_id,owner_version,label,scopes,location,events,created_at,updated_at,member_ref_key)
+        SELECT ?,id,version,?,?,?,?,?,?,? FROM oa_operators WHERE id=? AND role='owner' AND status='active'`).bind(id, label, JSON.stringify(scopes), String(input.location), JSON.stringify(events), at, at, refKey, who.id),
       env.DB.prepare('INSERT INTO st_integration_secrets(token_hash,integration_id,created_at) SELECT ?,id,? FROM st_integrations WHERE id=?').bind(await hash(token), at, id),
     ])
     if (results[0].meta.changes !== 1) fail('Owner access changed', 403)

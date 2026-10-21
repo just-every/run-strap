@@ -3,7 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { join, extname } from 'node:path'
 import { chromium } from '@playwright/test'
 
-// API-002 screens at 1440 and 390: attendance starts unchecked, and a default
+// API-002 and API-003 screens at 1440 and 390: attendance starts unchecked, and a default
 // roster key cannot read it. The owner explicitly creates a combined key, reads
 // its resources and usage, then rotates and revokes it. Screenshots mask secrets.
 export async function integrationsBrowser(h, { api, member }) {
@@ -45,6 +45,7 @@ export async function integrationsBrowser(h, { api, member }) {
         await owner.locator('tr').filter({ hasText: `Default roster ${width}` }).first().getByRole('button', { name: 'Revoke', exact: true }).click()
         assert.equal(await attendanceScope.isChecked(), false)
         await create.getByLabel('Key label').fill(label)
+        for (const shared of [/member reference only this key can use/, /outcome \(booked, attended, no-show, excused, late cancel or early cancel\)/, /No reasons, notes, health answers, money, contact details or full names\./]) assert.match(await create.innerText(), shared, 'API-003 the form lists the exact shared fields before the key exists')
         await attendanceScope.check()
         await create.getByLabel(/booking\.changed/).check()
         await create.getByLabel(/attendance\.changed/).check()
@@ -58,7 +59,9 @@ export async function integrationsBrowser(h, { api, member }) {
         assert.equal(await attendanceScope.isChecked(), false, 'the next key starts with fresh consent')
         // Both resources and a refused attendance write appear in the same usage log.
         assert.equal((await api(h, token, '/api/strap/integration/roster')).status, 200)
-        assert.equal((await api(h, token, '/api/strap/integration/attendance')).status, 200)
+        const outcomes = await api(h, token, '/api/strap/integration/attendance')
+        assert.deepEqual([outcomes.status, outcomes.value.scope, Array.isArray(outcomes.value.data)], [200, 'attendance:read', true])
+        assert.match((await api(h, token, '/api/strap/integration/key')).value.scopes[1].reads, /member reference only this key can use/)
         assert.equal((await api(h, token, '/api/strap/integration/attendance', { method: 'POST', body: {} })).status, 405)
         await owner.goto(h.origin + '/app/integrations')
         assert.ok(!(await owner.content()).includes(token), 'the secret is shown only once')

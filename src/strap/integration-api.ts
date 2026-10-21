@@ -1,11 +1,12 @@
-// API-002: the integration door. GET only, Bearer integration secret, a required schema
+// API-002/API-003: the integration door. GET only, Bearer integration secret, a required schema
 // version, 60 counted requests per key in any rolling 60 seconds, and opaque-cursor pages.
 import type { Bindings } from '../auth.server'
 import { loadSystem } from './domain/store'
 import { list, shortName } from './domain/types'
 import { studioSettings } from './domain/studio'
 import { hash } from './credentials'
-import { eventDelivery, scopeCatalogue } from './integrations'
+import { booleanAttendanceReads, eventDelivery, scopeCatalogue } from './integrations'
+import { attendanceRows, memberRefs } from './integration-attendance'
 
 export const schemaVersions = ['1']
 export const rateLimit = { requests: 60, windowSeconds: 60 }
@@ -28,17 +29,21 @@ function page(url: URL) {
 }
 const cursorAfter = (entry: { start: string; id: string }) => 'c1.' + btoa(JSON.stringify([entry.start, entry.id])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-/** Both scopes page the same classes. Attendance exposes current booked outcomes
- * as booleans only; roster fields remain unchanged. Erased people never appear. */
-async function classPage(env: Bindings, url: URL, attendanceOnly = false) {
+/** Both scopes page the same classes. Attendance exposes outcome rows (API-003) to a key holding a
+ * member-reference key and booleans only to older keys; roster fields remain unchanged. Erased people never appear. */
+async function classPage(env: Bindings, url: URL, attendance: 'roster' | 'boolean' | 'outcomes' = 'roster', refKey: string | null = null) {
   const { limit, after } = page(url), { state } = await loadSystem(env.DB)
   const people = new Map(state.people.filter(p => !p.erasedAt).map(p => [p.id, p]))
   const classes = list(state, 'class').sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
     .filter(c => !after || c.start > after[0] || (c.start === after[0] && c.id > after[1]))
   const shown = classes.slice(0, limit), bookings = list(state, 'booking')
+  const refs = attendance === 'outcomes' ? await memberRefs(refKey!, [...people.values()]) : new Map<string, string>()
   return {
     location: { id: 'studio', name: studioSettings(state)?.location ?? null },
-    data: shown.map(c => attendanceOnly ? {
+    data: shown.map(c => attendance === 'outcomes' ? {
+      id: c.id, title: c.title, service: c.service, start: c.start, end: c.end, status: c.status,
+      attendance: attendanceRows(bookings.filter(b => b.classId === c.id), people, refs),
+    } : attendance === 'boolean' ? {
       id: c.id,
       attendance: bookings.filter(b => b.classId === c.id && b.status === 'booked' && people.has(b.personId))
         .map(b => ({ bookingId: b.id, attended: b.attendance === 'attended' })),
@@ -89,11 +94,11 @@ export async function integrationResponse(request: Request, env: Bindings): Prom
     const scopes: string[] = JSON.parse(key.scopes)
     if (url.pathname === '/api/strap/integration/key') return await respond(200, {
       schemaVersion: version, id: key.id, label: key.label, location: key.location, rateLimit,
-      scopes: scopes.map(scope => ({ name: scope, ...scopeCatalogue[scope as keyof typeof scopeCatalogue] })),
+      scopes: scopes.map(scope => ({ name: scope, ...scopeCatalogue[scope as keyof typeof scopeCatalogue], ...(scope === 'attendance:read' && !key.member_ref_key ? { reads: booleanAttendanceReads } : {}) })),
       events: JSON.parse(key.events).map((name: string) => ({ name, delivery: eventDelivery })),
     })
     if (url.pathname === '/api/strap/integration/roster' && scopes.includes('roster:read')) return await respond(200, { schemaVersion: version, scope: 'roster:read', ...await classPage(env, url) })
-    if (url.pathname === '/api/strap/integration/attendance' && scopes.includes('attendance:read')) return await respond(200, { schemaVersion: version, scope: 'attendance:read', ...await classPage(env, url, true) })
+    if (url.pathname === '/api/strap/integration/attendance' && scopes.includes('attendance:read')) return await respond(200, { schemaVersion: version, scope: 'attendance:read', ...await classPage(env, url, key.member_ref_key ? 'outcomes' : 'boolean', key.member_ref_key) })
     refuse(403, 'scope_not_granted', { scopes })
   } catch (error) {
     const refusal = error as Refusal
