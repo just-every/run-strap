@@ -450,8 +450,8 @@ Judged from the code and tests at commit `411dc1910f35337acd819abe79b1e061e25e90
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 14 | 0 | 0 | 14 |
-| Target and push further | 29 | 13 | 92 | 134 |
-| All | 43 | 13 | 92 | 148 |
+| Target and push further | 29 | 14 | 91 | 134 |
+| All | 43 | 14 | 91 | 148 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
