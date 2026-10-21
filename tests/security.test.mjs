@@ -110,6 +110,12 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   assert.equal(invited.status, 202)
   const pendingId = (await h.db.prepare("SELECT id FROM oa_operators WHERE email='pending@studio.example'").first()).id
   const staffId = await operatorId(h, member.cookie)
+  const teacher = await h.cmd('person.save', { name: 'synthetic-strap-4', email: 'synthetic-strap-4@studio.example', role: 'instructor', active: true })
+  const timetable = await h.cmd('classes.prepare', { week: '2099-11-02', classes: [{ title: 'synthetic-strap-5', room: 'Studio', start: '2099-11-02T10:00:00Z', end: '2099-11-02T11:00:00Z', capacity: 4, instructorId: teacher.id }] })
+  const earned = (await h.cmd('classes.publish', { id: timetable.id })).classes[0]
+  const closure = await h.cmd('closure.prepare', { scope: 'class', classId: earned.id, reason: 'Studio closed' })
+  await h.cmd('closure.confirm', { id: closure.id, impact: closure.impact.key })
+  const adjustment = { classId: earned.id, instructorId: teacher.id, amountCents: 350, reason: 'Agreed setup time', requestId: 'synthetic-strap-3' }
   const before = async () => (await h.db.batch((await h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results.map(r => h.db.prepare(`SELECT * FROM ${r.name} ORDER BY rowid`)))).map(r => r.results)
   const unchanged = async (act, label) => { const saved = await before(); await act(); assert.deepEqual(await before(), saved, label + ': nothing written (including auth mail, audit and rate counters)') }
   const held = await h.state(second)
@@ -118,7 +124,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
   for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) await unchanged(async () => { const r = await h.send(page, undefined, second); assert.equal(r.status, 403, page); assert.equal(r.headers.get('x-strap-refusal'), 'mfa_enrollment_required') }, page)
   assert.equal((await h.send('/app/people', undefined, second)).status, 200)
-  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['pay.adjust', { classId: 'synthetic-strap-1', instructorId: 'synthetic-strap-2', amountCents: 350, reason: 'Agreed setup time', requestId: 'synthetic-strap-3' }], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
+  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['pay.adjust', adjustment], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
   const staffChanges = [
     ['person.invite', { id: member.id }],
     ['person.save', { ...member, role: 'instructor' }],
@@ -134,11 +140,16 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
     ['/auth/invite/cancel', { operatorId: pendingId }],
   ]) await unchanged(async () => { const r = await h.send(path, input, second); assert.equal(r.status, 403); assert.equal(r.value.error, 'mfa_enrollment_required') }, path)
   // Forms take the same guard, including parsed role and activation changes.
-  const beforeForm = await before()
-  const form = await h.mf.dispatchFetch(h.origin + '/app/action?name=person.save&returnTo=%2Fapp%2Fpeople', { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: member.id, name: member.name, email: member.email, role: 'instructor', active: 'true' }).toString() })
-  assert.equal(form.status, 403); assert.equal(form.headers.get('x-strap-refusal'), 'mfa_enrollment_required')
-  assert.match(await form.text(), /mfa enrollment required/)
-  assert.deepEqual(await before(), beforeForm, 'refused form writes nothing')
+  for (const [name, input] of [
+    ['person.save', { id: member.id, name: member.name, email: member.email, role: 'instructor', active: 'true' }],
+    ['person.invite', { id: member.id }],
+    ['pay.adjust', { ...adjustment, adjustment: '3.50' }],
+    ['integration.create', { label: 'synthetic-strap-6', 'sc_roster:read': 'true', location: 'studio' }],
+  ]) await unchanged(async () => {
+    const form = await h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=%2Fapp%2Fpeople`, { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(input).toString() })
+    assert.equal(form.status, 403); assert.equal(form.headers.get('x-strap-refusal'), 'mfa_enrollment_required')
+    assert.match(await form.text(), /mfa enrollment required/)
+  }, name + ' form')
   assert.equal((await h.state()).people.find(p => p.id === member.id).role, 'member')
   // First enrollment needs Base's fresh email proof; neither starting method writes before that proof.
   await h.db.prepare('UPDATE oa_sessions SET created_at=? WHERE operator_id=?').bind(Date.now() - 660_000, secondId).run()
@@ -154,6 +165,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   assert.equal((await h.send('/auth/operator/role', { operatorId: staffId, role: 'admin' }, second)).status, 200)
 
   await get(h, '/api/strap/teaching-pay', second, 200)
+  assert.equal((await h.cmd('pay.adjust', adjustment, second)).amountCents, 350)
   // The enrolling owner resets nobody's factors but another owner's: never their own.
   await refused(h, 'mfa.reset', { operatorId: secondId }, second, 403, 'another_owner_required')
   const fresh = await h.signIn(h.auth.OWNER_EMAIL)
