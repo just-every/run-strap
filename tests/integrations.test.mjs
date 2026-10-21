@@ -170,3 +170,137 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   assert.ok(!page.text.includes(display.token) && !page.text.includes(rotated.token), 'API-002 secrets are shown only once')
   if (process.env.STRAP_PROOF_DIR) await (await import('./integrations-browser.mjs')).integrationsBrowser(h, { api, member: ana })
 }))
+
+test('API-002: attendance requires a new explicit scope, exposes only current booked-seat booleans, and inherits the integration fences', () => run(async h => {
+  await h.mf.dispatchFetch(h.origin + '/setup', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes', redirect: 'manual' })
+  await h.cmd('studio.save', { location: 'Brooklyn Studio', timeZone: 'America/New_York' })
+  await h.cmd('bookingRule.save', { service: 'Reformer', noShowFeeCents: 2000, noShowGraceMinutes: 0 })
+  const coach = await h.person('Maya', 'instructor'), members = {}
+  for (const name of ['Ana', 'Ben', 'Cy', 'Dee', 'Eve']) {
+    members[name] = await h.person(name)
+    await h.cmd('pack.approve', { id: (await h.cmd('pack.prepare', { personId: members[name].id, credits: 8, amountCents: 10000, expiresAt: '2099-12-31T00:00:00Z' })).id })
+  }
+  const publish = async (title, hours, capacity) => {
+    const start = at(hours)
+    return (await h.cmd('classes.publish', { id: (await h.cmd('classes.prepare', { week: monday(start), classes: [{ title, service: 'Reformer', start, end: new Date(Date.parse(start) + 45 * minute).toISOString(), capacity, instructorId: coach.id }] })).id })).classes[0]
+  }
+  const first = await publish('Attendance Flow', 30, 5), second = await publish('Pending Flow', 54, 1), third = await publish('Cancelled Flow', 78, 4), seats = {}
+  for (const [name, member] of Object.entries(members)) seats[name] = await h.cmd('booking.book', { classId: first.id }, member.cookie)
+  await h.cmd('waitlist.save', { mode: 'offer', claimMinutes: 60, lateWindow: 'promote' })
+  const cancelled = await h.cmd('booking.book', { classId: second.id }, members.Ana.cookie)
+  const offered = await h.cmd('booking.book', { classId: second.id }, members.Ben.cookie)
+  const waiting = await h.cmd('booking.book', { classId: second.id }, members.Cy.cookie)
+  await h.cmd('booking.cancel', { id: cancelled.id }, members.Ana.cookie)
+  const cancelledThird = await h.cmd('booking.book', { classId: third.id }, members.Ana.cookie)
+  await h.cmd('booking.cancel', { id: cancelledThird.id }, members.Ana.cookie)
+  assert.deepEqual((await h.state()).bookings.filter(b => [cancelled.id, offered.id, waiting.id, cancelledThird.id].includes(b.id)).map(b => b.status).sort(), ['cancelled', 'cancelled', 'offered', 'waitlisted'])
+
+  // Move the class behind the clock; all attendance outcomes are recorded through HTTP.
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(new Date(Date.now() - 30 * minute).toISOString(), new Date(Date.now() + 15 * minute).toISOString(), first.id).run()
+  await h.cmd('attendance.checkin', { id: seats.Ana.id }, coach.cookie)
+  for (const name of ['Ben', 'Cy', 'Dee']) await h.cmd('attendance.noshow', { id: seats[name].id }, coach.cookie)
+  await h.cmd('attendance.correct', { id: seats.Cy.id, outcome: 'excused', reason: 'Private correction reason' })
+  await h.cmd('attendance.correct', { id: seats.Dee.id, outcome: 'attended', reason: 'Private paper roster note' })
+  assert.ok((await h.state()).charges.some(c => c.reason === 'no_show_fee' && c.amountCents === 2000), 'money exists behind the boolean projection')
+
+  const roster = await createKey(h, { label: 'Existing roster consent', 'sc_roster:read': 'true', location: 'studio' })
+  const deniedEvent = await inApp(h, 'integration.create', { label: 'Unconsented attendance event', 'sc_roster:read': 'true', 'ev_attendance.changed': 'true', location: 'studio' })
+  assert.ok(deniedEvent.text.includes('event not permitted') && !deniedEvent.token)
+  const refused = await api(h, roster.token, '/api/strap/integration/attendance')
+  assert.deepEqual([refused.status, refused.value], [403, { error: 'scope_not_granted', scopes: ['roster:read'] }])
+  const beforeRotation = await api(h, roster.token, '/api/strap/integration/roster')
+  assert.deepEqual(keysOf(beforeRotation.value).filter(key => /attendance|attended|checked|noshow/i.test(key)), [], 'roster consent still carries no attendance')
+
+  // Extra scope fields on later lifecycle forms never widen the original grant.
+  await h.cmd('integration.events', { id: roster.id, scopes: ['roster:read', 'attendance:read'], events: ['booking.changed'] })
+  const eventInjection = await inApp(h, 'integration.events', { id: roster.id, 'sc_attendance:read': 'true', 'ev_attendance.changed': 'true' })
+  assert.ok(eventInjection.text.includes('event not permitted'))
+  const rotatedRoster = await inApp(h, 'integration.rotate', { id: roster.id, 'sc_attendance:read': 'true', scopes: 'attendance:read' })
+  assert.ok(rotatedRoster.token && rotatedRoster.token !== roster.token)
+  assert.deepEqual((await api(h, rotatedRoster.token, '/api/strap/integration/key')).value.scopes.map(s => s.name), ['roster:read'])
+  assert.equal((await api(h, rotatedRoster.token, '/api/strap/integration/attendance')).status, 403)
+  assert.deepEqual((await api(h, rotatedRoster.token, '/api/strap/integration/roster')).value.data, beforeRotation.value.data)
+
+  const both = await createKey(h, { label: 'Consented attendance display', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', 'ev_attendance.changed': 'true', location: 'studio' })
+  assert.deepEqual(both.scopes, ['roster:read', 'attendance:read'])
+  assert.deepEqual(both.events, [{ name: 'attendance.changed', delivery: 'not_delivered' }])
+  const pageOne = await api(h, both.token, '/api/strap/integration/attendance?limit=2')
+  assert.equal(pageOne.status, 200, pageOne.text)
+  assert.deepEqual([pageOne.value.schemaVersion, pageOne.value.scope, pageOne.value.location, pageOne.value.data.map(c => c.id), pageOne.value.page.limit], ['1', 'attendance:read', { id: 'studio', name: 'Brooklyn Studio' }, [first.id, second.id], 2])
+  const rosterPage = await api(h, both.token, '/api/strap/integration/roster?limit=2')
+  assert.equal(pageOne.value.page.next, rosterPage.value.page.next, 'both resources page the same classes')
+  const pageTwo = await api(h, both.token, `/api/strap/integration/attendance?limit=2&cursor=${encodeURIComponent(rosterPage.value.page.next)}`)
+  assert.deepEqual([pageTwo.value.data, pageTwo.value.page.next], [[{ id: third.id, attendance: [] }], null])
+  const attendance = await api(h, both.token, '/api/strap/integration/attendance')
+  assert.deepEqual(attendance.value, {
+    schemaVersion: '1', scope: 'attendance:read', location: { id: 'studio', name: 'Brooklyn Studio' },
+    data: [{ id: first.id, attendance: Object.entries(seats).map(([name, seat]) => ({ bookingId: seat.id, attended: ['Ana', 'Dee'].includes(name) })) }, { id: second.id, attendance: [] }, { id: third.id, attendance: [] }],
+    page: { limit: 50, next: null },
+  }, 'check-in and corrected attendance are true; no-show, excused and unrecorded are indistinguishable false; other booking states are omitted')
+  for (const entry of attendance.value.data) {
+    assert.deepEqual(Object.keys(entry), ['id', 'attendance'], 'attendance carries no class names, times or instructor data')
+    for (const booking of entry.attendance) assert.deepEqual(Object.keys(booking), ['bookingId', 'attended'], 'bookings carry no names, money, reasons, actors or attendance history')
+  }
+  for (const hidden of [...Object.keys(members), coach.name, 'Private correction reason', 'Private paper roster note', 'no_show', 'excused', cancelled.id, offered.id, waiting.id, cancelledThird.id]) assert.ok(!attendance.text.includes(hidden), `attendance omits ${hidden}`)
+  const combinedRoster = await api(h, both.token, '/api/strap/integration/roster')
+  assert.deepEqual(keysOf(combinedRoster.value).filter(key => /attendance|attended|checked|noshow/i.test(key)), [], 'even a combined key receives attendance only from its separate resource')
+  for (const query of ['limit=0', 'limit=101', 'limit=bad', 'cursor=bad']) assert.equal((await api(h, both.token, `/api/strap/integration/attendance?${query}`)).value.error, query.startsWith('limit') ? 'invalid_limit' : 'invalid_cursor')
+
+  const unused = await h.cmd('person.save', { name: 'Unused Identity', email: 'unused@studio.example', role: 'member', active: true })
+  await h.cmd('person.erase', { id: unused.id })
+  // SEC-003 will add used-member erasure. Exercise its read fence with a retained booked record now.
+  await h.db.prepare('UPDATE st_people SET erased_at=?,active=0 WHERE id=?').bind(Date.now(), members.Eve.id).run()
+  const erased = await api(h, both.token, '/api/strap/integration/attendance')
+  assert.deepEqual(erased.value.data[0].attendance, attendance.value.data[0].attendance.filter(b => b.bookingId !== seats.Eve.id))
+  assert.ok(!erased.text.includes(seats.Eve.id) && !erased.text.includes(unused.id))
+  assert.ok(!(await api(h, both.token, '/api/strap/integration/roster')).text.includes(seats.Eve.id))
+
+  const attendanceOnly = await createKey(h, { label: 'Attendance only', 'sc_attendance:read': 'true', 'ev_attendance.changed': 'true', location: 'studio' })
+  assert.equal((await api(h, attendanceOnly.token, '/api/strap/integration/attendance')).status, 200)
+  assert.equal((await api(h, attendanceOnly.token, '/api/strap/integration/roster')).status, 403)
+  assert.equal((await h.send('/api/strap/command', { name: 'integration.events', input: { id: attendanceOnly.id, events: ['booking.changed'] } }, h.owner)).value.error, 'event_not_permitted')
+  assert.deepEqual((await api(h, attendanceOnly.token, '/api/strap/integration/key')).value.events, [{ name: 'attendance.changed', delivery: 'not_delivered' }])
+
+  // The established check order applies to attendance too: secret, limit, method, version, scope.
+  assert.equal((await api(h, '', '/api/strap/integration/attendance', { method: 'POST', version: '' })).status, 401)
+  assert.equal((await api(h, rotatedRoster.token, '/api/strap/integration/attendance', { method: 'POST', version: '' })).status, 405)
+  assert.equal((await api(h, rotatedRoster.token, '/api/strap/integration/attendance', { version: '' })).value.error, 'schema_version_required')
+  assert.equal((await api(h, rotatedRoster.token, '/api/strap/integration/attendance', { version: '2' })).value.error, 'unsupported_schema_version')
+  const rate = await createKey(h, { label: 'Shared endpoint rate', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio' })
+  for (let n = 0; n < 60; n++) assert.equal((await api(h, rate.token, `/api/strap/integration/${['key', 'roster', 'attendance'][n % 3]}`)).status, 200)
+  const limited = await api(h, rate.token, '/api/strap/integration/attendance', { method: 'POST', version: '' })
+  assert.deepEqual([limited.status, limited.value.error], [429, 'rate_limited'], 'one rate budget covers all resources and precedes method/version checks')
+  assert.ok(Number(limited.headers.get('retry-after')) >= 1 && Number(limited.headers.get('retry-after')) <= 60)
+  assert.equal((await api(h, both.token, '/api/strap/integration/attendance')).status, 200, 'another key retains its own budget')
+
+  const rotated = await inApp(h, 'integration.rotate', { id: both.id, 'sc_money:read': 'true', 'sc_roster:write': 'true' })
+  assert.ok(rotated.token && rotated.token !== both.token)
+  assert.equal((await api(h, both.token, '/api/strap/integration/attendance')).value.error, 'integration_credential_revoked')
+  assert.deepEqual((await api(h, rotated.token, '/api/strap/integration/attendance')).value.data, erased.value.data)
+  assert.deepEqual((await api(h, rotated.token, '/api/strap/integration/key')).value.scopes.map(s => s.name), ['roster:read', 'attendance:read'])
+  await h.cmd('integration.revoke', { id: both.id })
+  assert.equal((await api(h, rotated.token, '/api/strap/integration/attendance')).value.error, 'integration_credential_revoked')
+  const owned = (await h.state()).integrations.find(k => k.id === both.id)
+  assert.ok(owned.requests.some(r => r.route === '/api/strap/integration/attendance' && r.status === 200))
+  assert.deepEqual([owned.requests[0].route, owned.requests[0].status, owned.requests[0].code], ['/api/strap/integration/attendance', 401, 'integration_credential_revoked'])
+  for (const row of owned.requests) assert.deepEqual(Object.keys(row), ['integrationId', 'at', 'method', 'route', 'status', 'code'])
+  for (const secret of [both.token, rotated.token, ...Object.values(seats).map(b => b.id), 'Private correction reason']) assert.ok(!JSON.stringify(owned).includes(secret), 'attendance log contains neither member outcomes nor secrets')
+  assert.deepEqual((await h.state(members.Ana.cookie)).integrations, [])
+  assert.deepEqual((await h.state(coach.cookie)).integrations, [])
+
+  // The owner transfers authority through native account doors; existing keys stop.
+  const confirmNativeMail = async (email, cookie = '') => {
+    const mail = (await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r => JSON.parse(r.message)).find(m => m.to.includes(email))
+    const token = new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token')
+    assert.equal((await h.send('/auth/confirm', { token }, cookie)).status, 303)
+  }
+  assert.equal((await h.send('/auth/step-up', { action: 'owner:transfer' }, h.owner)).status, 202)
+  await confirmNativeMail(h.auth.OWNER_EMAIL, h.owner)
+  const successor = 'successor@studio.example'
+  assert.equal((await h.send('/auth/invite', { email: successor, displayName: 'Successor Owner', role: 'owner' }, h.owner)).status, 202)
+  await confirmNativeMail(successor)
+  const originalOwner = (await h.send('/auth/session', undefined, h.owner)).value.operator
+  assert.equal((await h.send('/auth/operator/role', { operatorId: originalOwner.id, role: 'member' }, h.owner)).status, 200)
+  const accessChanged = await api(h, attendanceOnly.token, '/api/strap/integration/attendance', { method: 'POST', version: '' })
+  assert.deepEqual([accessChanged.status, accessChanged.value.error], [401, 'integration_credential_revoked'])
+}))

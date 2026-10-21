@@ -1,10 +1,10 @@
 # Integrations
 
-An integration key lets another application, such as a front-desk display, a signage screen or a studio dashboard, read your class rosters. A key reads nothing else and changes nothing.
+An integration key lets another application, such as a front-desk display, a signage screen or a studio dashboard, read the rosters or boolean attendance you explicitly grant. A key reads only its selected scopes and changes nothing.
 
 ## Create a key
 
-Open **Integrations** in Strap. Only the studio owner sees this page. Name the key, keep **Read class rosters** (`roster:read`) ticked, choose the location and, if you like, the events it should hear about. Then select **Create integration key**.
+Open **Integrations** in Strap. Only the studio owner sees this page. Name the key, select **Read class rosters** (`roster:read`) and optionally **Read attendance** (`attendance:read`, off by default), choose the location and, if you like, the events it should hear about. Then select **Create integration key**.
 
 Strap shows the secret once. Paste it into the other application's secret settings straight away. Strap keeps only a SHA-256 hash of it, the same way it keeps agent keys.
 
@@ -12,11 +12,12 @@ Only you, signed in as the studio owner, can create, rotate and revoke keys or c
 
 ## What a key can read
 
-The catalogue has one scope.
+The catalogue has two separate read-only scopes. Scopes are fixed when a key is created. Existing keys never gain attendance, and rotating a secret never changes its scopes.
 
 | Scope | Reads | Never includes |
 | --- | --- | --- |
 | `roster:read` | Classes (id, title, service, start and end in UTC, capacity, published or cancelled) with each booking's id and status (booked, waitlisted, offered or cancelled) and the attendee's first name and last initial | Attendance, money, packs, payments, fees, balances, email addresses, phone numbers, emergency contacts, notes, cancellation reasons and instructor names |
+| `attendance:read` | Class ids and currently booked booking ids, each with an `attended` boolean | Names; no-show/excused labels; times, actors, channels, kiosk ids, fees, credits, reasons, corrections or notes |
 
 A key covers your studio's one location. Keys for chosen locations arrive with multiple locations (STUDIO-002). Other read scopes, such as contact details or money, and any write scope each need their own approved addition before Strap offers them. People you have erased never appear.
 
@@ -51,6 +52,14 @@ Classes come in order of start time, then id. A page holds 1 to 100 classes; `li
 
 `GET /api/strap/integration/key` describes the key itself: its scopes, location, event subscriptions and rate limit.
 
+## Read boolean attendance
+
+With an explicitly granted `attendance:read` key, send `GET /api/strap/integration/attendance` using the same Bearer secret, schema version and paging parameters as the roster. The result has `scope: "attendance:read"` and `data: [{ "id": "CLASS_ID", "attendance": [{ "bookingId": "BOOKING_ID", "attended": true }] }]`, plus the same location and page envelope.
+
+`true` means the booking's current outcome is attended, through check-in or an owner correction. `false` covers not yet recorded, no-show and excused without distinguishing them. Waitlisted, offered and cancelled bookings are absent, as are erased people. A roster-only key receives 403 here and its roster remains free of attendance. A key with both scopes can join on `bookingId`. Further named outcome labels need a later owner-approved clause.
+
+All lifecycle, check-order, rate, log, location, erasure and restore rules below apply to both scopes. Rate usage is shared per key across resources.
+
 ## Schema versions
 
 Every request names a version in the `strap-schema-version` header. The current and only version is `1`. A request without the header is refused with `400` and `schema_version_required`; an unknown version is refused with `400` and `unsupported_schema_version`. Both refusals list the supported versions. Every response carries the header and a `schemaVersion` field.
@@ -84,7 +93,7 @@ Under each key, **Usage and failures** lists its newest 100 requests with the ti
 
 ## Event subscriptions
 
-A key may subscribe to the events its scopes allow. `roster:read` allows `class.changed` and `booking.changed`. Strap records your choice but does not deliver events yet: each subscription is labelled not delivered until signed event delivery (INT-008) ships.
+A key may subscribe to the events its scopes allow. `roster:read` allows `class.changed` and `booking.changed`; `attendance:read` allows `attendance.changed`. Strap records your choice but does not deliver events yet: each subscription is labelled not delivered until signed event delivery (INT-008) ships.
 
 ## Backups, restores and exits
 

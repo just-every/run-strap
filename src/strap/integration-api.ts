@@ -28,9 +28,9 @@ function page(url: URL) {
 }
 const cursorAfter = (entry: { start: string; id: string }) => 'c1.' + btoa(JSON.stringify([entry.start, entry.id])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-/** roster:read — classes in (start, id) order with booking status and short attendee names.
- * No money, contact details, notes or reasons; erased people never appear. */
-async function roster(env: Bindings, url: URL) {
+/** Both scopes page the same classes. Attendance exposes current booked outcomes
+ * as booleans only; roster fields remain unchanged. Erased people never appear. */
+async function classPage(env: Bindings, url: URL, attendanceOnly = false) {
   const { limit, after } = page(url), { state } = await loadSystem(env.DB)
   const people = new Map(state.people.filter(p => !p.erasedAt).map(p => [p.id, p]))
   const classes = list(state, 'class').sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
@@ -38,11 +38,15 @@ async function roster(env: Bindings, url: URL) {
   const shown = classes.slice(0, limit), bookings = list(state, 'booking')
   return {
     location: { id: 'studio', name: studioSettings(state)?.location ?? null },
-    data: shown.map(c => ({
+    data: shown.map(c => attendanceOnly ? {
+      id: c.id,
+      attendance: bookings.filter(b => b.classId === c.id && b.status === 'booked' && people.has(b.personId))
+        .map(b => ({ bookingId: b.id, attended: b.attendance === 'attended' })),
+    } : {
       id: c.id, title: c.title, service: c.service, start: c.start, end: c.end, capacity: c.capacity, status: c.status,
       roster: bookings.filter(b => b.classId === c.id && people.has(b.personId))
         .map(b => ({ bookingId: b.id, status: b.status, attendee: shortName(people.get(b.personId)!.name) })),
-    })),
+    }),
     page: { limit, next: classes.length > limit ? cursorAfter(shown.at(-1)! as { start: string; id: string }) : null },
   }
 }
@@ -88,7 +92,8 @@ export async function integrationResponse(request: Request, env: Bindings): Prom
       scopes: scopes.map(scope => ({ name: scope, ...scopeCatalogue[scope as keyof typeof scopeCatalogue] })),
       events: JSON.parse(key.events).map((name: string) => ({ name, delivery: eventDelivery })),
     })
-    if (url.pathname === '/api/strap/integration/roster' && scopes.includes('roster:read')) return await respond(200, { schemaVersion: version, scope: 'roster:read', ...await roster(env, url) })
+    if (url.pathname === '/api/strap/integration/roster' && scopes.includes('roster:read')) return await respond(200, { schemaVersion: version, scope: 'roster:read', ...await classPage(env, url) })
+    if (url.pathname === '/api/strap/integration/attendance' && scopes.includes('attendance:read')) return await respond(200, { schemaVersion: version, scope: 'attendance:read', ...await classPage(env, url, true) })
     refuse(403, 'scope_not_granted', { scopes })
   } catch (error) {
     const refusal = error as Refusal

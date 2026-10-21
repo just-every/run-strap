@@ -7,6 +7,7 @@ import { fail, hash } from './credentials'
 /** The whole catalogue. A scope lists the events a key holding it may subscribe to. */
 export const scopeCatalogue = {
   'roster:read': { label: 'Read class rosters', reads: 'Classes, each booking’s status and each attendee’s first name and last initial', events: ['class.changed', 'booking.changed'] },
+  'attendance:read': { label: 'Read attendance', reads: 'Class ids and booked booking ids with attended true or false only', events: ['attendance.changed'] },
 } as const
 type Scope = keyof typeof scopeCatalogue
 /** Until STUDIO-002 adds locations, the studio has exactly one, and every key covers it. */
