@@ -231,6 +231,7 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
     {key:'full',title:'One guest seat',date:boundary,time:'11:00',capacity:1},
     {key:'wrong',title:'Reformer guest',service:'Reformer',date:before,time:'16:00'}
   ]);
+  await h.cmd('bookingRule.save',{service:'Mat',cancelCutoffHours:720,lateCancelReturnsCredit:false,lateCancelFeeCents:0});
   const guestTerms = {passes:2,period:'month',rollover:0,services:['Mat'],perGuest:1,windowDays:365,excess:'refuse',priceCents:2500};
   const pack = await sell(h,host.id,{credits:10,guestTerms}), otherPack = await sell(h,other.id,{credits:10,guestTerms});
   const preview = (guest,index,packId=pack.id,cookie=host.cookie,payerId=host.id) => h.cmd('guest.preview',{guestId:guest.id,classId:classes.get(index).id,packId,payerId},cookie);

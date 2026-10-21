@@ -231,6 +231,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if (entry.name === 'guest.preview') Object.assign(input,{sponsorId:ben.id,guestId:ana.id,packId:guestPack.id})
+      if (entry.name === 'guest.book') Object.assign(input,{id:guestQuote.id,confirm:true})
       if (entry.name.startsWith('reservation.')) Object.assign(input,{personId:seriesMember.id,classId:reservationDraft.classId,throughDate:reservationDraft.throughDate,reservationId:reservation.id,id:entry.name==='reservation.cancel.confirm'?cancellationDraft.id:reservationDraft.id,key:entry.name==='reservation.cancel.confirm'?cancellationDraft.key:reservationDraft.key})
       // Self-capable shared commands still refuse acting for somebody else.
       if (['booking.cancel','booking.spot','booking.offer.accept','booking.move'].includes(entry.memberDoor.staff)) {
