@@ -45,6 +45,8 @@ export async function renewalsBrowser(h,{packs}) {
           const entry = page.locator(`[data-pack-id="${row.packId}"]`)
           assert.ok((await entry.innerText()).includes(String(row.remainingCredits)+' credits'))
           assert.ok((await entry.innerText()).includes(row.member))
+          assert.equal(await entry.locator('time').first().getAttribute('datetime'),row.expiresAt)
+          if (row.lastVisit) assert.equal(await entry.locator('time').nth(1).getAttribute('datetime'),row.lastVisit)
         }
         await capture('filtered-csv')
         const pack = packs[i]
