@@ -62,3 +62,11 @@ prepare the reminder again.
 Open **Revenue reports** as the owner to compare assessed sales and fees with money received and refunded outside Strap. Filter events by studio-local inclusive dates, named plan/type and the current studio location. **Inspect record** opens the exact retained source; member links open the member profile. The JSON door is `GET /api/strap/reports/revenue`, with `from`, `to`, `plan`, `location` and optional `sourceId` filters. It requires your native owner session.
 
 Ordinary receipts have no plan allocation and stay **Unallocated**. A balance credit is different from an external cash refund. Current member counts and all-time balances have their own labels; balances are unavailable under a plan filter. The definitions on the report explain every total. Missing due dates, historical membership states, processor costs and ACH returns remain unavailable rather than appearing as zero or claiming provider verification.
+
+## Pack renewal report through HTTP
+
+The signed-in owner can read `/api/strap/reports/renewals?days=30&lowCredits=1` and download the same rows from `/api/strap/reports/renewals.csv` with the same query. This first RPT-007 slice has no worklist screen. It lists finite credit packs expiring in the next selected number of 24-hour days, or currently at/below the selected credit threshold. It omits expired packs and packs with a member-accepted or applied renewal. Each pack appears once. Last visit uses corrected attended bookings for classes that have started. Money remaining and marketing permission are unavailable; pack price and booking-email preferences do not establish either.
+
+The owner posts `renewal.followup.create` through `/api/strap/command` with the row’s `packId` and exact `basis`, the report’s `days` and `lowCredits`, and `ownerId`, `nextAction` and an ISO `dueAt`. It creates an assigned internal inquiry in Lead follow-up once per pack. Changed source facts require a fresh report. Identical repeats return the existing task; changed assignment details refuse and must be edited in Lead follow-up. No message is sent and no consent is granted.
+
+Other plan kinds, worklist screens, monetary remaining value, marketing permission and approved sequences remain unfinished; the complete RPT-007 acceptance still applies.

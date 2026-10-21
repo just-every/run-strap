@@ -27,7 +27,7 @@ async function checkout(root) {
 }
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
-test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
+test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -63,6 +63,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await integrationRead(h,integration.token)).status,200)
     assert.equal((await integrationRead(h,integration.token,'attendance')).status,200,'API-002 explicitly granted attendance scope reads before archive')
     await h.cmd('mail.connect',{})
+    const renewalReport=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,h.owner)).value
+    const renewalRow=renewalReport.rows.find(r=>r.personId===member.id)
+    const renewalInput={packId:renewalRow.packId,basis:renewalRow.basis,lowCredits:10000,ownerId:(await h.state()).actor.id,nextAction:'Review next pack',dueAt:'2099-11-01T00:00:00Z'}
+    const renewalTask=await h.cmd('renewal.followup.create',renewalInput)
     assert.equal((await h.send('/api/strap/exit.json')).status,401)
     for(const cookie of [member.cookie,coach.cookie]) assert.equal((await h.send('/api/strap/exit.json',undefined,cookie)).status,403)
     assert.equal((await h.send('/api/strap/exit.json',undefined,'',{authorization:`Bearer ${key.token}`})).status,401)
@@ -102,6 +106,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)
     reconstructExit(restoredDownload.value,csv)
+    const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
+    assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
+    assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')
+    assert.equal((await h.state(restoredOwner)).pipeline.leads.filter(l=>l.id===renewalTask.leadId).length,1)
     const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox').all()).results.map(r=>JSON.parse(r.message))
     assert.ok(mail.length>0)
     assert.ok(mail.every(m=>m.text.includes('/auth/confirm?token=')), 'restoration/download produced no studio message or collection; only fresh access mail')

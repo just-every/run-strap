@@ -185,3 +185,93 @@ test('RPT-001: current sales, collections, refunds, fee reversals and member sna
   await h.cmd('person.save',{id:cy.id,name:'Cy',email:cy.email,role:'member',active:false,version:state.people.find(p=>p.id===cy.id).version})
   assert.equal((await read()).totals.activeMembers,2)
 }))
+
+test('RPT-007: finite-pack expiry and low-credit HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
+  await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
+  const ana = await h.person('RenewAna'), ben = await h.person('RenewBen'), coach = await h.person('RenewCoach','instructor')
+  const day = 86_400_000, base = Date.now()
+  const buy = async (p,days,credits=5,extra={}) => h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits,amountCents:10000,expiresAt:new Date(base+days*day).toISOString(),...extra})).id})
+  const soon = await buy(ana,20), far = await buy(ana,40), low = await buy(ben,40,1), both = await buy(ana,7,1)
+  const unlimited = await buy(ben,5,undefined,{kind:'unlimited',planName:'Unlimited',credits:undefined})
+  const expired = await buy(ben,5)
+  let pack = (await h.state()).packs.find(p=>p.id===expired.id)
+  await h.cmd('pack.adjust',{id:pack.id,revision:pack.creditRevision,creditsDelta:0,expiresAt:'2020-01-01T00:00:00Z',reason:'Corrected expiration',requestId:'expired-renewal-fixture'})
+  const read = async (query='') => {
+    const response = await h.send('/api/strap/reports/renewals'+(query?'?'+query:''),undefined,h.owner)
+    assert.equal(response.status,200,response.text); assert.equal(response.headers.get('cache-control'),'no-store'); return response.value
+  }
+  let report = await read()
+  assert.deepEqual(new Set(report.rows.map(r=>r.packId)),new Set([soon.id,low.id,both.id]))
+  assert.equal(report.rows.filter(r=>r.packId===both.id).length,1)
+  assert.deepEqual(report.rows.find(r=>r.packId===both.id).reasons,['expiring','low-credits'])
+  assert.deepEqual(report.rows.find(r=>r.packId===low.id).reasons,['low-credits'])
+  for (const row of report.rows) {
+    assert.equal(row.remainingValueCents,null); assert.equal(row.contactPermission,'unavailable'); assert.equal(row.lastVisit,null)
+    assert.equal(row.expiresAt,(await h.state()).packs.find(p=>p.id===row.packId).expiresAt)
+  }
+  assert.equal(Date.parse(report.through)-Date.parse(report.asOf),30*day)
+  assert.deepEqual(new Set((await read('days=45&lowCredits=0')).rows.map(r=>r.packId)),new Set([soon.id,far.id,low.id,both.id]))
+  assert.deepEqual((await read('days=1&lowCredits=0')).rows,[])
+  for (const query of ['days=0','days=367','days=1.5','days=','days=-1','days=NaN','lowCredits=-1','lowCredits=10001','lowCredits=1.1']) {
+    assert.equal((await h.send('/api/strap/reports/renewals?'+query,undefined,h.owner)).status,400)
+    assert.equal((await h.send('/api/strap/reports/renewals.csv?'+query,undefined,h.owner)).status,400)
+  }
+  const before = await h.state(), ownerId = before.actor.id
+  const dueAt = new Date(Date.now()+day).toISOString(), task = {packId:soon.id,basis:report.rows.find(r=>r.packId===soon.id).basis,ownerId,nextAction:'Review renewal options internally',dueAt}
+  // A stale row may not create work based on obsolete source facts.
+  await h.cmd('studio.save',{location:'Brooklyn',timeZone:'America/New_York'})
+  await h.cmd('renewal.followup.create',task,h.owner,409)
+  assert.equal((await h.state()).pipeline.leads.length,before.pipeline.leads.length)
+  report = await read(); task.basis=report.rows.find(r=>r.packId===soon.id).basis
+  await h.cmd('renewal.followup.create',{...task,ownerId:coach.id},h.owner,409)
+  assert.equal((await h.state()).pipeline.leads.length,before.pipeline.leads.length,'a non-owner assignee cannot receive a private renewal task')
+  const assigned = await h.cmd('renewal.followup.create',task)
+  assert.deepEqual(await h.cmd('renewal.followup.create',task),assigned)
+  await h.cmd('renewal.followup.create',{...task,ownerId:coach.id},h.owner,409)
+  await h.cmd('renewal.followup.create',{...task,nextAction:'Changed request'},h.owner,409)
+  const after = await h.state(), lead = after.pipeline.leads.find(l=>l.id===assigned.leadId)
+  assert.equal(after.pipeline.leads.length,before.pipeline.leads.length+1)
+  assert.deepEqual([lead.personId,lead.ownerId,lead.nextAction,lead.dueAt],[ana.id,ownerId,task.nextAction,dueAt])
+  assert.equal(after.pipeline.events.filter(e=>e.leadId===lead.id).length,1)
+  assert.deepEqual([after.charges.length,after.payments.length,after.staffNotices.length,after.noticeDeliveries.length],[before.charges.length,before.payments.length,before.staffNotices.length,before.noticeDeliveries.length],'an internal follow-up sends nothing and changes no money')
+  report = await read()
+  assert.equal(report.rows.find(r=>r.packId===soon.id).followup.leadId,lead.id)
+  const csv = await h.send('/api/strap/reports/renewals.csv',undefined,h.owner)
+  assert.equal(csv.status,200); assert.match(csv.headers.get('content-type'),/^text\/csv/)
+  assert.equal(csv.headers.get('cache-control'),'no-store')
+  // Parse the actual download independently; JSON-valued CSV cells retain typed values.
+  const parse = text => text.trimEnd().split('\r\n').map(line=>[...line.matchAll(/"((?:[^"]|"")*)"(?:,|$)/g)].map(m=>m[1].replaceAll('""','"')))
+  const [columns,...data] = parse(csv.text)
+  assert.deepEqual(data.map(values=>Object.fromEntries(columns.map((key,i)=>[key,JSON.parse(values[i])]))),report.rows.map(({basis,...row})=>row))
+  for (const cookie of [ana.cookie,coach.cookie,'']) {
+    const status=cookie ? 403 : 401
+    for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv']) assert.equal((await h.send(path,undefined,cookie)).status,status)
+    await h.cmd('renewal.followup.create',task,cookie,status)
+  }
+  const agent = await h.cmd('agent.create',{label:'Renewal reader denied'})
+  for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv']) assert.equal((await h.send(path,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
+  assert.equal((await h.send('/api/strap/agent/command',{name:'renewal.followup.create',input:task},'',{authorization:`Bearer ${agent.token}`})).status,403)
+  const preview = await h.cmd('plan.change.prepare',{packId:soon.id,mode:'renewal',credits:5,amountCents:10000,expiresAt:new Date(base+60*day).toISOString(),requestId:'renew-worklist'})
+  assert.ok((await read()).rows.some(r=>r.packId===soon.id),'a preview alone is not a renewal')
+  await h.cmd('plan.change.accept',{id:preview.id,key:preview.key},ana.cookie)
+  assert.ok(!(await read()).rows.some(r=>r.packId===soon.id),'member-accepted renewal removes its source pack')
+  const stale = (await read()).rows.find(r=>r.packId===low.id)
+  await h.cmd('renewal.followup.create',{...task,packId:soon.id,basis:stale.basis},h.owner,200) // prior task remains one even after renewal
+  const version = (await h.state()).version
+  await h.cmd('renewal.followup.create',{...task,packId:far.id,basis:stale.basis},h.owner,409)
+  assert.equal((await h.state()).version,version)
+  // Corrected attendance alone controls the last-visit field; future check-in is not a past visit.
+  const cy = await h.person('RenewCy'), cyPack = await buy(cy,40,1)
+  const start = new Date(Date.now()+2500).toISOString()
+  const session = (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Renewal visit',start,end:new Date(Date.parse(start)+60000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0]
+  const booking = await h.cmd('booking.book',{classId:session.id},ben.cookie)
+  const cyBooking = await h.cmd('booking.book',{classId:session.id},cy.cookie)
+  await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+  assert.equal((await read()).rows.find(r=>r.packId===low.id).lastVisit,null)
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(start)-Date.now()+30)))
+  assert.equal((await read()).rows.find(r=>r.packId===low.id).lastVisit,start)
+  await h.cmd('attendance.noshow',{id:cyBooking.id},coach.cookie)
+  assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,null,'a no-show is not a visit')
+  await h.cmd('attendance.correct',{id:cyBooking.id,outcome:'attended',reason:'Instructor confirmed attendance'})
+  assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,start,'corrected attendance becomes the authoritative last visit')
+}))

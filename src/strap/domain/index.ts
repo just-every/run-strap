@@ -1,3 +1,4 @@
+import { createRenewalFollowup } from './renewals';
 import { prepareReservations, confirmReservations, prepareReservationCancellation, confirmReservationCancellation, reservationSnapshot } from './reservations';
 import { processClassReminders, saveReminderRule, completeReminderTask } from './class-reminders';
 import { messagePreference, messageTemplates, saveMessagePreference, saveMessageTemplates, launchMessagePreference } from './message-settings';
@@ -40,6 +41,7 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'renewal.followup.create':defineCommand(createRenewalFollowup,['owner']),
   'reservation.prepare':defineCommand(prepareReservations,['owner','member'],{member:{staff:'reservation.prepare',right:'booking'},staffRight:'booking'}),
   'reservation.confirm':defineCommand(confirmReservations,['owner','member'],{member:{staff:'reservation.confirm',right:'booking'},staffRight:'booking'}),
   'reservation.cancel.prepare':defineCommand(prepareReservationCancellation,['owner','member'],{member:{staff:'reservation.cancel.prepare',right:'booking'},staffRight:'booking'}),
