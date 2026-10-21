@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, extname } from 'node:path'
 import { chromium } from '@playwright/test'
 import { totp } from './mfa-helpers.mjs'
@@ -9,7 +10,8 @@ import { totp } from './mfa-helpers.mjs'
 // member opts in with an authenticator app; the owner sees factors, resets and finance grants. The page must not overflow.
 const types = { '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.ico': 'image/x-icon', '.js': 'text/javascript' }
 export async function securityBrowser(h, { finance, nextSession, member }) {
-  await mkdir(process.env.STRAP_PROOF_DIR, { recursive: true })
+  const proof = process.env.STRAP_PROOF_DIR ?? join(tmpdir(), 'strap-security-proof')
+  await mkdir(proof, { recursive: true })
   const browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
   try {
     for (const width of [1440, 390]) {
@@ -25,7 +27,7 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
       }
       const capture = async (page, name) => {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' does not overflow')
-        await page.screenshot({ path: join(process.env.STRAP_PROOF_DIR, `SEC-004-${name}-${width}.png`), fullPage: true })
+        await page.screenshot({ path: join(proof, `SEC-004-${name}-${width}.png`), fullPage: true })
       }
       const person = finance[width]
       // Held at enrollment, then a passkey in the virtual authenticator.

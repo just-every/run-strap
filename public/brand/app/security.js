@@ -2,8 +2,8 @@
 // and verifies the result; nothing here decides anything.
 const bytes = text => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(text.length / 4) * 4, '=')), c => c.charCodeAt(0))
 const text = buffer => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-const post = async (name, input) => {
-  const response = await fetch('/api/strap/command', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, input }) })
+const post = async (button, name, input) => {
+  const response = await fetch(button.dataset.door, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, input }) })
   const value = await response.json()
   if (!response.ok) throw new Error((value.error || 'Could not complete this step').replace(/_/g, ' '))
   return value.result ?? value
@@ -11,9 +11,9 @@ const post = async (name, input) => {
 const credentials = list => (list || []).map(item => ({ ...item, id: bytes(item.id) }))
 
 async function register(button) {
-  const { challenge_id, publicKey } = await post('mfa.passkey.options', { purpose: 'register' })
+  const { challenge_id, publicKey } = await post(button, 'mfa.passkey.options', { purpose: 'register' })
   const created = await navigator.credentials.create({ publicKey: { ...publicKey, challenge: bytes(publicKey.challenge), user: { ...publicKey.user, id: bytes(publicKey.user.id) }, excludeCredentials: credentials(publicKey.excludeCredentials) } })
-  const done = await post('mfa.passkey.register', { challenge_id, client_data_json: text(created.response.clientDataJSON), attestation_object: text(created.response.attestationObject) })
+  const done = await post(button, 'mfa.passkey.register', { challenge_id, client_data_json: text(created.response.clientDataJSON), attestation_object: text(created.response.attestationObject) })
   const list = (done.recovery_codes || []).map(code => `<li><code>${code}</code></li>`).join('')
   const panel = document.createElement('section')
   panel.className = 'panel'
@@ -23,9 +23,9 @@ async function register(button) {
 }
 
 async function verify(button) {
-  const { challenge_id, publicKey } = await post('mfa.passkey.options', { purpose: 'verify' })
+  const { challenge_id, publicKey } = await post(button, 'mfa.passkey.options', { purpose: 'verify' })
   const got = await navigator.credentials.get({ publicKey: { ...publicKey, challenge: bytes(publicKey.challenge), allowCredentials: credentials(publicKey.allowCredentials) } })
-  await post('mfa.passkey.verify', { challenge_id, credential_id: text(got.rawId), client_data_json: text(got.response.clientDataJSON), authenticator_data: text(got.response.authenticatorData), signature: text(got.response.signature) })
+  await post(button, 'mfa.passkey.verify', { challenge_id, credential_id: text(got.rawId), client_data_json: text(got.response.clientDataJSON), authenticator_data: text(got.response.authenticatorData), signature: text(got.response.signature) })
   location.assign(button.dataset.return)
 }
 

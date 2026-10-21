@@ -13,7 +13,7 @@ function verify(m: any, query: URLSearchParams) {
   const passkey = m.factors.some((f: any) => f.kind === 'passkey' && f.usable)
   return panel('Confirm it is you', body(`<p>${h(holdText.mfa_required)}</p>`
     + form('mfa.verify', query.get('returnTo') ?? '/app/security', field('code', 'Authenticator code or recovery code', '', 'text', 'required autocomplete="one-time-code" inputmode="text" maxlength="20"'), 'Continue')
-    + (passkey ? `<p><button class="btn quiet" type="button" data-passkey="verify" data-return="${h(query.get('returnTo') ?? '/app/security')}">Use a passkey</button></p>` : '')), { icon: 'key' })
+    + (passkey ? `<p><button class="btn quiet" type="button" data-door="/api/strap/command" data-passkey="verify" data-return="${h(query.get('returnTo') ?? '/app/security')}">Use a passkey</button></p>` : '')), { icon: 'key' })
 }
 
 function enroll(m: any, notice: any, query: URLSearchParams) {
@@ -24,7 +24,7 @@ function enroll(m: any, notice: any, query: URLSearchParams) {
     : body(m.totpAvailable
       ? form('mfa.totp.start', query.get('returnTo') ?? '/app/security', field('label', 'Name', 'Authenticator app', 'text', 'maxlength="80"'), 'Set up an authenticator app', 'quiet')
       : '<p class="notice">Authenticator apps need this installation’s MFA key, which is not set. A passkey works without it.</p>')
-  const passkey = body(`<p>Use this device’s fingerprint, face or screen lock, or a security key.</p><p><button class="btn" type="button" data-passkey="register" data-return="${h(query.get('returnTo') ?? '/app/security')}">Add a passkey</button></p><p class="notice" role="alert" data-passkey-error hidden></p>`)
+  const passkey = body(`<p>Use this device’s fingerprint, face or screen lock, or a security key.</p><p><button class="btn" type="button" data-door="/api/strap/command" data-passkey="register" data-return="${h(query.get('returnTo') ?? '/app/security')}">Add a passkey</button></p><p class="notice" role="alert" data-passkey-error hidden></p>`)
   return panel('Authenticator app', totp, { icon: 'key' }) + panel('Passkey', passkey, { icon: 'key' })
 }
 
