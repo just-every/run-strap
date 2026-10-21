@@ -1,3 +1,5 @@
+import { assertGuestTarget, guestLedger, restoreGuest } from './guest-bookings';
+import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
 import { acknowledged } from './bookings';
@@ -14,6 +16,7 @@ function futureClass(tx: Transaction, classId: unknown) {
   tx.future(entry.start); return entry;
 }
 function availablePack(tx: Transaction, booking: RecordData, entry: RecordData, needsAvailable: boolean) {
+  if (booking.guestPackId) return assertGuestTarget(tx,booking,entry);
   if (!booking.packId) { insist(booking.unpaid,'eligible_credit_required',409); return null; }
   const pack = record(tx.state,booking.packId,'pack');
   insist(pack.personId === booking.personId && packServiceEligible(pack,entry) && pack.expiresAt > entry.start && pack.expiresAt > now()
@@ -65,11 +68,11 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   insist(booking.status === 'booked' && !booking.attendance && !booking.checkedInAt,'unstarted_confirmed_booking_required',409);
   insist(source.id !== entry.id,'different_class_required');
   if (staff) { staffReason(tx,input); actionChannel(input); }
-  else insist(tx.who.personId === booking.personId && ['member','instructor'].includes(tx.who.role),'forbidden',403);
+  else insist((tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking))) && ['member','instructor'].includes(tx.who.role),'forbidden',403);
   const to = target(tx,booking,entry,input,false,heldOffer);
   if (to.full && !to.override) {
     insist(!list(tx.state,'booking').some(b => b.moveFromBookingId === booking.id && b.classId === entry.id && b.status !== 'cancelled'),'already_waitlisted',409);
-    const waiter = {id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
+    const waiter = {...(booking.guestPackId ? {guestPackId:booking.guestPackId,sponsorId:booking.sponsorId,payerId:booking.payerId,guestFunding:booking.guestFunding,guestPriceCents:booking.guestPriceCents} : {}),id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
       madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',cancelTerms:cancelTerms(tx.state,entry,to.pack),createdAt:now(),sequence:tx.state.version+1};
     tx.put('booking',waiter);
     bookingHistory(tx,'waitlist',booking,waiter,input,{keptBookingId:booking.id}); return waiter;
@@ -78,6 +81,7 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   const moved = {...booking,classId:entry.id,spot:to.spot,capacityPool:to.capacityPool,cancelTerms:cancelTerms(tx.state,entry,to.pack),
     movedAt:now(),movedBy:tx.who.id,bookingChannel:staff ? actionChannel(input) : 'online',override:to.override,feeCents:penalty.feeCents};
   if (booking.packId) appendPackEvent(tx,to.pack!,{type:'transfer',credits:0,bookingId:booking.id,classId:entry.id,reason:`Moved from ${source.id}`});
+  if (booking.guestPackId) guestLedger(tx,moved,'transfer');
   tx.put('booking',moved);
   for (const pending of list(tx.state,'booking').filter(b => b.moveFromBookingId === booking.id && b.status !== 'cancelled')) {
     tx.put('booking',{...pending,status:'cancelled',cancellation:'move_replaced',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role});
@@ -93,12 +97,13 @@ export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
   insist(booking.status === 'cancelled' && ['early','late'].includes(booking.cancellation),'cancellation_not_restorable',409);
   const reason = text(input.reason,'restore_reason',500), to = target(tx,booking,entry,input,booking.refunded === true);
   insist(!to.full || to.override,'class_full',409);
-  if (booking.refunded && to.pack) appendPackEvent(tx,to.pack,{type:'reserve',credits:countsCredits(to.pack) ? -1 : 0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
+  if (booking.refunded && to.pack && !booking.guestPackId) appendPackEvent(tx,to.pack,{type:'reserve',credits:countsCredits(to.pack) ? -1 : 0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
   const charges = list(tx.state,'charge').filter(c => c.bookingId === booking.id), fees = charges.filter(c => c.reason === 'late_cancel_fee' && (!booking.cancellationId || c.cancellationId === booking.cancellationId) && !charges.some(r => r.reversesChargeId === c.id));
   for (const fee of fees) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
   const {cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents,waiver,cancellationId,...active} = booking;
   const restored = {...active,status:'booked',restoredAt:now(),restoredBy:tx.who.id,spot:to.spot,capacityPool:to.capacityPool,override:to.override};
-  if (!booking.refunded && to.pack) appendPackEvent(tx,to.pack,{type:'reserve',credits:0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
+  if (!booking.refunded && to.pack && !booking.guestPackId) appendPackEvent(tx,to.pack,{type:'reserve',credits:0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
+  if (booking.guestPackId) restoreGuest(tx,restored);
   tx.put('booking',restored);
   bookingHistory(tx,'restore',booking,restored,input,{cancellationId:cancellationId ?? null,feeReversedCents:fees.reduce((sum,c) => sum+c.amountCents,0)}); return restored;
 }

@@ -1,3 +1,4 @@
+import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly, windowOpen } from './booking-policy';
 import type { Transaction } from './store';
@@ -70,7 +71,7 @@ export function book(tx: Transaction, input: Record<string,unknown>, forMember?:
  * owner acts for front desk with the fee-waiver right until STAFF-001. */
 export function cancel(tx: Transaction, input: Record<string,unknown>, parentActionId?: string) {
   const booking = record(tx.state,input.id,'booking');
-  insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId),'forbidden',403);
+  insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking))),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');
   insist(entry.start > now(),'cancellation_closed',409);
   tx.future(entry.start);
@@ -88,13 +89,13 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
     }
   } else if (effect.waivable) insist(input.mode === undefined || input.mode === 'late','fee_waiver_right_required',403);
   // An unpaid visit (SCHED-010) has no credit to return: cancelling releases it.
-  const returned = booking.status === 'booked' && !!booking.packId && (choice === 'early' || effect.creditReturned);
+  const returned = booking.status === 'booked' && (!!booking.guestPackId || (!!booking.packId && (choice === 'early' || effect.creditReturned)));
   const feeCents = choice === 'late' ? effect.feeCents : 0;
   if (booking.status === 'booked') {
     bookingCredit(tx,booking,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
   }
   const cancellationId = id();
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.payerId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
   const cancelled = {...booking,cancellationId,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
   if (staff) staffReason(tx,input);

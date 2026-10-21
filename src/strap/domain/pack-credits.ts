@@ -1,3 +1,4 @@
+import { guestLedger, releaseGuest } from './guest-bookings';
 import { id, insist, list, now, record, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { countsCredits, heldVisits, periodEndsAt, periodOf, periods, planOf, planRefusal, planStart, visitsLeft } from './entitlements';
@@ -44,6 +45,7 @@ type CreditEvent = {
 };
 /** A booking's credit event on its own pack; an unsettled unpaid visit (SCHED-010) has none. */
 export function bookingCredit(tx: Transaction, booking: RecordData, input: CreditEvent) {
+  if (booking.guestPackId) { if (input.type === 'restore') releaseGuest(tx,booking); else guestLedger(tx,booking,input.type); return null; }
   return booking.packId ? appendPackEvent(tx,record(tx.state,booking.packId,'pack'),input) : null;
 }
 /** Each call inserts a fresh event; balance and ledger share the command fence. */

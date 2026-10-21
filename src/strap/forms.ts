@@ -126,7 +126,11 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   }
   if (name === 'waitlist.save') input.claimMinutes = Number(input.claimMinutes)
   if (name === 'booking.desk') input.waitlist = input.waitlist === 'true'
+  if (name === 'guest.consent.save') { input.consent = input.consent === 'true'; if (input.maxCharge) input.maxChargeCents = cents(input.maxCharge,'maximum guest charge'); delete input.maxCharge; }
+  if (name === 'guest.book') input.confirm = input.confirm === 'true';
   if (name === 'pack.prepare') {
+    if (String(input.guestPasses ?? '').trim()) input.guestTerms = {passes:Number(input.guestPasses),period:input.guestPeriod,rollover:Number(input.guestRollover),services:String(input.guestServices ?? '').split(/\r?\n/).map(v=>v.trim()).filter(Boolean),perGuest:Number(input.guestLimit),windowDays:Number(input.guestWindow),excess:input.guestExcess,priceCents:cents(input.guestPrice || '0','guest drop-in price')};
+    for (const key of ['guestPasses','guestPeriod','guestRollover','guestServices','guestLimit','guestWindow','guestExcess','guestPrice']) delete input[key];
     input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))
     // PLAN-002 plan terms: a visits or unlimited plan has no credit count.
     const kind = String(input.kind ?? 'credits'), days = [1, 2, 3, 4, 5, 6, 7].filter(day => input[`day_${day}`] === 'true')

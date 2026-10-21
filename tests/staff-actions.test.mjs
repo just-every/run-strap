@@ -39,10 +39,38 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':(name.startsWith('booking.')||name.startsWith('reservation.'))?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.'))?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
-    let reservationDraft,reservation,cancellationDraft,seriesMember
+    let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack
     const actions={
+      'guest.consent.save':async door=>{
+        const input={personId:ana.id,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.status,'member_action_required')
+        await h.cmd('guest.consent.save',{sponsorEmail:ben.email,consent:true},ana.cookie)
+        assert.ok((await h.state(ben.cookie)).guests.guests.some(g=>g.id===ana.id))
+        await refused(h,'guest.consent.save',{sponsorEmail:ben.email,consent:true},h.owner)
+      },
+      'guest.consent.revoke':async door=>{
+        const r=await checkAudit(door,{personId:ana.id,requestId:randomUUID(),channel:'desk'})
+        assert.equal(r.result.status,'member_action_required')
+        const grant=(await h.state(ana.cookie)).guests.consents.find(g=>g.type==='guest'&&g.sponsorId===ben.id)
+        await h.cmd('guest.consent.revoke',{id:grant.id},ana.cookie)
+        assert.equal((await h.state(ben.cookie)).guests.guests.length,0)
+        await h.cmd('guest.consent.save',{sponsorEmail:ben.email,consent:true},ana.cookie)
+      },
+      'guest.preview':async door=>{
+        const draft=await h.cmd('pack.prepare',{personId:ben.id,credits:3,amountCents:6000,expiresAt:'2099-12-31T00:00:00Z',guestTerms:{passes:2,period:'month',rollover:0,services:[],perGuest:1,windowDays:365,excess:'refuse',priceCents:0}})
+        guestPack=await h.cmd('pack.approve',{id:draft.id})
+        const r=await checkAudit(door,{sponsorId:ben.id,guestId:ana.id,packId:guestPack.id,classId:future.id,channel:'phone',requestId:randomUUID()})
+        guestQuote=r.result; assert.equal(guestQuote.amountCents,0)
+      },
+      'guest.book':async door=>{
+        const input={id:guestQuote.id,confirm:true,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.guestFunding,'pass')
+        assert.equal((await h.state(ben.cookie)).packs.find(p=>p.id===guestPack.id).remaining,3)
+        await h.cmd(door,input); assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1)
+        await h.cmd('booking.cancel',{id:r.result.id},ana.cookie)
+      },
       'reservation.prepare':async door=>{
         seriesMember=await h.person('SeriesMember')
         await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:seriesMember.id,credits:3,amountCents:6000,expiresAt:'2099-12-31T00:00:00Z'})).id})
@@ -133,7 +161,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         const first=await h.cmd('booking.book',{classId:future.id},ana.cookie)
         const waiter=await h.cmd('booking.book',{classId:future.id},ben.cookie)
         await h.cmd('booking.cancel',{id:first.id},ana.cookie)
-        const cancellations=(await h.state(ana.cookie)).notices.filter(n=>n.subject.startsWith('Booking cancelled:'))
+        const ordinaryIds=new Set((await h.state()).bookings.filter(b=>!b.guestPackId&&b.classId===future.id).map(b=>b.id))
+        const cancellations=(await h.state(ana.cookie)).notices.filter(n=>ordinaryIds.has(n.bookingId)&&n.subject.startsWith('Booking cancelled:'))
         assert.equal(new Set(cancellations.map(n=>n.body)).size,1,'staff and member cancellation notices agree')
         const r=await checkAudit(door,{id:waiter.id,channel:'inbox'})
         assert.equal(r.result.status,'booked');assert.equal((await h.state(ben.cookie)).bookings.find(b=>b.id===waiter.id).status,'booked')

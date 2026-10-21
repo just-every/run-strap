@@ -215,3 +215,97 @@ test('PLAN-002: plan-level rules and priority seat memberships, and SCHED-014 la
   assert.equal((await h.state()).bookings.length, version)
   assert.equal(dx2.packId, weekly.id)
 }))
+
+test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, rollover and cross-host guest limits stay separate from own credits', () => run(async h => {
+  const coach = await studio(h), host = await h.person('Morgan'), other = await h.person('Robin'), payer = await h.person('Taylor');
+  const guests = []; for (const name of ['Avery','Emery','Riley','Quinn','Jamie']) guests.push(await h.person(name));
+  // Distinct public sign-ins avoid any shared profile or staff-made consent.
+  for (const guest of guests) await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},guest.cookie);
+  await h.cmd('guest.consent.save',{sponsorEmail:other.email,consent:true},guests[0].cookie);
+  const paidBy = await h.cmd('guest.consent.save',{sponsorEmail:host.email,kind:'payer',consent:true,maxChargeCents:2500},payer.cookie);
+  let boundary = today().slice(0,8)+'01';
+  while (boundary < addDays(today(),9)) boundary = addDays(boundary,32).slice(0,8)+'01';
+  const before = addDays(boundary,-1), classes = await publish(h,coach,[
+    ...Array.from({length:6},(_,i)=>({key:`g${i}`,title:`Guest Mat ${i}`,date:before,time:`${String(9+i).padStart(2,'0')}:00`})),
+    {key:'next',title:'Next month Mat',date:boundary,time:'10:00'},
+    {key:'full',title:'One guest seat',date:boundary,time:'11:00',capacity:1},
+    {key:'wrong',title:'Reformer guest',service:'Reformer',date:before,time:'16:00'}
+  ]);
+  const guestTerms = {passes:2,period:'month',rollover:0,services:['Mat'],perGuest:1,windowDays:365,excess:'refuse',priceCents:2500};
+  const pack = await sell(h,host.id,{credits:10,guestTerms}), otherPack = await sell(h,other.id,{credits:10,guestTerms});
+  const preview = (guest,index,packId=pack.id,cookie=host.cookie,payerId=host.id) => h.cmd('guest.preview',{guestId:guest.id,classId:classes.get(index).id,packId,payerId},cookie);
+  const confirm = (d,cookie=host.cookie) => h.cmd('guest.book',{id:d.id,confirm:true},cookie);
+  const first = await confirm(await preview(guests[0],'g0')), second = await confirm(await preview(guests[1],'g1'));
+  await h.cmd('guest.preview',{guestId:guests[2].id,classId:classes.get('g2').id,packId:pack.id},host.cookie,409);
+  assert.equal((await h.state(host.cookie)).packs.find(p=>p.id===pack.id).remaining,10);
+  assert.deepEqual((await h.state(host.cookie)).guests.allowances.find(a=>a.packId===pack.id).periods.find(p=>p.start===before.slice(0,8)+'01').used,2);
+  await h.cmd('guest.preview',{guestId:guests[0].id,classId:classes.get('g3').id,packId:otherPack.id},other.cookie,409);
+  assert.equal((await h.state(other.cookie)).guests.bookings.length,0);
+  const reset = await confirm(await preview(guests[2],'next'));
+  assert.equal(reset.guestFunding,'pass');
+  // Cancellation returns once even when late; restoration reserves once and
+  // moving the seat changes its period without touching the host's pack.
+  await h.cmd('booking.cancel',{id:first.id},host.cookie);
+  await h.cmd('booking.cancel',{id:first.id},host.cookie,409);
+  await h.cmd('booking.restore',{id:first.id,reason:'Cancelled wrong guest',channel:'phone'});
+  await h.cmd('booking.move',{id:first.id,classId:classes.get('g4').id,requestId:'guest-move'},host.cookie);
+  let state = await h.state();
+  assert.equal(state.guests.events.filter(e=>e.bookingId===first.id && e.type==='return').length,1);
+  assert.equal(state.bookings.find(b=>b.id===first.id).classId,classes.get('g4').id);
+  assert.equal(state.packs.find(p=>p.id===pack.id).remaining,10);
+  const blocker=await h.cmd('booking.book',{classId:classes.get('full').id},other.cookie);
+  const waiter=await h.cmd('booking.move',{id:first.id,classId:classes.get('full').id,requestId:'guest-full-move'},host.cookie);
+  assert.equal(waiter.status,'waitlisted');
+  assert.equal((await h.state()).bookings.find(b=>b.id===first.id).classId,classes.get('g4').id);
+  await h.cmd('booking.cancel',{id:blocker.id},other.cookie);
+  const offered=(await h.state(host.cookie)).guests.bookings.find(b=>b.id===waiter.id);
+  assert.equal(offered.status,'offered');
+  const source=(await h.state()).bookings.find(b=>b.id===first.id);
+  await h.cmd('booking.offer.accept',{id:waiter.id,terms:source.cancelEffect.key},host.cookie);
+  assert.equal((await h.state()).bookings.find(b=>b.id===first.id).classId,classes.get('full').id);
+  // A different pack explicitly adopts charge-on-excess. Every paid quote is
+  // confirmed at the real price, charged once to its consenting payer.
+  const charged = await sell(h,host.id,{credits:10,guestTerms:{...guestTerms,excess:'charge'}});
+  await confirm(await preview(guests[3],'g0',charged.id));
+  await confirm(await preview(guests[4],'g1',charged.id));
+  const quote = await preview(guests[2],'g2',charged.id,host.cookie,payer.id);
+  assert.equal(quote.amountCents,2500);
+  const paid = await confirm(quote); assert.equal(paid.guestFunding,'paid');
+  assert.equal((await confirm(quote)).id,paid.id);
+  state = await h.state();
+  assert.equal(state.charges.filter(c=>c.bookingId===paid.id && c.amountCents===2500 && c.personId===payer.id).length,1);
+  await h.cmd('booking.cancel',{id:paid.id},host.cookie);
+  assert.equal((await h.state()).charges.filter(c=>c.bookingId===paid.id).reduce((n,c)=>n+c.amountCents,0),0);
+  await h.cmd('guest.consent.revoke',{id:paidBy.id},payer.cookie);
+  await h.cmd('booking.restore',{id:paid.id,reason:'Please restore',channel:'desk'},h.owner,403);
+  // Service eligibility, stale previews, missing guest consent and unknown
+  // members all refuse rather than exposing or silently changing allocations.
+  await h.cmd('guest.preview',{guestId:guests[0].id,classId:classes.get('wrong').id,packId:pack.id},host.cookie,409);
+  const stranger = await h.person('Drewguest');
+  await h.cmd('guest.preview',{guestId:stranger.id,classId:classes.get('g5').id,packId:pack.id},host.cookie,403);
+  await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},stranger.cookie);
+  const stale = await preview(stranger,'g5',charged.id);
+  await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},stranger.cookie);
+  await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,409);
+  const grant = (await h.state(stranger.cookie)).guests.consents.find(c=>c.type==='guest');
+  await h.cmd('guest.consent.revoke',{id:grant.id},stranger.cookie);
+  await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,403);
+  assert.ok(!(await h.state(other.cookie)).people.some(p=>p.id===host.id));
+  assert.equal(second.guestFunding,'pass');
+  const rollGuests=[];
+  for (const name of ['River','Skyler','Dakota','Marley','Finley']) {
+    const guest=await h.person(name); rollGuests.push(guest);
+    await h.cmd('guest.consent.save',{sponsorEmail:other.email,consent:true},guest.cookie);
+  }
+  const rolling=await sell(h,other.id,{credits:4,guestTerms:{...guestTerms,rollover:1}});
+  await confirm(await preview(rollGuests[0],'g5',rolling.id,other.cookie,other.id),other.cookie);
+  for (const guest of rollGuests.slice(1,4)) await confirm(await preview(guest,'next',rolling.id,other.cookie,other.id),other.cookie);
+  const period=(await h.state(other.cookie)).guests.allowances.find(a=>a.packId===rolling.id).periods.find(p=>p.start===boundary);
+  assert.deepEqual([period.carriedIn,period.allowance,period.used],[1,3,3]);
+  await h.cmd('guest.preview',{guestId:rollGuests[4].id,classId:classes.get('next').id,packId:rolling.id},other.cookie,409);
+  const current=(await h.state()).packs.find(p=>p.id===rolling.id);
+  await h.cmd('pack.adjust',{id:rolling.id,creditsDelta:0,reason:'Guest allowance ended with the pack',requestId:'guest-expiry',revision:current.summary.revision,expiresAt:new Date(Date.parse(classes.get('next').start)-1000).toISOString()});
+  await h.cmd('guest.preview',{guestId:rollGuests[4].id,classId:classes.get('next').id,packId:rolling.id},other.cookie,409);
+
+  if (process.env.STRAP_PROOF_DIR) await (await import('./guests-browser.mjs')).guestsBrowser(h,{host,guest:guests[0],packId:pack.id});
+}));
