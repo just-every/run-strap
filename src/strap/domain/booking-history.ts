@@ -1,5 +1,6 @@
 import { humanOwner, id, insist, list, now, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
+import { makeupRecipients } from './makeup-authority';
 import { putNotice, reserveMail, titleOf, whenText } from './notices';
 
 export const cancellationReasons = (state: State): string[] => state.records.get('cancellation-reasons')?.data.reasons ?? ['Sick','Schedule conflict','Other'];
@@ -28,6 +29,7 @@ export function bookingHistory(tx: Transaction, action: string, before: RecordDa
   const suppressionReason = suppressed ? text(input.suppressionReason,'suppression_reason',500) : null;
   const event = {id:id(),...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]))} : {}),bookingId:after.id,personId:after.personId,classId:before.classId,targetClassId:after.classId,action,
     actorId:tx.who.id,actorRole:tx.who.role,staffMade:staff,right:staff ? 'booking' : null,channel:staff ? actionChannel(input) : 'online',
+    comment:staff && action === 'cancel' && after.guestPackId ? text(input.reason,'guest_cancel_reason',500) : null,
     reason:staff ? String(input.cancelReason ?? input.reason ?? '') : `Member ${action}`,at:now(),type:after.cancellation ?? null,
     feeCents:after.feeCents ?? 0,creditReturned:after.refunded ?? false,waiver:after.waiver ?? null,before,after,...details,
     notice:{status:suppressed ? 'suppressed' : 'in_app',suppressionReason,mailStatus:null as string | null}};
@@ -37,6 +39,10 @@ export function bookingHistory(tx: Transaction, action: string, before: RecordDa
     putNotice(tx,{id:`notice:action:${event.id}`,personId:after.personId,bookingId:after.id,classId:after.classId,subject,body});
     const delivery = reserveMail(tx,tx.notices,{id:`mail:action:${event.id}`,sourceKind:'booking_action',sourceId:event.id,personId:after.personId,bookingIds:[after.id],subject,body});
     event.notice.mailStatus = delivery.status;
+    if (after.makeupCreditId) for (const personId of makeupRecipients(tx,after.personId).filter(p => p !== after.personId)) {
+      putNotice(tx,{id:`notice:action:${event.id}:guardian:${personId}`,personId,bookingId:after.id,classId:after.classId,subject,body});
+      reserveMail(tx,tx.notices,{id:`mail:action:${event.id}:guardian:${personId}`,sourceKind:'booking_action',sourceId:event.id,personId,bookingIds:[after.id],subject,body});
+    }
   }
   tx.put('bookingAction',event); return event;
 }

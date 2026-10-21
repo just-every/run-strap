@@ -20,12 +20,12 @@ function facts(tx: Transaction, input: Record<string,unknown>) {
   insist(seatCapacity(tx.state,entry).onlineOpen > 0,'class_full',409);
   const amountCents = refusal ? pack.guestTerms.priceCents : 0, payerId = text(input.payerId || sponsor.id,'payerId',100);
   guestPayer(tx.state,sponsor.id,payerId,amountCents,tx.who.role === 'owner' && amountCents > 0);
-  return {sponsor,guest,pack,entry,amountCents,payerId,funding:refusal ? 'paid' : 'pass',refusal};
+  return {sponsor,guest,pack,entry,amountCents,payerId,funding:refusal ? 'paid' : 'pass',refusal,cancelTerms:cancelTerms(tx.state,entry,pack)};
 }
-const basis = (tx: Transaction, f: ReturnType<typeof facts>) => JSON.stringify({sponsor:f.sponsor.id,guest:f.guest.id,guestVersion:f.guest.version,pack:f.pack,entry:f.entry,amountCents:f.amountCents,payerId:f.payerId,funding:f.funding,consents:list(tx.state,'guestConsent').filter(g => g.sponsorId === f.sponsor.id && [f.guest.id,f.payerId].includes(g.personId)),holds:list(tx.state,'booking').filter(b => b.guestPackId || b.classId === f.entry.id).map(b => [b.id,b.classId,b.status,b.personId,b.guestFunding])});
+const basis = (tx: Transaction, f: ReturnType<typeof facts>) => JSON.stringify({sponsor:f.sponsor.id,guest:f.guest.id,guestVersion:f.guest.version,pack:f.pack,entry:f.entry,amountCents:f.amountCents,payerId:f.payerId,funding:f.funding,cancelTerms:f.cancelTerms,consents:list(tx.state,'guestConsent').filter(g => g.sponsorId === f.sponsor.id && [f.guest.id,f.payerId].includes(g.personId)),holds:list(tx.state,'booking').filter(b => b.guestPackId || b.classId === f.entry.id).map(b => [b.id,b.classId,b.status,b.personId,b.guestFunding])});
 export function previewGuestBooking(tx: Transaction, input: Record<string,unknown>) {
   const f = facts(tx,input);
-  const draft = {id:id(),personId:f.guest.id,sponsorId:f.sponsor.id,packId:f.pack.id,classId:f.entry.id,payerId:f.payerId,amountCents:f.amountCents,funding:f.funding,refusal:f.refusal,basis:basis(tx,f),createdAt:now(),actorId:tx.who.id,status:'preview'};
+  const draft = {id:id(),personId:f.guest.id,sponsorId:f.sponsor.id,packId:f.pack.id,classId:f.entry.id,payerId:f.payerId,amountCents:f.amountCents,funding:f.funding,refusal:f.refusal,cancelTerms:f.cancelTerms,basis:basis(tx,f),createdAt:now(),actorId:tx.who.id,status:'preview'};
   tx.put('guestBookingDraft',draft); return draft;
 }
 export function bookGuest(tx: Transaction, input: Record<string,unknown>) {
@@ -37,7 +37,7 @@ export function bookGuest(tx: Transaction, input: Record<string,unknown>) {
   insist(input.confirm === true,'explicit_confirmation_required');
   tx.future(f.entry.start); tx.future(f.pack.expiresAt);
   const spot = chooseSpot(tx.state,f.entry,input.spot);
-  const booking = {id:id(),personId:f.guest.id,sponsorId:f.sponsor.id,guestPackId:f.pack.id,guestFunding:f.funding,payerId:f.payerId,guestPriceCents:f.amountCents,classId:f.entry.id,status:'booked',capacityPool:'online',bookingChannel:tx.who.role === 'owner' ? input.channel ?? 'desk' : 'online',cancelTerms:cancelTerms(tx.state,f.entry,f.pack),createdAt:now(),bookedAt:now(),sequence:tx.state.version+1,...(spot ? {spot} : {})};
+  const booking = {id:id(),personId:f.guest.id,sponsorId:f.sponsor.id,guestPackId:f.pack.id,guestFunding:f.funding,payerId:f.payerId,guestPriceCents:f.amountCents,classId:f.entry.id,status:'booked',capacityPool:'online',bookingChannel:tx.who.role === 'owner' ? input.channel ?? 'desk' : 'online',cancelTerms:draft.cancelTerms,createdAt:now(),bookedAt:now(),sequence:tx.state.version+1,...(spot ? {spot} : {})};
   tx.put('booking',booking); guestLedger(tx,booking,'reserve');
   if (f.amountCents) tx.put('charge',{id:id(),personId:f.payerId,bookingId:booking.id,classId:f.entry.id,amountCents:f.amountCents,reason:'guest_drop_in',createdAt:now(),createdBy:tx.who.id});
   tx.put('guestBookingDraft',{...draft,status:'booked',bookingId:booking.id});
@@ -76,7 +76,7 @@ export function guestSnapshot(state: State, who: Actor) {
   const consents = list(state,'guestConsent').filter(g => owner || g.personId === me || g.sponsorId === me);
   const visible = new Set(consents.filter(g => g.active && g.sponsorId === me && g.type === 'guest').map(g => g.personId));
   const bookings = list(state,'booking').filter(b => b.guestPackId && (owner || b.personId === me || (b.sponsorId === me && visible.has(b.personId))));
-  return {consents:consents.map(g => ({...g,name:state.people.find(p => p.id === (g.personId === me ? g.sponsorId : g.personId))?.name ?? 'Former member'})),guests:state.people.filter(p => visible.has(p.id) && p.active && !p.erasedAt).map(p => ({id:p.id,name:p.name})),
+  return {consents:consents.map(g => ({...g,name:!owner && g.personId !== me && !g.active ? 'Withdrawn person' : state.people.find(p => p.id === (g.personId === me ? g.sponsorId : g.personId))?.name ?? 'Former member'})),guests:state.people.filter(p => visible.has(p.id) && p.active && !p.erasedAt).map(p => ({id:p.id,name:p.name})),
     bookings:bookings.map(b => b.status === 'booked' && record(state,b.classId,'class').start > now() ? {...b,cancelEffect:cancellationEffect(b,record(state,b.classId,'class'))} : b),drafts:list(state,'guestBookingDraft').filter(d => d.actorId === who.id),events:list(state,'guestPassEvent').filter(e => owner || e.personId === me || e.guestId === me),
     allowances:list(state,'pack').filter(p => p.guestTerms && (owner || p.personId === me)).map(p => ({packId:p.id,personId:p.personId,...guestAllowanceSummary(state,p)}))};
 }

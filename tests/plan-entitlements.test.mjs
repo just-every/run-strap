@@ -282,7 +282,7 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   // Service eligibility, stale previews, missing guest consent and unknown
   // members all refuse rather than exposing or silently changing allocations.
   await h.cmd('guest.preview',{guestId:guests[0].id,classId:classes.get('wrong').id,packId:pack.id},host.cookie,409);
-  const stranger = await h.person('Drewguest');
+  const stranger = await h.person('Drew');
   await h.cmd('guest.preview',{guestId:stranger.id,classId:classes.get('g5').id,packId:pack.id},host.cookie,403);
   await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},stranger.cookie);
   const stale = await preview(stranger,'g5',charged.id);
@@ -291,6 +291,13 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   const grant = (await h.state(stranger.cookie)).guests.consents.find(c=>c.type==='guest');
   await h.cmd('guest.consent.revoke',{id:grant.id},stranger.cookie);
   await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,403);
+  const hostAfterWithdrawal = await h.state(host.cookie);
+  assert.equal(hostAfterWithdrawal.guests.consents.find(c=>c.id===grant.id).active,false);
+  assert.notEqual(hostAfterWithdrawal.guests.consents.find(c=>c.id===grant.id).name,stranger.name);
+  assert.ok(!hostAfterWithdrawal.guests.guests.some(g=>g.id===stranger.id));
+  assert.doesNotMatch((await h.send('/app/packs',undefined,host.cookie)).text,/Drew/);
+  assert.equal((await h.state(stranger.cookie)).guests.consents.find(c=>c.id===grant.id).name,host.name,'the guest retains their own authorization history');
+  assert.equal((await h.state()).guests.consents.find(c=>c.id===grant.id).name,stranger.name,'the owner retains studio authorization history');
   assert.ok(!(await h.state(other.cookie)).people.some(p=>p.id===host.id));
   assert.equal(second.guestFunding,'pass');
   const rollGuests=[];
@@ -309,4 +316,99 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   await h.cmd('guest.preview',{guestId:rollGuests[4].id,classId:classes.get('next').id,packId:rolling.id},other.cookie,409);
 
   if (process.env.STRAP_PROOF_DIR) await (await import('./guests-browser.mjs')).guestsBrowser(h,{host,guest:guests[0],packId:charged.id,classId:classes.get('g2').id});
+}));
+
+
+test('PLAN-010: owner guest charges require live payer caps and guest-seat fees and reversals stay with the host', () => run(async h => {
+  const coach = await studio(h), host = await h.person('Morgan'), payer = await h.person('Taylor');
+  const guests = []; for (const name of ['Avery','Emery','Riley']) guests.push(await h.person(name));
+  for (const guest of guests) await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},guest.cookie);
+  const classes = await publish(h,coach,[...['first','paid','self','moved'].map((key,i)=>({key,title:`Mat with ${coach.name} ${i+1}`,date:addDays(today(),3),time:`${10+i}:00`})),{key:'early',title:'Mat next month',date:addDays(today(),40),time:'10:00'}]);
+  const rules = {service:'Mat',cancelCutoffHours:720,lateCancelReturnsCredit:false,lateCancelFeeCents:1500,noShowFeeCents:2000};
+  await h.cmd('bookingRule.save',rules);
+  const pack = await sell(h,host.id,{credits:10,guestTerms:{passes:1,period:'month',rollover:0,services:['Mat'],perGuest:1,windowDays:365,excess:'charge',priceCents:2500}});
+  const previewInput = (guest,key,payerId) => ({sponsorId:host.id,guestId:guest.id,classId:classes.get(key).id,packId:pack.id,payerId});
+  const reserve = async (guest,key,payerId,cookie=h.owner) => {
+    const draft = await h.cmd('guest.preview',previewInput(guest,key,payerId),cookie);
+    return h.cmd('guest.book',{id:draft.id,confirm:true},cookie);
+  };
+  await reserve(guests[0],'first',host.id,host.cookie);
+  const refused = async (name,input,status,error) => {
+    const before = (await h.state()).version, result = await h.cmd(name,input,h.owner,status);
+    if (error) assert.equal(result.error,error);
+    assert.equal((await h.state()).version,before,'refusal writes nothing');
+  };
+  const allow = (person,maxChargeCents) => h.cmd('guest.consent.save',{sponsorEmail:host.email,kind:'payer',consent:true,maxChargeCents},person.cookie);
+  // Staff charges need a recorded cap for either a third-party payer or the host.
+  for (const [who,guest,key] of [[payer,guests[1],'paid'],[host,guests[2],'self']]) {
+    const input = previewInput(guest,key,who.id);
+    await refused('guest.preview',input,403,'guest_payer_consent_required');
+    await allow(who,2499);
+    await refused('guest.preview',input,403,'guest_payer_consent_required');
+    await allow(who,2500);
+  }
+  const early = await reserve(guests[0],'early',host.id);
+  const earlyCancel = {id:early.id,cancelReason:'Other',reason:'Avery requested a different week',mode:'late',channel:'desk'};
+  await refused('booking.cancel',earlyCancel,400);
+  await h.cmd('booking.cancel',{...earlyCancel,mode:'early'});
+  assert.equal((await h.state()).bookings.find(b=>b.id===early.id).cancellation,'early','a non-waivable choice must match the current timing');
+  const stale = await h.cmd('guest.preview',previewInput(guests[1],'paid',payer.id),host.cookie);
+  assert.deepEqual([stale.cancelTerms.cutoffHours,stale.cancelTerms.lateFeeCents,stale.cancelTerms.noShowFeeCents],[720,1500,2000]);
+  const page = (await h.send('/app/packs',undefined,host.cookie)).text;
+  assert.match(page,/Late cancellation or a late move adds \$15\.00 to the host’s studio balance/);
+  assert.match(page,/A no-show adds \$20\.00 to the host’s studio balance/);
+  await h.cmd('bookingRule.save',{...rules,lateCancelFeeCents:1800});
+  const beforeStale = (await h.state()).version;
+  assert.equal((await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,409)).error,'guest_preview_changed');
+  assert.equal((await h.state()).version,beforeStale);
+  const ownerQuote = await h.cmd('guest.preview',previewInput(guests[1],'paid',payer.id));
+  await allow(payer,2499);
+  await refused('guest.book',{id:ownerQuote.id,confirm:true},403,'guest_payer_consent_required');
+  await allow(payer,2500);
+  const paid = await reserve(guests[1],'paid',payer.id), selfPaid = await reserve(guests[2],'self',host.id);
+  assert.deepEqual([paid.guestFunding,paid.payerId,paid.guestPriceCents,selfPaid.guestFunding,selfPaid.payerId],['paid',payer.id,2500,'paid',host.id]);
+  assert.equal(paid.cancelTerms.lateFeeCents,1800,'the seat keeps its confirmed terms');
+  let state = await h.state();
+  assert.deepEqual(state.charges.filter(c=>[paid.id,selfPaid.id].includes(c.bookingId)).map(c=>[c.bookingId,c.personId,c.reason,c.amountCents]).sort(),[[paid.id,payer.id,'guest_drop_in',2500],[selfPaid.id,host.id,'guest_drop_in',2500]].sort());
+  // Staff enters both a reason/comment and an explicit timing choice, even when no waiver is requested.
+  const cancelInput = {id:paid.id,cancelReason:'Sick',channel:'desk',mode:'late',reason:'Emery phoned with a fever'};
+  await refused('booking.cancel',{...cancelInput,reason:''},400);
+  const {mode,...missingTiming} = cancelInput;
+  await refused('booking.cancel',missingTiming,400);
+  await h.cmd('booking.cancel',cancelInput);
+  state = await h.state();
+  assert.equal(state.bookingActions.find(a=>a.bookingId===paid.id && a.action==='cancel').comment,cancelInput.reason);
+  const cancelFee = state.charges.find(c=>c.bookingId===paid.id && c.reason==='late_cancel_fee');
+  assert.deepEqual([cancelFee.personId,cancelFee.amountCents],[host.id,1800]);
+  assert.deepEqual(state.charges.filter(c=>c.bookingId===paid.id && c.reason==='guest_drop_in_reversal').map(c=>[c.personId,c.amountCents]),[[payer.id,-2500]]);
+  await h.cmd('booking.restore',{id:paid.id,reason:'Emery can attend after all',channel:'phone'});
+  state = await h.state();
+  assert.deepEqual(state.charges.filter(c=>c.reversesChargeId===cancelFee.id).map(c=>[c.personId,c.amountCents]),[[host.id,-1800]]);
+  await h.cmd('booking.move',{id:paid.id,classId:classes.get('moved').id,requestId:'synthetic-strap-1'},host.cookie);
+  state = await h.state();
+  assert.deepEqual(state.charges.filter(c=>c.bookingId===paid.id && c.reason==='late_move_fee').map(c=>[c.personId,c.amountCents]),[[host.id,1800]]);
+  assert.deepEqual([state.bookings.find(b=>b.id===paid.id).payerId,state.bookings.find(b=>b.id===paid.id).guestPriceCents],[payer.id,2500]);
+  // A late-cancel correction reverses the fee to its debtor, preserving the payer's price reversal.
+  await h.cmd('booking.cancel',{id:selfPaid.id},host.cookie);
+  await h.cmd('attendance.correct',{id:selfPaid.id,outcome:'early_cancel',reason:'Studio changed the class time'});
+  // Only the stored test class is backdated; no-show and correction still enter through HTTP.
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(new Date(Date.now()-30*60_000).toISOString(),new Date(Date.now()+30*60_000).toISOString(),classes.get('moved').id).run();
+  await h.cmd('attendance.noshow',{id:paid.id},coach.cookie);
+  await h.cmd('attendance.noshow',{id:paid.id},coach.cookie,409);
+  state = await h.state();
+  const noShowFee = state.charges.find(c=>c.bookingId===paid.id && c.reason==='no_show_fee');
+  assert.deepEqual([noShowFee.personId,noShowFee.amountCents],[host.id,2000]);
+  await h.cmd('attendance.correct',{id:paid.id,outcome:'excused',reason:'Emery was excused by the studio'});
+  await h.cmd('attendance.correct',{id:paid.id,outcome:'excused',reason:'Repeat correction'},h.owner,409);
+  state = await h.state();
+  assert.deepEqual(state.charges.filter(c=>c.reversesChargeId===noShowFee.id).map(c=>[c.personId,c.amountCents]),[[host.id,-2000]]);
+  const charges = state.charges.filter(c=>[paid.id,selfPaid.id].includes(c.bookingId));
+  for (const reversal of charges.filter(c=>c.reversesChargeId)) {
+    const original = charges.find(c=>c.id===reversal.reversesChargeId);
+    assert.deepEqual([reversal.personId,reversal.amountCents],[original.personId,-original.amountCents]);
+    assert.equal(charges.filter(c=>c.reversesChargeId===original.id).length,1);
+  }
+  assert.equal(charges.filter(c=>c.personId===payer.id).reduce((n,c)=>n+c.amountCents,0),0,'the payer owes no fee or excused guest price');
+  assert.ok(!charges.some(c=>guests.some(g=>g.id===c.personId)),'the guest owes neither fees nor their reversals');
+  assert.equal(state.packs.find(p=>p.id===pack.id).remaining,10,'guest funding never spends the host’s own credits');
 }));

@@ -5,82 +5,88 @@ import { cancelTerms, cancellationEffect, classService, insistBookingOpen } from
 import { bookingCredit, serviceKey } from './pack-credits';
 import { chooseSpot, seatCapacity } from './spots';
 import { promote } from './waitlist';
-import { confirmBooking, putNotice, reserveMail } from './notices';
+import { canManageMakeup, authorizeMakeup, makeupNotice } from './makeup-authority';
+import { appendPackEvent } from './pack-credits';
 import { requestBasis, staffChannel } from './staff-actions';
 
-// Deliberately limited authority: this relationship opens makeup records only,
-// never a household, payer, health record, profile or general account snapshot.
-// Legal guardian grants require owner-verified youth/legal evidence and guardian
-// acceptance; adult delegation additionally requires participant acceptance.
-export function canManageMakeup(state: State, who: Actor, personId: string) {
-  if (who.role === 'owner' && who.isOwner) return true;
-  if (who.role !== 'member' || !who.personId) return false;
-  if (!state.people.some(p => p.id === personId && p.active && !p.erasedAt)) return false;
-  return who.personId === personId || list(state,'makeupGuardian').some(r => r.personId === personId && r.guardianId === who.personId && !r.revokedAt && (r.relationship === 'legal-guardian' || r.participantAcceptedAt) && r.guardianAcceptedAt);
-}
-const authorize = (tx: Transaction, personId: string) => { person(tx.state,personId); insist(canManageMakeup(tx.state,tx.who,personId),'makeup_not_found',404); };
 export function saveAbsencePolicy(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const service = text(input.service,'service',100), key = `absence-policy:${serviceKey(service)}`;
   const previous = tx.state.records.get(key)?.data;
-  const policy = {id:key,service,noticeHours:integer(input.noticeHours,'noticeHours',0,8760),expiryDays:integer(input.expiryDays,'expiryDays',1,365),active:input.active !== false,revision:(previous?.revision ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id};
+  const capped = input.maxCredits !== undefined && input.maxCredits !== '';
+  const maxCredits = capped ? integer(input.maxCredits,'maxCredits',1,365) : null;
+  const capDays = capped ? integer(input.capDays,'capDays',1,365) : null;
+  insist(capped || input.capDays === undefined || input.capDays === '' || input.capDays === null,'maxCredits_required');
+  const policy = {id:key,service,maxCredits,capDays,noticeHours:integer(input.noticeHours,'noticeHours',0,8760),expiryDays:integer(input.expiryDays,'expiryDays',1,365),active:input.active !== false,revision:(previous?.revision ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id};
   tx.put('absencePolicy',policy); return policy;
 }
-export function saveMakeupGuardian(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
-  const participant = person(tx.state,input.personId), guardian = person(tx.state,input.guardianId);
-  insist(participant.role === 'member' && guardian.role === 'member' && participant.id !== guardian.id,'invalid_makeup_guardian');
-  text(input.authorizationEvidence,'authorizationEvidence',500);
-  const prior = list(tx.state,'makeupGuardian').find(r => r.personId === participant.id && r.guardianId === guardian.id && !r.revokedAt);
-  if (prior) return prior;
-  const kind = text(input.relationship,'relationship',30), evidence = text(input.authorizationEvidence,'authorizationEvidence',500);
-  insist(kind === 'legal-guardian' || kind === 'adult-delegate','invalid_relationship');
-  const relationship = {id:id(),personId:participant.id,guardianId:guardian.id,relationship:kind,authorizationEvidence:evidence,youthVerified:kind === 'legal-guardian',createdAt:now(),createdBy:tx.who.id,participantAcceptedAt:null,guardianAcceptedAt:null,revokedAt:null};
-  tx.put('makeupGuardian',relationship); return relationship;
-}
-export function acceptMakeupGuardian(tx: Transaction, input: Record<string,unknown>) {
-  insist(tx.who.role === 'member','member_required',403);
-  const r = record(tx.state,input.id,'makeupGuardian');
-  insist(!r.revokedAt && [r.personId,r.guardianId].includes(tx.who.personId),'makeup_not_found',404);
-  person(tx.state,r.personId); person(tx.state,r.guardianId);
-  const field = tx.who.personId === r.personId ? 'participantAcceptedAt' : 'guardianAcceptedAt';
-  if (r[field]) return r;
-  const updated = {...r,[field]:now(),[field.replace('At','By')]:tx.who.id}; tx.put('makeupGuardian',updated); return updated;
-}
-export function revokeMakeupGuardian(tx: Transaction, input: Record<string,unknown>) {
-  const r = record(tx.state,input.id,'makeupGuardian');
-  insist((tx.who.role === 'owner' && tx.who.isOwner) || (tx.who.role === 'member' && [r.personId,r.guardianId].includes(tx.who.personId)),'makeup_not_found',404);
-  if (r.revokedAt) return r;
-  const updated = {...r,revokedAt:now(),revokedBy:tx.who.id}; tx.put('makeupGuardian',updated); return updated;
-}
-export function reportAbsence(tx: Transaction, input: Record<string,unknown>) {
-  const original = record(tx.state,input.id,'booking'); authorize(tx,original.personId);
+function absenceFacts(tx: Transaction, input: Record<string,unknown>) {
+  const original = record(tx.state,input.id,'booking'); authorizeMakeup(tx,original.personId);
   const reason = text(input.reason,'reason',500), requestId = text(input.requestId,'requestId',100);
-  const prior = list(tx.state,'absence').find(a => a.originalBookingId === original.id);
-  if (prior) { insist(prior.reason === reason,'absence_request_changed',409); return prior; }
   const entry = record(tx.state,original.classId,'class');
   const policy = tx.state.records.get(`absence-policy:${serviceKey(classService(entry))}`)?.data;
+  const pack = original.packId ? record(tx.state,original.packId,'pack') : null;
   insist(policy?.active,'absence_not_eligible',409);
-  insist(original.status === 'booked' && !!original.packId && !original.makeupCreditId && !original.checkedInAt && !original.attendance,'absence_not_eligible',409);
+  insist(original.status === 'booked' && pack && pack.amountCents > 0 && !original.guestPackId && !original.unpaid && !original.makeupCreditId && !original.checkedInAt && !original.attendance,'absence_not_eligible',409);
   insist(entry.status === 'published','absence_not_eligible',409);
   const cutoff = new Date(Date.parse(entry.start)-policy.noticeHours*3600000).toISOString();
   insist(cutoff > now(),'absence_notice_closed',409); tx.future(cutoff);
+  if (policy.maxCredits) {
+    const since = new Date(Date.now()-policy.capDays*86400000).toISOString();
+    const issued = list(tx.state,'makeupCredit').filter(c => c.personId === original.personId && !c.voidedAt && c.issuedAt > since && serviceKey(c.service) === serviceKey(policy.service));
+    insist(issued.length < policy.maxCredits,'absence_credit_cap_reached',409);
+  }
+  return {original,entry,policy,reason,requestId};
+}
+const absenceBasis = (f: ReturnType<typeof absenceFacts>) => JSON.stringify({original:f.original,entry:f.entry,policy:f.policy,reason:f.reason});
+export function previewAbsence(tx: Transaction, input: Record<string,unknown>) {
+  const f = absenceFacts(tx,input), previewId = id();
+  const preview = {id:previewId,key:id(),actorId:tx.who.id,originalBookingId:f.original.id,personId:f.original.personId,reason:f.reason,requestId:f.requestId,channel:tx.who.role === 'owner' ? staffChannel(input) : 'member',basis:absenceBasis(f),cancellationEffect:cancellationEffect(f.original,f.entry),expiresAt:new Date(Math.min(Date.now()+15*60000,Date.parse(f.entry.start)-f.policy.noticeHours*3600000)).toISOString(),status:'preview',createdAt:now()};
+  tx.put('absencePreview',preview); return preview;
+}
+export function reportAbsence(tx: Transaction, input: Record<string,unknown>) {
+  const original = record(tx.state,input.id,'booking'); authorizeMakeup(tx,original.personId);
+  const reason = text(input.reason,'reason',500), requestId = text(input.requestId,'requestId',100);
+  const prior = list(tx.state,'absence').find(a => a.originalBookingId === original.id);
+  if (prior) { insist(prior.reason === reason && !prior.restoredAt,'absence_request_changed',409); return prior; }
+  const f = absenceFacts(tx,input), {entry,policy} = f;
+  let preview: RecordData | null = null;
+  if (input.previewId) {
+    preview = record(tx.state,input.previewId,'absencePreview');
+    insist(preview.actorId === tx.who.id && preview.originalBookingId === original.id,'makeup_not_found',404);
+    insist(input.key === preview.key && preview.status === 'preview' && preview.expiresAt > now() && preview.basis === absenceBasis(f),'absence_preview_changed',409);
+    tx.future(preview.expiresAt);
+  }
   const at = now(), creditId = id(), absence = {id:id(),personId:original.personId,originalBookingId:original.id,classId:entry.id,reason,requestId,policy:{...policy},creditId,at,actorId:tx.who.id,actorRole:tx.who.role,channel:tx.who.role === 'owner' ? staffChannel(input) : 'member',originalOutcome:{status:original.status,attendance:original.attendance ?? null,packId:original.packId}};
   tx.put('absence',absence);
   tx.put('makeupCredit',{id:creditId,personId:original.personId,absenceId:absence.id,originalBookingId:original.id,service:policy.service,issuedAt:at,expiresAt:new Date(Date.parse(entry.start)+policy.expiryDays*86400000).toISOString(),bookingId:null});
-  // The original allocation stays spent. This is a separate makeup grant, not
-  // an early cancellation refund or an attendance correction.
   bookingCredit(tx,original,{type:'consume',credits:0,bookingId:original.id,classId:entry.id,reason:'absence'});
   tx.put('booking',{...original,status:'cancelled',cancellation:'absence',attendance:'absence',absenceId:absence.id,cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,refunded:false});
-  const subject = 'Absence recorded', body = `Your absence is recorded. One makeup credit expires ${new Date(Date.parse(entry.start)+policy.expiryDays*86400000).toISOString()}. Your original visit stays used.`;
-  putNotice(tx,{id:`notice:absence:${absence.id}`,personId:original.personId,bookingId:original.id,subject,body});
-  reserveMail(tx,tx.notices,{id:`mail:absence:${absence.id}`,sourceKind:'booking_action',sourceId:absence.id,personId:original.personId,bookingIds:[original.id],subject,body});
+  if (preview) tx.put('absencePreview',{...preview,status:'reported',absenceId:absence.id});
+  makeupNotice(tx,original.personId,{id:`absence:${absence.id}`,bookingIds:[original.id],subject:'Absence recorded',body:`Your absence is recorded. One makeup credit expires ${new Date(Date.parse(entry.start)+policy.expiryDays*86400000).toISOString()}. Your original visit stays used.`});
   promote(tx,entry); return absence;
+}
+/** Restoring the original allocation voids only an unused makeup grant. */
+export function restoreAbsence(tx: Transaction, booking: RecordData, entry: RecordData, placement: {spot: unknown;capacityPool: unknown;override: unknown}, input: Record<string,unknown>) {
+  humanOwner(tx.who); const reason = text(input.reason,'restore_reason',500);
+  insist(booking.cancellation === 'absence' && booking.status === 'cancelled' && entry.start > now(),'cancellation_not_restorable',409); tx.future(entry.start);
+  const absence = record(tx.state,booking.absenceId,'absence'), credit = record(tx.state,absence.creditId,'makeupCredit');
+  insist(!credit.bookingId && !credit.reservedAt && !credit.voidedAt && !absence.restoredAt,'makeup_credit_used',409);
+  const at = now();
+  tx.put('makeupCredit',{...credit,voidedAt:at,voidedBy:tx.who.id,voidReason:reason});
+  tx.put('absence',{...absence,restoredAt:at,restoredBy:tx.who.id,restoreReason:reason});
+  const {attendance,cancellation,absenceId,cancelledAt,cancelledBy,cancelledByRole,refunded,...active} = booking;
+  const restored = {...active,status:'booked',restoredAt:at,restoredBy:tx.who.id,spot:placement.spot,capacityPool:placement.capacityPool,override:placement.override};
+  appendPackEvent(tx,record(tx.state,booking.packId,'pack'),{type:'reserve',credits:0,bookingId:booking.id,classId:entry.id,reason:'absence_restored'});
+  tx.put('booking',restored);
+  makeupNotice(tx,booking.personId,{id:`absence-restored:${absence.id}`,bookingIds:[booking.id],subject:'Absence restored',body:'Your original class is booked again. Its original visit stays reserved and the unused makeup credit was voided.'});
+  return restored;
 }
 /** Hook for moves/restores: ordinary capacity, waiver, duplicates and window
  * remain the caller's responsibility. This checks the special allocation. */
 export function assertMakeupTarget(tx: Transaction, booking: RecordData, entry: RecordData, needsAvailable = false) {
   const credit = record(tx.state,booking.makeupCreditId,'makeupCredit');
+  insist(!credit.voidedAt,'makeup_credit_voided',409);
   insist(entry.id !== record(tx.state,credit.originalBookingId,'booking').classId,'different_class_required',409);
   insist(credit.personId === booking.personId && serviceKey(credit.service) === serviceKey(classService(entry)),'makeup_not_eligible',409);
   insist(credit.expiresAt > now() && credit.expiresAt > entry.start,'makeup_expired',409); tx.future(credit.expiresAt);
@@ -101,7 +107,7 @@ export function releaseMakeupCredit(tx: Transaction, booking: RecordData) {
   const released = {...credit,bookingId:null,releasedAt:now()}; tx.put('makeupCredit',released); return released;
 }
 export function bookMakeup(tx: Transaction, input: Record<string,unknown>) {
-  const credit = record(tx.state,input.creditId,'makeupCredit'); authorize(tx,credit.personId);
+  const credit = record(tx.state,input.creditId,'makeupCredit'); authorizeMakeup(tx,credit.personId);
   const requestId = text(input.requestId,'requestId',100), basis = requestBasis(input);
   const replay = list(tx.state,'booking').find(b => b.makeupCreditId === credit.id && b.makeupRequestId === requestId && b.madeBy === tx.who.id);
   if (replay) { insist(replay.makeupRequestBasis === basis,'makeup_request_changed',409); return replay; }
@@ -114,18 +120,20 @@ export function bookMakeup(tx: Transaction, input: Record<string,unknown>) {
   insistBookingOpen(tx,entry,false); promote(tx,entry);
   insist(seatCapacity(tx.state,entry).onlineOpen > 0,'class_full',409);
   const spot = chooseSpot(tx.state,entry,input.spot), seated = {...booking,...(spot ? {spot} : {})};
-  reserveMakeupCredit(tx,seated); tx.put('booking',seated); confirmBooking(tx,seated); return seated;
+  reserveMakeupCredit(tx,seated); tx.put('booking',seated);
+  makeupNotice(tx,credit.personId,{id:`makeup-booked:${seated.id}`,bookingIds:[seated.id],subject:'Makeup booking confirmed',body:'Your replacement class is booked using the linked makeup credit. Your original absence remains recorded.'}); return seated;
 }
 export function makeupSnapshot(state: State, who: Actor) {
   const visible = (r: RecordData) => canManageMakeup(state,who,r.personId);
-  return {participants:state.people.filter(p=>canManageMakeup(state,who,p.id)).map(p=>({id:p.id,name:p.name})),policies:who.role === 'owner' || who.role === 'member' ? list(state,'absencePolicy') : [],
-    guardians:list(state,'makeupGuardian').filter(r => (who.role === 'owner' && who.isOwner) || (who.role === 'member' && [r.personId,r.guardianId].includes(who.personId))).map(r => who.role === 'owner' ? r : {id:r.id,personId:r.personId,guardianId:r.guardianId,relationship:r.relationship,participantAcceptedAt:r.participantAcceptedAt,guardianAcceptedAt:r.guardianAcceptedAt,revokedAt:r.revokedAt}),
+  const reportable = (b: RecordData) => {
+    if (b.status !== 'booked' || !b.packId || b.attendance || b.checkedInAt || b.guestPackId || b.unpaid || list(state,'absence').some(a => a.originalBookingId === b.id)) return false;
+    const pack = state.records.get(b.packId)?.data, entry = state.records.get(b.classId)?.data;
+    if (!pack || !(pack.amountCents > 0) || !entry || entry.status !== 'published') return false;
+    const policy = state.records.get(`absence-policy:${serviceKey(classService(entry))}`)?.data;
+    return policy?.active && Date.parse(entry.start)-policy.noticeHours*3600000 > Date.now();
+  };
+  return {previews:list(state,'absencePreview').filter(p => p.actorId === who.id && visible(p)),participants:state.people.filter(p=>canManageMakeup(state,who,p.id)).map(p=>({id:p.id,name:p.name})),policies:who.role === 'owner' || who.role === 'member' ? list(state,'absencePolicy') : [],
+    guardians:list(state,'makeupGuardian').filter(r => (who.role === 'owner' && who.isOwner) || (who.role === 'member' && [r.personId,r.guardianId].includes(who.personId))).map(r => who.role === 'owner' ? r : {id:r.id,personId:r.personId,guardianId:r.guardianId,relationship:r.relationship,adultOn:r.adultOn,adultAt:r.adultAt,participantAcceptedAt:r.participantAcceptedAt,guardianAcceptedAt:r.guardianAcceptedAt,revokedAt:r.revokedAt}),
     credits:list(state,'makeupCredit').filter(visible),absences:list(state,'absence').filter(visible),
-    bookings:list(state,'booking').filter(b => visible(b) && (b.makeupCreditId || b.absenceId || (b.status === 'booked' && b.packId && !b.attendance))).map(b=>b.status==='booked' && record(state,b.classId,'class').start>now() ? {...b,cancelEffect:cancellationEffect(b,record(state,b.classId,'class'))}:b)};
-}
-
-export function launchMakeupGuardian(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who); text(input.requestId,'requestId',100);
-  const relationship = record(tx.state,input.id,'makeupGuardian');
-  return {id:id(),personId:relationship.personId,guardianId:relationship.guardianId,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fmakeups'};
+    bookings:list(state,'booking').filter(b => visible(b) && (b.makeupCreditId || b.absenceId || reportable(b))).map(b=>b.status==='booked' && record(state,b.classId,'class').start>now() ? {...b,cancelEffect:cancellationEffect(b,record(state,b.classId,'class'))}:b)};
 }

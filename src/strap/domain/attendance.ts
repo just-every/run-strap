@@ -41,7 +41,7 @@ export function markNoShow(tx: Transaction, input: Record<string,unknown>) {
   tx.reached(graceEndsAt);
   bookingCredit(tx,booking,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'no_show'});
   const feeCents = booking.cancelTerms?.noShowFeeCents ?? 0;
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});
   const marked = {...booking,attendance:'no_show',noShowAt:now(),noShowBy:tx.who.id,noShowByRole:tx.who.role,noShowFeeCents:feeCents};
   tx.put('booking',marked); return marked;
 }
@@ -69,15 +69,18 @@ export function correctAttendance(tx: Transaction, input: Record<string,unknown>
   const charges = list(tx.state,'charge').filter(c => c.bookingId === booking.id);
   const open = charges.filter(c => fees.includes(c.reason) && !charges.some(r => r.reversesChargeId === c.id));
   const reversedCents = open.reduce((sum,c) => sum+c.amountCents,0);
-  for (const fee of open) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
+  for (const fee of open) tx.put('charge',{id:id(),personId:fee.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
   let refund: RecordData | null = null;
   if (input.refundReference !== undefined && input.refundReference !== '') {
     const reference = text(input.refundReference,'refund_reference',160);
     insist(reversedCents > 0,'no_fee_to_refund',409);
+    const debtors = [...new Set(open.map(c => c.personId))];
+    insist(debtors.length === 1,'single_fee_debtor_required',409);
+    const debtorId = debtors[0];
     // Only what the studio owes the member after the reversal can be paid back.
-    insist(balance(tx.state,booking.personId) <= -reversedCents,'fee_not_paid_nothing_to_refund',409);
+    insist(balance(tx.state,debtorId) <= -reversedCents,'fee_not_paid_nothing_to_refund',409);
     insist(!list(tx.state,'payment').some(p => p.reference === reference),'payment_reference_used',409);
-    refund = {id:id(),personId:booking.personId,amountCents:-reversedCents,reference,kind:'refund',bookingId:booking.id,createdAt:now(),recordedBy:tx.who.id};
+    refund = {id:id(),personId:debtorId,amountCents:-reversedCents,reference,kind:'refund',bookingId:booking.id,createdAt:now(),recordedBy:tx.who.id};
     tx.put('payment',refund);
   }
   const correction = {from,to:outcome,reason,by:tx.who.id,byRole:tx.who.role,at:now(),creditRestored:restore,feeReversedCents:reversedCents,refundId:refund?.id ?? null,

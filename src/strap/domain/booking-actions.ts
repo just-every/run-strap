@@ -1,4 +1,5 @@
-import { assertMakeupTarget, reserveMakeupCredit, canManageMakeup } from './makeups';
+import { assertMakeupTarget, reserveMakeupCredit, restoreAbsence } from './makeups';
+import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { assertGuestTarget, guestLedger, restoreGuest } from './guest-bookings';
 import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type RecordData } from './types';
@@ -60,13 +61,20 @@ export function moveBooking(tx: Transaction, input: Record<string,unknown>) {
   if (tx.who.role !== 'owner' && input.requestId) {
     const basis = JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
     const prior = list(tx.state,'bookingAction').find(a => a.actorId === tx.who.id && a.requestId === input.requestId);
-    if (prior) { insist(prior.action === 'move' || prior.action === 'waitlist','booking_request_changed',409); insist(prior.requestBasis === basis,'booking_request_changed',409); return prior.after; }
+    if (prior) {
+      insist(prior.action === 'move' || prior.action === 'waitlist','booking_request_changed',409); insist(prior.requestBasis === basis,'booking_request_changed',409);
+      const booked = record(tx.state,prior.after.id,'booking');
+      if (booked.makeupCreditId) authorizeMakeup(tx,booked.personId);
+      else insist(tx.who.personId === booked.personId || (booked.guestPackId && canManageGuest(tx.state,tx.who,booked)),'forbidden',403);
+      return prior.after;
+    }
   }
   return performMove(tx,input);
 }
 function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer = false) {
   const staff = tx.who.role === 'owner';
   const booking = record(tx.state,input.id,'booking'), source = futureClass(tx,booking.classId), entry = futureClass(tx,input.classId);
+  if (booking.makeupCreditId) authorizeMakeup(tx,booking.personId);
   insist(booking.status === 'booked' && !booking.attendance && !booking.checkedInAt,'unstarted_confirmed_booking_required',409);
   insist(source.id !== entry.id,'different_class_required');
   if (staff) { staffReason(tx,input); actionChannel(input); }
@@ -90,18 +98,22 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
     if (pending.classId !== entry.id) promote(tx,record(tx.state,pending.classId,'class'));
   }
   const action = bookingHistory(tx,'move',booking,moved,input,{type:penalty.mode,waiver:penalty.waiver,acceptedOfferId:input.acceptedOfferId ?? null});
-  if (penalty.feeCents) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:source.id,amountCents:penalty.feeCents,reason:'late_move_fee',bookingActionId:action.id,createdAt:now(),createdBy:tx.who.id});
+  if (penalty.feeCents) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:source.id,amountCents:penalty.feeCents,reason:'late_move_fee',bookingActionId:action.id,createdAt:now(),createdBy:tx.who.id});
   promote(tx,source); return moved;
 }
 export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const booking = record(tx.state,input.id,'booking'), entry = futureClass(tx,booking.classId);
+  if (booking.status === 'cancelled' && booking.cancellation === 'absence') {
+    const to = target(tx,booking,entry,input,false); insist(!to.full || to.override,'class_full',409);
+    return restoreAbsence(tx,booking,entry,to,input);
+  }
   insist(booking.status === 'cancelled' && ['early','late'].includes(booking.cancellation),'cancellation_not_restorable',409);
   const reason = text(input.reason,'restore_reason',500), to = target(tx,booking,entry,input,booking.refunded === true);
   insist(!to.full || to.override,'class_full',409);
   if (booking.refunded && to.pack && !booking.guestPackId) appendPackEvent(tx,to.pack,{type:'reserve',credits:countsCredits(to.pack) ? -1 : 0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
   const charges = list(tx.state,'charge').filter(c => c.bookingId === booking.id), fees = charges.filter(c => c.reason === 'late_cancel_fee' && (!booking.cancellationId || c.cancellationId === booking.cancellationId) && !charges.some(r => r.reversesChargeId === c.id));
-  for (const fee of fees) tx.put('charge',{id:id(),personId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
+  for (const fee of fees) tx.put('charge',{id:id(),personId:fee.personId,bookingId:booking.id,classId:entry.id,amountCents:-fee.amountCents,reason:'fee_reversal',reversesChargeId:fee.id,note:reason,createdAt:now(),createdBy:tx.who.id});
   const {cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents,waiver,cancellationId,...active} = booking;
   const restored = {...active,status:'booked',restoredAt:now(),restoredBy:tx.who.id,spot:to.spot,capacityPool:to.capacityPool,override:to.override};
   if (!booking.refunded && to.pack && !booking.guestPackId) appendPackEvent(tx,to.pack,{type:'reserve',credits:0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});

@@ -1,4 +1,4 @@
-import { canManageMakeup } from './makeups';
+import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly, windowOpen } from './booking-policy';
@@ -78,6 +78,12 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
   tx.future(entry.start);
   insist(booking.status !== 'cancelled','already_cancelled',409);
   const effect = cancellationEffect(booking,entry), staff = tx.who.role === 'owner';
+  if (booking.makeupCreditId) authorizeMakeup(tx,booking.personId);
+  if (staff && booking.guestPackId) {
+    text(input.reason,'guest_cancel_reason',500);
+    insist(input.mode === 'early' || input.mode === 'late','invalid_cancel_choice');
+    if (!effect.waivable) insist(input.mode === effect.timing,'invalid_cancel_choice');
+  }
   if (input.terms !== undefined) insist(text(input.terms,'terms',40) === effect.key,'cancellation_terms_changed',409);
   if (booking.status === 'booked') { if (effect.timing === 'early') tx.future(effect.cutoffAt); else tx.reached(effect.cutoffAt); }
   let choice = effect.timing, waiver: Record<string,unknown> | null = null;
@@ -96,7 +102,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
     bookingCredit(tx,booking,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
   }
   const cancellationId = id();
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.payerId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
   const cancelled = {...booking,cancellationId,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
   if (staff) staffReason(tx,input);

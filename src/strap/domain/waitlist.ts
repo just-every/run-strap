@@ -1,4 +1,5 @@
-import { assertMakeupTarget, canManageMakeup } from './makeups';
+import { assertMakeupTarget } from './makeups';
+import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { assertGuestTarget } from './guest-bookings';
 import { canManageGuest } from './guest-consent';
 import { acceptPendingMove } from './booking-actions';
@@ -96,6 +97,7 @@ export function promoteAll(tx: Transaction) {
  * STAFF-001) accepts it on their behalf. The credit is reserved now. */
 export function acceptOffer(tx: Transaction, input: Record<string,unknown>) {
   const booking = record(tx.state,input.id,'booking');
+  if (booking.makeupCreditId) authorizeMakeup(tx,booking.personId);
   const staff = tx.who.role === 'owner' && tx.who.isOwner;
   insist(staff || ((tx.who.role === 'member' || tx.who.role === 'instructor') && (tx.who.personId === booking.personId || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId)) || (booking.moveFromBookingId && tx.state.records.get(booking.moveFromBookingId)?.data.guestPackId && canManageGuest(tx.state,tx.who,tx.state.records.get(booking.moveFromBookingId)!.data)))),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');

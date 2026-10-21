@@ -39,6 +39,31 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
             await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-010-review-${width}.png`),fullPage:false});
             await review.getByRole('button',{name:'Approve this exact pack',exact:true}).click();
             assert.equal((await h.state()).packs.find(p=>p.draftId===draft.id).guestTerms.priceCents,2500);
+            const seat=(await h.state()).guests.bookings.find(b=>b.sponsorId===host.id && b.status==='booked' && b.cancelEffect);
+            assert.ok(seat,'staff has a guest seat to manage');
+            const cancel=page.locator(`#guests form[action*="name=booking.cancel"]:has(input[name="id"][value="${seat.id}"])`);
+            assert.equal(await cancel.locator('select[name="cancelReason"]').inputValue(),'');
+            assert.equal(await cancel.locator('select[name="mode"]').inputValue(),'');
+            assert.equal(await cancel.evaluate(f=>f.checkValidity()),false);
+            const comment=width===1440 ? 'Guest called the desk about a migraine' : 'Guest requested an early cancellation after the room changed';
+            const timing=width===390 && seat.cancelEffect.waivable ? 'early' : seat.cancelEffect.timing;
+            await cancel.getByLabel('Cancellation reason',{exact:true}).selectOption('Sick');
+            await cancel.getByLabel('Cancellation comment',{exact:true}).fill(comment);
+            await cancel.getByLabel('Cancellation timing',{exact:true}).selectOption(timing);
+            assert.equal(await cancel.evaluate(f=>f.checkValidity()),true);
+            await cancel.scrollIntoViewIfNeeded();
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+            await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-010-staff-cancel-${width}.png`),fullPage:false});
+            await cancel.getByRole('button',{name:'Cancel guest seat',exact:true}).click();
+            const after=await h.state(), cancelled=after.bookings.find(b=>b.id===seat.id);
+            assert.deepEqual([cancelled.status,cancelled.cancellation],['cancelled',timing]);
+            const action=after.bookingActions.find(a=>a.bookingId===seat.id && a.action==='cancel' && a.id===cancelled.cancellationId);
+            assert.equal(action.reason,'Sick','the configured cancellation reason stays distinct from the entered comment');
+            assert.ok(JSON.stringify(action).includes(comment),'the staff comment is retained in audit');
+            assert.equal(action.actorRole,'owner');
+            // Restore through the same public staff door so both widths exercise the complete journey.
+            await h.cmd('booking.restore',{id:seat.id,reason:'Browser journey restores the guest seat',channel:'desk'});
+            await page.reload();
           }
           if (role==='host') {
             await page.locator('#guests').getByText('Book a guest',{exact:true}).click();
@@ -50,6 +75,9 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
             await prepare.getByRole('button',{name:'Preview guest booking',exact:true}).click();
             const draft=(await h.state(host.cookie)).guests.drafts.filter(d=>d.status==='preview'&&d.personId===guest.id&&d.classId===classId).at(-1);
             assert.equal(draft.amountCents,2500);
+            const review=page.locator('#guests article').filter({has:page.locator(`input[value="${draft.id}"]`)});
+            assert.match(await review.innerText(),/Late cancellation or a late move adds \$[0-9,.]+ to the host’s studio balance/);
+            assert.match(await review.innerText(),/A no-show adds \$[0-9,.]+ to the host’s studio balance/);
             const confirm=page.locator(`form[action*="name=guest.book"]:has(input[value="${draft.id}"])`);
             await confirm.getByRole('checkbox').check(); await confirm.scrollIntoViewIfNeeded();
             await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-010-confirm-${width}.png`),fullPage:false});

@@ -1,4 +1,5 @@
-import { saveAbsencePolicy, saveMakeupGuardian, acceptMakeupGuardian, revokeMakeupGuardian, launchMakeupGuardian, reportAbsence, bookMakeup, makeupSnapshot } from './makeups';
+import { saveMakeupGuardian, acceptMakeupGuardian, revokeMakeupGuardian, launchMakeupGuardian } from './makeup-authority';
+import { saveAbsencePolicy, previewAbsence, reportAbsence, bookMakeup, makeupSnapshot } from './makeups';
 import { previewGuestBooking, bookGuest, guestSnapshot } from './guest-bookings';
 import { saveGuestConsent, revokeGuestConsent, launchGuestConsent } from './guest-consent';
 import { createRenewalFollowup } from './renewals';
@@ -49,6 +50,7 @@ export const handlers = {
   'makeup.guardian.accept':defineCommand(acceptMakeupGuardian,['member'],{member:{staff:'makeup.guardian.launch',right:'member-record',ownStep:true}}),
   'makeup.guardian.revoke':defineCommand(revokeMakeupGuardian,['owner','member'],{member:{staff:'makeup.guardian.revoke',right:'member-record'},staffRight:'member-record'}),
   'makeup.guardian.launch':defineCommand(launchMakeupGuardian,['owner'],{staffRight:'member-record'}),
+  'absence.preview':defineCommand(previewAbsence,['owner','member'],{member:{staff:'absence.preview',right:'booking'},staffRight:'booking'}),
   'absence.report':defineCommand(reportAbsence,['owner','member'],{member:{staff:'absence.report',right:'booking'},staffRight:'booking'}),
   'makeup.book':defineCommand(bookMakeup,['owner','member'],{member:{staff:'makeup.book',right:'booking'},staffRight:'booking'}),
   'guest.consent.save':defineCommand(saveGuestConsent,['member'],{member:{staff:'guest.consent.launch',right:'booking',ownStep:true}}),
