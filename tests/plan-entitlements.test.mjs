@@ -308,5 +308,5 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   await h.cmd('pack.adjust',{id:rolling.id,creditsDelta:0,reason:'Guest allowance ended with the pack',requestId:'guest-expiry',revision:current.summary.revision,expiresAt:new Date(Date.parse(classes.get('next').start)-1000).toISOString()});
   await h.cmd('guest.preview',{guestId:rollGuests[4].id,classId:classes.get('next').id,packId:rolling.id},other.cookie,409);
 
-  if (process.env.STRAP_PROOF_DIR) await (await import('./guests-browser.mjs')).guestsBrowser(h,{host,guest:guests[0],packId:pack.id});
+  if (process.env.STRAP_PROOF_DIR) await (await import('./guests-browser.mjs')).guestsBrowser(h,{host,guest:guests[0],packId:charged.id,classId:classes.get('g2').id});
 }));
