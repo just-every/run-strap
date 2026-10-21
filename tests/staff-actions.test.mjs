@@ -257,6 +257,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       await actions[name](entry.memberDoor.staff);covered.add(name)
       if (name.startsWith('reservation.')) assert.equal((await h.send(`/app/people?person=${seriesMember.id}`,undefined,h.owner)).status,200,'the staff history renders the recurring action and its before/after effects')
     }
+    assert.equal((await h.send('/app/people',undefined,h.owner)).status,200,'all new canonical staff actions render in the shared history')
+    assert.equal((await h.send('/app/people?person='+ana.id,undefined,h.owner)).status,200,'member history renders guest and makeup effects')
     for (const entry of memberCommands) assert.ok(covered.has(entry.name),`${entry.name}: a new member action needs a tested staff pair`)
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
