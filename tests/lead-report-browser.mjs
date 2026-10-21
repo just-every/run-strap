@@ -15,7 +15,7 @@ export async function leadReportBrowser(h,{ana,unknown,ownerId}) {
     })
     const split=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,split),value:h.owner.slice(split+1),url:h.origin}])
     const page=await context.newPage()
-    const shot=async state=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-005-${state}-${width}.png`),fullPage:true})}
+    const shot=async state=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.locator('section').filter({has:page.getByRole('heading',{name:'Inquiry and attendance funnel',exact:true})}).locator('table').evaluateAll(tables=>tables.every(table=>table.getBoundingClientRect().right<=table.closest('section').getBoundingClientRect().right)),true,'RPT-005: report tables stay inside their panel');await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`RPT-005-${state}-${width}.png`),fullPage:true})}
     await page.goto(h.origin+'/app/leads')
     const funnel=page.locator('section').filter({has:page.getByRole('heading',{name:'Inquiry and attendance funnel',exact:true})})
     await funnel.getByText('Unknown source',{exact:true}).first().waitFor()
@@ -26,6 +26,10 @@ export async function leadReportBrowser(h,{ana,unknown,ownerId}) {
     const row=page.locator(`[data-funnel-member="${ana.id}"]`)
     await row.getByText('2 attended · repeat attendance',{exact:true}).waitFor()
     await shot('filtered')
+    await row.getByRole('link',{name:'Visit 1',exact:true}).click()
+    await page.locator('#roster').waitFor()
+    assert.ok((await page.locator('#roster').innerText()).includes(ana.name))
+    await page.goBack()
     await row.getByRole('link',{name:'Inquiry 1',exact:true}).click()
     await page.locator('#lead').waitFor()
     assert.ok((await page.locator('#lead').innerText()).includes('EXTERNAL-PRIYA'))
