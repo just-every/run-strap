@@ -64,7 +64,7 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
         await staffPanel.getByLabel('Request channel').selectOption('phone')
         await staffPanel.getByRole('button',{name:'Preview recurring reservation',exact:true}).click()
         const staffDraft=(await h.state()).reservationPreviews.filter(r=>r.personId===member.id).at(-1),staffReview=staff.locator(`[data-reservation-preview="${staffDraft.id}"]`)
-        assert.ok(await staffReview.count(),JSON.stringify({previews:await staff.locator('[data-reservation-preview]').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-reservation-preview'))),text:(await staff.locator('main').innerText()).slice(-8000)}))
+        assert.ok(await staffReview.count(),JSON.stringify({previews:await staff.locator('[data-reservation-preview]').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-reservation-preview'))),url:staff.url(),text:(await staff.locator('body').innerText()).slice(-8000)}))
         await shot(staff,'staff-preview',staffReview)
         await staffReview.getByRole('button',{name:'Confirm recurring reservation',exact:true}).click()
         const staffReservation=(await h.state()).reservations.filter(r=>r.personId===member.id).at(-1),staffSaved=staff.locator(`[data-reservation="${staffReservation.id}"]`)
