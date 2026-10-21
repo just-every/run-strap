@@ -13,7 +13,7 @@ import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
 import { defineCommand } from './command-catalogue';
 import { dismissForMember, launchWaiver, priorStaffRequest, retainStaffAction, staffActions, staffBefore } from './staff-actions';
 import { load, loadKiosk, loadSystem, Transaction } from './store';
-import { DomainError, insist, list, shortName, type Actor, type RecordData } from './types';
+import { DomainError, insist, list, shortName, type Actor, type Person, type RecordData, type State } from './types';
 import { prepareClasses, publishClasses } from './classes';
 import { prepareSeries, publishSeries, prepareSeriesChange, approveSeriesChange } from './series';
 import { prepareSeriesCancellation, confirmSeriesCancellation, prepareScopedClosure, confirmScopedClosure } from './series-cancellation';
@@ -134,6 +134,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if (who.role === 'agent') insist(['recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = handlers[name as keyof typeof handlers];
   if (!spec) throw new DomainError('unknown_command',404);
+  insist(who.role !== 'finance','owner_required',403);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
   const staff = !!spec.staffRight && (tx.who.role === 'owner' || (name === 'attendance.checkin' && tx.who.role === 'instructor'));
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
@@ -165,9 +166,19 @@ export async function kioskCommand(db: D1Database, kioskId: string, name: 'check
   const person = loaded.state.people.find(p => p.id === result.personId)!, entry = loaded.state.records.get(result.classId)!.data;
   return {name:shortName(person.name),classTitle:String(entry.title).split(' · ')[0],start:entry.start};
 }
+/** A finance user reads the revenue and collections inputs and nothing else: the owner's view, cut down to them. */
+const financeKeys = ['balances','bookingActions','bookings','charges','packs','payments','studio','version'];
+export async function financeSnapshot(db: D1Database, who: Actor) {
+  const loaded = await load(db,who);
+  insist(loaded.who.role === 'finance','owner_required',403);
+  const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as Record<string,unknown>;
+  return {actor:loaded.who,people:(full.people as Person[]).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active})),...Object.fromEntries(financeKeys.map(key => [key,full[key]]))};
+}
 export async function snapshot(db: D1Database, who: Actor) {
-  const loaded = await load(db,who), {state} = loaded;
-  who = loaded.who;
+  const loaded = await load(db,who);
+  return snapshotFor(loaded.state,loaded.who);
+}
+async function snapshotFor(state: State, who: Actor) {
   const owner = who.role === 'owner' || who.role === 'agent';
   const allClasses = list(state,'class');
   const classes = owner || who.role === 'member' ? allClasses : allClasses.filter(c => c.instructorId === who.personId);

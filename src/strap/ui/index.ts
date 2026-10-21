@@ -8,6 +8,7 @@ import { renewalsPage } from './renewals'
 import { retentionPage } from './retention'
 import { reportsPage } from './reports'
 import { agentPage } from './agent'
+import { securityPage } from './security'
 import { integrationsPage } from './integrations'
 import { classesPage } from './classes'
 import { classesOn, currentClass } from './facts'
@@ -41,10 +42,11 @@ export async function renderApp(state: any, target: string, notice: { message?: 
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)
               : current === '/app/integrations' ? integrationsPage(state, notice)
+              : current === '/app/security' ? securityPage(state, query, notice)
                 : current === '/app/recognition' ? recognitionPage(state,notice) : current === '/app/teaching-pay' ? teachingPayPage(state) : current === '/app/revenue' ? revenuePage(state,query) : current === '/app/reports' ? reportsPage(state, query) : studioPage(state, notice)
   const todays = classesOn(state, studioToday(state)), now = currentClass(state, todays)
   const day = current === '/app' && desk ? dayNav(state, query) : `<p class="today-date"><span>${h(dayLong(studioToday(state)))}</span></p>`
   const checkIn = now ? `/app?class=${encodeURIComponent(now.id)}#class-${now.id}` : '/app'
   const notices = `${bulkResult(notice)}${notice.error ? `<div class="notice error" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" role="status">${h(notice.message)}</div>` : ''}`
-  return new Response(shell(state, current, title, topBar(state, day, checkIn), content, notices), { status: allowed ? 200 : 403, headers: security })
+  return new Response(shell(state, current, title, topBar(state, day, checkIn), content, notices), { status: allowed ? 200 : 403, headers: current === '/app/security' ? { ...security, 'content-security-policy': security['content-security-policy'] + "; script-src 'self'; connect-src 'self'" } : security })
 }

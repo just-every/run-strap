@@ -11,7 +11,7 @@ import { revenueReport } from './revenue-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
 import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
-import { commandCatalogue, command, snapshot, sweep, type Actor } from './domain'
+import { commandCatalogue, command, financeSnapshot, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { inAppOnly, integrationCommand, integrationKeys } from './integrations'
@@ -22,20 +22,37 @@ import { exitExport } from './exit-export'
 import { kioskResponse } from './kiosk/http'
 import { kioskDeviceCommand, kioskDevices } from './kiosk/devices'
 import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-mail'
+import { cleared, financeRoute, mfaHold, privilegedCommand, privilegedRoute, privilegedState } from './security/gate'
+import { auditEvents, factorCounts, mfaCommand, mfaView } from './security/mfa'
+import { financeCommand, financeUsers } from './security/finance'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations'])
+const pages = new Set(['/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
-async function state(env: Bindings, who: Actor) {
+/** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
+async function access(env: Bindings) {
+  const counts = await factorCounts(env)
+  const operators = (await env.DB.prepare("SELECT id,email,display_name AS name,role FROM oa_operators WHERE status='active' ORDER BY email").all()).results as any[]
+  return { operators: operators.map(o => ({ ...o, factors: counts[o.id] ?? 0 })), finance: await financeUsers(env) }
+}
+
+async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
+  const human = ['owner', 'finance', 'member', 'instructor'].includes(who.role)
+  const mfa = human ? await mfaView(env, who) : null
+  if (who.role === 'finance') {
+    const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
+    return { ...await financeSnapshot(env.DB, who), classes: [], displayName: operator?.name ?? '', mfa }
+  }
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
   const current = await snapshot(env.DB, who), deliveries = await noticeDeliveries(env, who.role)
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
-  return { ...current, leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '' }
+  const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries(privilegedState.map(key => [key, key === 'teachingPay' || key === 'memberMail' ? null : []])) : {}
+  return { ...current, mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
 async function appState(env: Bindings, who: Actor, target: string) {
@@ -47,6 +64,8 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
+  if (name.startsWith('finance.')) return financeCommand(env, who, name, input)
   if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('integration.')) return integrationCommand(env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
@@ -66,6 +85,13 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   // Emails go out only after the change and their reservations commit.
   await sendNotices(env, context.queued)
   return name === 'waiver.launch' ? sendWaiverLaunch(request,env,result) : result
+}
+
+/** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
+async function guard(env: Bindings, who: Actor, path: string, name = '') {
+  if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
+  const hold = await mfaHold(env, who, { path, name, privileged: privilegedRoute(path) || privilegedCommand(name) })
+  if (hold) fail(hold.code, 403)
 }
 
 async function inputBody(request: Request): Promise<Record<string, unknown>> {
@@ -103,17 +129,21 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
+    if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if (who.role === 'finance' && path === '/app') return new Response(null, { status: 303, headers: { ...headers, location: '/app/revenue' } })
       if (path === '/api/strap/staff-history' || path === '/api/strap/staff-history.csv') {
         if (who.role !== 'owner') fail('owner_required',403)
+        // The security audit (factor enrollment, resets, finance grants) joins the staff-made actions in the owner's history.
         const current = await state(env,who)
+        current.staffActions = [...current.staffActions,...await auditEvents(env)]
         return path.endsWith('.csv')
           ? new Response(historyCsv(current,url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="strap-staff-history.csv"'}})
           : json(historyExport(current,url.searchParams))
       }
       const exportPath = path.match(/^\/api\/strap\/reports\/(revenue|attendance)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(cancellations)\.(xlsx)$/)
       if (exportPath) {
-        if (who.role !== 'owner') fail('owner_required',403)
+        if (who.role !== 'owner' && !(who.role === 'finance' && exportPath[1] === 'revenue')) fail('owner_required',403)
         return reportDownload(await state(env,who),exportPath[1],exportPath[2],url.searchParams)
       }
       const nativeExport = path.match(/^\/api\/strap\/reports\/(retention|renewals)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(teaching-pay)\.(csv|xlsx)$/)
@@ -143,7 +173,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         return json(report)
       }
       if (path === '/api/strap/reports/revenue') {
-        if (who.role !== 'owner') fail('owner_required',403)
+        if (who.role !== 'owner' && who.role !== 'finance') fail('owner_required',403)
         return json(revenueReport(await state(env,who),url.searchParams))
       }
       if (path === '/api/strap/reports/attendance') {
@@ -154,6 +184,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (who.role !== 'owner') fail('owner_required',403)
         return new Response(cancellationsCsv(await state(env,who),url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-cancellations.csv'}})
       }
+      if (path === '/api/strap/mfa') return json(await mfaView(env, who))
       if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
       if (pages.has(path)) return renderApp(await appState(env, who, path + url.search), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
@@ -169,6 +200,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     } else {
       if (path === '/app/action') {
         const name = url.searchParams.get('name') ?? ''
+        await guard(env, who, path, name)
         const current = await state(env, who)
         const input = formInput(name, await inputBody(request), current.studio?.timeZone)
         if (name === 'session.signout') {
@@ -181,13 +213,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).
-        if (!['import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        if (!['import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await appState(env, who, back), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
         if (typeof body.name !== 'string' || !body.input || typeof body.input !== 'object' || Array.isArray(body.input)) fail('Provide a command name and input object')
         if (isAgent && !preparations.includes(String(body.name))) fail('Agents can only prepare drafts', 403)
+        if (!isAgent) await guard(env, who, path, String(body.name))
         if (inAppOnly.includes(String(body.name))) fail('integration_secret_in_app_only', 403)
         return json(await execute(request, env, who, String(body.name), body.input as Record<string, unknown>))
       }
@@ -196,7 +229,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
   } catch (error) {
     const status = Number((error as any)?.status) || 500
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
-    if (path === '/app/action' && who) return renderApp(await appState(env, who, back), back, { error: message.replace(/_/g, ' ') })
+    const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
+    if (path === '/app/action' && who) return renderApp(await appState(env, who, held ? '/app/security' : back), held ? '/app/security' : back, { error: message.replace(/_/g, ' ') })
+    if (pages.has(path) && held) return new Response(null, { status: 303, headers: { ...headers, location: `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}` } })
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
     return json({ error: message }, status)
   }

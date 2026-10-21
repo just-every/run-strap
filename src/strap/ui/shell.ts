@@ -8,6 +8,8 @@ import { avatar, h, owner, rows } from './shared'
 export interface Tab { href: string; label: string; glyph: string; count?: number }
 
 export function tabs(s: any): Tab[] {
+  const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
+  if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length
   if (owner(s)) return [
     { href: '/app', label: 'Today', glyph: 'today' },
@@ -25,6 +27,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/import', label: 'Import', glyph: 'upload' },
     { href: '/app/agent', label: 'Agent access', glyph: 'sparkles' },
     { href: '/app/integrations', label: 'Integrations', glyph: 'key' },
+    security,
   ]
   if (s.actor.role === 'instructor') return [
     { href: '/app', label: 'Today', glyph: 'today' },
@@ -32,11 +35,12 @@ export function tabs(s: any): Tab[] {
     { href: '/app/teaching-pay', label: 'My teaching pay', glyph: 'report' },
     { href: '/app/substitutions', label: 'Instructor substitutions', glyph: 'users' },
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
+    security,
   ]
-  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }]
+  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
 }
 
-const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member' } as Record<string, string>)[s.actor.role] ?? s.actor.role
+const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member', finance: 'Finance' } as Record<string, string>)[s.actor.role] ?? s.actor.role
 
 export function shell(s: any, current: string, title: string, top: string, content: string, notices: string) {
   const name = h(branding.name), me = s.displayName || s.actor.email

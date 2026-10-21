@@ -16,7 +16,7 @@ export async function principal(request: Request, env: Bindings, agent = false):
   }
   const session = await operatorAuth(env).getSession(request)
   if (!session) fail('Sign in to continue', 401)
-  return actor(env.DB, { userId: session!.operator.id, email: session!.operator.email, isOwner: session!.operator.role === 'owner' })
+  return { ...await actor(env.DB, { userId: session!.operator.id, email: session!.operator.email, isOwner: session!.operator.role === 'owner' }), sessionId: session!.id }
 }
 
 export async function agentKeys(env: Bindings, who: Actor) {

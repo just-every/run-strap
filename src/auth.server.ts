@@ -37,6 +37,8 @@ export interface Bindings {
  OWNER_EMAIL: string
  SESSION_SECRET: string
  SETUP_TOKEN?: string
+ /** Seals authenticator-app secrets (SEC-004); never the session secret. */
+ MFA_KEY?: string
  MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string
  MAIL_API_KEY?: string
