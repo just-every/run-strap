@@ -85,13 +85,17 @@ async function startTotp(env: Bindings, who: Actor, input: Record<string, unknow
   return { factor: id, secret: encoded, uri: `otpauth://totp/${issuer}:${encodeURIComponent(who.email)}?secret=${encoded}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30` }
 }
 
+async function failuresSinceProof(env: Bindings, who: Actor) {
+  return (await one<{ n: number; pausedUntil: number }>(env, "SELECT COUNT(*) AS n,COALESCE(MAX(json_extract(detail,'$.pausedUntil')),0) AS pausedUntil FROM st_security_audit WHERE action='mfa.refused' AND subject_id=? AND at>? AND at>COALESCE((SELECT MAX(at) FROM st_security_audit WHERE subject_id=? AND action IN ('mfa.verify','mfa.step_up','mfa.enroll')),0)", who.id, Date.now() - LOCK_MS, who.id))!
+}
 async function lockedOut(env: Bindings, who: Actor) {
-  // Wrong codes since this person last presented a right one, within the window.
-  const failures = await one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM st_security_audit WHERE action='mfa.refused' AND subject_id=? AND at>? AND at>COALESCE((SELECT MAX(at) FROM st_security_audit WHERE subject_id=? AND action IN ('mfa.verify','mfa.step_up','mfa.enroll')),0)", who.id, Date.now() - LOCK_MS, who.id)
-  if (failures!.n >= LOCK_FAILURES) fail('mfa_locked', 429)
+  const failures = await failuresSinceProof(env, who)
+  if (failures.n >= LOCK_FAILURES || failures.pausedUntil > Date.now()) fail('mfa_locked', 429)
 }
 async function refuse(env: Bindings, who: Actor, method: string): Promise<never> {
-  await commit(env, [], who, 'mfa.refused', who, { method })
+  const failures = await failuresSinceProof(env, who)
+  // The fifth refusal records the pause explicitly, without recording any submitted code.
+  await commit(env, [], who, 'mfa.refused', who, { method, ...(failures.n + 1 >= LOCK_FAILURES ? { pausedUntil: Date.now() + LOCK_MS } : {}) })
   return fail('mfa_code_invalid', 403)
 }
 
@@ -129,7 +133,12 @@ async function verifyFactor(env: Bindings, who: Actor, input: Record<string, unk
   if (/^\d{6}$/.test(code)) {
     for (const factor of usable.filter(f => f.kind === 'totp')) {
       const step = await matchTotp((await unseal(env.MFA_KEY, factor.sealed_secret!, binding(factor.id, who.id)))!, code, Date.now())
-      if (step !== null && step > factor.last_step) return presented(env, who, 'totp', [stmt(env, 'UPDATE st_mfa_factors SET last_step=? WHERE id=? AND last_step<?', step, factor.id, step)])
+      if (step !== null && step > factor.last_step) {
+        try { return await presented(env, who, 'totp', [
+          stmt(env, "INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_mfa_factors WHERE id=? AND status='active' AND last_step<?) THEN 1 ELSE 0 END", factor.id, step),
+          stmt(env, 'UPDATE st_mfa_factors SET last_step=? WHERE id=?', step, factor.id),
+        ]) } catch (error) { if (/CHECK constraint failed/.test(String(error))) return refuse(env, who, 'totp'); throw error }
+      }
     }
     return refuse(env, who, 'totp')
   }

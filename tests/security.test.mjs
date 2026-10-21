@@ -83,6 +83,8 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   // Five wrong codes pause the person: the right one is refused until the pause ends.
   for (let i = 0; i < 4; i++) await refused(h, 'mfa.verify', { code: '111111' }, fifth, 403, 'mfa_code_invalid')
   await refused(h, 'mfa.verify', { code: totp(app.secret, -1) }, fifth, 429, 'mfa_locked')
+  const pauses = (await get(h, '/api/strap/staff-history?auditCommand=mfa.refused', h.owner, 200)).value.rows
+  assert.ok(pauses.some(r => r.after.pausedUntil > Date.now()), 'the pause is audited explicitly')
   // Revoking the grant returns the person to a member identity at once.
   await h.cmd('finance.revoke', { id: fiona.id })
   await get(h, '/api/strap/reports/revenue', fourth, 403, 'owner_required')
@@ -115,7 +117,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
   for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) assert.equal((await h.send(page, undefined, second)).status, 303, page)
   assert.equal((await h.send('/app/people', undefined, second)).status, 200)
-  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
+  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['pay.adjust', { classId: 'synthetic-strap-1', instructorId: 'synthetic-strap-2', amountCents: 350, reason: 'Agreed setup time', requestId: 'synthetic-strap-3' }], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
   const staffChanges = [
     ['person.invite', { id: member.id }],
     ['person.save', { ...member, role: 'instructor' }],
@@ -181,6 +183,14 @@ test('SEC-004: a member opts in, and every later session is held at every door u
   await refused(h, 'booking.cancel', { id: 'x' }, next, 403, 'mfa_required')
   await verifyTotp(h, app.secret, next)
   await get(h, '/api/strap/state', next, 200)
+  const renewed = await h.cmd('mfa.recovery.renew', {}, next)
+  assert.equal(renewed.recovery_codes.length, 10)
+  await refused(h, 'mfa.verify', { code: app.recoveryCodes[0] }, ana.cookie, 403, 'mfa_code_invalid')
+  await h.cmd('mfa.verify', { code: renewed.recovery_codes[0] }, ana.cookie)
+  const events = (await get(h, '/api/strap/staff-history', h.owner, 200)).value.rows
+  const memberOperator = await operatorId(h, ana.cookie)
+  assert.ok(events.some(r => r.command === 'mfa.recovery_renewed' && r.personId === memberOperator))
+  for (const value of [app.secret, ...renewed.recovery_codes]) assert.ok(!JSON.stringify(events).includes(value), 'audit never includes a secret or recovery code')
   // Removing the only factor needs a checked session and ends every session of the person.
   await refused(h, 'mfa.remove', { factor: app.factor }, await h.signIn(ana.email), 403, 'mfa_required')
   assert.equal((await h.cmd('mfa.remove', { factor: app.factor }, next)).removed, true)
