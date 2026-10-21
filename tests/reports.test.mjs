@@ -186,7 +186,7 @@ test('RPT-001: current sales, collections, refunds, fee reversals and member sna
   assert.equal((await read()).totals.activeMembers,2)
 }))
 
-test('RPT-007: finite-pack expiry and low-credit HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
+test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   const ana = await h.person('RenewAna'), ben = await h.person('RenewBen'), coach = await h.person('RenewCoach','instructor')
   const day = 86_400_000, base = Date.now()
@@ -215,6 +215,7 @@ test('RPT-007: finite-pack expiry and low-credit HTTP worklist, matching CSV, co
   for (const query of ['days=0','days=367','days=1.5','days=','days=-1','days=NaN','lowCredits=-1','lowCredits=10001','lowCredits=1.1']) {
     assert.equal((await h.send('/api/strap/reports/renewals?'+query,undefined,h.owner)).status,400)
     assert.equal((await h.send('/api/strap/reports/renewals.csv?'+query,undefined,h.owner)).status,400)
+    assert.equal((await h.send('/app/renewals?'+query,undefined,h.owner)).status,400)
   }
   const before = await h.state(), ownerId = before.actor.id
   const dueAt = new Date(Date.now()+day).toISOString(), task = {packId:soon.id,basis:report.rows.find(r=>r.packId===soon.id).basis,ownerId,nextAction:'Review renewal options internally',dueAt}
@@ -245,16 +246,21 @@ test('RPT-007: finite-pack expiry and low-credit HTTP worklist, matching CSV, co
   assert.deepEqual(data.map(values=>Object.fromEntries(columns.map((key,i)=>[key,JSON.parse(values[i])]))),report.rows.map(({basis,...row})=>row))
   for (const cookie of [ana.cookie,coach.cookie,'']) {
     const status=cookie ? 403 : 401
-    for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv']) assert.equal((await h.send(path,undefined,cookie)).status,status)
+    for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv','/app/renewals']) assert.equal((await h.send(path,undefined,cookie)).status,!cookie && path.startsWith('/app/') ? 303 : status)
     await h.cmd('renewal.followup.create',task,cookie,status)
   }
   const agent = await h.cmd('agent.create',{label:'Renewal reader denied'})
   for (const path of ['/api/strap/reports/renewals','/api/strap/reports/renewals.csv']) assert.equal((await h.send(path,undefined,'',{authorization:`Bearer ${agent.token}`})).status,401)
   assert.equal((await h.send('/api/strap/agent/command',{name:'renewal.followup.create',input:task},'',{authorization:`Bearer ${agent.token}`})).status,403)
+  const screen = await h.send('/app/renewals?days=45&lowCredits=0',undefined,h.owner)
+  assert.equal(screen.status,200)
+  assert.deepEqual([...screen.text.matchAll(/data-pack-id="([^"]+)"/g)].map(m=>m[1]),(await read('days=45&lowCredits=0')).rows.map(r=>r.packId))
   const preview = await h.cmd('plan.change.prepare',{packId:soon.id,mode:'renewal',credits:5,amountCents:10000,expiresAt:new Date(base+60*day).toISOString(),requestId:'renew-worklist'})
   assert.ok((await read()).rows.some(r=>r.packId===soon.id),'a preview alone is not a renewal')
   await h.cmd('plan.change.accept',{id:preview.id,key:preview.key},ana.cookie)
   assert.ok(!(await read()).rows.some(r=>r.packId===soon.id),'member-accepted renewal removes its source pack')
+  assert.ok(!(await h.send('/app/renewals',undefined,h.owner)).text.includes('data-pack-id="'+soon.id+'"'),'accepted renewal leaves the screen')
+  assert.ok(!(await h.send('/api/strap/reports/renewals.csv',undefined,h.owner)).text.includes(soon.id),'accepted renewal leaves the CSV')
   const stale = (await read()).rows.find(r=>r.packId===low.id)
   await h.cmd('renewal.followup.create',{...task,packId:soon.id,basis:stale.basis},h.owner,200) // prior task remains one even after renewal
   const version = (await h.state()).version
@@ -274,4 +280,9 @@ test('RPT-007: finite-pack expiry and low-credit HTTP worklist, matching CSV, co
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,null,'a no-show is not a visit')
   await h.cmd('attendance.correct',{id:cyBooking.id,outcome:'attended',reason:'Instructor confirmed attendance'})
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,start,'corrected attendance becomes the authoritative last visit')
+  if (process.env.STRAP_PROOF_DIR || process.env.CI) {
+    const taskMembers = [await h.person('JordanLane'),await h.person('AveryChen')]
+    const packs = []; for (const member of taskMembers) packs.push(await buy(member,20,1,{planName:'Mat five-class pack'}))
+    await (await import('./renewals-browser.mjs')).renewalsBrowser(h,{packs})
+  }
 }))

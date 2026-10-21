@@ -38,6 +38,10 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'renewal.followup.create') {
+    input.days = Number(input.days); input.lowCredits = Number(input.lowCredits)
+    if (input.dueAt) input.dueAt = String(input.dueAt)+'Z'
+  }
   if (name === 'reminder.rule.save') { input.enabled = input.enabled === 'true'; input.leadMinutes = Number(input.leadMinutes) }
   if (name === 'mail.preference.save') input.optedOut = input.optedOut === 'true'
   if (name === 'profile.save' || name === 'profile.save.staff' || (name === 'person.save' && 'version' in input)) for (const key of ['revision', 'version']) if (key in input) input[key] = Number(input[key])
