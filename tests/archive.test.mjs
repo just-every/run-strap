@@ -27,7 +27,7 @@ async function checkout(root) {
 }
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', location: 'studio', 'ev_booking.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token) => h.mf.dispatchFetch(h.origin + '/api/strap/integration/roster', { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
-test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
+test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
   try {
@@ -50,7 +50,11 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portab
     await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
     await h.cmd('booking.book',{classId:(await h.state()).classes[0].id},member.cookie)
     const repeating=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:'2099-11-03',endDate:'2099-11-10',time:'09:00',minutes:50,title:'Restored weekly mobility',service:'Mobility',room:'Movement',capacity:2,instructorId:coach.id})).id})
-    const seriesBooking=await h.cmd('booking.book',{classId:repeating.classes[0].id},member.cookie)
+    const closedOccurrence=await h.cmd('series.cancel.prepare',{classId:repeating.classes[1].id,scope:'this',reason:'Holiday closure'})
+    await h.cmd('series.cancel.confirm',{id:closedOccurrence.id,impact:closedOccurrence.impact.key})
+    const reservationPreview=await h.cmd('reservation.prepare',{classId:repeating.classes[0].id,throughDate:repeating.series.endDate},member.cookie)
+    const reservation=await h.cmd('reservation.confirm',{id:reservationPreview.id,key:reservationPreview.key},member.cookie)
+    const seriesBooking=(await h.state(member.cookie)).bookings.find(b=>b.id===reservation.outcomes[0].bookingId)
     await h.cmd('payment.record',{personId:member.id,amountCents:5000,reference:'Processor-backup-1'})
     const csv=await readFile('tests/fixtures/members.csv','utf8'),preview=await h.cmd('import.preview',{csv})
     await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})
@@ -88,6 +92,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portab
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
+    const restoredReservations=await h.state(restoredOwner)
+    assert.deepEqual(restoredReservations.reservations.find(r=>r.id===reservation.id),reservation,'SCHED-005 native restore retains occurrence outcomes and booking identities')
+    assert.equal(restoredReservations.reservationPreviews.find(r=>r.id===reservationPreview.id).status,'confirmed')
+    assert.equal(restoredReservations.reservations.find(r=>r.id===reservation.id).outcomes[1].reason,'class_cancelled','SCHED-005 the member keeps the skipped date and reason after restore')
     assert.deepEqual((await h.state(restoredOwner)).people.find(row=>row.id===p.id).emergencyContact,contact.emergencyContact,'APP-003 the restored member keeps their emergency contact')
     assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)

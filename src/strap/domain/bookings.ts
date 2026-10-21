@@ -49,8 +49,9 @@ export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pa
   const updated = {...booking,status:'booked',packId:pack.id,bookedAt:now(),...(spot ? {spot} : {})};
   tx.put('booking',updated); return updated;
 }
-export function book(tx: Transaction, input: Record<string,unknown>) {
-  const member = ownMember(tx), entry = record(tx.state,input.classId,'class');
+export function book(tx: Transaction, input: Record<string,unknown>, forMember?: string) {
+  if (forMember) humanOwner(tx.who);
+  const member = forMember ? person(tx.state,forMember) : ownMember(tx), entry = record(tx.state,input.classId,'class');
   insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
@@ -67,7 +68,7 @@ export function book(tx: Transaction, input: Record<string,unknown>) {
 }
 /** SCHED-006: the effect shown before cancelling is the effect applied. The
  * owner acts for front desk with the fee-waiver right until STAFF-001. */
-export function cancel(tx: Transaction, input: Record<string,unknown>) {
+export function cancel(tx: Transaction, input: Record<string,unknown>, parentActionId?: string) {
   const booking = record(tx.state,input.id,'booking');
   insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');
@@ -97,7 +98,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>) {
   const cancelled = {...booking,cancellationId,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
   if (staff) staffReason(tx,input);
-  tx.put('booking',cancelled); bookingHistory(tx,'cancel',booking,cancelled,input,{id:cancellationId}); promote(tx,entry); return cancelled;
+  tx.put('booking',cancelled); bookingHistory(tx,'cancel',booking,cancelled,input,{id:cancellationId,...(parentActionId ? {parentActionId} : {})}); promote(tx,entry); return cancelled;
 }
 export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);

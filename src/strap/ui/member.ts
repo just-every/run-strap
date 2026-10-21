@@ -1,3 +1,4 @@
+import { reservationsPanel } from './reservations'
 import { messagePreferencePanel } from './message-settings'
 import { memberMove } from './member-move'
 // A member's home: the classes they can book, their credits and the waiver.
@@ -37,5 +38,5 @@ export function memberHome(s: any) {
   const packLine = (p: any) => `<p class="meta" data-plan="${h(p.id)}">${h(packName(p))}: ${countsCredits(p) ? `${p.remaining} available` : `${h(planTerms(p.entitlement))}; ${h(packLeft(p))}`}; expires ${packExpiration(s, p.expiresAt)}${p.eligibleServices?.length ? ` · ${h(p.eligibleServices.join(', '))}` : ''}</p>`
   const creditPanel = panel('My credits', body(packs.length ? `${packs.some(countsCredits) ? `<p class="credits-big"><b>${credits}</b> credits to use</p>` : ''}${packs.map(packLine).join('')}` : '<p class="meta">You have no class credits. Ask the studio for a pack.</p>'), { icon: 'card' })
   const schedule = list.length ? `<div class="table-wrap">${weekTable(s, list, c => bookAction(s, c))}</div>` : emptyState('calendar', 'No classes open for booking', 'The studio has not published upcoming classes yet.')
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Classes</h1><p>A booking uses one credit; the waitlist holds none until you move up.</p></div>${noticesPanel(s)}${!signed ? `<p class="notice">Acknowledge the studio’s waiver before you book.</p>` : ''}${panel('Book a class', schedule, { icon: 'calendar' })}</div><aside class="rail">${memberCheckin(s)}${creditPanel}${messagePreferencePanel(s)}${waiver || panel('Waiver', emptyLine('The studio has not published a waiver.'), { id: 'waiver' })}</aside></div>`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Classes</h1><p>A booking uses one credit; the waitlist holds none until you move up.</p></div>${noticesPanel(s)}${!signed ? `<p class="notice">Acknowledge the studio’s waiver before you book.</p>` : ''}${panel('Book a class', schedule, { icon: 'calendar' })}${reservationsPanel(s,s.actor.personId,'/app#recurring-reservations')}</div><aside class="rail">${memberCheckin(s)}${creditPanel}${messagePreferencePanel(s)}${waiver || panel('Waiver', emptyLine('The studio has not published a waiver.'), { id: 'waiver' })}</aside></div>`
 }

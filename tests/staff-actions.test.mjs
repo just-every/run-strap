@@ -39,9 +39,39 @@ test('STAFF-006: every current member command has a real staff door, identical m
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':name.startsWith('booking.')?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='plan.change.prepare'?'contract-change':(name.startsWith('booking.')||name.startsWith('reservation.'))?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
+    let reservationDraft,reservation,cancellationDraft,seriesMember
     const actions={
+      'reservation.prepare':async door=>{
+        seriesMember=await h.person('SeriesMember')
+        await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:seriesMember.id,credits:3,amountCents:6000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+        const dates={startDate:'2098-01-06',endDate:'2098-01-20',time:'09:00',minutes:50,intervalWeeks:1,title:'Standing class',service:'Yoga',room:'Series',capacity:3,instructorId:coach.id}
+        const series=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',dates)).id})
+        const r=await checkAudit(door,{classId:series.classes[0].id,throughDate:dates.endDate,personId:seriesMember.id,channel:'phone',requestId:randomUUID()})
+        reservationDraft=r.result
+        assert.ok(reservationDraft.outcomes.every(o=>o.status==='booked'))
+        assert.equal(r.after.bookings.filter(b=>b.reservationId).length,0,'staff preview books nothing')
+      },
+      'reservation.confirm':async door=>{
+        const input={id:reservationDraft.id,key:reservationDraft.key,channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        reservation=r.result
+        assert.equal(r.after.bookings.filter(b=>b.reservationId===reservation.id).length,3)
+        assert.deepEqual((await h.state(seriesMember.cookie)).reservations.find(r=>r.id===reservation.id),reservation,'member reads the same staff-made outcomes')
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1)
+      },
+      'reservation.cancel.prepare':async door=>{
+        const r=await checkAudit(door,{reservationId:reservation.id,channel:'phone',requestId:randomUUID()});cancellationDraft=r.result
+        assert.equal(cancellationDraft.outcomes.length,3)
+      },
+      'reservation.cancel.confirm':async door=>{
+        const input={id:cancellationDraft.id,key:cancellationDraft.key,channel:'phone',cancelReason:'Schedule conflict',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.equal(r.result.status,'cancelled')
+        const children=r.after.bookingActions.filter(a=>a.parentActionId===r.event.id)
+        assert.equal(children.length,3,'per-occurrence audit links to its one canonical command audit')
+        assert.ok(children.every(a=>a.actorRole==='owner'&&a.staffMade&&a.channel==='phone'&&a.right==='booking'))
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1)
+      },
       'profile.save':async door=>{
         const input={personId:ana.id,emergencyName:'Rosa Diaz',emergencyPhone:'(615) 555-0123',channel:'phone',revision:0,requestId:randomUUID()},r=await checkAudit(door,input)
         assert.deepEqual(r.result.emergencyContact,{name:'Rosa Diaz',phone:'6155550123',relationship:null})
@@ -171,6 +201,7 @@ test('STAFF-006: every current member command has a real staff door, identical m
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if (entry.name.startsWith('reservation.')) Object.assign(input,{personId:seriesMember.id,classId:reservationDraft.classId,throughDate:reservationDraft.throughDate,reservationId:reservation.id,id:entry.name==='reservation.cancel.confirm'?cancellationDraft.id:reservationDraft.id,key:entry.name==='reservation.cancel.confirm'?cancellationDraft.key:reservationDraft.key})
       // Self-capable shared commands still refuse acting for somebody else.
       if (['booking.cancel','booking.spot','booking.offer.accept','booking.move'].includes(entry.memberDoor.staff)) {
         const other=(await h.state()).bookings.find(b=>b.personId===ben.id&&b.status==='booked');input.id=other.id

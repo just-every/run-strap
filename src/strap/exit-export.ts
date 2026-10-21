@@ -31,6 +31,9 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'reservation' },
+  { from: 'st_records.data.outcomes[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=reservation' },
+  { from: 'st_records.data.parentActionId', to: 'st_records.id', kind: 'staffAction', when: 'kind=bookingAction' },
   { from: 'st_records.data.chargeId', to: 'st_records.id', kind: 'charge', when: 'kind=payment' },
   { from: 'st_records.data.reversesChargeId', to: 'st_records.id', kind: 'charge', when: 'kind=charge' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=planChange or kind=planChangeRequest' },

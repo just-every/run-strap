@@ -6,7 +6,7 @@ import { memberCheckin } from './checkin';
 import { memberMail } from './notices';
 
 export const staffChannel = (input: Record<string,unknown>) => { const channel = text(input.channel ?? 'desk','channel',20); insist(['desk','phone','inbox'].includes(channel),'invalid_channel'); return channel; };
-export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade && (!a.parentActionId || !list(state,'staffAction').some(parent => parent.id === a.parentActionId))),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
 export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
@@ -43,10 +43,10 @@ export function retainStaffAction(tx: Transaction, name: string, right: string, 
   const channel = staffChannel(input), after = staffAfter(name,result);
   const personId = result.personId ?? input.personId;
   const existing = ['bookingAction','profileChange'].flatMap(kind => list(tx.state,kind).map(data => ({kind,data})))
-    .find(({data}) => !priorIds.has(data.id) && data.staffMade && data.actorId === tx.who.id);
+    .find(({data}) => !priorIds.has(data.id) && data.staffMade && !data.parentActionId && data.actorId === tx.who.id);
   const metadata = {command:name,...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:requestBasis(input),result:after} : {})};
   if (existing) { tx.put(existing.kind,{...existing.data,...metadata}); return; }
-  const event = {id:id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : null,at:now(),...metadata};
+  const event = {id:result.staffActionId ?? id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : null,at:now(),...metadata};
   tx.put('staffAction',event);
 }
 export function dismissForMember(tx: Transaction, input: Record<string,unknown>) {
