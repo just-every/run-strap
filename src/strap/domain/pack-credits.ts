@@ -1,3 +1,4 @@
+import { releaseMakeupCredit } from './makeups';
 import { guestLedger, releaseGuest } from './guest-bookings';
 import { id, insist, list, now, record, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -46,6 +47,7 @@ type CreditEvent = {
 /** A booking's credit event on its own pack; an unsettled unpaid visit (SCHED-010) has none. */
 export function bookingCredit(tx: Transaction, booking: RecordData, input: CreditEvent) {
   if (booking.guestPackId) { if (input.type === 'restore') releaseGuest(tx,booking); else guestLedger(tx,booking,input.type); return null; }
+  if (booking.makeupCreditId) { if (input.type === 'restore') releaseMakeupCredit(tx,booking); return null; }
   return booking.packId ? appendPackEvent(tx,record(tx.state,booking.packId,'pack'),input) : null;
 }
 /** Each call inserts a fresh event; balance and ledger share the command fence. */
@@ -99,8 +101,9 @@ function planSummary(state: State, pack: RecordData, reservations: Map<string,st
   const zone = studioZone(state), at = Date.parse(now()), expiresAt = Date.parse(pack.expiresAt), held = packHeld(state,pack);
   const lost = new Set(list(state,'booking').filter(b => b.packId === pack.id && b.status === 'cancelled' && b.cancellation === 'late' && b.refunded !== true).map(b => b.id));
   const returns = packEvents(state,pack).filter(e => e.type === 'restore' && e.bookingId);
-  const counts = (ids: string[]) => ({reserved:ids.filter(id => reservations.get(id) === 'reserved').length,
-    attended:ids.filter(id => reservations.get(id) === 'consumed' && !lost.has(id)).length,lateCancelled:ids.filter(id => lost.has(id)).length});
+  const absent = new Set(list(state,'booking').filter(b=>b.packId===pack.id&&b.attendance==='absence').map(b=>b.id));
+  const counts = (ids: string[]) => ({absent:ids.filter(id=>absent.has(id)).length,reserved:ids.filter(id => reservations.get(id) === 'reserved').length,
+    attended:ids.filter(id => reservations.get(id) === 'consumed' && !lost.has(id) && !absent.has(id)).length,lateCancelled:ids.filter(id => lost.has(id)).length});
   const totals = {...counts([...reservations.keys()]),returned:returns.length};
   if (plan.kind === 'unlimited') return {kind:plan.kind,...totals,periods:[],left:null};
   const startOfClass = (classId: string) => state.records.get(classId)?.data.start as string | undefined;

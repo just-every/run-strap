@@ -17,6 +17,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/people', label: 'People', glyph: 'users' },
     { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
+    { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' },
     { href: '/app/packs', label: 'Packs and payments', glyph: 'card', count: waiting(['pack', 'reminder']) },
     { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' },
     { href: '/app/renewals', label: 'Renewal worklist', glyph: 'report' },
@@ -37,7 +38,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
     security,
   ]
-  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
+  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
 }
 
 const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member', finance: 'Finance' } as Record<string, string>)[s.actor.role] ?? s.actor.role

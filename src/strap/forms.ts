@@ -48,6 +48,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     })
     for (const key of [...keys,'profile',...Array.from({length:7},(_,i) => [`opens_${i+1}`,`closes_${i+1}`]).flat()]) delete input[key]
   }
+  if (name === 'absence.policy.save') { input.noticeHours=Number(input.noticeHours); input.expiryDays=Number(input.expiryDays); }
   if (name === 'renewal.followup.create') {
     input.days = Number(input.days); input.lowCredits = Number(input.lowCredits)
     if (input.dueAt) input.dueAt = String(input.dueAt)+'Z'

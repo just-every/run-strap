@@ -40,7 +40,7 @@ export function putNotice(tx: Transaction, notice: RecordData, prepared = false)
 export function confirmBooking(tx: Transaction, booking: RecordData) {
   const entry = tx.state.records.get(booking.classId)!.data;
   const subject = `${booking.status === 'booked' ? 'Booking confirmed' : 'Waitlist confirmed'}: ${titleOf(entry)}`;
-  const body = booking.status === 'booked' ? booking.packId ? 'Your class is booked; one credit is reserved.' : 'Your unpaid visit is booked; no credit was used.' : 'You joined the waitlist; no credit was used.';
+  const body = booking.status === 'booked' ? booking.makeupCreditId ? 'Your replacement class is booked with the linked makeup credit; the original absence stays recorded.' : booking.packId ? 'Your class is booked; one credit is reserved.' : 'Your unpaid visit is booked; no credit was used.' : 'You joined the waitlist; no credit was used.';
   putNotice(tx,{id:`notice:confirmation:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,subject,body});
   reserveMail(tx,tx.notices,{id:`mail:confirmation:${booking.id}`,sourceKind:'confirmation',sourceId:booking.id,personId:booking.personId,bookingIds:[booking.id],subject,body});
 }

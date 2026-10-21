@@ -51,7 +51,7 @@ export const planStart = (pack: RecordData): string => pack.termStartAt ?? pack.
 /** A booking holds one of the pack's visits while booked (attended and no-show
  * included) and after a late cancel that kept it; release ends the hold. */
 export const holds = (b: RecordData, packId: string) => b.packId === packId
-  && ((b.status === 'booked' && b.attendance !== 'excused') || (b.status === 'cancelled' && b.cancellation === 'late' && b.refunded !== true));
+  && (b.attendance === 'absence' || (b.status === 'booked' && b.attendance !== 'excused') || (b.status === 'cancelled' && b.cancellation === 'late' && b.refunded !== true));
 export const heldVisits = (pack: RecordData, bookings: RecordData[], classStart: (id: string) => string | undefined): Held[] =>
   bookings.filter(b => holds(b,pack.id)).flatMap(b => { const start = classStart(b.classId); return start ? [{id:b.id,start,booked:b.status === 'booked'}] : [] });
 

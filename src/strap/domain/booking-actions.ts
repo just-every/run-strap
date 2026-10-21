@@ -1,3 +1,4 @@
+import { assertMakeupTarget, reserveMakeupCredit, canManageMakeup } from './makeups';
 import { assertGuestTarget, guestLedger, restoreGuest } from './guest-bookings';
 import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type RecordData } from './types';
@@ -17,6 +18,7 @@ function futureClass(tx: Transaction, classId: unknown) {
 }
 function availablePack(tx: Transaction, booking: RecordData, entry: RecordData, needsAvailable: boolean) {
   if (booking.guestPackId) return assertGuestTarget(tx,booking,entry);
+  if (booking.makeupCreditId) { assertMakeupTarget(tx,booking,entry,needsAvailable); return null; }
   if (!booking.packId) { insist(booking.unpaid,'eligible_credit_required',409); return null; }
   const pack = record(tx.state,booking.packId,'pack');
   insist(pack.personId === booking.personId && packServiceEligible(pack,entry) && pack.expiresAt > entry.start && pack.expiresAt > now()
@@ -68,11 +70,11 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   insist(booking.status === 'booked' && !booking.attendance && !booking.checkedInAt,'unstarted_confirmed_booking_required',409);
   insist(source.id !== entry.id,'different_class_required');
   if (staff) { staffReason(tx,input); actionChannel(input); }
-  else insist((tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking))) && ['member','instructor'].includes(tx.who.role),'forbidden',403);
+  else insist((tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))) && ['member','instructor'].includes(tx.who.role),'forbidden',403);
   const to = target(tx,booking,entry,input,false,heldOffer);
   if (to.full && !to.override) {
     insist(!list(tx.state,'booking').some(b => b.moveFromBookingId === booking.id && b.classId === entry.id && b.status !== 'cancelled'),'already_waitlisted',409);
-    const waiter = {...(booking.guestPackId ? {guestPackId:booking.guestPackId,sponsorId:booking.sponsorId,payerId:booking.payerId,guestFunding:booking.guestFunding,guestPriceCents:booking.guestPriceCents} : {}),id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
+    const waiter = {...(booking.makeupCreditId ? {makeupCreditId:booking.makeupCreditId,originalBookingId:booking.originalBookingId} : {}),...(booking.guestPackId ? {guestPackId:booking.guestPackId,sponsorId:booking.sponsorId,payerId:booking.payerId,guestFunding:booking.guestFunding,guestPriceCents:booking.guestPriceCents} : {}),id:id(),personId:booking.personId,classId:entry.id,moveFromBookingId:booking.id,moveRequest:staff ? {cancelReason:input.cancelReason,channel:actionChannel(input)} : {},status:'waitlisted',capacityPool:'online',bookingChannel:staff ? actionChannel(input) : 'online',
       madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',cancelTerms:cancelTerms(tx.state,entry,to.pack),createdAt:now(),sequence:tx.state.version+1};
     tx.put('booking',waiter);
     bookingHistory(tx,'waitlist',booking,waiter,input,{keptBookingId:booking.id}); return waiter;
@@ -103,6 +105,7 @@ export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
   const {cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents,waiver,cancellationId,...active} = booking;
   const restored = {...active,status:'booked',restoredAt:now(),restoredBy:tx.who.id,spot:to.spot,capacityPool:to.capacityPool,override:to.override};
   if (!booking.refunded && to.pack && !booking.guestPackId) appendPackEvent(tx,to.pack,{type:'reserve',credits:0,bookingId:booking.id,classId:entry.id,reason:'cancellation_restored'});
+  if (booking.makeupCreditId) reserveMakeupCredit(tx,restored);
   if (booking.guestPackId) restoreGuest(tx,restored);
   tx.put('booking',restored);
   bookingHistory(tx,'restore',booking,restored,input,{cancellationId:cancellationId ?? null,feeReversedCents:fees.reduce((sum,c) => sum+c.amountCents,0)}); return restored;

@@ -42,7 +42,7 @@ export function closureImpact(state: State, scope: Record<string,any>) {
     const seats = list(state,'booking').filter(b => b.classId === c.id && ['booked','offered','waitlisted'].includes(b.status))
       .sort((a,b) => a.status.localeCompare(b.status) || a.id.localeCompare(b.id));
     return {classId:c.id,title:c.title,start:c.start,end:c.end,room:roomOf(c),
-      bookings:seats.map(b => ({bookingId:b.id,personId:b.personId,status:b.status,creditReturned:b.status === 'booked' && !!(b.packId || b.guestPackId)}))};
+      bookings:seats.map(b => ({bookingId:b.id,personId:b.personId,status:b.status,creditReturned:b.status === 'booked' && !!(b.packId || b.guestPackId || b.makeupCreditId)}))};
   });
   const bookings = classes.flatMap(c => c.bookings);
   return {classes,members:new Set(bookings.map(b => b.personId)).size,creditsReturned:bookings.filter(b => b.creditReturned).length,
@@ -85,9 +85,9 @@ export async function confirmClosure(tx: Transaction, input: Record<string,unkno
     for (const seat of item.bookings) {
       const booking = record(tx.state,seat.bookingId,'booking');
       if (booking.status === 'booked') bookingCredit(tx,booking,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'class_cancelled'});
-      tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked' && !!(booking.packId || booking.guestPackId),feeCents:0,closureId:closure.id});
+      tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked' && !!(booking.packId || booking.guestPackId || booking.makeupCreditId),feeCents:0,closureId:closure.id});
       const title = titleOf(entry), when = whenText(tx.state,entry.start);
-      const body = `${title} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? booking.guestPackId ? 'Your guest pass was returned or the guest charge reversed.' : booking.packId ? 'Your class credit is back in your pack.' : 'Your unpaid visit is closed; no credit was used.' : 'Your waitlist spot is closed; no credit was used.'}`;
+      const body = `${title} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? booking.makeupCreditId ? 'Your makeup credit is available again until its original expiry.' : booking.guestPackId ? 'Your guest pass was returned or the guest charge reversed.' : booking.packId ? 'Your class credit is back in your pack.' : 'Your unpaid visit is closed; no credit was used.' : 'Your waitlist spot is closed; no credit was used.'}`;
       const notice = {id:`notice:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,closureId:closure.id,subject:`Cancelled: ${title}, ${when}`,body};
       insist(!tx.state.records.has(notice.id),'notice_exists',409);
       putNotice(tx,notice);

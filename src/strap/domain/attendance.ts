@@ -1,3 +1,4 @@
+import { releaseMakeupCredit } from './makeups';
 import { releaseGuest } from './guest-bookings';
 import { humanOwner, id, insist, list, now, record, text, type Actor, type RecordData } from './types';
 import type { Transaction } from './store';
@@ -63,6 +64,7 @@ export function correctAttendance(tx: Transaction, input: Record<string,unknown>
     tx.future(pack.expiresAt);
     appendPackEvent(tx,pack,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'attendance_correction'});
   }
+  if (restore && booking.makeupCreditId) releaseMakeupCredit(tx,booking);
   if (restore && booking.guestPackId) releaseGuest(tx,booking);
   const charges = list(tx.state,'charge').filter(c => c.bookingId === booking.id);
   const open = charges.filter(c => fees.includes(c.reason) && !charges.some(r => r.reversesChargeId === c.id));

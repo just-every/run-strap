@@ -1,3 +1,4 @@
+import { makeupsPanel } from './makeups'
 import { substitutionsPage } from './substitutions'
 import { leadsPage } from './leads'
 import { recognitionPage } from './recognition'
@@ -36,7 +37,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
     : current === '/app' ? (desk ? today(state, query, owner(state) ? successRail(state, query) : '') : memberHome(state))
       : current === '/app/classes' ? classesPage(state, query)
         : current === '/app/profile' ? memberProfilePage(state) : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/leads' ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
-          : current === '/app/packs' ? packsPage(state, query)
+          : current === '/app/makeups' ? `<div class="page single"><div class="page-main"><div class="page-title"><h1>Absences and makeups</h1></div>${makeupsPanel(state)}</div></div>` : current === '/app/packs' ? packsPage(state, query)
             : current === '/app/renewals' ? renewalsPage(state, query)
             : current === '/app/retention' ? retentionPage(state)
             : current === '/app/import' ? importPage(state, notice)
