@@ -282,6 +282,7 @@ test('RPT-007: finite-pack expiry and low-credit screen/HTTP worklist, matching 
   assert.equal((await read()).rows.find(r=>r.packId===cyPack.id).lastVisit,start,'corrected attendance becomes the authoritative last visit')
   if (process.env.STRAP_PROOF_DIR || process.env.CI) {
     const taskMembers = [await h.person('JordanLane'),await h.person('AveryChen')]
+    for (const [member,name] of [[ana,'Ana Lopez'],[ben,'Ben Walker'],[cy,'Cy Morgan'],[taskMembers[0],'Jordan Lane'],[taskMembers[1],'Avery Chen']]) await h.cmd('person.save',{id:member.id,name,email:member.email,role:'member',active:true})
     const packs = []; for (const member of taskMembers) packs.push(await buy(member,20,1,{planName:'Mat five-class pack'}))
     await (await import('./renewals-browser.mjs')).renewalsBrowser(h,{packs})
   }

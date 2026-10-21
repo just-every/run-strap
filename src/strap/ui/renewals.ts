@@ -22,7 +22,7 @@ export function renewalsPage(s: any, query: URLSearchParams) {
       : `<a href="${h(back)}&amp;pack=${encodeURIComponent(row.packId)}#renewal-task">Assign follow-up</a>`)
     + '</tr>').join('')
   const task = selected && !selected.followup ? panel('Assign renewal follow-up',body(`<p>${h(selected.member)} · ${h(selected.plan)} · ${h(selected.remainingCredits)} credits</p>`
-    + form('renewal.followup.create',back,hidden('packId',selected.packId)+hidden('basis',selected.basis)+hidden('days',report.days)+hidden('lowCredits',report.lowCredits)
+    + form('renewal.followup.create',back+'&pack='+encodeURIComponent(selected.packId)+'#renewal-task',hidden('packId',selected.packId)+hidden('basis',selected.basis)+hidden('days',report.days)+hidden('lowCredits',report.lowCredits)
       + select('ownerId','Assigned owner',s.leadOwners.map((owner: any) => [owner.id,owner.name]),s.actor.id)
       + field('nextAction','Next action','Review renewal options internally','text','required maxlength="500"')
       + field('dueAt','Due at (UTC)','','datetime-local','required'),'Create assigned follow-up')
