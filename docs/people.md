@@ -50,3 +50,22 @@ or imported again.
 Open a member in People. Under **Check-in code and key tag**, read their existing code or issue the first one; reading keeps the tag working. Replacing a lost tag is a separate action with a required reason. Under **Member waiver link**, review the exact current waiver and request the member’s secure sign-in link. The member signs in and acknowledges for themselves; a request never confirms delivery or acknowledgment. Under **Member notices**, mark a notice read for the named member. Its content stays unchanged and the member sees that staff marked it read. Choose how the request arrived (desk, phone or inbox). Staff action history retains each action’s right and before/after effect. Until staff roles ship, these controls belong to the native owner.
 
 After a restore, staff waiver links stay paused with member email. Review and reconnect member email in Studio before requesting a new link; an old launch record never resends itself. Members can still request their own ordinary sign-in link.
+
+## Find and download staff actions
+
+In People, **Staff action history** shows recorded staff-made actions. Select a person to focus on that member, then
+filter by acting staff member, action right, channel, command and from/through date. Both date bounds include the whole day in the studio's
+time zone. The newest event is first; event identity orders simultaneous events. Clear a field to include all its values.
+Open **Recorded change** for the before/after effect and the retained actor, right, channel and reason.
+
+**Download staff history CSV** and **Open staff history JSON** use the same filters. These are private owner downloads;
+members, instructors and preparation agents cannot use them. Reads and downloads never create or rewrite history.
+Existing unused-identity erasure keeps action provenance with personal before/after values removed. This history covers
+current staff-made actions; it is not a complete studio audit, and it makes no new retention-policy claim.
+
+For an authenticated native owner, `GET /api/strap/staff-history` returns `timeZone`, effective `filters` and ordered `rows`.
+`GET /api/strap/staff-history.csv` downloads those same audit facts. Both accept `person`, `auditActor`, `auditRight`, `auditChannel`,
+`auditCommand`, `auditFrom` and `auditTo`; dates use `YYYY-MM-DD`. Other values match exactly. CSV headers are plain
+strings and data cells are JSON values, matching Strap's portable-exit convention; `before` and `after` contain JSON
+text when present, and null when absent or erased. Only explicit audit fields are exported, without internal replay
+payloads or command results. Keep these downloads private like your other studio records.

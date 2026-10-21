@@ -17,7 +17,7 @@ async function linkCookie(h,email) {
   const token=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token')
   const response=await h.send('/auth/confirm',{token});assert.equal(response.status,303,response.text);return response.cookie
 }
-export async function staffActionsBrowser(h,{ana,ben,publish}) {
+export async function staffActionsBrowser(h,{ana,ben,publish,historyMember}) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
   try {
@@ -73,6 +73,32 @@ export async function staffActionsBrowser(h,{ana,ben,publish}) {
       await page.locator('#person').screenshot({path:join(process.env.STRAP_PROOF_DIR,`STAFF-006-waiver-request-${width}.png`)})
       const audit=page.locator('#staff-actions');await audit.locator('summary').first().click()
       await audit.screenshot({path:join(process.env.STRAP_PROOF_DIR,`STAFF-006-audit-${width}.png`)})
+      // SEC-002: exercise the existing history panel's new controls and real download at both widths.
+      await page.goto(h.origin+`/app/people?person=${historyMember.id}#staff-actions`)
+      let historyPanel=page.locator('#staff-actions')
+      await historyPanel.getByLabel('Action right',{exact:true}).selectOption('member-record')
+      await historyPanel.getByLabel('Action channel',{exact:true}).selectOption('phone')
+      await historyPanel.getByLabel('Action command',{exact:true}).selectOption('profile.save.staff')
+      await historyPanel.getByRole('button',{name:'Filter staff actions',exact:true}).click()
+      historyPanel=page.locator('#staff-actions')
+      assert.equal(await historyPanel.locator('[data-staff-command]').count(),1)
+      await historyPanel.locator('summary').first().click()
+      assert.match(await historyPanel.innerText(),/615.*555.*0197/)
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'staff history does not overflow')
+      await historyPanel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SEC-002-filtered-history-${width}.png`)})
+      const pendingDownload=page.waitForEvent('download')
+      await historyPanel.getByRole('link',{name:'Download staff history CSV',exact:true}).click()
+      const downloaded=await pendingDownload,stream=await downloaded.createReadStream(),chunks=[]
+      for await(const chunk of stream)chunks.push(chunk)
+      const {parseCsv}=await import('./report-downloads.mjs'),[keys,...values]=parseCsv(Buffer.concat(chunks).toString())
+      assert.equal(values.length,1)
+      assert.equal(JSON.parse(values[0][keys.indexOf('after')]).phone,'6155550197')
+      await historyPanel.getByLabel('Action channel',{exact:true}).selectOption('inbox')
+      await historyPanel.getByRole('button',{name:'Filter staff actions',exact:true}).click()
+      historyPanel=page.locator('#staff-actions')
+      assert.equal(await historyPanel.locator('[data-staff-command]').count(),0)
+      await historyPanel.getByText('No staff actions recorded.',{exact:true}).waitFor()
+      await historyPanel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SEC-002-empty-history-${width}.png`)})
       const memberContext=await browser.newContext({viewport:{width,height:1000}});await assets(memberContext,h);await cookieInto(memberContext,await linkCookie(h,ana.email),h.origin)
       const memberPage=await memberContext.newPage();await memberPage.goto(h.origin+'/app#waiver')
       await memberPage.locator('#waiver').screenshot({path:join(process.env.STRAP_PROOF_DIR,`STAFF-006-member-waiver-${width}.png`)})

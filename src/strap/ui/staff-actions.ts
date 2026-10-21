@@ -1,9 +1,10 @@
+import { staffHistory, historyFilters } from '../staff-history'
 import { delivery } from './closures'
 // STAFF-006 uses the existing member profile and the owner's command forms.
 import { actionChannel } from './booking-rules'
 import { waiverSigned } from './facts'
 import { money, when } from './format'
-import { body, cell, emptyLine, form, h, hidden, owner, panel, person, rows, table } from './shared'
+import { body, cell, emptyLine, field, form, h, hidden, owner, panel, person, rows, select, table } from './shared'
 import { profileText } from './profile'
 
 /** One request identity per rendered form; submitting it again keeps that identity. */
@@ -71,12 +72,26 @@ function effect(s: any, value: any) {
 const actionLabels: Record<string,string> = {'reservation.prepare':'Preview recurring reservation','reservation.confirm':'Confirm recurring reservation','reservation.cancel.prepare':'Preview future cancellations','reservation.cancel.confirm':'Cancel future reservations','mail.preference.launch':'Open member message preferences','fee.collect':'Record fee receipt','fee.waive':'Waive attendance fee',schedule:'Change class schedule','booking.desk':'Book at desk','booking.cancel':'Cancel booking',cancel:'Cancel booking','booking.spot':'Move spot','booking.offer.accept':'Accept offer',accept:'Accept offer','booking.move':'Move booking',move:'Move booking','booking.restore':'Restore booking',restore:'Restore booking','booking.waitlist.position':'Change waitlist position',position:'Change waitlist position',waitlist:'Join waitlist','attendance.checkin':'Check in','checkin.code.staff':'Read or issue check-in code','checkin.rotate':'Replace check-in code','waiver.launch':'Request waiver link','notice.dismiss.staff':'Mark notice read','recognition.launch':'Open member recognition preferences','plan.change.prepare':'Preview plan change','profile.save.staff':'Edit member profile','person.save':'Change name, email or phone'}
 const actionLabel = (action: string) => { if (!actionLabels[action]) throw new Error('Staff action needs a display label'); return actionLabels[action] }
 
-/** The canonical staff audit stays focused on the selected person, when any. */
-export function staffActionHistory(s: any, chosen?: any) {
+/** Screen and downloads share the same canonical staff-history projection. */
+export function staffActionHistory(s: any, query = new URLSearchParams()) {
   if (!owner(s)) return ''
-  const events = rows(s, 'staffActions').filter(a => !chosen || a.personId === chosen.id).sort((a, b) => b.at.localeCompare(a.at))
+  const chosen = rows(s,'people').find(p => p.id === query.get('person'))
+  const report = staffHistory(s,query), events = report.rows
+  const options = (key: string) => [...new Set(rows(s,'staffActions').map(a => key === 'command' ? a.command ?? a.action : a[key]))].sort().map(value => [value,value] as [string,string])
+  const preserved = [...query].filter(([key]) => !historyFilters.includes(key as any) || key === 'person').map(([key,value]) => hidden(key,value)).join('')
+  const controls = `<form method="get" action="/app/people#staff-actions" class="form">${preserved}`
+    + select('auditActor','Acting staff member',[['','All staff'],...options('actorId')],query.get('auditActor') ?? '')
+    + select('auditRight','Action right',[['','All rights'],...options('right')],query.get('auditRight') ?? '')
+    + select('auditChannel','Action channel',[['','All channels'],...options('channel')],query.get('auditChannel') ?? '')
+    + select('auditCommand','Action command',[['','All commands'],...options('command')],query.get('auditCommand') ?? '')
+    + field('auditFrom','Action from date',query.get('auditFrom'),'date') + field('auditTo','Action through date',query.get('auditTo'),'date')
+    + '<button class="btn" type="submit">Filter staff actions</button></form>'
+  const exportQuery = new URLSearchParams([...query].filter(([key]) => historyFilters.includes(key as any)))
+  const downloads = `<p><a class="btn quiet" href="/api/strap/staff-history.csv?${h(exportQuery.toString())}">Download staff history CSV</a> <a href="/api/strap/staff-history?${h(exportQuery.toString())}">Open staff history JSON</a></p>`
+
   const list = events.map(a => `<tr data-staff-command="${h(a.command ?? a.action)}">${cell('When / member', `${when(s, a.at)}<small>${h(person(s, a.personId))}</small>`)}${cell('Staff / channel', `${h(a.actorId === s.actor.id ? s.displayName : a.actorId)}<small>${h(a.actorRole)} · ${h(a.channel)}</small>`)}${cell('Action', `${h(actionLabel(a.action))}<small>Right: ${h(a.right)}</small>${a.reason ? `<small>Reason: ${h(a.reason)}</small>` : ''}`)}</tr>`
     + `<tr><td colspan="3"><details class="more"><summary>Recorded change</summary><div class="panel-body">${a.erased ? '<p class="meta">Values erased with the member’s personal data.</p>' : `<dl><dt>Before</dt><dd>${effect(s,a.before)}</dd><dt>After</dt><dd>${effect(s,a.after)}</dd></dl>`}</div></details></td></tr>`).join('')
   return panel('Staff action history', body(`<p class="meta">${chosen ? `Actions for ${h(chosen.name)}.` : 'Actions for all members. Select a person to focus their history.'}</p>`)
+    + body(controls + downloads + `<p class="meta">${events.length} recorded actions. Newest first; date bounds include both days in ${h(report.timeZone)}. This is the existing staff-made history, not a complete studio audit.</p>`)
     + (list ? `<div class="table-wrap">${table(['When / member', 'Staff / channel', 'Action'], list)}</div>` : emptyLine('No staff actions recorded.')), { id: 'staff-actions', icon: 'users' })
 }

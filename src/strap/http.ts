@@ -1,3 +1,4 @@
+import { historyExport, historyCsv } from './staff-history'
 import { retentionReport } from './retention-report'
 import { leadReport } from './lead-report'
 import { renewalWorklist } from './domain/renewals'
@@ -103,6 +104,13 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
     who = await principal(request, env, isAgent)
     if (request.method === 'GET') {
+      if (path === '/api/strap/staff-history' || path === '/api/strap/staff-history.csv') {
+        if (who.role !== 'owner') fail('owner_required',403)
+        const current = await state(env,who)
+        return path.endsWith('.csv')
+          ? new Response(historyCsv(current,url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="strap-staff-history.csv"'}})
+          : json(historyExport(current,url.searchParams))
+      }
       const exportPath = path.match(/^\/api\/strap\/reports\/(revenue|attendance)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(cancellations)\.(xlsx)$/)
       if (exportPath) {
         if (who.role !== 'owner') fail('owner_required',403)

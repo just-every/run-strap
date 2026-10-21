@@ -25,7 +25,7 @@ async function prepare(h) {
 
 // The catalogue is the real dispatch registry. Every member-tagged command
 // must have a working staff pair, not just a matching string in a second list.
-test('STAFF-006: every current member command has a real staff door, identical member outcome and one canonical named-right audit entry; unauthorized users and agents cannot act for members',async()=>{
+test('STAFF-006 / SEC-002: every current member command has a real staff door, identical member outcome and one canonical named-right audit entry; unauthorized users and agents cannot act for members',async()=>{
   await run(async h=>{
     const {coach,ana,ben,publish}=await prepare(h)
     const future=await publish('Future Flow',26),near=await publish('Open check-in',0.25)
@@ -218,7 +218,61 @@ test('STAFF-006: every current member command has a real staff door, identical m
     await refused(h,'checkin.rotate',{personId:ana.id},h.owner,400)
     const rotated=await checkAudit('checkin.rotate',{personId:ana.id,reason:'Lost key tag',channel:'phone',requestId:randomUUID()})
     assert.notEqual(rotated.result.code,codeBefore.code);assert.equal(rotated.result.codeRevision,codeBefore.codeRevision+1)
-    if(process.env.STRAP_PROOF_DIR)await(await import('./staff-actions-browser.mjs')).staffActionsBrowser(h,{ana,ben,publish})
+    // SEC-002: search and download actual staff-made changes, without broadening access or rewriting history.
+    const historyMember=await h.person('HistoryOne'),otherHistoryMember=await h.person('HistoryTwo')
+    const edit={personId:historyMember.id,phone:'6155550197',channel:'phone',revision:0,requestId:randomUUID()}
+    await h.cmd('profile.save.staff',edit)
+    await h.cmd('profile.save.staff',edit) // a replay remains one change in search and export
+    await h.cmd('profile.save.staff',{personId:otherHistoryMember.id,phone:'6155550198',channel:'inbox',revision:0,requestId:randomUUID()})
+    const historyQuery=new URLSearchParams({person:historyMember.id,auditActor:(await h.state()).actor.id,auditRight:'member-record',auditChannel:'phone',auditCommand:'profile.save.staff'})
+    const history=await h.send('/api/strap/staff-history?'+historyQuery,undefined,h.owner)
+    assert.equal(history.status,200);assert.equal(history.headers.get('cache-control'),'no-store')
+    assert.equal(history.value.rows.length,1,'only the selected member, right, channel and command appear; replay is not duplicated')
+    const change=history.value.rows[0]
+    assert.deepEqual([change.actorRole,change.actorId,change.personId,change.right,change.channel,change.before.phone,change.after.phone],['owner',(await h.state()).actor.id,historyMember.id,'member-record','phone',null,'6155550197'])
+    const {parseCsv}=await import('./report-downloads.mjs')
+    const download=await h.send('/api/strap/staff-history.csv?'+historyQuery,undefined,h.owner)
+    assert.equal(download.status,200);assert.equal(download.headers.get('cache-control'),'no-store');assert.match(download.headers.get('content-disposition'),/attachment/)
+    const [columns,...data]=parseCsv(download.text),exported=Object.fromEntries(columns.map((key,i)=>[key,data[0][i]]))
+    assert.equal(data.length,1)
+    assert.deepEqual(JSON.parse(exported.before),change.before);assert.deepEqual(JSON.parse(exported.after),change.after)
+    for(const field of ['actorId','actorRole','personId','command','right','channel','at','reason'])assert.deepEqual(exported[field],change[field])
+    const changedQuery=new URLSearchParams(historyQuery);changedQuery.set('auditChannel','inbox')
+    assert.equal((await h.send('/api/strap/staff-history?'+changedQuery,undefined,h.owner)).value.rows.length,0)
+    for(const [field,value] of [['auditActor','unrecorded-staff'],['auditRight','booking'],['auditCommand','booking.cancel'],['person',otherHistoryMember.id]]) {
+      const excluded=new URLSearchParams(historyQuery);excluded.set(field,value)
+      assert.equal((await h.send('/api/strap/staff-history?'+excluded,undefined,h.owner)).value.rows.length,0,field+' filters independently')
+    }
+    const empty=await h.send('/api/strap/staff-history.csv?'+changedQuery,undefined,h.owner);assert.equal(parseCsv(empty.text).length,1,'empty exports retain headers and no unrelated changes')
+    const all=(await h.send('/api/strap/staff-history',undefined,h.owner)).value.rows
+    for(let i=1;i<all.length;i++)assert.ok(all[i-1].at>=all[i].at,'history is newest first')
+    assert.equal(all.filter(a=>a.personId===historyMember.id&&a.command==='profile.save.staff').length,1)
+    assert.ok(all.some(a=>a.personId===otherHistoryMember.id&&a.channel==='inbox'&&a.after.phone==='6155550198'))
+    const localDay=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago'}).format(new Date(change.at))
+    const dated=new URLSearchParams(historyQuery);dated.set('auditFrom',localDay);dated.set('auditTo',localDay)
+    assert.deepEqual((await h.send('/api/strap/staff-history?'+dated,undefined,h.owner)).value.rows,history.value.rows,'inclusive studio-local bounds retain the exact change')
+    dated.set('auditFrom','2099-12-30');dated.set('auditTo','2099-12-31')
+    assert.equal((await h.send('/api/strap/staff-history?'+dated,undefined,h.owner)).value.rows.length,0,'out-of-period changes are excluded')
+    const unused=await h.cmd('person.save',{name:'Unused History',email:'unused-history@studio.example',role:'member',active:true})
+    await h.cmd('profile.save.staff',{personId:unused.id,phone:'6155550199',channel:'phone',revision:0,requestId:randomUUID()})
+    await h.cmd('person.erase',{id:unused.id})
+    const redacted=(await h.send('/api/strap/staff-history?person='+unused.id,undefined,h.owner)).value.rows
+    assert.equal(redacted.length,1);assert.equal(redacted[0].erased,true)
+    assert.deepEqual([redacted[0].before,redacted[0].after],[null,null],'existing unused-identity erasure keeps provenance without personal values')
+    assert.ok(!JSON.stringify(redacted).includes('6155550199'))
+    const redactedCsv=await h.send('/api/strap/staff-history.csv?person='+unused.id,undefined,h.owner)
+    assert.ok(!redactedCsv.text.includes('6155550199'))
+    const version=(await h.state()).version
+    for(const path of ['/api/strap/staff-history','/api/strap/staff-history.csv']) {
+      for(const cookie of [ana.cookie,coach.cookie,''])assert.equal((await h.send(path,undefined,cookie)).status,cookie?403:401)
+      assert.equal((await h.send(path,undefined,'',{authorization:`Bearer ${key.token}`})).status,401)
+      for(const query of ['auditFrom=2026-02-30','auditFrom=2026-02-02&auditTo=2026-02-01'])assert.equal((await h.send(path+'?'+query,undefined,h.owner)).status,400)
+      assert.equal((await h.send(path,{},h.owner)).status,404,'no write door is exposed')
+    }
+    assert.equal((await h.state()).version,version,'search, exports, denied reads and attempted rewrites change no studio records')
+    const fullExport=JSON.stringify(all)
+    assert.ok(!fullExport.includes(rotated.result.code),'check-in credentials do not enter audit downloads')
+    if(process.env.STRAP_PROOF_DIR)await(await import('./staff-actions-browser.mjs')).staffActionsBrowser(h,{ana,ben,publish,historyMember})
   })
 })
 

@@ -18,7 +18,7 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
-test('MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
+test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h
   try {
@@ -96,6 +96,11 @@ test('MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-00
     const before=await h.state(owner),mailCount=(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n
     assert.deepEqual(before.fees,originalFees,'ATT-002 linked external receipts, grace terms and waived fee reversals survive native restore')
     assert.deepEqual(before.staffActions.filter(a=>a.command?.startsWith('fee.')),originalFeeAudit,'ATT-002 canonical collection and waiver audits survive')
+    const restoredHistory=(await h.send('/api/strap/staff-history?auditRight=fee-waiver',undefined,owner)).value
+    assert.ok(restoredHistory.rows.some(a=>a.command==='fee.waive'&&a.after.status==='waived'),'SEC-002 restored audit search retains the reasoned fee waiver')
+    const restoredHistoryCsv=await h.send('/api/strap/staff-history.csv?auditRight=fee-waiver',undefined,owner)
+    assert.equal(restoredHistoryCsv.status,200);assert.match(restoredHistoryCsv.text,/fee.waive/)
+
     for(const fee of originalFees) assert.equal(before.bookings.find(b=>b.id===fee.bookingId).cancelTerms.noShowGraceMinutes,10,'ATT-002 booked grace survives native restore')
     const receipt=originalFees.find(f=>f.status==='collected')
     const receiptCount=before.payments.length

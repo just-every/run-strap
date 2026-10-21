@@ -55,6 +55,6 @@ export function peoplePage(s: any, query: URLSearchParams) {
     + panel(q ? `Matching “${query.get('q')}”` : 'Members and instructors', `<div class="panel-body">${search}</div>${table_}`, { icon: 'users' })
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
-    + staffActionHistory(s, chosen)
+    + staffActionHistory(s, query)
     + `</div><aside class="rail">${chosen ? card(s, chosen, back) : ''}${add}${cancellationReasonsPanel(s)}</aside></div>`
 }
