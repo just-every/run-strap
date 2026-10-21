@@ -40,7 +40,7 @@ The first time you open Strap you see **Finish setup**. Check the owner name and
 | People | Members and instructors, invitations and access |
 | Import | Bringing members across from a Mindbody CSV |
 | Agent access | Keys that let an assistant prepare drafts for you |
-| Studio | The location name and time zone every class time is shown in |
+| Studio | Location, time zone, legal studio identity, US address, receipt details and weekly business hours |
 | Local mail | Sign-in and invitation emails while Strap runs on your computer |
 
 Each person sees only their own work. The owner sees everything. An instructor sees their classes on **Today** and **My
@@ -53,3 +53,9 @@ classes** and checks people in to their own classes. A member sees the published
 3. Publish a [waiver](waivers.md) if members must acknowledge one before booking.
 4. [Prepare and publish the week](classes.md). Members can book straight away.
 5. When it is time to open your doors to everyone, [put Strap online](put-strap-online.md).
+
+## Studio identity and hours
+
+Open **Studio** to save the legal studio name, US address and receipt details. An address needs its street, city, state or territory code and five-digit ZIP (optionally ZIP+4). Clear every address field to remove it. Receipt details are saved for future invoices and receipts; saving them issues no document or message.
+
+Weekly business hours use your studio time zone. Give each open day one opening and closing time on the same day; leave both blank for closed days. These hours describe the studio. Class availability and booking windows keep their separate rules. Multiple locations and US phone defaults are not available.

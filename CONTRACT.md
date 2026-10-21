@@ -61,7 +61,7 @@ The previous contract had no clause IDs. Its positive guarantees receive publish
 
 ### Studio and members
 
-- **STUDIO-001 — US studio configuration.** Owners configure the legal studio identity, location addresses, USD pricing, US phone defaults, receipt details, local time zones, business hours and daylight-saving behavior; cents and local dates are explicit everywhere. **Acceptance evidence:** Configure a New York studio and a Los Angeles location; buy a USD pack, view its receipt and book across a DST transition; local times and charged cents agree across staff and member views.
+- **STUDIO-001 — US studio configuration.** Owners configure the legal studio identity, location addresses, USD pricing, US phone defaults, receipt details, local time zones, business hours and daylight-saving behavior; cents and local dates are explicit everywhere.  Current partial configuration semantics: the owner saves one legal studio name, US street address (state or territory code and ZIP/ZIP+4), receipt details and weekly business hours on the existing single-location Studio screen. Optional values can be cleared explicitly; location/time-zone-only saves retain the profile. Weekly hours use Monday=1 through Sunday=7 and one opening-before-closing HH:MM interval on the studio clock per open day; absent days are closed. Hours describe the studio and do not modify the separate booking-window or class-availability rules. Receipt details are stored configuration, not an issued or delivered receipt. The full clause and multi-location acceptance remain required. **Acceptance evidence:** Configure a New York studio and a Los Angeles location; buy a USD pack, view its receipt and book across a DST transition; local times and charged cents agree across staff and member views.
 
 - **STUDIO-002 — Locations and shared memberships.** One business manages multiple studios with location-scoped staff, rooms, schedules, prices and reporting; membership eligibility explicitly permits selected or all locations and transfer does not duplicate credits. SCHED-008 obligation before this capability ships: a location closure closes only the chosen location's rooms and classes, and its impact preview and notices name that location. API-002 obligation before this capability ships: each integration key names the locations it reads and both `roster:read` and `attendance:read` return only their classes; a key created before locations existed reads only the original location, and another location's data is refused through the integration door. Both scopes inherit every API-002 rule before this capability ships. API-003 obligation before this capability ships: `attendance:read` rows are limited to the key's locations, and a key created before locations existed reads only the original location. **Acceptance evidence:** Give a member a two-location plan, book at both, deny a third location, and compare site-restricted manager and consolidated owner reports.
 
@@ -445,13 +445,13 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from the code and tests at commit `b65e1dd5e59384dacaf845cbdcdb90694b5145c3` (21 October 2026); updated rows cite the current code and public-door acceptance evidence.
+Judged from the code and tests at commit `5b130f293d1ba52c04f8f82501eed44aa672de16` (21 October 2026); updated rows cite the current code and public-door acceptance evidence.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 14 | 0 | 0 | 14 |
-| Target and push further | 29 | 16 | 89 | 134 |
-| All | 43 | 16 | 89 | 148 |
+| Target and push further | 29 | 17 | 88 | 134 |
+| All | 43 | 17 | 88 | 148 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -469,7 +469,7 @@ Judged from the code and tests at commit `b65e1dd5e59384dacaf845cbdcdb90694b5145
 | `ERASE-001` | Unused identity erasure fence | published | done | `src/strap/domain/people.ts`; `tests/strap.test.mjs`; `tests/archive.test.mjs` |  |
 | `AUDIT-001` | Retained draft approval records | published | done | `src/strap/domain/drafts.ts`; `tests/strap.test.mjs`; `tests/archive.test.mjs` |  |
 | `PUBLIC-001` | Run site and installed studio doors | published | done | `src/site/pages.ts`; `src/site/shell.ts`; `src/strap/http.ts`; `tests/site/site.test.mjs`; `tests/site/browser-journey.mjs` |  |
-| `STUDIO-001` | US studio configuration | target | missing |  | No implemented us studio configuration workflow or public-door acceptance coverage. |
+| `STUDIO-001` | US studio configuration | target | partial | `src/strap/domain/studio.ts`; `src/strap/domain/studio-profile.ts`; `src/strap/ui/studio.ts`; `src/strap/ui/studio-profile.ts`; `src/strap/forms.ts`; `tests/strap.test.mjs`; `tests/studio.test.mjs`; `tests/studio-browser.mjs` | Single-location legal identity, US address, receipt details, local weekly hours and existing USD/time-zone forms ship. Multiple locations, US phone defaults, issued receipts and the full cross-location DST acceptance remain unimplemented; full acceptance stays required. |
 | `STUDIO-002` | Locations and shared memberships | target | missing |  | No implemented locations and shared memberships workflow or public-door acceptance coverage. |
 | `MEM-001` | Unified member history | target | partial | `src/strap/domain/index.ts`; `src/strap/ui/people.ts`; `src/strap/ui/packs.ts`; `tests/strap.test.mjs` | People, bookings, payment records, emergency contacts and the owner's audited contact edits (APP-003) exist; combined profiles, notes, preferences, duplicate merge and staff profile creation with invitation are absent. |
 | `MEM-002` | Households and authorized payers | target | missing |  | No implemented households and authorized payers workflow or public-door acceptance coverage. |

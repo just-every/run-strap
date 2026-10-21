@@ -38,6 +38,16 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'studio.save' && input.profile === 'true') {
+    const keys = ['line1','line2','city','region','postalCode']
+    input.address = keys.some(key => String(input[key] ?? '').trim())
+      ? Object.fromEntries([...keys.map(key => [key,String(input[key] ?? '').trim()]),['country','US']]) : null
+    input.businessHours = Array.from({length:7},(_,i) => i+1).flatMap(day => {
+      const opens = String(input[`opens_${day}`] ?? ''), closes = String(input[`closes_${day}`] ?? '')
+      return opens || closes ? [{day,opens,closes}] : []
+    })
+    for (const key of [...keys,'profile',...Array.from({length:7},(_,i) => [`opens_${i+1}`,`closes_${i+1}`]).flat()]) delete input[key]
+  }
   if (name === 'renewal.followup.create') {
     input.days = Number(input.days); input.lowCredits = Number(input.lowCredits)
     if (input.dueAt) input.dueAt = String(input.dueAt)+'Z'

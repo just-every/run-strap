@@ -1,3 +1,4 @@
+import { studioProfileFields } from './studio-profile'
 import { classRemindersPanel, reminderTasksPanel } from './class-reminders'
 import { messageTemplatesPanel } from './message-settings'
 // Studio settings: the location name people see and the time zone every class
@@ -17,7 +18,7 @@ export const studioSetup = (back: string) => `<section class="panel setup-card">
 export function studioPage(s: any, notice: any = {}) {
   const zone = s.studio ? `<p class="meta">Classes are entered and shown on ${h(zoneName(s.studio.timeZone))}.</p>` : ''
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
-    + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s), 'Save studio')}`), { icon: 'pin' })
+    + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
     + classRemindersPanel(s)
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)
