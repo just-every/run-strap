@@ -76,7 +76,9 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
         await shot(staff,'staff-cancelled',staffSaved)
         const state=await h.state(),actions=state.staffActions.filter(a=>a.personId===member.id&&a.command?.startsWith('reservation.'))
         assert.equal(actions.length,4);assert.ok(actions.every(a=>a.right==='booking'&&a.actorRole==='owner'))
-        await mine.goto(h.origin+'/app#recurring-reservations')
+        // The member is already on this hash route; reload requests the staff's
+        // newly committed result instead of doing same-document navigation.
+        await mine.reload()
         const final=mine.locator(`[data-reservation="${staffReservation.id}"]`)
         await final.getByText('Future cancellations recorded. Past and started visits were kept.',{exact:true}).waitFor()
         await shot(mine,'member-reads-staff-result',final)
