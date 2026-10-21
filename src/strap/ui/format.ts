@@ -32,12 +32,16 @@ export const dayShort = (s: any, date: string) => (date.slice(0, 4) === studioTo
 /** "Oct 20, 2026" */
 export const datePlain = (date: string) => plainDate.format(civil(date))
 /** "Today 9:14 am", "Yesterday 7:21 pm" or "Tue, Oct 20 · 6:00 am". */
-export function when(s: any, value: unknown) {
+export function whenLabel(s: any, value: unknown) {
   if (value === null || value === undefined || value === '') return '—'
   const instant = at(value), date = dayOf(s, instant), today = studioToday(s)
   const yesterday = localDate(Date.parse(today + 'T12:00:00Z') - 86_400_000, 'UTC')
   const label = date === today ? 'Today' : date === yesterday ? 'Yesterday' : dayShort(s, date) + ' ·'
   return `<time datetime="${h(instant.toISOString())}">${h(label)} ${h(clock(s, instant))}</time>`
+}
+export function when(s: any, value: unknown) {
+  if (value === null || value === undefined || value === '') return '—'
+  return `<time datetime="${h(at(value).toISOString())}">${h(whenLabel(s,value))}</time>`
 }
 /** Minutes between two instants: "50 min". */
 export const length = (start: unknown, end: unknown) => `${Math.round((Date.parse(String(end)) - Date.parse(String(start))) / 60_000)} min`

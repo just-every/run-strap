@@ -3,7 +3,7 @@ import { serviceKey } from '../domain/pack-credits';
 import { body, emptyLine, field, form, h, hidden, owner, panel, rows, select } from './shared';
 import { effectText } from './booking-rules';
 import { bookingControls } from './booking-actions';
-import { when } from './format';
+import { when, whenLabel } from './format';
 
 const path = '/app/makeups';
 const request = () => hidden('requestId',crypto.randomUUID());
@@ -14,7 +14,7 @@ export function makeupsPanel(s: any) {
   const participantName = (id: string) => data.participants?.find((p: any)=>p.id===id)?.name ?? 'Participant';
   const staff = owner(s), classes = rows(s,'classes'), classLabel = (classId: string) => {
     const entry = classes.find(c => c.id === classId);
-    return entry ? `${entry.title} · ${when(s,entry.start)}` : 'Original class';
+    return entry ? `${entry.title} · ${whenLabel(s,entry.start)}` : 'Original class';
   };
   const report = data.bookings.filter((b: any) => b.status === 'booked' && b.packId && !b.attendance && !b.makeupCreditId).map((b: any) =>
     `<div data-absence-booking="${h(b.id)}"><h3>${h(participantName(b.personId))} · ${h(classLabel(b.classId))}</h3>` + form('absence.report',path,hidden('id',b.id)+request()+field('reason','Absence reason','','text','required maxlength="500"')+(staff ? channel() : ''),'Report absence')+'</div>').join('');
@@ -22,7 +22,7 @@ export function makeupsPanel(s: any) {
     const booking = data.bookings.find((b: any) => b.id === credit.bookingId);
     const originalClassId = data.absences.find((a: any)=>a.id===credit.absenceId)?.classId;
     const choices = classes.filter(c => c.id!==originalClassId && serviceKey(classService(c))===serviceKey(credit.service) && c.status === 'published' && c.start > new Date().toISOString() && c.start < credit.expiresAt).map(c => [c.id,classLabel(c.id)] as [unknown,unknown]);
-    return `<div data-makeup-credit="${h(credit.id)}"><h3>${h(participantName(credit.personId))} · Makeup · ${h(credit.service)}</h3><p>Original: ${h(classLabel(data.absences.find((a: any) => a.id === credit.absenceId)?.classId))}. Expires ${h(when(s,credit.expiresAt))}. ${booking ? 'Reserved for '+h(classLabel(booking.classId)) : 'One visit available.'}</p>`
+    return `<div data-makeup-credit="${h(credit.id)}"><h3>${h(participantName(credit.personId))} · Makeup · ${h(credit.service)}</h3><p>Original: ${h(classLabel(data.absences.find((a: any) => a.id === credit.absenceId)?.classId))}. Expires ${when(s,credit.expiresAt)}. ${booking ? 'Reserved for '+h(classLabel(booking.classId)) : 'One visit available.'}</p>`
       + (!credit.bookingId && credit.expiresAt > new Date().toISOString() && choices.length ? form('makeup.book',path,hidden('creditId',credit.id)+request()+select('classId','Replacement class',choices)+(staff ? channel() : ''),'Book makeup') : '')
       + (booking?.status==='booked' && booking.cancelEffect ? `<p>${h(effectText(booking.cancelEffect,false))}</p>`+form('booking.cancel',path,hidden('id',booking.id)+hidden('terms',booking.cancelEffect.key)+request()+(staff ? hidden('channel','desk')+hidden('cancelReason','Other')+hidden('mode','late') : ''),'Cancel makeup','quiet')
         + (staff ? bookingControls(s,classes.find(c=>c.id===booking.classId),booking,path) : `<details><summary>Move makeup</summary>${form('booking.move',path,hidden('id',booking.id)+hidden('terms',booking.cancelEffect.key)+request()+select('classId','Move to class',choices.filter(([key]: any)=>key!==booking.classId)),'Move makeup','quiet')}</details>`) : '')+'</div>';

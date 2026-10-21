@@ -195,7 +195,8 @@ test('ATT-002: disclosed fee assessments, grace, reasoned waivers and desk recei
 
 test('SCHED-009: eligible absences issue one linked expiring makeup; participant, accepted guardian and phone desk share capacity and replay fences', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
-  const coach=await h.person('PriyaMakeup','instructor'), child=await h.person('IslaMakeup'), guardian=await h.person('RosaMakeup'), stranger=await h.person('NoahMakeup')
+  await h.cmd('studio.save',{location:'Park Slope',timeZone:'America/New_York'})
+  const coach=await h.person('Priya','instructor'), child=await h.person('Isla'), guardian=await h.person('Rosa'), stranger=await h.person('Noah')
   await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:child.id,credits:5,amountCents:0,expiresAt:'2099-12-31T00:00:00Z'})).id})
   const publish=async(service,start,capacity=2)=> (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:service,service,start,end:new Date(Date.parse(start)+30*minute).toISOString(),capacity,instructorId:coach.id,room:start}]})).id})).classes[0]
   const original=await publish('Youth Mat',at(24*hour)), replacement=await publish('Youth Mat',at(48*hour),1), wrong=await publish('Reformer',at(50*hour)), secondOriginal=await publish('Youth Mat',at(72*hour)), otherTarget=await publish('Youth Mat',at(96*hour))
@@ -256,7 +257,7 @@ test('SCHED-009: eligible absences issue one linked expiring makeup; participant
   await h.cmd('makeup.guardian.revoke',{id:relation.id},child.cookie)
   assert.equal((await h.state(guardian.cookie)).makeups.credits.length,0)
   await refused(h,'makeup.book',{...input,requestId:'synthetic-strap-8'},guardian.cookie,404,'makeup_not_found')
-  const monthly=await h.person('LenaMakeup')
+  const monthly=await h.person('Lena')
   const periodPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:monthly.id,kind:'visits',visits:2,period:'month',rollover:0,amountCents:0,expiresAt:'2099-12-31T00:00:00Z'})).id})
   const periodOriginal=await h.cmd('booking.book',{classId:original.id},monthly.cookie)
   await h.cmd('booking.book',{classId:secondOriginal.id},monthly.cookie)
