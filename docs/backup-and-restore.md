@@ -14,8 +14,9 @@ rer export --output exports/strap.rer
 
 The archive holds the owner and every member and instructor, classes, packs, bookings, payments, approvals, waiver
 acknowledgements, members' check-in codes and phones, and the originals and journals of member imports. Sessions,
-sign-in links, agent keys, paired kiosk devices, provider credentials and local mail are not included; you sign in
-again after a restore, create new agent keys and pair your kiosks again.
+sign-in links, agent keys, integration keys with their subscriptions and request logs, paired kiosk devices, provider
+credentials and local mail are not included; you sign in again after a restore, create new agent and integration keys
+and pair your kiosks again.
 
 ## Restore
 

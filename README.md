@@ -29,7 +29,7 @@ For your own owner email, run `npx -y @runeditrun/rer install just-every/run-str
 5. An owner can prepare a balance reminder and review its exact wording and balance before approving the text export. Balance reminders remain reviewed text exports. Owners can configure class reminder email timing in **Studio**; member opt-out keeps in-app notices, and failed or unavailable email creates a private follow-up task. SMS and push reminders are not available. Strap does not collect payments. [Agent commands](docs/AGENT-COMMANDS.md) can prepare drafts, while native human owner sessions approve them.
 6. **Import** accepts the [documented Mindbody member CSV shape](docs/MOVE-IN.md). Paste the [synthetic fixture](tests/fixtures/members.csv), preview, review and apply the unchanged CSV. Imports start inactive with no credits or charges. The journal retains original source and supports resume and conflict-preserving undo.
 
-Deactivate a person in **People** to revoke studio access immediately. Revoke preparation keys in **Agent access**. Waiver acknowledgement records receipt of the exact version; it is not a legal signature. Only unused, uninvited, non-imported people can be erased; used member history remains retained. Erasure blocks the same identity from being recreated or imported.
+Deactivate a person in **People** to revoke studio access immediately. Revoke preparation keys in **Agent access** and integration keys in **Integrations**. Waiver acknowledgement records receipt of the exact version; it is not a legal signature. Only unused, uninvited, non-imported people can be erased; used member history remains retained. Erasure blocks the same identity from being recreated or imported.
 
 ## Back up and restore
 
@@ -50,7 +50,7 @@ rer setup --owner-email original-owner@example.com
 rer dev
 ```
 
-The original owner/member identities, classes, packs, bookings, payments, approvals, waiver acknowledgements, import originals and journals travel. Sessions, sign-in links, agent keys, provider credentials and the development outbox do not. Re-enter private configuration and sign in again. Setup uses the archived owner's email. Damaged archives and populated destinations are refused. After erasure, pass a later archive as the journal: `rer import --input OLD.rer --journal LATER.rer --yes`. A current destination or supplied later journal fences older data. Offline older backups cannot discover later erasure; protect and retire old copies. `rer reset --yes` destroys local data and settings; export first if needed.
+The original owner/member identities, classes, packs, bookings, payments, approvals, waiver acknowledgements, import originals and journals travel. Sessions, sign-in links, agent keys, integration keys, provider credentials and the development outbox do not. Re-enter private configuration and sign in again. Setup uses the archived owner's email. Damaged archives and populated destinations are refused. After erasure, pass a later archive as the journal: `rer import --input OLD.rer --journal LATER.rer --yes`. A current destination or supplied later journal fences older data. Offline older backups cannot discover later erasure; protect and retire old copies. `rer reset --yes` destroys local data and settings; export first if needed.
 
 ## Deploy
 
