@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
-import { enrollTotp, softwarePasskey, totp } from './mfa-helpers.mjs'
+import { emailStepUp, enrollTotp, softwarePasskey, totp } from './mfa-helpers.mjs'
 
 const mail = async (h, email) => (await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r => JSON.parse(r.message)).find(m => m.to.includes(email))
 const operatorId = async (h, cookie) => (await h.send('/auth/session', undefined, cookie)).value.operator.id
@@ -50,11 +50,15 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   await refused(h, 'mfa.verify', { code: totp(app.secret, 1) }, await h.signIn(fiona.email), 403, 'mfa_code_invalid')
   // A passkey is added beside it (this session has presented the app) and then signs in on its own.
   const key = softwarePasskey(h.origin)
+  const unverified = await h.cmd('mfa.passkey.options', { purpose: 'register' }, second)
+  assert.equal(unverified.publicKey.authenticatorSelection.userVerification, 'required')
+  await refused(h, 'mfa.passkey.register', { challenge_id: unverified.challenge_id, ...key.registration(unverified.publicKey.challenge, { flags: 0x41 }) }, second, 403, 'passkey_user_not_verified')
   const options = await h.cmd('mfa.passkey.options', { purpose: 'register' }, second)
   const added = await h.cmd('mfa.passkey.register', { challenge_id: options.challenge_id, label: 'Laptop', ...key.registration(options.publicKey.challenge) }, second)
   assert.equal(added.recovery_codes, null, 'working recovery codes are kept, not replaced')
   const third = await h.signIn(fiona.email)
   await get(h, '/api/strap/reports/revenue', third, 403, 'mfa_required')
+  assert.equal((await presentPasskey(h, key, third, { flags: 0x01 })).status, 403, 'user presence alone cannot sign in')
   const other = softwarePasskey(h.origin)
   assert.equal((await presentPasskey(h, key, third, { key: other.privateKey })).status, 403, 'a signature from another key is refused')
   assert.equal((await presentPasskey(h, key, third, { counter: 0, rpHash: Buffer.alloc(32) })).status, 403, 'another relying party is refused')
@@ -62,12 +66,16 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   await get(h, '/api/strap/reports/revenue', third, 200)
   assert.equal((await presentPasskey(h, key, third, { counter: 1 })).status, 403, 'a replayed signature counter is refused')
   // A recovery code works once: the second use, from a fresh session, is refused.
+  const raced = await Promise.all([h.signIn(fiona.email), h.signIn(fiona.email)])
+  const attempts = await Promise.all(raced.map(cookie => h.send('/api/strap/command', { name: 'mfa.verify', input: { code: app.recoveryCodes[1] } }, cookie)))
+  assert.deepEqual(attempts.map(r => r.status).sort(), [200, 403], 'concurrent recovery consumption admits exactly one session')
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_mfa_sessions WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?) AND method='recovery'").bind(await operatorId(h, fiona.cookie)).first()).n, 1)
   const code = app.recoveryCodes[0], fourth = await h.signIn(fiona.email), fifth = await h.signIn(fiona.email)
   await h.cmd('mfa.verify', { code }, fourth)
   await get(h, '/api/strap/reports/revenue', fourth, 200)
   await refused(h, 'mfa.verify', { code }, fifth, 403, 'mfa_code_invalid')
   await get(h, '/api/strap/reports/revenue', fifth, 403, 'mfa_required')
-  assert.equal((await get(h, '/api/strap/mfa', fourth, 200)).value.recoveryCodesLeft, 9)
+  assert.equal((await get(h, '/api/strap/mfa', fourth, 200)).value.recoveryCodesLeft, 8)
   // Five wrong codes pause the person: the right one is refused until the pause ends.
   for (let i = 0; i < 4; i++) await refused(h, 'mfa.verify', { code: '111111' }, fifth, 403, 'mfa_code_invalid')
   await refused(h, 'mfa.verify', { code: totp(app.secret, -1) }, fifth, 429, 'mfa_locked')
@@ -89,21 +97,63 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   await confirm(h.auth.OWNER_EMAIL, h.owner)
   assert.equal((await h.send('/auth/invite', { email: 'second@studio.example', displayName: 'Second Owner', role: 'owner' }, h.owner)).status, 202)
   const second = await confirm('second@studio.example'), secondId = await operatorId(h, second)
+  const member = await h.person('Stafftarget')
+  const inactive = await h.cmd('person.save', { name: 'Inactive', email: 'inactive@studio.example', role: 'member', active: false })
+  const invited = await h.send('/auth/invite', { email: 'pending@studio.example', displayName: 'Pending', role: 'member' }, h.owner)
+  assert.equal(invited.status, 202)
+  const pendingId = (await h.db.prepare("SELECT id FROM oa_operators WHERE email='pending@studio.example'").first()).id
+  const staffId = await operatorId(h, member.cookie)
+  const before = async () => (await h.db.batch((await h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results.map(r => h.db.prepare(`SELECT * FROM ${r.name} ORDER BY rowid`)))).map(r => r.results)
+  const unchanged = async (act, label) => { const saved = await before(); await act(); assert.deepEqual(await before(), saved, label + ': nothing written (including auth mail, audit and rate counters)') }
   const held = await h.state(second)
   assert.deepEqual([held.teachingPay, held.integrations, held.agentKeys, held.memberMail], [null, [], [], null])
   assert.equal((await get(h, '/api/strap/mfa', second, 200)).value.required, true)
-  for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await get(h, path, second, 403, 'mfa_enrollment_required')
+  for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
   for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) assert.equal((await h.send(page, undefined, second)).status, 303, page)
   assert.equal((await h.send('/app/people', undefined, second)).status, 200)
-  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await refused(h, name, input, second, 403, 'mfa_enrollment_required')
+  for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
+  const staffChanges = [
+    ['person.invite', { id: member.id }],
+    ['person.save', { ...member, role: 'instructor' }],
+    ['person.save', { ...member, active: false }],
+    ['person.save', { ...inactive, active: true }],
+  ]
+  for (const [name, input] of staffChanges) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
+  for (const [path, input] of [
+    ['/auth/invite', { email: 'refused@studio.example', displayName: 'Refused', role: 'member' }],
+    ['/auth/operator/role', { operatorId: staffId, role: 'admin' }],
+    ['/auth/operator/status', { operatorId: staffId, status: 'inactive' }],
+    ['/auth/operator/status', { operatorId: staffId, status: 'active' }],
+    ['/auth/invite/cancel', { operatorId: pendingId }],
+  ]) await unchanged(async () => { const r = await h.send(path, input, second); assert.equal(r.status, 403); assert.equal(r.value.error, 'mfa_enrollment_required') }, path)
+  // Forms take the same guard, including parsed role and activation changes.
+  const form = await h.mf.dispatchFetch(h.origin + '/app/action?name=person.save&returnTo=%2Fapp%2Fpeople', { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: member.id, name: member.name, email: member.email, role: 'instructor', active: 'true' }).toString() })
+  assert.match(await form.text(), /mfa enrollment required/)
+  assert.equal((await h.state()).people.find(p => p.id === member.id).role, 'member')
+  // First enrollment needs Base's fresh email proof; neither starting method writes before that proof.
+  await h.db.prepare('UPDATE oa_sessions SET created_at=? WHERE operator_id=?').bind(Date.now() - 660_000, secondId).run()
+  await unchanged(() => refused(h, 'mfa.totp.start', {}, second, 403, 'step_up_required'), 'first TOTP step-up')
+  await unchanged(() => refused(h, 'mfa.passkey.options', { purpose: 'register' }, second, 403, 'step_up_required'), 'first passkey step-up')
+  await emailStepUp(h, second)
   const enrolled = await enrollTotp(h, second)
+  await unchanged(() => refused(h, 'mfa.remove', { factor: enrolled.factor }, second, 409, 'mfa_last_factor_required'), 'owner last factor')
+  // A pending app does not count as a working second factor.
+  await h.cmd('mfa.totp.start', { label: 'Not confirmed' }, second)
+  await unchanged(() => refused(h, 'mfa.remove', { factor: enrolled.factor }, second, 409, 'mfa_last_factor_required'), 'pending factor')
+  for (const [name, input] of staffChanges.slice(1, 2)) assert.equal((await h.cmd(name, input, second)).role, 'instructor')
+  assert.equal((await h.send('/auth/operator/role', { operatorId: staffId, role: 'admin' }, second)).status, 200)
+
   await get(h, '/api/strap/teaching-pay', second, 200)
   // The enrolling owner resets nobody's factors but another owner's: never their own.
   await refused(h, 'mfa.reset', { operatorId: secondId }, second, 403, 'another_owner_required')
   const fresh = await h.signIn(h.auth.OWNER_EMAIL)
   await refused(h, 'mfa.reset', { operatorId: secondId }, fresh, 403, 'mfa_required')
+  await h.db.prepare('UPDATE oa_step_up_challenges SET consumed_at=1 WHERE consumed_at IS NOT NULL').run()
+  await unchanged(() => refused(h, 'mfa.reset', { operatorId: secondId, reason: 'Lost phone' }, h.owner, 403, 'step_up_required'), 'reset step-up')
+  await emailStepUp(h, h.owner, 'delete')
+  await unchanged(() => refused(h, 'mfa.reset', { operatorId: secondId, reason: '  ' }, h.owner, 400, 'invalid_reason'), 'reset reason')
   const reset = await h.cmd('mfa.reset', { operatorId: secondId, reason: 'Lost phone' })
-  assert.equal(reset.factors_removed, 1)
+  assert.equal(reset.factors_removed, 2)
   assert.equal((await h.send('/api/strap/state', undefined, second)).status, 401, 'the reset person is signed out everywhere')
   const again = await h.signIn('second@studio.example')
   await get(h, '/api/strap/teaching-pay', again, 403, 'mfa_enrollment_required')
@@ -111,7 +161,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   // The audit record: who reset whom, when and why; filterable, exportable, owner only.
   const audit = (await get(h, '/api/strap/staff-history?auditCommand=mfa.reset', h.owner, 200)).value.rows
   assert.equal(audit.length, 1)
-  assert.deepEqual([audit[0].command, audit[0].actorId, audit[0].personId, audit[0].reason, audit[0].after.actor, audit[0].after.subject, audit[0].after.factorsRemoved], ['mfa.reset', first, secondId, 'Lost phone', h.auth.OWNER_EMAIL, 'second@studio.example', 1])
+  assert.deepEqual([audit[0].command, audit[0].actorId, audit[0].personId, audit[0].reason, audit[0].after.actor, audit[0].after.subject, audit[0].after.factorsRemoved], ['mfa.reset', first, secondId, 'Lost phone', h.auth.OWNER_EMAIL, 'second@studio.example', 2])
   assert.match((await get(h, '/api/strap/staff-history.csv?auditCommand=mfa.reset', h.owner, 200)).text, /mfa\.reset/)
   assert.equal((await get(h, '/api/strap/staff-history?auditCommand=mfa.enroll', h.owner, 200)).value.rows.length >= 2, true, 'enrollments are audited too')
   const ana = await h.person('Ana')
@@ -139,10 +189,16 @@ test('SEC-004: a member opts in, and every later session is held at every door u
 }))
 
 test('SEC-004: without an MFA key authenticator apps are refused and a passkey alone opens the privileged doors', () => run(async h => {
+  await refused(h, 'mfa.totp.start', {}, h.owner, 403, 'step_up_required')
+  await emailStepUp(h, h.owner)
   await refused(h, 'mfa.totp.start', {}, h.owner, 409, 'mfa_key_missing')
   await get(h, '/api/strap/teaching-pay', h.owner, 403, 'mfa_enrollment_required')
   const key = softwarePasskey(h.origin), options = await h.cmd('mfa.passkey.options', { purpose: 'register' })
-  const added = await h.cmd('mfa.passkey.register', { challenge_id: options.challenge_id, ...key.registration(options.publicKey.challenge) })
+  assert.equal(options.publicKey.timeout, 300_000)
+  await h.db.prepare('UPDATE st_mfa_challenges SET expires_at=? WHERE id=?').bind(Date.now() - 1, options.challenge_id).run()
+  await refused(h, 'mfa.passkey.register', { challenge_id: options.challenge_id, ...key.registration(options.publicKey.challenge) }, h.owner, 409, 'passkey_challenge_expired')
+  const active = await h.cmd('mfa.passkey.options', { purpose: 'register' })
+  const added = await h.cmd('mfa.passkey.register', { challenge_id: active.challenge_id, ...key.registration(active.publicKey.challenge) })
   assert.equal(added.recovery_codes.length, 10)
   await get(h, '/api/strap/teaching-pay', h.owner, 200)
   await refused(h, 'mfa.passkey.register', { challenge_id: options.challenge_id, ...key.registration(options.publicKey.challenge) }, h.owner, 409, 'passkey_challenge_expired')

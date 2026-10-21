@@ -29,6 +29,16 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' does not overflow')
         await page.screenshot({ path: join(proof, `SEC-004-${name}-${width}.png`), fullPage: true })
       }
+      const confirmEmail = async (page, email, button) => {
+        await page.getByRole('button', { name: button, exact: true }).click()
+        await page.getByText('Confirmation link sent.', { exact: false }).waitFor()
+        const messages = (await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r => JSON.parse(r.message))
+        const message = messages.find(m => m.to.includes(email))
+        const link = message.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]
+        await page.goto(link)
+        await page.getByRole('button', { name: 'Confirm', exact: true }).click()
+        await page.getByRole('heading', { name: 'Security', exact: true }).waitFor()
+      }
       const person = finance[width]
       // Held at enrollment, then a passkey in the virtual authenticator.
       const first = await open(person.cookie)
@@ -41,6 +51,7 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
         assert.equal(new URL(first.page.url()).pathname, '/app/security')
         await first.page.getByText('Reports, pay, exports, staff access').waitFor()
         await capture(first.page, 'finance-held-enrollment')
+        await confirmEmail(first.page, person.email, 'Email a confirmation link')
         await first.page.getByRole('button', { name: 'Add a passkey', exact: true }).click()
         await first.page.getByRole('heading', { name: 'Passkey added', exact: true }).waitFor()
         assert.equal(await first.page.locator('.recovery li').count(), 10)
@@ -65,6 +76,8 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
       const opted = await open(member[width].cookie)
       try {
         await opted.page.goto(h.origin + '/app/security')
+        await capture(opted.page, 'email-step-up')
+        await confirmEmail(opted.page, member[width].email, 'Email a confirmation link')
         await opted.page.getByRole('button', { name: 'Set up an authenticator app', exact: true }).click()
         await opted.page.getByRole('heading', { name: 'Authenticator app', exact: true }).waitFor()
         const secret = await opted.page.locator('.checkin-code code').innerText()
@@ -81,6 +94,17 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
         await owner.page.getByRole('heading', { name: 'Who can sign in', exact: true }).waitFor()
         await owner.page.getByRole('heading', { name: 'Finance users', exact: true }).waitFor()
         await capture(owner.page, 'owner-access')
+        await confirmEmail(owner.page, h.auth.OWNER_EMAIL, 'Confirm email before a reset')
+        const row = owner.page.getByRole('row').filter({ hasText: person.email })
+        const reason = row.getByLabel('Reason', { exact: true })
+        assert.equal(await reason.getAttribute('required'), '')
+        await reason.fill('Lost device')
+        await capture(owner.page, 'reset-reason')
+        await row.getByRole('button', { name: 'Reset factors', exact: true }).click()
+        await owner.page.getByRole('heading', { name: 'Who can sign in', exact: true }).waitFor()
+        assert.equal((await h.send('/auth/session', undefined, person.cookie)).status, 401, 'browser reset ends the target session')
+        assert.equal(await owner.page.getByRole('row').filter({ hasText: person.email }).getByRole('button', { name: 'Reset factors', exact: true }).count(), 0)
+        await capture(owner.page, 'reset-complete')
       } finally { await owner.context.close() }
     }
   } finally { await browser.close() }

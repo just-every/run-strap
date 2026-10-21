@@ -71,6 +71,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.send('/api/strap/exit.json')).status,401)
     for(const cookie of [member.cookie,coach.cookie]) assert.equal((await h.send('/api/strap/exit.json',undefined,cookie)).status,403)
     assert.equal((await h.send('/api/strap/exit.json',undefined,'',{authorization:`Bearer ${key.token}`})).status,401)
+    for (const token of [key.token,integration.token]) {
+      assert.equal((await h.send('/api/strap/mfa',undefined,'',{authorization:`Bearer ${token}`})).status,401)
+      assert.equal((await h.send('/api/strap/command',{name:'mfa.verify',input:{code:'synthetic-strap-1'}},'',{authorization:`Bearer ${token}`})).status,401)
+    }
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -85,6 +89,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
     const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'));assert.ok(!bytes.includes('Excluded integration'),'API-002 integration keys never travel in the native archive')
+    for (const value of [identity.factor.secret,...identity.factor.recoveryCodes]) assert.ok(!bytes.includes(value),'native archive excludes factor secrets and recovery codes')
+    assert.ok(!bytes.split('\n').filter(Boolean).map(JSON.parse).some(r=>JSON.stringify(r).includes('st_mfa_')),'native archive excludes all factor, passkey, recovery and challenge tables')
     await command(restored,['import','--input',old,'--yes','--no-queue'])
     await command(restored,['export','--output',again,'--no-queue'])
     const rows=text=>text.split('\n').filter(Boolean).map(JSON.parse).filter(r=>r.kind==='part')

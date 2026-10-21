@@ -54,8 +54,8 @@ export async function harness(options = {}) {
     }
     const signIn = async email => { const response = await send('/auth/magic-link', {email}); assert.equal(response.status,202,response.text); return confirmMail(email) }
     // The owner reaches reports, pay and exports only through a second factor (SEC-004): enroll one unless a test asks to start without it.
-    const mfaOwner = options.mfa === false || options.owner || options.unclaimed ? null : await enrollTotp({ cmd }, owner)
-    const enroll = cookie => enrollTotp({ cmd }, cookie)
+    const mfaOwner = options.mfa === false || options.owner || options.unclaimed ? null : await enrollTotp({ cmd, send, db }, owner)
+    const enroll = cookie => enrollTotp({ cmd, send, db }, cookie)
     return { db, mf, origin, owner, mfaOwner, auth, send, confirmSetup, enroll, cmd, state, person, signIn, close: async () => { await mf.dispose(); if (!options.root) await rm(dir, { recursive: true, force: true }) } }
   } catch (error) { await mf.dispose(); if (!options.root) await rm(dir, { recursive: true, force: true }); throw error }
 }

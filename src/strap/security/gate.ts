@@ -11,7 +11,7 @@ import { selfService, standing } from './mfa'
 const pages = new Set(['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent'])
 const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|staff-history|teaching-pay|reports\/revenue)$/
 export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path)
-export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|pay)\./.test(name) || ['mfa.reset', 'mail.connect'].includes(name)
+export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|pay)\./.test(name) || ['mfa.reset', 'mail.connect', 'person.invite'].includes(name)
 
 /** What a finance user may open: the revenue and collections report, its downloads and their own security page. */
 export const financeRoute = (path: string) => ['/app', '/app/revenue', '/app/security', '/api/strap/mfa', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/revenue.xlsx'].includes(path)
@@ -36,4 +36,13 @@ export async function cleared(env: Bindings, who: Actor) {
   if (!person(who)) return true
   const s = await standing(env, who)
   return !s.covered || (s.usable.length > 0 && s.verifiedAt !== null)
+}
+
+/** The person editor also changes studio sign-in rights, independently of Base's operator routes. */
+export async function staffRightsCommand(env: Bindings, name: string, input: Record<string, unknown>) {
+  if (name !== 'person.save') return false
+  const previous = input.id ? await env.DB.prepare('SELECT role,active FROM st_people WHERE id=?').bind(input.id).first<{ role: string; active: number }>() : null
+  return previous
+    ? (input.role !== undefined && input.role !== previous.role) || (input.active !== undefined && input.active !== !!previous.active)
+    : input.role === 'instructor'
 }

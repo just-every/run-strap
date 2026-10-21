@@ -2,7 +2,7 @@
 // Crypto. Registration accepts any attestation format without checking the
 // authenticator's maker (Strap never claims an attested device); the public
 // key, the relying-party id hash, the challenge, the origin and the
-// user-presence flag are always checked. ES256 and RS256 keys are accepted.
+// user-presence and user-verification flags are always checked. ES256 and RS256 keys are accepted.
 import { b64url, fromB64url, sha256Hex } from './crypto'
 
 const invalid = (message: string, status = 400) => Object.assign(new Error(message), { status })
@@ -69,6 +69,7 @@ async function clientData(text: string, type: string, challenge: string, origin:
 async function checkAuthData(data: AuthData, rpId: string) {
   insist(hex(data.rpIdHash) === await sha256Hex(rpId), 'passkey_rp_mismatch', 403)
   insist(data.flags & 0x01, 'passkey_user_not_present', 403)
+  insist(data.flags & 0x04, 'passkey_user_not_verified', 403)
 }
 
 export interface Registration { credentialId: string; publicKey: JsonWebKey; signCount: number }

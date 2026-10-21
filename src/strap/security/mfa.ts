@@ -51,10 +51,11 @@ export async function standing(env: Bindings, who: Actor) {
 const requirePerson = (who: Actor) => { if (!who.sessionId || !['owner', 'finance', 'member', 'instructor'].includes(who.role) || (who.role === 'owner' && !who.isOwner)) fail('person_required', 403) }
 
 /** Adding a factor beside a working one needs this session to have presented it. */
-async function requireEnrollable(env: Bindings, who: Actor) {
+async function requireEnrollable(env: Bindings, who: Actor, request: Request) {
   requirePerson(who)
   const { usable, verifiedAt } = await standing(env, who)
   if (usable.length && verifiedAt === null) fail('mfa_required', 403)
+  if (!usable.length) await operatorAuth(env).requireStepUp(request, 'credentials:mint')
 }
 async function requireVerified(env: Bindings, who: Actor) {
   requirePerson(who)
@@ -71,8 +72,8 @@ async function recoveryStatements(env: Bindings, who: Actor, force = false) {
   return { codes, statements: [stmt(env, 'DELETE FROM st_mfa_recovery WHERE operator_id=?', who.id), ...await Promise.all(codes.map(async code => stmt(env, 'INSERT INTO st_mfa_recovery(operator_id,code_hash) VALUES(?,?)', who.id, await recoveryHash(code))))] }
 }
 
-async function startTotp(env: Bindings, who: Actor, input: Record<string, unknown>) {
-  await requireEnrollable(env, who)
+async function startTotp(env: Bindings, who: Actor, input: Record<string, unknown>, request: Request) {
+  await requireEnrollable(env, who, request)
   if (!env.MFA_KEY) fail('mfa_key_missing', 409)
   const secret = crypto.getRandomValues(new Uint8Array(20)), id = crypto.randomUUID()
   await env.DB.batch([
@@ -93,8 +94,8 @@ async function refuse(env: Bindings, who: Actor, method: string): Promise<never>
   return fail('mfa_code_invalid', 403)
 }
 
-async function confirmTotp(env: Bindings, who: Actor, input: Record<string, unknown>) {
-  await requireEnrollable(env, who)
+async function confirmTotp(env: Bindings, who: Actor, input: Record<string, unknown>, request: Request) {
+  await requireEnrollable(env, who, request)
   await lockedOut(env, who)
   const factor = await one<Factor>(env, "SELECT * FROM st_mfa_factors WHERE id=? AND operator_id=? AND kind='totp' AND status='pending'", text(input, 'factor', 100), who.id)
   if (!factor) fail('factor_not_found', 404)
@@ -133,18 +134,20 @@ async function verifyFactor(env: Bindings, who: Actor, input: Record<string, unk
   }
   const hash = await recoveryHash(code)
   if (!await one(env, 'SELECT 1 FROM st_mfa_recovery WHERE operator_id=? AND code_hash=? AND used_at IS NULL', who.id, hash)) return refuse(env, who, 'recovery')
-  // The claim is the update itself: of two requests with one code, only the first changes a row.
-  const claimed = await stmt(env, 'UPDATE st_mfa_recovery SET used_at=? WHERE operator_id=? AND code_hash=? AND used_at IS NULL', Date.now(), who.id, hash).run()
-  if (claimed.meta.changes !== 1) return refuse(env, who, 'recovery')
-  return presented(env, who, 'recovery', [])
+  try {
+    return await presented(env, who, 'recovery', [
+      stmt(env, 'INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_mfa_recovery WHERE operator_id=? AND code_hash=? AND used_at IS NULL) THEN 1 ELSE 0 END', who.id, hash),
+      stmt(env, 'UPDATE st_mfa_recovery SET used_at=? WHERE operator_id=? AND code_hash=? AND used_at IS NULL', Date.now(), who.id, hash),
+    ])
+  } catch (error) { if (/CHECK constraint failed/.test(String(error))) return refuse(env, who, 'recovery'); throw error }
 }
 
 const relyingParty = (env: Bindings) => ({ origin: env.AUTH_ORIGIN, rpId: new URL(env.AUTH_ORIGIN).hostname })
 
-async function passkeyOptions(env: Bindings, who: Actor, input: Record<string, unknown>) {
+async function passkeyOptions(env: Bindings, who: Actor, input: Record<string, unknown>, request: Request) {
   const purpose = text(input, 'purpose', 10)
   if (purpose !== 'register' && purpose !== 'verify') fail('invalid_purpose')
-  if (purpose === 'register') await requireEnrollable(env, who)
+  if (purpose === 'register') await requireEnrollable(env, who, request)
   else { requirePerson(who); await lockedOut(env, who) }
   const passkeys = (await standing(env, who)).usable.filter(factor => factor.kind === 'passkey')
   if (purpose === 'verify' && !passkeys.length) fail('no_passkey', 409)
@@ -155,20 +158,19 @@ async function passkeyOptions(env: Bindings, who: Actor, input: Record<string, u
   ])
   const { rpId } = relyingParty(env), credentials = passkeys.map(factor => ({ type: 'public-key', id: factor.credential_id }))
   return { challenge_id: id, publicKey: purpose === 'register'
-    ? { challenge, rp: { id: rpId, name: branding.name }, user: { id: b64url(new TextEncoder().encode(who.id)), name: who.email, displayName: who.email }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], excludeCredentials: credentials, authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' }, attestation: 'none', timeout: CHALLENGE_MS }
-    : { challenge, rpId, allowCredentials: credentials, userVerification: 'preferred', timeout: CHALLENGE_MS } }
+    ? { challenge, rp: { id: rpId, name: branding.name }, user: { id: b64url(new TextEncoder().encode(who.id)), name: who.email, displayName: who.email }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], excludeCredentials: credentials, authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' }, attestation: 'none', timeout: CHALLENGE_MS }
+    : { challenge, rpId, allowCredentials: credentials, userVerification: 'required', timeout: CHALLENGE_MS } }
 }
 
 async function takeChallenge(env: Bindings, who: Actor, input: Record<string, unknown>, purpose: string) {
   const id = text(input, 'challenge_id', 100)
-  const row = await one<{ challenge: string; expires_at: number }>(env, 'SELECT challenge,expires_at FROM st_mfa_challenges WHERE id=? AND operator_id=? AND session_id=? AND purpose=?', id, who.id, who.sessionId, purpose)
+  const row = await one<{ challenge: string; expires_at: number }>(env, 'DELETE FROM st_mfa_challenges WHERE id=? AND operator_id=? AND session_id=? AND purpose=? RETURNING challenge,expires_at', id, who.id, who.sessionId, purpose)
   if (!row || row.expires_at < Date.now()) fail('passkey_challenge_expired', 409)
-  await stmt(env, 'DELETE FROM st_mfa_challenges WHERE id=?', id).run()
   return row!.challenge
 }
 
-async function registerPasskey(env: Bindings, who: Actor, input: Record<string, unknown>) {
-  await requireEnrollable(env, who)
+async function registerPasskey(env: Bindings, who: Actor, input: Record<string, unknown>, request: Request) {
+  await requireEnrollable(env, who, request)
   const challenge = await takeChallenge(env, who, input, 'register')
   const registration = await verifyRegistration({ clientDataJSON: text(input, 'client_data_json', 4000), attestationObject: text(input, 'attestation_object', 20000) }, { challenge, ...relyingParty(env) })
   const id = crypto.randomUUID(), recovery = await recoveryStatements(env, who), label = text(input, 'label', 80, true) || 'Passkey'
@@ -206,9 +208,13 @@ async function removeFactor(env: Bindings, request: Request, who: Actor, input: 
   await requireVerified(env, who)
   const factor = await one<Factor>(env, 'SELECT * FROM st_mfa_factors WHERE id=? AND operator_id=?', text(input, 'factor', 100), who.id)
   if (!factor) fail('factor_not_found', 404)
-  const last = (await one<{ n: number }>(env, 'SELECT COUNT(*) AS n FROM st_mfa_factors WHERE operator_id=? AND id!=?', who.id, factor!.id))!.n === 0
-  await commit(env, [stmt(env, 'DELETE FROM st_mfa_factors WHERE id=?', factor!.id), ...(last ? [stmt(env, 'DELETE FROM st_mfa_recovery WHERE operator_id=?', who.id)] : []), stmt(env, 'DELETE FROM st_mfa_sessions WHERE operator_id=?', who.id)],
+  const others = (await standing(env, who)).usable.filter(f => f.id !== factor!.id)
+  const last = !others.length
+  if (covered(who) && last) fail('mfa_last_factor_required', 409)
+  const fence = covered(who) ? [stmt(env, `INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_mfa_factors WHERE operator_id=? AND status='active' AND id IN (${others.map(() => '?').join(',')})) THEN 1 ELSE 0 END`, who.id, ...others.map(f => f.id))] : []
+  try { await commit(env, [...fence,stmt(env, 'DELETE FROM st_mfa_factors WHERE id=?', factor!.id), ...(last ? [stmt(env, 'DELETE FROM st_mfa_recovery WHERE operator_id=?', who.id)] : []), stmt(env, 'DELETE FROM st_mfa_sessions WHERE operator_id=?', who.id)],
     who, 'mfa.remove', who, { kind: factor!.kind, factor: factor!.id, label: factor!.label })
+  } catch (error) { if (/CHECK constraint failed/.test(String(error))) fail('mfa_last_factor_required', 409); throw error }
   return { id: factor!.id, removed: true, sessions_ended: await endSessions(env, request, who.id, who.sessionId) }
 }
 
@@ -228,13 +234,16 @@ async function renewRecovery(env: Bindings, who: Actor) {
  */
 async function resetFactors(env: Bindings, request: Request, who: Actor, input: Record<string, unknown>) {
   if (who.role !== 'owner' || !who.isOwner) fail('owner_required', 403)
+  await requireVerified(env, who)
   const target = await one<{ id: string; email: string; role: string; status: string }>(env, 'SELECT id,email,role,status FROM oa_operators WHERE id=?', text(input, 'operatorId', 100))
   if (!target) fail('person_not_found', 404)
   if (target!.id === who.id) fail('another_owner_required', 403)
+  await operatorAuth(env).requireStepUp(request, 'delete')
+  const reason = text(input, 'reason', 300)
   const removed = (await one<{ n: number }>(env, 'SELECT COUNT(*) AS n FROM st_mfa_factors WHERE operator_id=?', target!.id))!.n
   if (!removed) fail('no_factor_to_reset', 409)
   await commit(env, [stmt(env, 'DELETE FROM st_mfa_factors WHERE operator_id=?', target!.id), stmt(env, 'DELETE FROM st_mfa_recovery WHERE operator_id=?', target!.id), stmt(env, 'DELETE FROM st_mfa_sessions WHERE operator_id=?', target!.id), stmt(env, 'DELETE FROM st_mfa_challenges WHERE operator_id=?', target!.id)],
-    who, 'mfa.reset', { id: target!.id, email: target!.email }, { factorsRemoved: removed, targetRole: target!.role, reason: text(input, 'reason', 300, true) || null })
+    who, 'mfa.reset', { id: target!.id, email: target!.email }, { factorsRemoved: removed, targetRole: target!.role, reason })
   return { operatorId: target!.id, factors_removed: removed, sessions_ended: await endSessions(env, request, target!.id) }
 }
 
@@ -261,11 +270,15 @@ export async function auditEvents(env: Bindings) {
 
 const self = { 'mfa.totp.start': startTotp, 'mfa.totp.confirm': confirmTotp, 'mfa.verify': verifyFactor, 'mfa.passkey.options': passkeyOptions, 'mfa.passkey.register': registerPasskey, 'mfa.passkey.verify': verifyPasskey }
 /** Commands a held person may still use: enrolling and presenting their own factor. */
-export const selfService = [...Object.keys(self), 'mfa.recovery.renew', 'mfa.remove']
+export const selfService = [...Object.keys(self), 'mfa.recovery.renew', 'mfa.remove', 'mfa.step-up']
 
 export async function mfaCommand(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
   const run = self[name as keyof typeof self]
-  if (run) return run(env, who, input)
+  if (run) return run(env, who, input, request)
+  if (name === 'mfa.step-up') {
+    requirePerson(who)
+    return operatorAuth(env).requestStepUp(request, { action: input.purpose === 'reset' ? 'delete' : 'credentials:mint', returnTo: '/app/security' })
+  }
   if (name === 'mfa.recovery.renew') return renewRecovery(env, who)
   if (name === 'mfa.remove') return removeFactor(env, request, who, input)
   if (name === 'mfa.reset') return resetFactors(env, request, who, input)
