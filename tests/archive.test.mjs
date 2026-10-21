@@ -151,7 +151,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})
     // Checksum damage is a transfer failure (1); restore policy conflicts remain 4.
     await command(erased,['import','--input',corrupt,'--yes','--no-queue'],1)
-    h=await harness({root:source,...identity});const again=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},again);await h.cmd('person.erase',{id:p.id,revision:1},again);await h.close();h=null
+    h=await harness({root:source,...identity});const eraser=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},eraser);await h.cmd('person.erase',{id:p.id,revision:1},eraser);await h.close();h=null
     await command(source,['export','--output',later,'--no-queue'])
     const erasedBytes=await readFile(later,'utf8')
     for(const value of ['Rita Joiner','2125550188','2125550144','temporary@venue.example']) assert.ok(!erasedBytes.includes(value),`APP-003 erasure removes ${value} from the later archive`)
