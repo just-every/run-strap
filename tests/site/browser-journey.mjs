@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { totp } from '../mfa-helpers.mjs'
 import { createServer } from 'node:http'
 import { readFile, mkdir } from 'node:fs/promises'
 import { join, extname } from 'node:path'
@@ -61,7 +62,8 @@ export async function publicDoors(site) {
       await page.goto(h.origin + '/app')
       await shot('signin')
       assert.equal(new URL(page.url()).pathname, '/signin', 'private app redirects signed-out visitors')
-      const cookie = width === 1440 ? h.owner : await h.signIn(h.auth.OWNER_EMAIL)
+      // A fresh owner session presents the enrolled authenticator first (SEC-004).
+      const cookie = width === 1440 ? h.owner : await h.signIn(h.auth.OWNER_EMAIL).then(async fresh => { await h.cmd('mfa.verify', { code: totp(h.mfaOwner.secret, 1) }, fresh); return fresh })
       const split = cookie.indexOf('=')
       await context.addCookies([{ name: cookie.slice(0, split), value: cookie.slice(split + 1), url: h.origin }])
       await page.goto(h.origin + '/app')
