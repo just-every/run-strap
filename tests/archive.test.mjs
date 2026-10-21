@@ -181,3 +181,61 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     finally { await proxy.dispose() }
   } finally { if(h)await h.close();await rm(temporary,{recursive:true,force:true}) }
 })
+
+
+// Same origin is deliberate: restored owner IDs and an unchanged hostname are
+// insufficient authority to restart billing. Only the excluded live epoch is.
+test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
+  const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
+  let h
+  try {
+    for(const path of [source,restored])await checkout(path)
+    await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6})
+    h=await harness({root:source})
+    await h.confirmSetup(h.owner)
+    await h.cmd('studio.save',{location:'synthetic-strap-1',timeZone:'America/New_York'})
+    const member=await h.person('synthetic-strap-2')
+    const dueAt=new Date(Math.ceil((Date.now()+25_000)/1000)*1000).toISOString()
+    const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
+    const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner}
+    assert.equal(agreed.status,'active')
+    assert.equal(agreed.billingOrigin,sourceOrigin)
+    assert.equal(before.recurring.invoices.length,0)
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,1)
+    await h.close();h=null
+    const archive=join(temporary,'billing.rer')
+    await command(source,['export','--output',archive,'--no-queue'])
+    const archived=(await readFile(archive,'utf8')).split('\n').filter(Boolean).map(JSON.parse)
+    assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_contract_connections'))
+    assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_contract_connections'))
+    await command(restored,['import','--input',archive,'--yes','--no-queue'])
+    h=await harness({root:restored,...identity})
+    const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
+    // The harness's listening port changes on restart. Keep AUTH_ORIGIN and all
+    // product requests on the original canonical origin through dispatchFetch.
+    await h.setAuth({AUTH_ORIGIN:sourceOrigin})
+    const state=async()=>{
+      const response=await h.mf.dispatchFetch(sourceOrigin+'/api/strap/state',{headers:{host:new URL(sourceOrigin).host,origin:sourceOrigin,cookie:restoredOwner}})
+      assert.equal(response.status,200)
+      return response.json()
+    }
+    const retained=(await state()).recurring.terms.find(t=>t.id===agreed.id)
+    assert.equal(retained.status,'active','the native archive retains the accepted agreement')
+    assert.equal(retained.billingOrigin,sourceOrigin,'origin mismatch is not the reason billing stops')
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'live invoice authority never restores')
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(dueAt)-Date.now()+100)))
+    for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+    const after=await state()
+    assert.equal(after.recurring.terms.find(t=>t.id===agreed.id).status,'needs_reconnection')
+    assert.equal(after.recurring.invoices.length,0)
+    assert.deepEqual(after.charges,before.charges,'no restored balance charge')
+    assert.deepEqual(after.packs.map(p=>p.id),before.packs.map(p=>p.id),'no restored renewal entitlement')
+    assert.equal(after.staffNotices.filter(n=>n.id.startsWith('notice:invoice:')).length,0,'no renewal notice')
+    assert.equal((await h.db.prepare("SELECT COUNT(*) AS count FROM st_notice_deliveries WHERE source_id LIKE 'invoice:%'").first()).count,0,'no renewal delivery reservation')
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'the scheduler cannot reconnect billing')
+    const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox').all()).results.map(r=>JSON.parse(r.message))
+    assert.ok(mail.every(m=>m.text.includes('/auth/confirm?token=')),'only fresh authentication mail, no studio billing mail')
+  } finally {if(h)await h.close();await rm(temporary,{recursive:true,force:true})}
+})

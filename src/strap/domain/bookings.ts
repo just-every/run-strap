@@ -32,7 +32,7 @@ export function bookingPack(state: State, personId: string, entry: RecordData) {
 /** When no pack can seat: the member's first live plan for this class that
  * refuses it (PLAN-002 hours, upcoming cap or period visits), with its reason. */
 export function planRefused(state: State, personId: string, entry: RecordData) {
-  for (const pack of list(state,'pack').filter(p => p.personId === personId && p.entitlement && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now())
+  for (const pack of list(state,'pack').filter(p => p.personId === personId && packServiceEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now())
     .sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))) {
     const code = planBlock(state,pack,entry);
     if (code) return {pack,code};

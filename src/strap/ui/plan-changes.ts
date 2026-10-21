@@ -37,7 +37,7 @@ function change(s: any, c: any, mine: boolean) {
 export function planChangesPanel(s: any, chosen = '') {
   const mine = !owner(s), data = s.planChanges ?? { requests: [], changes: [] }
   // PLAN-005 changes credit packs; PLAN-002 plans are not offered (the domain refuses them).
-  const live = rows(s, 'packs').filter(p => countsCredits(p) && Date.parse(p.expiresAt) > Date.now() && (!chosen || p.personId === chosen))
+  const live = rows(s, 'packs').filter(p => countsCredits(p) && !(s.recurring?.terms ?? []).some((r: any)=>r.status==='active'&&r.currentPackId===p.id) && !(s.freezes?.freezes ?? []).some((f: any)=>f.packId===p.id&&['scheduled','active'].includes(f.status)) && Date.parse(p.expiresAt) > Date.now() && (!chosen || p.personId === chosen))
   const packChoices: [unknown, unknown][] = [['', 'Choose a pack'], ...live.map(p => [p.id, mine ? `${packName(p)} · ${money(p.amountCents)}` : `${person(s, p.personId)} · ${packName(p)} · ${money(p.amountCents)}`] as [unknown, unknown])]
   const changes = data.changes.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)).map((c: any) => change(s, c, mine)).join('')
   const requests = data.requests.map((r: any) => `<p class="meta" data-plan-request="${h(r.id)}">${h(mine ? 'You asked' : person(s, r.personId) + ' asked')}: ${h(r.note)} · ${statusPill(r.status)} · ${when(s, r.createdAt)}</p>`).join('')

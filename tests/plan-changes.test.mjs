@@ -112,3 +112,109 @@ test('PLAN-005: mid-term upgrade, renewal downgrade, member-accepted exact previ
   assert.ok(records.some(r=>r.kind==='planChangeRequest'&&r.data.id===request.id))
   if(process.env.STRAP_PROOF_DIR)await(await import('./plan-changes-browser.mjs')).planChangesBrowser(h,{member:ana})
 }))
+
+// Invoice agreement and freeze clocks use real instants; no test-only production clock.
+test('PLAN-006/011: exact member and direct freezes, original funding, earlier resumption and real revised renewal invoices once',{timeout:240_000},async()=>{const sent=[];await run(async h=>{
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save',{location:'Park Slope',timeZone:'America/New_York'})
+  const instructor=await h.person('Maya','instructor'),member=await h.person('Ana'),direct=await h.person('Lena'),stranger=await h.person('Noah')
+  const type=await h.cmd('freeze.type.save',{name:'Medical',reason:'Agreed time away',feeCents:1000,defaultLengthDays:30,maxLengthDays:366,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:true})
+  const refused=async(name,input,cookie,status,error)=>{const before=(await h.state()).version,r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,r.text);if(error)assert.match(r.value.error,error);assert.equal((await h.state()).version,before,'refused commands write nothing');return r}
+  const sale=async(person,expiresAt)=>{const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:5,amountCents:12000,expiresAt,guestTerms:{passes:1,period:'month',rollover:0,services:[],perGuest:1,windowDays:365,excess:'refuse',priceCents:0}})).id});return(await h.state()).packs.find(p=>p.id===approved.id)}
+  // Every automatic invoice needs a source-checked proposal and the member's own consent.
+  const expiry=second(110_000),pack=await sale(member,expiry),directPack=await sale(direct,expiry)
+  const recurring=async(person,p,requestId)=>{const proposal=await h.cmd('plan.recurring.prepare',{packId:p.id,intervalMonths:1,requestId});await refused('plan.recurring.accept',{id:proposal.id,key:proposal.key},h.owner,403);await refused('plan.recurring.accept',{id:proposal.id,key:proposal.key},person.id===stranger.id?member.cookie:stranger.cookie,404);return h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},person.cookie)}
+  const terms=await recurring(member,pack,'synthetic-strap-recurring-1'),directTerms=await recurring(direct,directPack,'synthetic-strap-recurring-2')
+  const stoppedPack=await sale(stranger,second(30_000))
+  const stoppedTerms=await recurring(stranger,stoppedPack,'synthetic-strap-stopped-agreement')
+  await refused('plan.recurring.stop',{id:stoppedTerms.id,reason:'Withdraw future invoice consent',requestId:'synthetic-strap-stop-denied'},member.cookie,404)
+  const stop={id:stoppedTerms.id,reason:'Withdraw future invoice consent',requestId:'synthetic-strap-stop'}
+  await h.cmd('plan.recurring.stop',stop,stranger.cookie); await h.cmd('plan.recurring.stop',stop,stranger.cookie)
+  const startAt=second(80_000),endAt=second(86_000),classAt=plus(startAt,1000),outsideAt=plus(endAt,2000)
+  function plus(at,ms){return new Date(Date.parse(at)+ms).toISOString()}
+  const publish=async(title,start)=>{return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,room:title,start,end:plus(start,500),capacity:5,instructorId:instructor.id}]})).id})).classes[0]}
+  const inside=await publish('Morning Mat',classAt),outside=await publish('Evening Flow',outsideAt),extra=await publish('Reformer practice',plus(startAt,2000))
+  const cancelled=await h.cmd('booking.book',{classId:inside.id},member.cookie),kept=await h.cmd('booking.book',{classId:outside.id},member.cookie)
+  await h.cmd('guest.consent.save',{sponsorEmail:member.email,consent:true},stranger.cookie);
+  const guestQuote=await h.cmd('guest.preview',{sponsorId:member.id,guestId:stranger.id,packId:pack.id,classId:inside.id},member.cookie);
+  const guestSeat=await h.cmd('guest.book',{id:guestQuote.id,confirm:true},member.cookie);
+  const ask={packId:pack.id,freezeTypeId:type.id,startAt,endAt,reason:'Planned family leave',requestId:'synthetic-strap-freeze-request'}
+  const request=await h.cmd('freeze.request',ask,member.cookie)
+  assert.deepEqual(await h.cmd('freeze.request',ask,member.cookie),request)
+  await refused('freeze.request',{...ask,reason:'changed'},member.cookie,409,/freeze_request_changed/)
+  await refused('freeze.request',{...ask,requestId:'foreign'},stranger.cookie,404)
+  assert.equal((await h.state(stranger.cookie)).freezes.requests.length,0)
+  const prepare={packId:pack.id,freezeRequestId:request.id,requestId:'synthetic-strap-freeze-preview-1',channel:'phone'}
+  const stale=await h.cmd('freeze.prepare',prepare)
+  assert.equal(stale.effects.originalRenewalAt,expiry);assert.equal(stale.effects.renewalAmountCents,12000)
+  assert.equal(stale.effects.revisedRenewalAt,plus(expiry,Date.parse(endAt)-Date.parse(startAt)))
+  assert.deepEqual(stale.effects.bookings.map(b=>b.bookingId).sort(),[cancelled.id,guestSeat.id].sort());assert.equal(stale.effects.bookings[0].feeCents,0)
+  await refused('freeze.prepare',{...prepare,requestId:'synthetic-strap-fee-exception',feeCents:0},h.owner,400,/exception_reason_required/)
+  await h.cmd('booking.book',{classId:extra.id},member.cookie)
+  await refused('freeze.confirm',{id:stale.id,key:stale.key,requestId:'stale-confirm'},h.owner,409,/freeze_source_changed/)
+  const preview=await h.cmd('freeze.prepare',{...prepare,requestId:'synthetic-strap-freeze-preview-2'})
+  assert.deepEqual((await h.state(member.cookie)).freezes.freezes.find(f=>f.id===preview.id), (await h.state()).freezes.freezes.find(f=>f.id===preview.id),'owner and member read the same effects')
+  for(const [cookie,status] of [[member.cookie,403],[instructor.cookie,403]])await refused('freeze.confirm',{id:preview.id,key:preview.key,requestId:'denied'},cookie,status)
+  const agent=await h.cmd('agent.create',{label:'synthetic-strap-freeze-agent'})
+  assert.equal((await h.send('/api/strap/agent/command',{name:'freeze.confirm',input:{id:preview.id,key:preview.key,requestId:'agent'}},'',{authorization:'Bearer '+agent.token})).status,403)
+  await refused('freeze.confirm',{id:preview.id,key:'different',requestId:'changed-key'},h.owner,409,/preview_changed/)
+  const confirm={id:preview.id,key:preview.key,requestId:'synthetic-strap-freeze-confirm',channel:'phone'}
+  const confirmed=await h.cmd('freeze.confirm',confirm)
+  assert.deepEqual(await h.cmd('freeze.confirm',confirm),confirmed)
+  let state=await h.state(),changed=state.packs.find(p=>p.id===pack.id)
+  assert.equal(changed.remaining,4,'only the retained outside booking still uses credit')
+  assert.equal(changed.expiresAt,preview.effects.revisedExpiresAt)
+  assert.equal(state.bookings.find(b=>b.id===kept.id).status,'booked')
+  assert.equal(state.bookings.find(b=>b.id===cancelled.id).cancellation,'freeze');
+  assert.equal(state.bookings.find(b=>b.id===guestSeat.id).cancellation,'freeze');
+  assert.equal(state.guests.events.filter(e=>e.bookingId===guestSeat.id&&e.type==='return').length,1,'the frozen plan’s separate guest allocation returns once');
+  assert.equal(state.packCreditEvents.filter(e=>e.type==='restore'&&e.bookingId===cancelled.id).length,1)
+  assert.equal(state.charges.filter(c=>c.freezeId===preview.id).length,1)
+  await refused('booking.book',{classId:inside.id},member.cookie,409,/frozen|freeze/)
+  const separate = await h.cmd('booking.desk',{personId:member.id,classId:inside.id,pay:'unpaid',requestId:'synthetic-strap-unpaid',channel:'desk'});
+  assert.equal(separate.unpaid,true,'a freeze pauses its plan, not an independently authorized unpaid visit');
+  await h.cmd('booking.cancel',{id:separate.id,cancelReason:'Other',channel:'desk'});
+  const alternative=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+  const independentlyFunded=await h.cmd('booking.book',{classId:inside.id},member.cookie);
+  assert.equal(independentlyFunded.packId,alternative.id,'another paid plan retains visit access during this plan’s freeze');
+  const action=state.staffActions.filter(a=>a.command==='freeze.confirm'&&a.after.id===preview.id)
+  assert.equal(action.length,1);assert.deepEqual([action[0].right,action[0].channel,action[0].personId],['contract-change','phone',member.id])
+  assert.equal(state.staffActions.filter(a=>a.parentActionId===action[0].id).length,0,'child booking actions do not duplicate the canonical freeze action')
+  const memberState=await h.state(member.cookie)
+  assert.ok(memberState.notices.some(n=>n.id==='notice:freeze-confirm:'+preview.id));
+  assert.equal(sent.filter(m=>m.to.includes(member.email)&&m.subject==='Membership freeze confirmed').length,1,'the network edge accepts the member’s once-only confirmation');
+  assert.equal((await h.state(stranger.cookie)).freezes.freezes.length,0)
+  assert.equal((await h.state(instructor.cookie)).freezes.freezes.length,0)
+
+  // Direct staff freeze needs no self-service request and supports open-ended and an exact early-end preview.
+  const directStart=second(6000),directEnd=plus(directStart,6000)
+  const directPreview=await h.cmd('freeze.prepare',{packId:directPack.id,freezeTypeId:type.id,startAt:directStart,endAt:null,reason:'Travel leave agreed at the desk',requestId:'synthetic-strap-direct',channel:'desk'})
+  assert.equal(directPreview.freezeRequestId,null);assert.equal(directPreview.effects.revisedRenewalAt,null)
+  await h.cmd('freeze.confirm',{id:directPreview.id,key:directPreview.key,requestId:'synthetic-strap-direct-confirm',channel:'desk'})
+  const end=await h.cmd('freeze.end.prepare',{id:directPreview.id,endAt:directEnd,reason:'Member is returning earlier',requestId:'synthetic-strap-early-end',channel:'desk'})
+  assert.equal(end.revisedRenewalAt,plus(expiry,6000))
+  await refused('freeze.end.confirm',{id:end.id,key:end.key,requestId:'member-end'},direct.cookie,403)
+  await h.cmd('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-end-confirm',channel:'desk'})
+  // Both agreed dates pass; repeat the scheduler without repeating either resumption or charge.
+  await until([endAt,directEnd].sort().at(-1))
+  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+  state=await h.state()
+  for(const freezeId of [preview.id,directPreview.id]){const freeze=state.freezes.freezes.find(f=>f.id===freezeId);assert.equal(freeze.status,'resumed');assert.equal(freeze.resumptionCount,1)}
+  assert.equal(state.recurring.invoices.length,0,'invoice does not appear at resumption before its revised due date')
+  await until([preview.effects.revisedRenewalAt,end.revisedRenewalAt].sort().at(-1))
+  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+  state=await h.state()
+  for(const [p,t] of [[member,terms],[direct,directTerms]]){
+    const invoices=state.recurring.invoices.filter(i=>i.recurringTermsId===t.id)
+    assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000)
+    assert.equal(state.charges.filter(c=>c.invoiceId===invoices[0].id).length,1,'real persisted balance charge')
+    assert.equal(state.balances.find(b=>b.personId===p.id).balanceCents,p.id===member.id?29000:25000)
+    assert.equal(state.packs.filter(p=>p.recurringTermsId===t.id).length,1)
+    assert.equal(state.packs.find(p=>p.recurringTermsId===t.id).remaining,5)
+  }
+  assert.equal(state.recurring.invoices.filter(i=>i.recurringTermsId===stoppedTerms.id).length,0)
+  assert.equal(state.balances.find(b=>b.personId===stranger.id).balanceCents,12000)
+  const deliveries=(await h.db.prepare("SELECT source_id,status,COUNT(*) AS count FROM st_notice_deliveries WHERE source_id LIKE 'freeze-resume:%' GROUP BY source_id,status").all()).results
+  assert.equal(deliveries.length,2);assert.ok(deliveries.every(d=>d.count===1&&d.status==='accepted'));assert.equal(sent.filter(m=>m.subject==='Membership resumed').length,2)
+  if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
+},{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})

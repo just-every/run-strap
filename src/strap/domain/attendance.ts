@@ -1,3 +1,4 @@
+import { packFreezeBlocks } from './freezes';
 import { releaseMakeupCredit } from './makeups';
 import { releaseGuest } from './guest-bookings';
 import { humanOwner, id, insist, list, now, record, text, type Actor, type RecordData } from './types';
@@ -16,6 +17,8 @@ function teaches(who: Actor, entry: RecordData) {
 /** Every check-in door ends here: the seat's reserved credit becomes consumed
  * (no further credit is spent), and a second check-in is refused. */
 export function recordCheckin(tx: Transaction, booking: RecordData, entry: RecordData, how: { channel: string; kioskId?: string }): RecordData {
+  const fundingPack = booking.guestPackId ?? booking.packId;
+  insist(!fundingPack || !packFreezeBlocks(tx.state,fundingPack,entry.start),'membership_frozen',409);
   insist(booking.status === 'booked','confirmed_booking_required',409);
   insist(!booking.checkedInAt,'already_checked_in',409);
   insist(!booking.attendance,'attendance_needs_correction',409);

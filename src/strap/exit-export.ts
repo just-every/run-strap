@@ -31,6 +31,18 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.recurringTermsId', to: 'st_records.id', kind: 'recurringTerms' },
+  { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'recurringInvoice', when: 'kind=pack or kind=charge' },
+  { from: 'st_records.data.freezeId', to: 'st_records.id', kind: 'freeze' },
+  { from: 'st_records.data.freezeTypeId', to: 'st_records.id', kind: 'freezeType' },
+  { from: 'st_records.data.freezeRequestId', to: 'st_records.id', kind: 'freezeRequest' },
+  { from: 'st_records.data.guestPackId', to: 'st_records.id', kind: 'pack' },
+  { from: 'st_records.data.sponsorId', to: 'st_people.id' },
+  { from: 'st_records.data.payerId', to: 'st_people.id' },
+  { from: 'st_records.data.guardianId', to: 'st_people.id' },
+  { from: 'st_records.data.originalBookingId', to: 'st_records.id', kind: 'booking' },
+  { from: 'st_records.data.makeupCreditId', to: 'st_records.id', kind: 'makeupCredit' },
+  { from: 'st_records.data.absenceId', to: 'st_records.id', kind: 'absence' },
   { from: 'st_records.data.leadId', to: 'st_records.id', kind: 'lead', when: 'kind=renewalFollowup' },
   { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'reservation' },
   { from: 'st_records.data.outcomes[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=reservation' },
