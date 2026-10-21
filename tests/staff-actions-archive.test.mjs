@@ -87,7 +87,7 @@ test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,...identity})
     assert.equal((await h.send('/api/strap/state',undefined,identity.owner)).status,401)
-    const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner)
+    const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
     const memberCookie=await h.signIn(member.email)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     await h.cmd('recognition.process',{},owner)

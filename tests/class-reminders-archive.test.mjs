@@ -84,7 +84,7 @@ test('MSG-003 / MOVE-011: native restore retains reminder identities and follow-
     assert.equal((await h.send('/api/strap/state', undefined, identity.owner)).status, 401)
     assert.equal((await h.send('/api/strap/state', undefined, oldMemberCookie)).status, 401, 'member sessions do not travel')
     const owner = await h.signIn(h.auth.OWNER_EMAIL)
-    await setup(h, owner)
+    await setup(h, owner); await h.enroll(owner)
     const memberCookie = await h.signIn(member.email)
     assert.equal((await h.send('/app', undefined, memberCookie)).status, 200, 'member recovers only through native sign-in')
     assert.equal((await h.state(memberCookie)).messagePreference.optedOut, false)

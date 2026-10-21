@@ -92,6 +92,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     h=await harness({root:restored,...identity})
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
+    assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
+    await h.enroll(restoredOwner)
     assert.equal((await integrationRead(h,integration.token)).status,401,'API-002 a restored studio refuses the old integration secret')
     assert.equal((await integrationRead(h,integration.token,'attendance')).status,401,'API-002 restored attendance scope is refused too')
     assert.deepEqual((await h.state(restoredOwner)).integrations,[],'API-002 integration keys never restore')
