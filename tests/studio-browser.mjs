@@ -34,7 +34,7 @@ export async function studioBrowser(h) {
         await page.getByLabel('Monday closes',{exact:true}).fill('20:30')
         await page.getByLabel('Sunday opens',{exact:true}).fill('09:00')
         await page.getByLabel('Sunday closes',{exact:true}).fill('12:00')
-        await page.getByRole('button',{name:'Save studio',exact:true}).click()
+        await Promise.all([page.waitForResponse(response => response.request().method()==='POST' && response.url().includes('name=studio.save')),page.getByRole('button',{name:'Save studio',exact:true}).click()])
         await page.waitForURL(h.origin+'/app/studio')
         await page.reload()
         const current = (await h.state()).studio
@@ -49,9 +49,10 @@ export async function studioBrowser(h) {
         await page.getByRole('alert').waitFor()
         assert.deepEqual((await h.state()).studio,current,'failed browser save preserves committed settings')
         await capture('refused')
+        if (proof) await page.screenshot({path:join(proof,`STUDIO-001-error-${width}.png`)})
         for (const label of ['Legal studio name','Street address','Suite or unit','City','State or territory code','ZIP code','Receipt details',
           ...['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].flatMap(day => [day+' opens',day+' closes'])]) await page.getByLabel(label,{exact:true}).fill('')
-        await page.getByRole('button',{name:'Save studio',exact:true}).click()
+        await Promise.all([page.waitForResponse(response => response.request().method()==='POST' && response.url().includes('name=studio.save')),page.getByRole('button',{name:'Save studio',exact:true}).click()])
         await page.waitForURL(h.origin+'/app/studio')
         await page.reload()
         const cleared = (await h.state()).studio

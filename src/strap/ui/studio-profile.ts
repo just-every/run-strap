@@ -10,7 +10,7 @@ export function studioProfileFields(studio: any = {}) {
     + `<div class="row2">${field('city','City',address.city ?? '','text','maxlength="100" autocomplete="address-level2"')}${field('region','State or territory code',address.region ?? '','text','maxlength="2" autocomplete="address-level1"')}</div>`
     + field('postalCode','ZIP code',address.postalCode ?? '','text','pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" autocomplete="postal-code"')
     + '<p>Country: United States. Leave every address field empty to remove the address.</p></fieldset>'
-    + textarea('receiptDetails','Receipt details',studio.receiptDetails ?? '','maxlength="1000" rows="3"')
+    + textarea('receiptDetails','Receipt details',studio.receiptDetails ?? '','maxlength="1000" rows="3" aria-label="Receipt details"')
     + '<p>Saved for future invoices and receipts. This setting does not issue or send a receipt.</p>'
     + '<fieldset><legend>Weekly business hours</legend><p>Times use the studio clock. Enter an opening and closing time for each open day; leave both empty for a closed day. One same-day interval per day. These hours describe the studio; booking windows and class availability use their own rules.</p>'
     + ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((label,i) => {
