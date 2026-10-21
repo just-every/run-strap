@@ -23,6 +23,7 @@ async function financeUser(h, name = 'Fiona') {
 const verifyTotp = (h, secret, cookie, offset = 1) => h.cmd('mfa.verify', { code: totp(secret, offset) }, cookie)
 async function presentPasskey(h, key, cookie, options) {
   const { challenge_id, publicKey } = await h.cmd('mfa.passkey.options', { purpose: 'verify' }, cookie)
+  assert.equal(publicKey.userVerification, 'required')
   return h.send('/api/strap/command', { name: 'mfa.passkey.verify', input: { challenge_id, ...key.assertion(publicKey.challenge, options) } }, cookie)
 }
 
@@ -66,7 +67,7 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   await get(h, '/api/strap/reports/revenue', third, 200)
   assert.equal((await presentPasskey(h, key, third, { counter: 1 })).status, 403, 'a replayed signature counter is refused')
   // A recovery code works once: the second use, from a fresh session, is refused.
-  const raced = await Promise.all([h.signIn(fiona.email), h.signIn(fiona.email)])
+  const raced = [await h.signIn(fiona.email), await h.signIn(fiona.email)]
   const attempts = await Promise.all(raced.map(cookie => h.send('/api/strap/command', { name: 'mfa.verify', input: { code: app.recoveryCodes[1] } }, cookie)))
   assert.deepEqual(attempts.map(r => r.status).sort(), [200, 403], 'concurrent recovery consumption admits exactly one session')
   assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_mfa_sessions WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?) AND method='recovery'").bind(await operatorId(h, fiona.cookie)).first()).n, 1)
@@ -201,7 +202,15 @@ test('SEC-004: without an MFA key authenticator apps are refused and a passkey a
   const added = await h.cmd('mfa.passkey.register', { challenge_id: active.challenge_id, ...key.registration(active.publicKey.challenge) })
   assert.equal(added.recovery_codes.length, 10)
   await get(h, '/api/strap/teaching-pay', h.owner, 200)
-  await refused(h, 'mfa.passkey.register', { challenge_id: options.challenge_id, ...key.registration(options.publicKey.challenge) }, h.owner, 409, 'passkey_challenge_expired')
+  await refused(h, 'mfa.passkey.register', { challenge_id: active.challenge_id, ...key.registration(active.publicKey.challenge) }, h.owner, 409, 'passkey_challenge_expired')
+  await refused(h, 'mfa.remove', { factor: added.factor }, h.owner, 409, 'mfa_last_factor_required')
+  const replacement = softwarePasskey(h.origin), next = await h.cmd('mfa.passkey.options', { purpose: 'register' })
+  await h.cmd('mfa.passkey.register', { challenge_id: next.challenge_id, ...replacement.registration(next.publicKey.challenge) })
+  assert.equal((await h.cmd('mfa.remove', { factor: added.factor })).removed, true, 'an owner may remove a factor beside another working one')
+  assert.equal((await h.send('/auth/session', undefined, h.owner)).status, 401)
+  const signedIn = await h.signIn(h.auth.OWNER_EMAIL)
+  assert.equal((await presentPasskey(h, replacement, signedIn)).status, 200)
+  await get(h, '/api/strap/teaching-pay', signedIn, 200)
 }, { mfa: false, auth: { MFA_KEY: '' } }))
 
 test('SEC-004: the security screens work in a real browser with a passkey at 1440 and 390', () => run(async h => {
