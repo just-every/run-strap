@@ -4,6 +4,7 @@
 // finance user with none is held at the privileged doors (see gate.ts) until they enroll.
 import { operatorAuth, type Bindings } from '../../auth.server'
 import branding from '../../branding.json'
+import { safeReturnTo } from '../../modules/operator-auth/index.mjs'
 import { fail } from '../credentials'
 import type { Actor } from '../domain'
 import { b64url, base32, matchTotp, recoveryCode, recoveryHash, RECOVERY_CODES, seal, unseal } from './crypto'
@@ -277,7 +278,7 @@ export async function mfaCommand(request: Request, env: Bindings, who: Actor, na
   if (run) return run(env, who, input, request)
   if (name === 'mfa.step-up') {
     requirePerson(who)
-    return operatorAuth(env).requestStepUp(request, { action: input.purpose === 'reset' ? 'delete' : 'credentials:mint', returnTo: '/app/security' })
+    return operatorAuth(env).requestStepUp(request, { action: input.purpose === 'reset' ? 'delete' : 'credentials:mint', returnTo: '/app/security?returnTo=' + encodeURIComponent(safeReturnTo(input.returnTo, '/app/security')) })
   }
   if (name === 'mfa.recovery.renew') return renewRecovery(env, who)
   if (name === 'mfa.remove') return removeFactor(env, request, who, input)

@@ -71,7 +71,10 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   const attempts = await Promise.all(raced.map(cookie => h.send('/api/strap/command', { name: 'mfa.verify', input: { code: app.recoveryCodes[1] } }, cookie)))
   assert.deepEqual(attempts.map(r => r.status).sort(), [200, 403], 'concurrent recovery consumption admits exactly one session')
   assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_mfa_sessions WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?) AND method='recovery'").bind(await operatorId(h, fiona.cookie)).first()).n, 1)
-  const code = app.recoveryCodes[0], fourth = await h.signIn(fiona.email), fifth = await h.signIn(fiona.email)
+  const fourth = raced[attempts.findIndex(r => r.status === 200)], fifth = raced[attempts.findIndex(r => r.status === 403)]
+  await get(h, '/api/strap/reports/revenue', fourth, 200)
+  await get(h, '/api/strap/reports/revenue', fifth, 403, 'mfa_required')
+  const code = app.recoveryCodes[0]
   await h.cmd('mfa.verify', { code }, fourth)
   await get(h, '/api/strap/reports/revenue', fourth, 200)
   await refused(h, 'mfa.verify', { code }, fifth, 403, 'mfa_code_invalid')

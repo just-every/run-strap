@@ -25,7 +25,7 @@ function enroll(m: any, notice: any, query: URLSearchParams) {
       ? form('mfa.totp.start', query.get('returnTo') ?? '/app/security', field('label', 'Name', 'Authenticator app', 'text', 'maxlength="80"'), 'Set up an authenticator app', 'quiet')
       : '<p class="notice">Authenticator apps need this installation’s MFA key, which is not set. A passkey works without it.</p>')
   const passkey = body(`<p>Use this device’s fingerprint, face or screen lock, or a security key.</p><p><button class="btn" type="button" data-door="/api/strap/command" data-passkey="register" data-return="${h(query.get('returnTo') ?? '/app/security')}">Add a passkey</button></p><p class="notice" role="alert" data-passkey-error hidden></p>`)
-  const proof = !m.factors.some((f: any) => f.usable) ? panel('Confirm your email', body('<p>Before your first factor, confirm a fresh email link in this session. A recent email-link sign-in also counts. Open the link in this browser, then return here to enroll.</p>' + form('mfa.step-up', '/app/security', hidden('purpose', 'enroll'), 'Email a confirmation link')), { icon: 'key' }) : ''
+  const proof = !m.factors.some((f: any) => f.usable) ? panel('Confirm your email', body('<p>Before your first factor, confirm a fresh email link in this session. A recent email-link sign-in also counts. Open the link in this browser, then return here to enroll.</p>' + form('mfa.step-up', '/app/security?returnTo=' + encodeURIComponent(query.get('returnTo') ?? '/app/security'), hidden('purpose', 'enroll') + hidden('returnTo', query.get('returnTo') ?? '/app/security'), 'Email a confirmation link')), { icon: 'key' }) : ''
   return proof + panel('Authenticator app', totp, { icon: 'key' }) + panel('Passkey', passkey, { icon: 'key' })
 }
 
