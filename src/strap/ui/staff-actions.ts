@@ -80,10 +80,10 @@ export function staffActionHistory(s: any, query = new URLSearchParams()) {
   const options = (key: string) => [...new Set(rows(s,'staffActions').map(a => key === 'command' ? a.command ?? a.action : a[key]))].sort().map(value => [value,value] as [string,string])
   const preserved = [...query].filter(([key]) => !historyFilters.includes(key as any) || key === 'person').map(([key,value]) => hidden(key,value)).join('')
   const controls = `<form method="get" action="/app/people#staff-actions" class="form">${preserved}`
-    + select('auditActor','Acting staff member',[['','All staff'],...options('actorId')],query.get('auditActor') ?? '')
-    + select('auditRight','Action right',[['','All rights'],...options('right')],query.get('auditRight') ?? '')
-    + select('auditChannel','Action channel',[['','All channels'],...options('channel')],query.get('auditChannel') ?? '')
-    + select('auditCommand','Action command',[['','All commands'],...options('command')],query.get('auditCommand') ?? '')
+    + select('auditActor','Acting staff member',[['','All staff'],...options('actorId')],query.get('auditActor') ?? '', 'aria-label="Acting staff member"')
+    + select('auditRight','Action right',[['','All rights'],...options('right')],query.get('auditRight') ?? '', 'aria-label="Action right"')
+    + select('auditChannel','Action channel',[['','All channels'],...options('channel')],query.get('auditChannel') ?? '', 'aria-label="Action channel"')
+    + select('auditCommand','Action command',[['','All commands'],...options('command')],query.get('auditCommand') ?? '', 'aria-label="Action command"')
     + field('auditFrom','Action from date',query.get('auditFrom'),'date') + field('auditTo','Action through date',query.get('auditTo'),'date')
     + '<button class="btn" type="submit">Filter staff actions</button></form>'
   const exportQuery = new URLSearchParams([...query].filter(([key]) => historyFilters.includes(key as any)))
