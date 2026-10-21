@@ -46,6 +46,7 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
             await prepare.locator('select[name=packId]').selectOption(packId);
             await prepare.locator('select[name=guestId]').selectOption(guest.id);
             await prepare.locator('select[name=classId]').selectOption(classId);
+            assert.equal(await prepare.evaluate(f=>f.checkValidity()),true);
             await prepare.getByRole('button',{name:'Preview guest booking',exact:true}).click();
             const draft=(await h.state(host.cookie)).guests.drafts.filter(d=>d.status==='preview'&&d.personId===guest.id&&d.classId===classId).at(-1);
             assert.equal(draft.amountCents,2500);
