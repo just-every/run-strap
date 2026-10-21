@@ -1,3 +1,4 @@
+import { packFreezeBlocks } from './freezes';
 import { studioSettings } from './studio';
 import { id, insist, list, now, record, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -25,6 +26,8 @@ export function changeImpact(state: State, before: RecordData[], after: RecordDa
     }
     for (const b of bookings.filter(b => b.status === 'booked')) {
       if (!assignments.has(b.id)) { const spot = free ? free.shift() : null; insist(!free || spot,'no_free_spot',409); assignments.set(b.id,spot ?? null); }
+      const fundingPack = b.guestPackId ?? b.packId;
+      insist(!fundingPack || !packFreezeBlocks(state,fundingPack,entry.start),'series_booking_membership_frozen',409);
       if (b.packId) { const pack = record(state,b.packId,'pack'); insist(pack.expiresAt > entry.start && packServiceEligible(pack,entry),'series_booking_credit_ineligible',409); }
     }
     const seats = bookings.map(b => {
