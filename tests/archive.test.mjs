@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getPlatformProxy } from 'wrangler'
 import { harness } from './harness.mjs'
+import { totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 const exec = promisify(execFile)
 const cli = resolve('node_modules/@runeditrun/rer/global/rer.mjs')
@@ -79,7 +80,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner,...(h.mfaOwner ? [h.mfaOwner.secret,h.mfaOwner.recoveryCodes[0]] : [])]) assert.ok(!download.text.includes(value))
     assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
-    const identity={auth:h.auth,owner:h.owner}
+    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner}
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
@@ -150,7 +151,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})
     // Checksum damage is a transfer failure (1); restore policy conflicts remain 4.
     await command(erased,['import','--input',corrupt,'--yes','--no-queue'],1)
-    h=await harness({root:source,...identity});await h.cmd('person.erase',{id:p.id,revision:1},identity.owner);await h.close();h=null
+    h=await harness({root:source,...identity});const again=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},again);await h.cmd('person.erase',{id:p.id,revision:1},again);await h.close();h=null
     await command(source,['export','--output',later,'--no-queue'])
     const erasedBytes=await readFile(later,'utf8')
     for(const value of ['Rita Joiner','2125550188','2125550144','temporary@venue.example']) assert.ok(!erasedBytes.includes(value),`APP-003 erasure removes ${value} from the later archive`)
