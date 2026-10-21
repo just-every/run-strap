@@ -6,12 +6,14 @@ import { fail, hash } from './credentials'
 
 /** The whole catalogue. A scope lists the events a key holding it may subscribe to. */
 export const scopeCatalogue = {
-  'roster:read': { label: 'Read class rosters', reads: 'Classes, booking status and attendance, and each attendee’s first name and last initial', events: ['class.changed', 'booking.changed'] },
+  'roster:read': { label: 'Read class rosters', reads: 'Classes, each booking’s status and each attendee’s first name and last initial', events: ['class.changed', 'booking.changed'] },
 } as const
 type Scope = keyof typeof scopeCatalogue
 /** Until STUDIO-002 adds locations, the studio has exactly one, and every key covers it. */
 export const locations = ['studio']
 export const eventDelivery = 'not_delivered'
+/** Commands that issue a secret run only from the owner's Integrations page, never the JSON API. */
+export const inAppOnly = ['integration.create', 'integration.rotate']
 
 const secret = () => 'strap_int_' + Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')
 const names = (value: unknown, field: string) => {

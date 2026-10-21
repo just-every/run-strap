@@ -11,6 +11,18 @@ async function api(h, token, path, { method = 'GET', version = '1', body } = {})
   const text = await response.text()
   return { status: response.status, headers: response.headers, text, value: JSON.parse(text) }
 }
+// Secrets are issued only in the app: the owner's Integrations form creates keys and rotates secrets.
+async function inApp(h, name, fields, cookie = h.owner) {
+  const response = await h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=%2Fapp%2Fintegrations`, { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString() })
+  const text = await response.text()
+  return { status: response.status, text, token: text.match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1] ?? null }
+}
+async function createKey(h, fields) {
+  const page = await inApp(h, 'integration.create', fields)
+  assert.equal(page.status, 200)
+  assert.ok(page.token, 'the Integrations page shows the new secret once')
+  return { ...(await h.state()).integrations.find(k => k.label === fields.label), token: page.token }
+}
 const keysOf = value => Array.isArray(value) ? value.flatMap(keysOf) : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]) : []
 
 test('API-002: the owner creates a read-roster integration for the studio location, pages its roster, is refused money, contact data and writes, sets events, rotates and revokes it, and reads its failures and rate limit', () => run(async h => {
@@ -32,27 +44,24 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   await h.cmd('booking.book', { classId: second.id }, cara.cookie)
   await h.cmd('booking.cancel', { id: (await h.cmd('booking.book', { classId: third.id }, ana.cookie)).id }, ana.cookie)
 
-  // Only the native owner creates keys, from the fixed catalogue, for the one location.
+  // Only the native owner creates keys, on the Integrations page, from the fixed catalogue, for the one location.
   const agentKey = await h.cmd('agent.create', { label: 'Preparation key' })
-  const valid = { label: 'Front desk display', scopes: ['roster:read'], location: 'studio', events: ['booking.changed'] }
-  assert.equal((await h.send('/api/strap/agent/command', { name: 'integration.create', input: valid }, '', { authorization: `Bearer ${agentKey.token}` })).status, 403, 'API-002 an agent key cannot create an integration')
-  for (const cookie of [ana.cookie, coach.cookie]) assert.equal((await h.send('/api/strap/command', { name: 'integration.create', input: valid }, cookie)).status, 403)
-  for (const [input, error] of [[{ ...valid, scopes: ['money:read'] }, 'scope_not_in_catalogue'], [{ ...valid, scopes: ['roster:read', 'roster:write'] }, 'scope_not_in_catalogue'], [{ ...valid, scopes: [] }, 'scope_not_in_catalogue'], [{ ...valid, location: 'queens' }, 'unknown_location'], [{ ...valid, events: ['payment.changed'] }, 'event_not_permitted']]) {
-    const refused = await h.send('/api/strap/command', { name: 'integration.create', input }, h.owner)
-    assert.deepEqual([refused.status, refused.value.error], [400, error])
+  const fields = { label: 'Front desk display', 'sc_roster:read': 'true', location: 'studio', 'ev_booking.changed': 'true' }
+  const input = { label: 'Front desk display', scopes: ['roster:read'], location: 'studio', events: ['booking.changed'] }
+  assert.equal((await h.send('/api/strap/agent/command', { name: 'integration.create', input }, '', { authorization: `Bearer ${agentKey.token}` })).status, 403, 'API-002 an agent key cannot create an integration')
+  const viaApi = await h.send('/api/strap/command', { name: 'integration.create', input }, h.owner)
+  assert.deepEqual([viaApi.status, viaApi.value.error], [403, 'integration_secret_in_app_only'], 'API-002 the JSON API cannot create a key, even for the owner')
+  for (const cookie of [ana.cookie, coach.cookie]) assert.equal((await inApp(h, 'integration.create', fields, cookie)).status, 403)
+  for (const [change, error] of [[{ 'sc_roster:read': '', 'sc_money:read': 'true' }, 'scope not in catalogue'], [{ 'sc_roster:write': 'true' }, 'scope not in catalogue'], [{ 'sc_roster:read': '' }, 'scope not in catalogue'], [{ location: 'queens' }, 'unknown location'], [{ 'ev_payment.changed': 'true' }, 'event not permitted']]) {
+    const refused = await inApp(h, 'integration.create', { ...fields, ...change })
+    assert.ok(refused.text.includes(error) && !refused.token, error)
   }
   assert.deepEqual((await h.state()).integrations, [], 'API-002 refused creations write nothing')
-  const display = await h.cmd('integration.create', valid)
+  const display = await createKey(h, fields)
   assert.match(display.token, /^strap_int_[0-9a-f]{64}$/)
   assert.deepEqual([display.scopes, display.location, display.events], [['roster:read'], 'studio', [{ name: 'booking.changed', delivery: 'not_delivered' }]])
   const stored = (await h.db.prepare('SELECT token_hash FROM st_integration_secrets').all()).results
   assert.ok(stored.length === 1 && stored[0].token_hash !== display.token && /^[0-9a-f]{64}$/.test(stored[0].token_hash), 'API-002 only a hash of the secret is stored')
-  // The browser form creates the same kind of key and shows its secret once.
-  const viaForm = await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Form display', 'sc_roster:read': 'true', location: 'studio', 'ev_class.changed': 'true' }).toString() })
-  const formPage = await viaForm.text()
-  assert.equal(viaForm.status, 200)
-  assert.match(formPage, /Save your integration secret[\s\S]*strap_int_[0-9a-f]{64}/)
-  assert.deepEqual((await h.state()).integrations.find(k => k.label === 'Form display').events, [{ name: 'class.changed', delivery: 'not_delivered' }])
 
   // The secret opens the integration door only.
   const bearer = { authorization: `Bearer ${display.token}` }
@@ -79,13 +88,13 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   assert.deepEqual([pageTwo.value.data.map(c => c.id), pageTwo.value.page.next], [[third.id], null])
   const all = await api(h, display.token, '/api/strap/integration/roster')
   assert.deepEqual([all.value.page.limit, all.value.data.map(c => c.id), all.value.page.next], [50, [first.id, second.id, third.id], null], 'API-002 the default page holds 50 classes')
-  const roster = Object.fromEntries([...pageOne.value.data, ...pageTwo.value.data].map(c => [c.title, c.roster.map(r => [r.status, r.attendance, r.attendee])]))
-  assert.deepEqual(roster, { 'Roster Flow One': [['booked', null, 'Ana L.'], ['waitlisted', null, 'Ben C.']], 'Roster Flow Two': [['booked', null, 'Cara']], 'Roster Flow Three': [['cancelled', null, 'Ana L.']] })
+  const roster = Object.fromEntries([...pageOne.value.data, ...pageTwo.value.data].map(c => [c.title, c.roster.map(r => [r.status, r.attendee])]))
+  assert.deepEqual(roster, { 'Roster Flow One': [['booked', 'Ana L.'], ['waitlisted', 'Ben C.']], 'Roster Flow Two': [['booked', 'Cara']], 'Roster Flow Three': [['cancelled', 'Ana L.']] })
   for (const entry of all.value.data) {
     assert.deepEqual(Object.keys(entry), ['id', 'title', 'service', 'start', 'end', 'capacity', 'status', 'roster'])
-    for (const row of entry.roster) assert.deepEqual(Object.keys(row), ['bookingId', 'status', 'attendance', 'attendee'])
+    for (const row of entry.roster) assert.deepEqual(Object.keys(row), ['bookingId', 'status', 'attendee'])
   }
-  assert.deepEqual(keysOf(all.value).filter(key => /cents|amount|fee|email|phone|contact|note|reason|pack|payment|balance|charge|instructor/i.test(key)), [], 'API-002 roster:read carries no money, contact details or notes')
+  assert.deepEqual(keysOf(all.value).filter(key => /cents|amount|fee|email|phone|contact|note|reason|pack|payment|balance|charge|instructor|attendance|checked|noshow/i.test(key)), [], 'API-002 roster:read carries no money, contact details or notes')
   for (const secret of ['Lopez', 'Cruz', '@', '2125550142', 'API-002-receipt', 'Maya']) assert.ok(!all.text.includes(secret), `API-002 roster:read leaks no ${secret}`)
   for (const query of ['limit=0', 'limit=101', 'limit=ten', 'limit=-1']) assert.deepEqual([(await api(h, display.token, `/api/strap/integration/roster?${query}`)).value.error], ['invalid_limit'], query)
   for (const cursor of ['abc', 'c1.' + btoa('{"x":1}'), 'c1.%%%']) assert.equal((await api(h, display.token, `/api/strap/integration/roster?cursor=${encodeURIComponent(cursor)}`)).value.error, 'invalid_cursor')
@@ -116,8 +125,9 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   assert.deepEqual((await api(h, display.token, '/api/strap/integration/key')).value.events.map(e => e.name), ['booking.changed', 'class.changed'])
 
   // Rotation issues a new secret and stops the old one at once.
-  const rotated = await h.cmd('integration.rotate', { id: display.id })
-  assert.notEqual(rotated.token, display.token)
+  assert.deepEqual([(await h.send('/api/strap/command', { name: 'integration.rotate', input: { id: display.id } }, h.owner)).value.error, (await api(h, display.token, '/api/strap/integration/key')).status], ['integration_secret_in_app_only', 200], 'API-002 the JSON API cannot rotate a secret')
+  const rotated = await inApp(h, 'integration.rotate', { id: display.id })
+  assert.ok(rotated.token && rotated.token !== display.token, 'the Integrations page shows the new secret once')
   assert.deepEqual([(await api(h, display.token, '/api/strap/integration/key')).status, (await api(h, display.token, '/api/strap/integration/key')).value.error], [401, 'integration_credential_revoked'])
   assert.equal((await api(h, rotated.token, '/api/strap/integration/key')).value.id, display.id)
 
@@ -136,7 +146,7 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   assert.equal((await h.send('/app/integrations', undefined, ana.cookie)).status, 403)
 
   // 60 counted requests per key in any rolling 60 seconds, then 429 with Retry-After; other keys are unaffected.
-  const probe = await h.cmd('integration.create', { label: 'Rate probe', scopes: ['roster:read'], location: 'studio' })
+  const probe = await createKey(h, { label: 'Rate probe', 'sc_roster:read': 'true', location: 'studio' })
   for (let i = 0; i < 60; i++) assert.equal((await api(h, probe.token, '/api/strap/integration/key')).status, 200, `request ${i + 1}`)
   const limited = await api(h, probe.token, '/api/strap/integration/roster')
   const retry = Number(limited.headers.get('retry-after'))
@@ -150,7 +160,8 @@ test('API-002: the owner creates a read-roster integration for the studio locati
   // Revocation stops every secret of the key; a revoked key cannot be rotated or resubscribed.
   assert.deepEqual(await h.cmd('integration.revoke', { id: display.id }), { id: display.id, revoked: true })
   assert.equal((await api(h, rotated.token, '/api/strap/integration/roster')).value.error, 'integration_credential_revoked')
-  for (const name of ['integration.rotate', 'integration.events']) assert.deepEqual([(await h.send('/api/strap/command', { name, input: { id: display.id, events: [] } }, h.owner)).status], [409], name)
+  assert.ok((await inApp(h, 'integration.rotate', { id: display.id })).text.includes('integration revoked'))
+  assert.equal((await h.send('/api/strap/command', { name: 'integration.events', input: { id: display.id, events: [] } }, h.owner)).status, 409)
   owned = (await h.state()).integrations.find(k => k.id === display.id)
   assert.ok(owned.revokedAt)
   assert.deepEqual([owned.requests[0].status, owned.requests[0].code, owned.requests[0].route], [401, 'integration_credential_revoked', '/api/strap/integration/roster'])

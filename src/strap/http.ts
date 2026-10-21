@@ -8,7 +8,7 @@ import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
 import { commandCatalogue, command, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
-import { integrationCommand, integrationKeys } from './integrations'
+import { inAppOnly, integrationCommand, integrationKeys } from './integrations'
 import { integrationResponse } from './integration-api'
 import { renderApp } from './ui'
 import { formInput } from './forms'
@@ -137,6 +137,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const body = await inputBody(request)
         if (typeof body.name !== 'string' || !body.input || typeof body.input !== 'object' || Array.isArray(body.input)) fail('Provide a command name and input object')
         if (isAgent && !preparations.includes(String(body.name))) fail('Agents can only prepare drafts', 403)
+        if (inAppOnly.includes(String(body.name))) fail('integration_secret_in_app_only', 403)
         return json(await execute(request, env, who, String(body.name), body.input as Record<string, unknown>))
       }
     }

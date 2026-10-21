@@ -8,7 +8,7 @@ Open **Integrations** in Strap. Only the studio owner sees this page. Name the k
 
 Strap shows the secret once. Paste it into the other application's secret settings straight away. Strap keeps only a SHA-256 hash of it, the same way it keeps agent keys.
 
-Only you, signed in as the studio owner, can create, rotate and revoke keys or change their events. Agent keys, integration keys, members and instructors cannot. A key belongs to the owner who created it and stops working if that owner's access ends or changes.
+Only you, signed in as the studio owner, can create, rotate and revoke keys or change their events. Strap issues secrets only on the Integrations page: the JSON command door refuses `integration.create` and `integration.rotate` with `integration_secret_in_app_only`, even for you, while `integration.revoke` and `integration.events` also work there. Agent keys, integration keys, members and instructors cannot manage keys at all. A key belongs to the owner who created it and stops working if that owner's access ends or changes.
 
 ## What a key can read
 
@@ -16,7 +16,7 @@ The catalogue has one scope.
 
 | Scope | Reads | Never includes |
 | --- | --- | --- |
-| `roster:read` | Classes (id, title, service, start and end in UTC, capacity, published or cancelled) with each booking's status (booked, waitlisted, offered or cancelled), its attendance (attended, no-show, excused or none) and the attendee's first name and last initial | Money, packs, payments, fees, balances, email addresses, phone numbers, emergency contacts, notes, cancellation reasons and instructor names |
+| `roster:read` | Classes (id, title, service, start and end in UTC, capacity, published or cancelled) with each booking's id and status (booked, waitlisted, offered or cancelled) and the attendee's first name and last initial | Attendance, money, packs, payments, fees, balances, email addresses, phone numbers, emergency contacts, notes, cancellation reasons and instructor names |
 
 A key covers your studio's one location. Keys for chosen locations arrive with multiple locations (STUDIO-002). Other read scopes, such as contact details or money, and any write scope each need their own approved addition before Strap offers them. People you have erased never appear.
 
@@ -40,7 +40,7 @@ curl -H "Authorization: Bearer $STRAP_INTEGRATION_SECRET" \
       "id": "CLASS_ID", "title": "Morning Flow", "service": "Morning Flow",
       "start": "2026-11-02T14:00:00.000Z", "end": "2026-11-02T14:45:00.000Z",
       "capacity": 12, "status": "published",
-      "roster": [ { "bookingId": "BOOKING_ID", "status": "booked", "attendance": null, "attendee": "Ana L." } ]
+      "roster": [ { "bookingId": "BOOKING_ID", "status": "booked", "attendee": "Ana L." } ]
     }
   ],
   "page": { "limit": 25, "next": "c1.OPAQUE" }

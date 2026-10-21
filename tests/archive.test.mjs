@@ -25,6 +25,7 @@ async function checkout(root) {
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
 }
+const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', location: 'studio', 'ev_booking.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token) => h.mf.dispatchFetch(h.origin + '/api/strap/integration/roster', { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
@@ -54,7 +55,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / APP-003 / API-002: portab
     const csv=await readFile('tests/fixtures/members.csv','utf8'),preview=await h.cmd('import.preview',{csv})
     await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})
     const key=await h.cmd('agent.create',{label:'Excluded secret'})
-    const integration=await h.cmd('integration.create',{label:'Excluded integration',scopes:['roster:read'],location:'studio',events:['booking.changed']})
+    const integration={token:await integrationKey(h)}
     assert.equal((await integrationRead(h,integration.token)).status,200)
     await h.cmd('mail.connect',{})
     assert.equal((await h.send('/api/strap/exit.json')).status,401)

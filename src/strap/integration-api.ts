@@ -28,7 +28,7 @@ function page(url: URL) {
 }
 const cursorAfter = (entry: { start: string; id: string }) => 'c1.' + btoa(JSON.stringify([entry.start, entry.id])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-/** roster:read — classes in (start, id) order with booking status, attendance and short attendee names.
+/** roster:read — classes in (start, id) order with booking status and short attendee names.
  * No money, contact details, notes or reasons; erased people never appear. */
 async function roster(env: Bindings, url: URL) {
   const { limit, after } = page(url), { state } = await loadSystem(env.DB)
@@ -41,7 +41,7 @@ async function roster(env: Bindings, url: URL) {
     data: shown.map(c => ({
       id: c.id, title: c.title, service: c.service, start: c.start, end: c.end, capacity: c.capacity, status: c.status,
       roster: bookings.filter(b => b.classId === c.id && people.has(b.personId))
-        .map(b => ({ bookingId: b.id, status: b.status, attendance: b.attendance ?? null, attendee: shortName(people.get(b.personId)!.name) })),
+        .map(b => ({ bookingId: b.id, status: b.status, attendee: shortName(people.get(b.personId)!.name) })),
     })),
     page: { limit, next: classes.length > limit ? cursorAfter(shown.at(-1)! as { start: string; id: string }) : null },
   }
