@@ -192,6 +192,8 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if (!spec) throw new DomainError('unknown_command',404);
   insist(who.role !== 'finance','owner_required',403);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
+  if(name==='plan.recurring.prepare')insist(tx.who.role==='owner'&&tx.who.isOwner,'owner_required',403);
+  if(name==='plan.recurring.accept'){insist(tx.who.role==='member','member_acceptance_required',403);const proposal=record(tx.state,input.id,'recurringTerms');insist(proposal.personId===tx.who.personId,'recurringTerms_not_found',404);}
   if(['plan.recurring.prepare','plan.recurring.accept'].includes(name)){const packId=String(input.packId??tx.state.records.get(String(input.id))?.data.packId??'');insist(!cancellationBlocks(tx.state,packId,'9999-12-31T00:00:00.000Z'),'withdraw_cancellation_before_new_agreement',409);}
   if (name.startsWith('plan.change.')) {
     const packId=String(input.packId ?? tx.state.records.get(String(input.id))?.data.packId ?? '');
