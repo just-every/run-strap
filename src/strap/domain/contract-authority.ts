@@ -25,6 +25,7 @@ export function acceptContractAuthority(tx: Transaction, input: Record<string,un
   insist(tx.who.role === 'member','member_required',403);
   const grant = record(tx.state,input.id,'contractAuthority');
   insist(!grant.revokedAt && [grant.personId,grant.delegateId].includes(tx.who.personId),'contract_authority_not_found',404);
+  insist(grant.kind!=='payer'||tx.who.personId!==grant.delegateId||grant.memberAcceptedAt,'contract_authority_not_found',404);
   if(grant.kind==='minor-guardian'){insist(grant.adultAt>now(),'contract_authority_expired',409);tx.future(grant.adultAt);}
   person(tx.state,grant.personId); person(tx.state,grant.delegateId);
   const field = tx.who.personId === grant.personId ? 'memberAcceptedAt' : 'delegateAcceptedAt';
@@ -50,7 +51,7 @@ export function authorizeContractCancellation(tx:Transaction,personId:string,ter
 }
 export const contractRecipients = (state: State, personId: string, termsId:string) => [...new Set([personId,...activeContractAuthorities(state,personId).filter(g => g.kind === 'payer'&&g.agreementIds?.includes(termsId)).map(g => g.delegateId)])];
 export function contractAuthoritySnapshot(state: State, who: Actor) {
-  return list(state,'contractAuthority').filter(g => who.role === 'owner' && who.isOwner || who.role === 'member' && [g.personId,g.delegateId].includes(who.personId)).map(g => who.role === 'owner' ? g : {id:g.id,personId:g.personId,participantName:person(state,g.personId,false).name,delegateName:person(state,g.delegateId,false).name,delegateId:g.delegateId,agreementIds:g.agreementIds,agreements:(g.agreementIds??[]).flatMap((id:string)=>{const t=state.records.get(id)?.data;return t?[{amountCents:t.amountCents,intervalMonths:t.intervalMonths,firstDueAt:t.firstDueAt,timeZone:t.timeZone}]:[];}),kind:g.kind,adultOn:g.adultOn,adultAt:g.adultAt,memberAcceptedAt:g.memberAcceptedAt,delegateAcceptedAt:g.delegateAcceptedAt,revokedAt:g.revokedAt});
+  return list(state,'contractAuthority').filter(g => who.role === 'owner' && who.isOwner || who.role === 'member' && (g.personId===who.personId||g.delegateId===who.personId&&(g.kind!=='payer'||g.memberAcceptedAt))).map(g => who.role === 'owner' ? g : {id:g.id,personId:g.personId,participantName:person(state,g.personId,false).name,delegateName:person(state,g.delegateId,false).name,delegateId:g.delegateId,agreementIds:g.agreementIds,agreements:(g.agreementIds??[]).flatMap((id:string)=>{const t=state.records.get(id)?.data;return t?[{amountCents:t.amountCents,intervalMonths:t.intervalMonths,firstDueAt:t.firstDueAt,timeZone:t.timeZone}]:[];}),kind:g.kind,adultOn:g.adultOn,adultAt:g.adultAt,memberAcceptedAt:g.memberAcceptedAt,delegateAcceptedAt:g.delegateAcceptedAt,revokedAt:g.revokedAt});
 }
 
 export function launchContractAuthority(tx:Transaction,input:Record<string,unknown>){humanOwner(tx.who);text(input.requestId,'requestId',100);const grant=record(tx.state,input.id,'contractAuthority');return {id:id(),personId:grant.personId,previewId:grant.id,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23cancellations'};}

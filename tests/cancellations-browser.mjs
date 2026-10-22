@@ -162,6 +162,7 @@ async function authorityJourneys(c){
   }
   const payerPlan=await saleAndAgreement(h,nina,key())
   const payerGrant=await record(nina,payer,'payer')
+  await go(payerPage);assert.equal(await payerPage.locator(`[data-contract-authority="${payerGrant.id}"]`).count(),0,'the payer sees no new invitation or contract facts before participant consent');await shot(payerPage,'payer-before-participant-consent');
   await accept(mine,payerGrant);await accept(payerPage,payerGrant)
   await go(payerPage)
   const payerStop=payerPage.locator(`[data-cancellation-stop="${payerPlan.terms.id}"]`)
