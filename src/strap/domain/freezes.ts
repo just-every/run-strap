@@ -34,11 +34,16 @@ export function saveFreezeType(tx: Transaction, input: Record<string,unknown>) {
 function assertFreezeCaps(state: State, type: RecordData, startAt: string, endAt: string | null, personId: string) {
   if (!type.maxFreezes && !type.maxDays) return;
   insist(endAt,'freeze_cap_requires_end',409);
-  const since = shiftCalendarDays(startAt,-365,studioZone(state));
-  const previous = list(state,'freeze').filter(f=>f.personId===personId && f.freezeTypeId===type.id && f.confirmedAt && !['withdrawn','declined'].includes(f.status) && f.startAt>since && f.startAt<=startAt);
-  insist(!type.maxFreezes || previous.length < type.maxFreezes,'freeze_count_cap_reached',409);
-  const days = previous.reduce((n,f)=>n+(f.endAt ? calendarDays(f.startAt,f.endAt,studioZone(state)) : 365),0)+calendarDays(startAt,endAt,studioZone(state));
-  insist(!type.maxDays || days<=type.maxDays,'freeze_day_cap_reached',409);
+  const freezes = list(state,'freeze').filter(f=>f.personId===personId && f.freezeTypeId===type.id && f.confirmedAt && !['withdrawn','declined'].includes(f.status));
+  const proposed={startAt,endAt};
+  // An earlier insertion must also preserve every already-agreed later window.
+  for (const anchor of [proposed,...freezes.filter(f=>f.startAt>=startAt)]) {
+    const since=shiftCalendarDays(anchor.startAt,-365,studioZone(state));
+    const window=[...freezes,proposed].filter(f=>f.startAt>since&&f.startAt<=anchor.startAt);
+    insist(!type.maxFreezes || window.length<=type.maxFreezes,'freeze_count_cap_reached',409);
+    const days=window.reduce((n,f)=>n+(f.endAt ? calendarDays(f.startAt,f.endAt,studioZone(state)) : 365),0);
+    insist(!type.maxDays || days<=type.maxDays,'freeze_day_cap_reached',409);
+  }
 }
 function terms(state: State, input: Record<string,unknown>, memberRequest = false) {
   const type = record(state,input.freezeTypeId,'freezeType'), startAt = studioDayInstant(input.startAt,studioZone(state));
@@ -114,10 +119,10 @@ export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
   if (freeze.confirmedAt) { insist(freeze.confirmedBy === tx.who.id && freeze.confirmationRequestId === input.requestId && freeze.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return freeze; }
   insist(freeze.status === 'preview' && freeze.startAt > now(),'freeze_preview_expired',409);
   const pack = record(tx.state,freeze.packId,'pack');
+  insist(freezeBasis(tx.state,pack,freeze) === freeze.basis,'freeze_source_changed',409);
   insist(!freeze.requiresAcceptance || (freeze.acceptedAt && freeze.acceptanceBasis === freeze.basis),'freeze_member_acceptance_required',409);
   if (freeze.freezeRequestId) insist(record(tx.state,freeze.freezeRequestId,'freezeRequest').status === 'requested','freeze_request_closed',409);
   assertFreezeCaps(tx.state,record(tx.state,freeze.freezeTypeId,'freezeType'),freeze.startAt,freeze.endAt,pack.personId);
-  insist(freezeBasis(tx.state,pack,freeze) === freeze.basis,'freeze_source_changed',409);
   insist(!pending(tx.state,pack.id),'freeze_pending',409); tx.future(freeze.startAt);
   const actionId = id(), at = now();
   for (const effect of freeze.effects.bookings) {
@@ -171,6 +176,8 @@ export function confirmEndFreeze(tx: Transaction, input: Record<string,unknown>)
   insist(end.acceptedAt && end.acceptanceBasis === end.basis,'freeze_member_acceptance_required',409);
   insist(end.endAt > now() && live(freeze),'freeze_end_preview_expired',409);
   insist(end.basis === freezeEndBasis(tx.state,freeze),'freeze_source_changed',409); tx.future(end.endAt);
+  const pack=record(tx.state,freeze.packId,'pack');
+  tx.put('pack',{...pack,allowanceExpiresAt:pack.allowanceExpiresAt ?? freeze.effects.originalExpiresAt});
   appendPackEvent(tx,record(tx.state,freeze.packId,'pack'),{type:'adjust',credits:0,expiresAt:end.revisedExpiresAt,reason:`Early resumption ${end.id}`});
   moveRecurringRenewal(tx,freeze.packId,end.revisedExpiresAt,freeze.id);
   const updated = {...freeze,endAt:end.endAt,endReason:end.reason,endPreviewId:end.id,effects:{...freeze.effects,revisedExpiresAt:end.revisedExpiresAt,revisedRenewalAt:end.revisedRenewalAt,durationDays:calendarDays(freeze.startAt,end.endAt,studioZone(tx.state))}};

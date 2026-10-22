@@ -241,3 +241,58 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
   if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
 },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})
+
+
+test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exact consent while recurring terms remind, stop and reconnect safely',()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/New_York'});
+  const member=await h.person('Nora'),guest=await h.person('Ari'),payer=await h.person('Sam'),coach=await h.person('Sage','instructor');
+  const sell=async(person,input={})=>{const r=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:5,amountCents:10000,expiresAt:'2098-07-01T04:00:00.000Z',...input})).id});return(await h.state()).packs.find(p=>p.id===r.id)};
+  const publish=async(title,start)=>{const d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title,service:'Mat',room:title,start,end:new Date(Date.parse(start)+1800000).toISOString(),capacity:5,instructorId:coach.id}]})).id})).classes[0]};
+  const pack=await sell(member,{kind:'visits',visits:2,period:'month',rollover:0,guestTerms:{passes:1,period:'month',rollover:0,services:['Mat'],perGuest:10,windowDays:365,excess:'charge',priceCents:2500}});
+  const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:12,requestId:'synthetic-strap-501'});
+  assert.match(proposal.consent,/until stopped/);assert.ok(proposal.consent.includes('100.00'));assert.ok(proposal.consent.includes(proposal.nextRenewalAt));assert.ok(proposal.consent.includes(proposal.stopPath));
+  const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);assert.ok(agreed.acknowledgement);assert.ok(agreed.retention);
+  const type=await h.cmd('freeze.type.save',{name:'Travel',reason:'Agreed travel',feeCents:1000,defaultLengthDays:30,maxLengthDays:60,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:false,maxFreezes:1,maxDays:30});
+  const input={packId:pack.id,freezeTypeId:type.id,startAt:'2098-03-01',endAt:'2098-03-31',reason:'Travel confirmed',requestId:'synthetic-strap-502'};
+  const preview=await h.cmd('freeze.prepare',input);assert.equal(preview.effects.durationDays,30);assert.equal(preview.effects.revisedExpiresAt,'2098-07-31T04:00:00.000Z','billing stays at midnight through the March DST change');
+  const before=(await h.state()).version;assert.equal((await h.cmd('freeze.confirm',{id:preview.id,key:preview.key,requestId:'synthetic-strap-503'},h.owner,409)).error,'freeze_member_acceptance_required');assert.equal((await h.state()).version,before);
+  await h.cmd('freeze.accept',{id:preview.id,key:preview.key},member.cookie);await h.cmd('freeze.confirm',{id:preview.id,key:preview.key,requestId:'synthetic-strap-504'});
+  const first=await publish('Late June Mat','2098-06-29T13:00:00.000Z'),second=await publish('Extra July Mat','2098-07-03T13:00:00.000Z'),third=await publish('Another July Mat','2098-07-04T13:00:00.000Z');
+  await h.cmd('booking.book',{classId:first.id},member.cookie);await h.cmd('booking.book',{classId:second.id},member.cookie);assert.equal((await h.cmd('booking.book',{classId:third.id},member.cookie,409)).error,'plan_visits_used','the extension adds no July allowance');
+  await h.cmd('guest.consent.save',{sponsorEmail:member.email,consent:true},guest.cookie);await h.cmd('guest.consent.save',{sponsorEmail:member.email,kind:'payer',consent:true,maxChargeCents:2500},payer.cookie);
+  const one=await h.cmd('guest.preview',{sponsorId:member.id,packId:pack.id,guestId:guest.id,classId:first.id},member.cookie);await h.cmd('guest.book',{id:one.id,confirm:true},member.cookie);
+  const extra=await h.cmd('guest.preview',{sponsorId:member.id,packId:pack.id,guestId:guest.id,classId:second.id,payerId:payer.id},member.cookie);assert.equal(extra.funding,'paid','the extension adds no guest pass');await h.cmd('guest.book',{id:extra.id,confirm:true},member.cookie);
+  const end=await h.cmd('freeze.end.prepare',{id:preview.id,endAt:'2098-03-21',reason:'Return earlier',requestId:'synthetic-strap-505'});await h.cmd('freeze.end.accept',{id:end.id,key:end.key},member.cookie);await h.cmd('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-506'});
+  const other=await sell(member,{expiresAt:'2099-12-31T00:00:00.000Z'});assert.equal((await h.cmd('freeze.prepare',{packId:other.id,freezeTypeId:type.id,startAt:'2098-05-01',endAt:'2098-05-02',reason:'Another trip',requestId:'synthetic-strap-507'},h.owner,409)).error,'freeze_count_cap_reached');
+  const current=(await h.state()).freezes.freezes.find(f=>f.id===preview.id);const withdrawn=await h.cmd('freeze.withdraw',{id:current.id,withdrawKey:current.withdrawal.key,requestId:'synthetic-strap-508'},member.cookie);assert.equal(withdrawn.status,'withdrawn');
+  const fee=(await h.state()).charges.find(c=>c.freezeId===preview.id&&c.amountCents===1000);assert.equal((await h.state()).charges.filter(c=>c.reversesChargeId===fee.id&&c.personId===member.id&&c.amountCents===-1000).length,1);
+  const after=(await h.state()).freezes.freezes.find(f=>f.id===preview.id);assert.equal(after.status,'withdrawn');assert.equal((await h.state()).packs.find(p=>p.id===pack.id).expiresAt,pack.expiresAt);
+  const retained=(await h.state()).recurring.terms.find(t=>t.id===agreed.id);assert.equal(retained.nextRenewalAt,pack.expiresAt);
+  await h.cmd('plan.recurring.stop',{id:agreed.id,requestId:'synthetic-strap-509'},member.cookie);assert.equal((await h.state()).packs.find(p=>p.id===pack.id).expiresAt,pack.expiresAt,'reasonless stop keeps access through the paid term');
+  // These are accepted historical agreements, not a production clock override.
+  const saveRecord=async(kind,value)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(value),kind,value.id).run();
+  const invoiceMember=await h.person('Inez'),oldMember=await h.person('Mateo');
+  const invoicePack=await sell(invoiceMember),oldPack=await sell(oldMember);
+  const agree=async(pack,who,months)=>{const p=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:months,requestId:'synthetic-strap-'+pack.id});return h.cmd('plan.recurring.accept',{id:p.id,key:p.key},who.cookie)};
+  const annual=await agree(invoicePack,invoiceMember,12),old=await agree(oldPack,oldMember,1);
+  const at=new Date(),due=new Date(at.getTime()+20*86400000).toISOString(),accepted=new Date(at);accepted.setUTCFullYear(accepted.getUTCFullYear()-1);accepted.setUTCDate(accepted.getUTCDate()+20);
+  await saveRecord('recurringTerms',{...annual,acceptedAt:accepted.toISOString(),nextRenewalAt:due});await saveRecord('pack',{...invoicePack,expiresAt:due});
+  const overdue=new Date(at);overdue.setUTCMonth(overdue.getUTCMonth()-3);await saveRecord('recurringTerms',{...old,nextRenewalAt:overdue.toISOString()});await saveRecord('pack',{...oldPack,expiresAt:overdue.toISOString()});
+  await h.mf.getWorker().then(w=>w.scheduled());await h.mf.getWorker().then(w=>w.scheduled());
+  let billing=(await h.state()).recurring;
+  const reminders=billing.reminders.filter(r=>r.recurringTermsId===annual.id);assert.ok(reminders.some(r=>r.kinds.includes('annual')));assert.ok(reminders.some(r=>r.kinds.includes('renewal')));
+  assert.equal(new Set(reminders.map(r=>r.id)).size,reminders.length);assert.ok(reminders.every(r=>r.body.includes(annual.stopPath)&&r.body.includes('until stopped')));
+  assert.equal(billing.terms.find(r=>r.id===old.id).failure,'billing_period_already_ended');assert.equal(billing.invoices.filter(r=>r.recurringTermsId===old.id).length,0,'ended periods create no backlog debt');
+  assert.equal((await h.state()).charges.filter(c=>c.recurringTermsId===old.id).length,0);
+  const connection=billing.connection,previousOrigin='https://prior-studio.example';
+  await h.db.prepare("UPDATE st_contract_connections SET origin=? WHERE id='billing'").bind(previousOrigin).run();
+  for(const term of billing.terms.filter(r=>r.acceptedAt&&['active','needs_review'].includes(r.status)))await saveRecord('recurringTerms',{...term,billingOrigin:previousOrigin});
+  const reconnect={previousOrigin,connectionId:connection.connectionId,requestId:'synthetic-strap-510'};
+  assert.equal((await h.cmd('plan.recurring.reconnect',reconnect,invoiceMember.cookie,403)).error,'forbidden');
+  const moved=await h.cmd('plan.recurring.reconnect',reconnect);assert.ok(moved.agreementIds.includes(annual.id));assert.deepEqual(await h.cmd('plan.recurring.reconnect',reconnect),moved);
+  billing=(await h.state()).recurring;const currentAgreement=billing.terms.find(r=>r.id===annual.id);assert.deepEqual(currentAgreement.acknowledgement,annual.acknowledgement);assert.equal(currentAgreement.billingOrigin,h.origin);assert.equal(currentAgreement.nextRenewalAt,due);
+  assert.ok((await h.state(invoiceMember.cookie)).notices.some(n=>n.subject==='Recurring invoices moved to the new studio address'));
+  await h.db.prepare("DELETE FROM st_contract_connections WHERE id='billing'").run();
+  assert.equal((await h.cmd('plan.recurring.reconnect',{...reconnect,requestId:'synthetic-strap-511'},h.owner,409)).error,'fresh_member_acceptance_required');
+
+}))
