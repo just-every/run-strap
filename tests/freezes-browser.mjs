@@ -92,6 +92,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         await mine.locator(`[data-freeze="${freeze.id}"]`).scrollIntoViewIfNeeded();await shot(mine,'member-withdrawn')
         // Staff begins on the actual member profile and follows its freeze door.
         await staff.goto(h.origin+'/app/people?person='+direct.id)
+        await staff.getByText('Membership freezes',{exact:true}).click()
         await staff.getByRole('link',{name:'Freeze this member’s plan',exact:true}).click()
         const directType=staff.locator(`[data-freeze-type="${typeId}"]`)
         await directType.locator('summary').click()
