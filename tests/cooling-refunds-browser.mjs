@@ -133,7 +133,7 @@ async function refundPreviewAndSubmit(c,name,a,date,time,expected,deduction,form
   await due.scrollIntoViewIfNeeded();await shot(page,name+'-refund-due')
 }
 
-export async function coolingRefundsBrowser(h,cases){
+export async function coolingRefundsBrowser(h,cases,{fixOnly=false}={}){
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   // A fresh temporary browser profile uses the runner's real HOME.
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
@@ -155,18 +155,21 @@ export async function coolingRefundsBrowser(h,cases){
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'the entire page fits the viewport')
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-007-refund-${label}-${width}.png`)})
       }
-      const fixtures=cases.browserCases[width]
-      assert.ok(fixtures,'each width receives fresh uncancelled agreements')
+      const fixtures=fixOnly?null:cases.browserCases[width]
       const c={h,fixtures,pageFor,shot,staff:await pageFor(h.owner),key:()=>`synthetic-strap-${sequence++}`}
-      await settingsAndSale(c)
-      await recordServiceValues(c)
-      await refundPreviewAndSubmit(c,'ny',fixtures.ny,'2026-01-06','00:00:00',25800,0)
-      await refundPreviewAndSubmit(c,'ga',fixtures.ga,'2026-01-08','00:00:00',15800,10000,/capped at \$100/)
-      await refundPreviewAndSubmit(c,'fl',fixtures.fl,'2026-01-08','12:00:00',8100,900,/complete local term days/)
-      await refundPreviewAndSubmit(c,'ca',fixtures.ca,'2026-02-04','00:00:00',90000,180000,/pro-rata time made available/)
-      const fixed=await cancellationFixCases(h,{previewOnly:true,fixtureOffset:width*100})
-      await refundPreviewAndSubmit(c,'collected-fee-and-payer-receipts',fixed.receipts,'2026-01-06','00:00:00',25800,0)
-      await refundPreviewAndSubmit(c,'initial-over-renewal-window',fixed.overlap,'2026-01-06','00:00:00',31700,0)
+      if(fixOnly){
+        const fixed=await cancellationFixCases(h,{previewOnly:true,fixtureOffset:width*100})
+        await refundPreviewAndSubmit(c,'collected-fee-and-payer-receipts',fixed.receipts,'2026-01-06','00:00:00',25800,0)
+        await refundPreviewAndSubmit(c,'initial-over-renewal-window',fixed.overlap,'2026-01-06','00:00:00',31700,0)
+      }else{
+        assert.ok(fixtures,'each width receives fresh uncancelled agreements')
+        await settingsAndSale(c)
+        await recordServiceValues(c)
+        await refundPreviewAndSubmit(c,'ny',fixtures.ny,'2026-01-06','00:00:00',25800,0)
+        await refundPreviewAndSubmit(c,'ga',fixtures.ga,'2026-01-08','00:00:00',15800,10000,/capped at \$100/)
+        await refundPreviewAndSubmit(c,'fl',fixtures.fl,'2026-01-08','12:00:00',8100,900,/complete local term days/)
+        await refundPreviewAndSubmit(c,'ca',fixtures.ca,'2026-02-04','00:00:00',90000,180000,/pro-rata time made available/)
+      }
     }finally{for(const context of contexts)await context.close()}
   }}finally{await browser.close()}
 }

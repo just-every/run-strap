@@ -360,4 +360,6 @@ test('PLAN-007: one-step member, payer and guardian cancellation supersedes free
 test('PLAN-007: delivered contract copies and state-specific cooling clocks preserve the longest right and refund timely NY renewals',async()=>{await run(async h=>{
   await h.confirmSetup(h.owner);const cases=await(await import('./cooling-off-cases.mjs')).coolingOffCases(h);
   if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-off-browser.mjs')).coolingOffBrowser(h,cases);
-});await run(async h=>{await h.confirmSetup(h.owner);const cases=await(await import('./cooling-refund-cases.mjs')).coolingRefundCases(h);if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,cases);});})
+});await run(async h=>{await h.confirmSetup(h.owner);const cases=await(await import('./cooling-refund-cases.mjs')).coolingRefundCases(h);if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,cases);});
+  // Keep the extra real sign-ins within the same per-installation auth limits.
+  if(process.env.STRAP_PROOF_DIR)await run(async h=>{await h.confirmSetup(h.owner);await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,null,{fixOnly:true});});})
