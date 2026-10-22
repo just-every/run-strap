@@ -46,6 +46,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       'freeze.request':async door=>{
         freezeMember=await h.person('Marisol');freezeType=await h.cmd('freeze.type.save',{name:'Travel',reason:'Agreed absence',feeCents:1000,defaultLengthDays:30,maxLengthDays:90,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:false});
         freezePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:freezeMember.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+        freezePack=(await h.state()).packs.find(p=>p.id===freezePack.id);
         const input={packId:freezePack.id,freezeTypeId:freezeType.id,startAt:'2098-01-02',endAt:'2098-02-01',reason:'Member requested travel leave',requestId:randomUUID()};
         const request=await h.cmd('freeze.request',input,freezeMember.cookie);
         const r=await checkAudit(door,{...input,freezeRequestId:request.id,channel:'phone',requestId:randomUUID()});

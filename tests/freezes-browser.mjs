@@ -17,7 +17,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
           const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}]);return context.newPage()
         }
         const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-006-${label}-${width}.png`),fullPage:false})}
-        const sale=async who=>await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:8,amountCents:14000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+        const sale=async who=>{const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:8,amountCents:14000,expiresAt:'2099-12-31T00:00:00Z'})).id});return(await h.state()).packs.find(p=>p.id===ack.id)}
         const pack=await sale(member),directPack=await sale(direct),packId=pack.id,directPackId=directPack.id,zone=(await h.state()).studio.timeZone
         const staff=await pageFor(h.owner),mine=await pageFor(member.cookie),directMine=await pageFor(direct.cookie)
         // The actual recurring-consent forms precede any freeze: no balance agreement is inferred.

@@ -131,6 +131,7 @@ export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
     const cancelled = {...booking,status:'cancelled',cancellation:'freeze',cancellationId:`freeze:${freeze.id}:${booking.id}`,cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
       refunded:effect.creditReturned,feeCents:0,freezeId:freeze.id};
     tx.put('booking',cancelled);
+    if(booking.guestPackId)contractNotice(tx,`freeze-guest:${freeze.id}:${booking.id}`,booking.personId,'Guest booking cancelled for a membership freeze','The host’s agreed freeze cancelled this guest seat. Its original guest pass was returned or its original studio-balance price was reversed once to the original payer. No cancellation fee, payment or external refund was made.',[booking.id]);
     bookingHistory(tx,'cancel',booking,cancelled,{reason:'Agreed membership freeze',channel:input.channel ?? 'desk'}, {id:cancelled.cancellationId,parentActionId:actionId});
   }
   if (freeze.effects.revisedExpiresAt) {

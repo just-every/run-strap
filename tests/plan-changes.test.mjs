@@ -173,6 +173,7 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   assert.equal(state.bookings.find(b=>b.id===kept.id).status,'booked')
   assert.equal(state.bookings.find(b=>b.id===cancelled.id).cancellation,'freeze');
   assert.equal(state.bookings.find(b=>b.id===guestSeat.id).cancellation,'freeze');
+  assert.ok((await h.state(stranger.cookie)).notices.some(n=>n.subject==='Guest booking cancelled for a membership freeze'));
   assert.equal(state.guests.events.filter(e=>e.bookingId===guestSeat.id&&e.type==='return').length,1,'the frozen plan’s separate guest allocation returns once');
   assert.equal(state.packCreditEvents.filter(e=>e.type==='restore'&&e.bookingId===cancelled.id).length,1)
   assert.equal(state.charges.filter(c=>c.freezeId===preview.id).length,1)
@@ -235,7 +236,7 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   const sofia=await h.person('Sofia'),sofiaPack=await sale(sofia,'2099-12-31T00:00:00.000Z');
   const series=(await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:'2098-01-06',endDate:'2098-01-06',time:'09:00',minutes:30,intervalWeeks:1,title:'Morning Pilates',service:'Mat',room:'Timetable studio',capacity:4,instructorId:instructor.id})).id}));
   await h.cmd('booking.book',{classId:series.classes[0].id},sofia.cookie);
-  const seriesFreeze=await h.cmd('freeze.prepare',{packId:sofiaPack.id,freezeTypeId:type.id,startAt:'2098-01-07T00:00:00.000Z',endAt:'2098-01-08T00:00:00.000Z',reason:'Planned absence',requestId:'synthetic-strap-series-freeze'});
+  const seriesFreeze=await h.cmd('freeze.prepare',{packId:sofiaPack.id,freezeTypeId:type.id,startAt:'2098-01-07',endAt:'2098-01-08',reason:'Planned absence',requestId:'synthetic-strap-series-freeze'});
   await h.cmd('freeze.accept',{id:seriesFreeze.id,key:seriesFreeze.key},sofia.cookie);
   await h.cmd('freeze.confirm',{id:seriesFreeze.id,key:seriesFreeze.key,requestId:'synthetic-strap-series-confirm'});
   await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
@@ -248,7 +249,7 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
   const member=await h.person('Nora'),guest=await h.person('Ari'),payer=await h.person('Sam'),coach=await h.person('Sage','instructor');
   const sell=async(person,input={})=>{const r=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:5,amountCents:10000,expiresAt:'2098-07-01T04:00:00.000Z',...input})).id});return(await h.state()).packs.find(p=>p.id===r.id)};
   const publish=async(title,start)=>{const d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title,service:'Mat',room:title,start,end:new Date(Date.parse(start)+1800000).toISOString(),capacity:5,instructorId:coach.id}]})).id})).classes[0]};
-  const pack=await sell(member,{kind:'visits',visits:2,period:'month',rollover:0,guestTerms:{passes:1,period:'month',rollover:0,services:['Mat'],perGuest:10,windowDays:365,excess:'charge',priceCents:2500}});
+  const pack=await sell(member,{kind:'visits',credits:undefined,visits:2,period:'month',rollover:0,guestTerms:{passes:1,period:'month',rollover:0,services:['Mat'],perGuest:10,windowDays:365,excess:'charge',priceCents:2500}});
   const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:12,requestId:'synthetic-strap-501'});
   assert.match(proposal.consent,/until stopped/);assert.ok(proposal.consent.includes('100.00'));assert.ok(proposal.consent.includes(proposal.nextRenewalAt));assert.ok(proposal.consent.includes(proposal.stopPath));
   const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);assert.ok(agreed.acknowledgement);assert.ok(agreed.retention);
@@ -266,6 +267,8 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
   const other=await sell(member,{expiresAt:'2099-12-31T00:00:00.000Z'});assert.equal((await h.cmd('freeze.prepare',{packId:other.id,freezeTypeId:type.id,startAt:'2098-05-01',endAt:'2098-05-02',reason:'Another trip',requestId:'synthetic-strap-507'},h.owner,409)).error,'freeze_count_cap_reached');
   const current=(await h.state()).freezes.freezes.find(f=>f.id===preview.id);const withdrawn=await h.cmd('freeze.withdraw',{id:current.id,withdrawKey:current.withdrawal.key,requestId:'synthetic-strap-508'},member.cookie);assert.equal(withdrawn.status,'withdrawn');
   const fee=(await h.state()).charges.find(c=>c.freezeId===preview.id&&c.amountCents===1000);assert.equal((await h.state()).charges.filter(c=>c.reversesChargeId===fee.id&&c.personId===member.id&&c.amountCents===-1000).length,1);
+  const reversed=(await h.state()).charges.filter(c=>c.bookingId&&c.reason==='guest_drop_in_reversal');assert.equal(reversed.length,1);assert.equal(reversed[0].personId,payer.id);assert.equal(reversed[0].amountCents,-2500);
+  assert.ok((await h.state(guest.cookie)).notices.some(n=>n.subject==='Guest booking cancelled after a freeze withdrawal'));
   const after=(await h.state()).freezes.freezes.find(f=>f.id===preview.id);assert.equal(after.status,'withdrawn');assert.equal((await h.state()).packs.find(p=>p.id===pack.id).expiresAt,pack.expiresAt);
   const retained=(await h.state()).recurring.terms.find(t=>t.id===agreed.id);assert.equal(retained.nextRenewalAt,pack.expiresAt);
   await h.cmd('plan.recurring.stop',{id:agreed.id,requestId:'synthetic-strap-509'},member.cookie);assert.equal((await h.state()).packs.find(p=>p.id===pack.id).expiresAt,pack.expiresAt,'reasonless stop keeps access through the paid term');
