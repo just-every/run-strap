@@ -7,7 +7,7 @@ export const contractRegion = (state: State, personId: string) => state.records.
 export function saveContractRegion(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who); const member = person(tx.state,input.personId), region = text(input.region,'region',2).toUpperCase();
   insist(regions.has(region),'invalid_region');
-  const saved = {id:`contract-jurisdiction:${member.id}`,personId:member.id,region,evidenceReference:text(input.evidenceReference,'evidenceReference',200),updatedBy:tx.who.id,updatedAt:now()};
+  const saved = {id:`contract-jurisdiction:${member.id}`,personId:member.id,region,previousRegion:contractRegion(tx.state,member.id),evidenceReference:text(input.evidenceReference,'evidenceReference',200),updatedBy:tx.who.id,updatedAt:now()};
   tx.put('contractJurisdiction',saved);return saved;
 }
 /** The complete native invoice contract retained at acceptance, excluding internal source facts. */

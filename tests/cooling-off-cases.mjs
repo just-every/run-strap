@@ -26,7 +26,7 @@ export async function coolingOffCases(h){
       await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:amount,reference:key()})
     }
     contract=(await h.state(member.cookie)).cancellations.contracts.find(t=>t.id===terms.id)
-    return {member,pack,terms,window:contract.coolingOff}
+    return {member,pack,terms,window:contract.coolingOff,hours:(await h.state()).studio.businessHours}
   }
   const cancel=async(a,at,ok=true)=>h.cmd('plan.cancellation.statutory',{packId:a.pack.id,reasonCode:'cooling-off',documentedAt:at,evidenceReference:key(),requestId:key()},a.member.cookie,ok?200:409)
   const ga=await agreement({region:'GA'});assert.equal(ga.window.deadline,'2026-01-15T07:00:00.000Z');assert.equal(ga.window.governingRule.id,'GA-10-1-393.2')
