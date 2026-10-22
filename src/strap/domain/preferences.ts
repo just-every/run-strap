@@ -9,7 +9,7 @@ export type MarketingChannel = typeof channels[number];
 export function preferencesOf(state: State,personId: string): RecordData {
   return state.records.get('member-preference:'+personId)?.data ?? {id:'member-preference:'+personId,personId,revision:0,
     marketing:{email:'denied',sms:'denied',inApp:'denied'},contactChannels:{email:true,sms:false,inApp:true},preferredTimes:'',preferredClasses:'',accessibility:'',
-    attendanceSharing:true,feedback:false,timeZone:'America/New_York',quietStart:'20:00',quietEnd:'10:00',updatedAt:null,updatedBy:null,source:null};
+    attendanceSharing:true,feedback:false,timeZone:null,quietStart:'20:00',quietEnd:'10:00',updatedAt:null,updatedBy:null,source:null};
 }
 export function suppressMarketing(tx: Transaction,personId: string,channel: string | null,reason: string) {
   for(const message of list(tx.state,'marketingMessage').filter(m => m.personId === personId && (!channel || m.channel === channel) && ['queued','held'].includes(m.status)))
@@ -54,7 +54,9 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
   }
   for(const key of ['preferredTimes','preferredClasses','accessibility'] as const)if(input[key] !== undefined)after[key]=optional(input[key],key,key === 'accessibility'?2000:500);
   for(const key of ['attendanceSharing','feedback'] as const)if(input[key] !== undefined){insist(typeof input[key] === 'boolean','invalid_'+key);after[key]=input[key];}
-  if(input.timeZone !== undefined){const zone=text(input.timeZone,'timeZone',100);try{new Intl.DateTimeFormat('en-US',{timeZone:zone}).format();}catch{insist(false,'invalid_timeZone');}after.timeZone=zone;}
+  // A blank zone records none: marketing SMS quiet hours then follow the studio's clock.
+  if(input.timeZone !== undefined){const zone=input.timeZone === null || (typeof input.timeZone === 'string' && !input.timeZone.trim()) ? null : text(input.timeZone,'timeZone',100);
+    if(zone)try{new Intl.DateTimeFormat('en-US',{timeZone:zone}).format();}catch{insist(false,'invalid_timeZone');}after.timeZone=zone;}
   for(const key of ['quietStart','quietEnd'] as const)if(input[key] !== undefined)after[key]=clock(input[key],key);
   insist(after.quietStart !== after.quietEnd,'quiet_hours_need_distinct_bounds');
   if(input.attendanceSharing === true && before.attendanceSharing === false){text(input.consentStatement,'consentStatement',500);if(staff)text(input.sourceReference,'sourceReference',200);}

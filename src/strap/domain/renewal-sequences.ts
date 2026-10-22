@@ -2,10 +2,15 @@ import { humanOwner, id, insist, integer, list, now, record, text, type State } 
 import type { Transaction } from './store';
 import { channels, permission, preferencesOf, suppressMarketing, type MarketingChannel } from './preferences';
 import { renewalWorklist } from './renewals';
+import { studioSettings } from './studio';
 
-/** Queue enforcement only. This module has no external provider transport or credentials. */
+/** Queue enforcement only. This module has no external provider transport or credentials.
+ * Marketing SMS quiet hours always include 20:00–10:00 (and any stricter member window) on the
+ * member's recorded clock, else the studio's; with neither clock the local hour is unknown, so the text stays held. */
 export function inQuietHours(state:State,personId:string,at=now()) {
-  const p=preferencesOf(state,personId),parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:p.timeZone,hourCycle:'h23',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(at)).map(p=>[p.type,p.value]));
+  const p=preferencesOf(state,personId),timeZone=p.timeZone ?? studioSettings(state)?.timeZone;
+  if(!timeZone)return true;
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(at)).map(p=>[p.type,p.value]));
   const minute=Number(parts.hour)*60+Number(parts.minute),minutes=(s:string)=>Number(s.slice(0,2))*60+Number(s.slice(3)),start=minutes(p.quietStart),end=minutes(p.quietEnd);
   return minute<600 || minute>=1200 || (start<end ? minute>=start&&minute<end : minute>=start||minute<end);
 }
@@ -39,7 +44,7 @@ export function enrollRenewalSequence(tx:Transaction,input:Record<string,unknown
   const saved={id:key,personId:pack.personId,packId:pack.id,sequenceId:sequence.id,channel:sequence.channel,text:sequence.text,status:'queued',createdAt:now(),createdBy:tx.who.id};
   tx.put('marketingMessage',saved);return saved;
 }
-/** Explicit native owner review. SMS/email remain held: no provider transport is claimed. */
+/** Explicit native owner review. SMS/email remain held: no provider transport is claimed. Quiet hours hold marketing SMS only. */
 export function reviewRenewalQueue(tx:Transaction) {
   humanOwner(tx.who);const rows=worklist(tx),at=now();
   for(const message of list(tx.state,'marketingMessage').filter(m=>['queued','held'].includes(m.status))) {
@@ -47,7 +52,7 @@ export function reviewRenewalQueue(tx:Transaction) {
     if(denied){suppressMarketing(tx,message.personId,message.channel,denied);continue;}
     if(!rows.some(r=>r.packId===message.packId)){tx.put('marketingMessage',{...message,status:'suppressed',holdReason:null,suppressionReason:'source_no_longer_eligible',suppressedAt:at});continue;}
     const sequence=record(tx.state,message.sequenceId,'renewalSequence');
-    const held=!sequence.enabled?'sequence_paused':inQuietHours(tx.state,message.personId,at)?'quiet_hours':message.channel!=='inApp'?'provider_delivery_unavailable':null;
+    const held=!sequence.enabled?'sequence_paused':message.channel==='sms'&&inQuietHours(tx.state,message.personId,at)?'quiet_hours':message.channel!=='inApp'?'provider_delivery_unavailable':null;
     if(held){tx.put('marketingMessage',{...message,status:'held',holdReason:held});continue;}
     tx.put('memberMessage',{id:'in-app:'+message.sequenceId+':'+message.packId,marketingMessageId:message.id,personId:message.personId,text:message.text,at,actorId:tx.who.id,actorRole:'owner',staffMade:true,channel:'in-app-marketing',sequenceId:sequence.id});
     tx.put('marketingMessage',{...message,status:'delivered',holdReason:null,deliveredAt:at,outcome:'in-app-recorded'});

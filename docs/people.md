@@ -86,4 +86,4 @@ Front desk changes assigned channel preferences with the member's stated permiss
 
 Members may remove their rows from existing roster and attendance integration keys. Re-enabling sharing requires a new recorded consent statement. The owner or authorized staff may export the preference record with its dated source history; other members, instructors and agents cannot. Exports and notes stay private.
 
-Quiet hours always include 8 pm–10 am on the member's chosen local clock and can be stricter. These defaults, shared-phone confirmation and restricted-access rules await contract approval. No provider delivery or complete MSG-008 acceptance is claimed.
+Marketing texts are held during quiet hours, which always include 8 pm–10 am in the member's chosen time zone, or the studio's when none is chosen, and can be stricter. Quiet hours never hold in-app marketing or operational messages. These defaults, shared-phone confirmation and restricted-access rules await contract approval. No provider delivery or complete MSG-008 acceptance is claimed.
