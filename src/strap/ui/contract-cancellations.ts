@@ -1,3 +1,4 @@
+import { coolingRefundCalculation as calculation } from './cooling-refund-value';
 import { packName } from './facts';
 import { money, zoneOf } from './format';
 import { packExpiration } from './pack-history';
@@ -8,7 +9,6 @@ const identity=()=>hidden('requestId',crypto.randomUUID());
 const channel=()=>select('channel','Request received by',[['desk','At the desk'],['phone','Phone'],['inbox','Email or inbox']],'desk');
 const dateTime=(prefix:string,label:string,required=false)=>`<div class="row2">${field(prefix+'Date',label+' date','','date',required?'required':'')}${field(prefix+'Time',label+' time','','time',`step="1" ${required?'required':''}`)}</div>`;
 const exact=(s:any,at:string)=>packExpiration(s,at);
-const calculation=(value:any)=>value.formula?.kind?`<p data-cooling-refund-calculation>${h(value.formula.explanation)} Paid ${money(value.paidCents)}; permitted deduction ${money(value.formula.deductionCents)}; refund due ${value.amountCents===null?'awaiting allocation':money(value.amountCents)}.</p><ul>${value.formula.rules.map((r:any)=>`<li>${h(r.explanation)}</li>`).join('')}</ul>`:'';
 const valueText=(value:any)=>value.amountCents===null?`Refund due awaits allocation of actual receipts. Known unused prepaid value ${money(value.knownUnusedCents)}; no paid amount was assumed.`:`Refund due ${money(value.amountCents)}, settled externally.`;
 function cancellation(s:any,c:any){
   const e=c.effects,staff=owner(s),bookingRows=e.bookings.map((b:any)=>`<li>${h(rows(s,'classes').find(entry=>entry.id===b.classId)?.title??'Class')} · ${exact(s,b.start)}: ${h(b.effect)}.</li>`).join('');
