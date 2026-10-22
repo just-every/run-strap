@@ -51,7 +51,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         const r=await checkAudit(door,{id:contractGrant.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'member_action_required');
         await h.cmd('contract.authority.accept',{id:contractGrant.id},contractMember.cookie);await h.cmd('contract.authority.accept',{id:contractGrant.id},contractDelegate.cookie);
       },
-      'contract.authority.revoke':async door=>{const r=await checkAudit(door,{id:contractGrant.id,reason:'Member withdrew delegation by phone',requestId:randomUUID(),channel:'phone'});assert.ok(r.result.revokedAt)},
+      'contract.authority.revoke':async door=>{const r=await checkAudit(door,{id:contractGrant.id,requestedByPersonId:contractMember.id,requestEvidenceReference:'synthetic-strap-710',reason:'Member withdrew delegation by phone',requestId:randomUUID(),channel:'phone'});assert.ok(r.result.revokedAt)},
       'plan.cancellation.stop':async door=>{const r=await checkAudit(door,{packId:contractPack.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'scheduled');assert.equal(r.result.terminatedBy,r.after.actor.id)},
       'plan.cancellation.statutory':async door=>{const {member,pack}=await nativeContract('Imani');const r=await checkAudit(door,{packId:pack.id,reasonCode:'cooling-off',documentedAt:new Date().toISOString(),evidenceReference:'synthetic-strap-702',requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'applied');assert.equal(r.after.cancellations.statements.filter(s=>s.cancellationId===r.result.id).length,1)},
       'plan.cancellation.request':async door=>{

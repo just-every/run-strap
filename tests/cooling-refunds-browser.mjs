@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {mkdir,readFile} from 'node:fs/promises'
 import {join,extname} from 'node:path'
 import {chromium} from '@playwright/test'
+import {cancellationFixCases} from './cooling-refund-cases.mjs'
 
 const formFor=(page,name)=>page.locator(`form[action*="name=${name}"]`)
 const presence='I confirm I am physically present at this studio while accepting this agreement.'
@@ -162,6 +163,9 @@ export async function coolingRefundsBrowser(h,cases){
       await refundPreviewAndSubmit(c,'ga',fixtures.ga,'2026-01-08','00:00:00',15800,10000,/capped at \$100/)
       await refundPreviewAndSubmit(c,'fl',fixtures.fl,'2026-01-08','12:00:00',8100,900,/complete local term days/)
       await refundPreviewAndSubmit(c,'ca',fixtures.ca,'2026-02-04','00:00:00',90000,180000,/pro-rata time made available/)
+      const fixed=await cancellationFixCases(h,{previewOnly:true})
+      await refundPreviewAndSubmit(c,'collected-fee-and-payer-receipts',fixed.receipts,'2026-01-06','00:00:00',25800,0)
+      await refundPreviewAndSubmit(c,'initial-over-renewal-window',fixed.overlap,'2026-01-06','00:00:00',31700,0)
     }finally{for(const context of contexts)await context.close()}
   }}finally{await browser.close()}
 }

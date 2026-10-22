@@ -147,8 +147,9 @@ export async function cancellationFixCases(h,{scenario='all',previewOnly=false}=
     const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents,initiationFeeCents,expiresAt:'2099-01-05T07:00:00.000Z'})).id})
     return (await h.state()).packs.find(p=>p.id===approved.id)
   }
-  const pay=async(pack)=>{
+  const pay=async(pack,beforeAllocate)=>{
     const receipt=await h.cmd('payment.record',{personId:pack.personId,amountCents:pack.amountCents+pack.initiationFeeCents,reference:key()})
+    if(beforeAllocate)await beforeAllocate(receipt)
     for(const charge of (await h.state()).charges.filter(c=>c.packId===pack.id))await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:charge.amountCents,reference:key()})
     return receipt
   }
@@ -177,7 +178,6 @@ export async function cancellationFixCases(h,{scenario='all',previewOnly=false}=
   if(scenario!=='overlap'){
     const member=await h.person(key()),payer=await h.person(key()),instructor=await h.person(key(),'instructor')
     let pack=await sell(member),terms=await agree(pack,member)
-    await pay(pack)
     // A collected late-cancel fee belongs to its booking, never to a pack charge.
     await h.cmd('bookingRule.save',{service:'c35 mat',cancelCutoffHours:72,lateCancelFeeCents:1500})
     const at=new Date(Date.now()+86400000),week=new Date(Date.UTC(at.getUTCFullYear(),at.getUTCMonth(),at.getUTCDate()-(at.getUTCDay()+6)%7)).toISOString().slice(0,10)
@@ -186,11 +186,23 @@ export async function cancellationFixCases(h,{scenario='all',previewOnly=false}=
     await h.cmd('booking.cancel',{id:booking.id,mode:'late',cancelReason:'Other',channel:'desk',requestId:key()})
     const fee=(await h.state()).fees.find(f=>f.bookingId===booking.id)
     assert.equal(fee.amountCents,1500)
-    await h.cmd('fee.collect',{id:fee.id,reference:key()})
+    const collected=await h.cmd('fee.collect',{id:fee.id,reference:key()})
+    const packCharge=(await h.state()).charges.find(c=>c.packId===pack.id&&c.amountCents===5900)
+    const version=(await h.state()).version
+    await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:collected.receipt.id,chargeId:packCharge.id,amountCents:1500,reference:key()},h.owner,409)
+    assert.equal((await h.state()).version,version,'a receipt tied to a booking fee cannot be reallocated as membership funding')
     const grant=await h.cmd('contract.authority.save',{personId:member.id,delegateId:payer.id,kind:'payer',evidenceReference:key()})
     await h.cmd('contract.authority.accept',{id:grant.id},member.cookie);await h.cmd('contract.authority.accept',{id:grant.id},payer.cookie)
     await h.cmd('payment.record',{personId:payer.id,amountCents:4300,reference:key()})
     const other=await sell(member,2000,0);await pay(other)
+    const noPackMoney=await h.cmd('plan.cancellation.statutory',{packId:pack.id,reasonCode:'cooling-off',documentedAt:new Date().toISOString(),evidenceReference:key(),requestId:key(),previewOnly:true},member.cookie)
+    assert.equal(noPackMoney.value.amountCents,0,'fee, other-pack and payer receipts cannot fund this agreement even while its charges remain unpaid')
+    assert.equal(noPackMoney.value.needsAllocation,false)
+    await pay(pack,async()=>{
+      const pending=await h.cmd('plan.cancellation.statutory',{packId:pack.id,reasonCode:'cooling-off',documentedAt:new Date().toISOString(),evidenceReference:key(),requestId:key(),previewOnly:true},member.cookie)
+      assert.equal(pending.value.needsAllocation,true,'an unallocated receipt able to fund this agreement still requires reconciliation')
+      assert.equal(pending.value.amountCents,null)
+    })
     pack=(await h.state()).packs.find(p=>p.id===pack.id)
     pack={...pack,termStartAt:start,createdAt:start};await save('pack',pack);await save('recurringTerms',{...terms,acceptedAt:start})
     fixtures.receipts={member,pack,terms,documentedAt,expected:25800,label:'collected desk fee and payer receipts cannot hold a fully allocated agreement in needs_allocation'}

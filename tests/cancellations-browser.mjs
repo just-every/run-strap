@@ -208,6 +208,40 @@ async function authorityJourneys(c){
   }
 }
 
+async function ownerPayerRevocation(c,width){
+  const {h,nina,payer,staff,go,shot,key}=c
+  const {pack,terms}=await saleAndAgreement(h,nina,key())
+  const grant=await h.cmd('contract.authority.save',{personId:nina.id,delegateId:payer.id,kind:'payer',evidenceReference:key()})
+  await h.cmd('contract.authority.accept',{id:grant.id},nina.cookie)
+  await h.cmd('contract.authority.accept',{id:grant.id},payer.cookie)
+  await go(staff,nina)
+  const article=staff.locator(`[data-contract-authority="${grant.id}"]`),form=article.locator('form[action*="name=contract.authority.revoke"]')
+  assert.match(await form.innerText(),/never on studio initiative/)
+  const options=await form.locator('[name=requestedByPersonId] option').evaluateAll(nodes=>nodes.map(n=>n.value))
+  assert.deepEqual(options,[nina.id,payer.id],'only the two named parties can request owner revocation')
+  await form.locator('[name=reason]').fill('Named party requested revocation by phone')
+  await form.locator('[name=requestedByPersonId]').selectOption(width===1440?nina.id:payer.id)
+  const before=(await h.state()).version
+  await form.getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
+  assert.equal((await h.state()).version,before,'missing recorded request evidence prevents form submission')
+  const evidence=key()
+  await form.locator('[name=requestEvidenceReference]').fill(evidence)
+  await form.scrollIntoViewIfNeeded();await shot(staff,'owner-payer-revocation-recorded-party-request')
+  await form.getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
+  const state=await h.state(),revoked=state.cancellations.authorities.find(g=>g.id===grant.id)
+  assert.ok(revoked.revokedAt)
+  assert.equal(revoked.revocationRequestedByPersonId,width===1440?nina.id:payer.id)
+  assert.equal(revoked.revocationRequestEvidenceReference,evidence)
+  assert.ok(!(await h.state(payer.cookie)).cancellations.contracts.some(t=>t.id===terms.id))
+  await article.scrollIntoViewIfNeeded();assert.match(await article.innerText(),/Revoked/);await shot(staff,'owner-payer-revocation-confirmed')
+  await staff.goto(h.origin+'/app/people?person='+nina.id+'#staff-actions')
+  const audit=staff.locator('#staff-actions')
+  const event=state.staffActions.find(a=>a.command==='contract.authority.revoke'&&a.after.id===grant.id)
+  assert.equal(event.after.revocationRequestEvidenceReference,evidence)
+  const row=audit.locator('[data-staff-command="contract.authority.revoke"]').first()
+  await row.scrollIntoViewIfNeeded();await shot(staff,'owner-payer-revocation-audit')
+}
+
 export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger}){
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
@@ -233,6 +267,10 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         for(const grant of (await h.state()).cancellations.authorities.filter(g=>!g.revokedAt&&((g.personId===nina.id&&g.delegateId===payer.id)||(g.personId===child.id&&g.delegateId===guardian.id)))){
           await go(staff)
           const revoke=staff.locator(`[data-contract-authority="${grant.id}"] form[action*="name=contract.authority.revoke"]`)
+          if(grant.kind==='payer'){
+            await revoke.locator('[name=requestedByPersonId]').selectOption(grant.personId)
+            await revoke.locator('[name=requestEvidenceReference]').fill(key())
+          }
           await revoke.locator('textarea[name=reason]').fill('The named participant and delegate requested fresh reviewed authority')
           await revoke.getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
         }
@@ -241,6 +279,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         await ownerEarlyTermination(context)
         await statutoryRefund(context)
         await authorityJourneys(context)
+        await ownerPayerRevocation(context,width)
         await go(outsider,nina)
         assert.doesNotMatch(await outsider.locator('#cancellations').innerText(),/Nina|Kira|Oscar/, 'another member’s contract, payer and guardian identities stay private; the account still sees its own stop door')
         const privateView=(await h.state(stranger.cookie)).cancellations

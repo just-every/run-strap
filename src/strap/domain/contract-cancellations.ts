@@ -86,7 +86,7 @@ export async function statutoryCancellation(tx:Transaction,input:Record<string,u
   const reasonCode=text(input.reasonCode,'reasonCode',30),documentedAt=instant(input.documentedAt,'documentedAt'),evidenceReference=text(input.evidenceReference,'evidenceReference',200),p=policy(tx.state);
   insist(['death','disability','relocation','cooling-off'].includes(reasonCode),'invalid_statutory_reason');insist(documentedAt<=now(),'documented_request_must_be_past');
   if(reasonCode==='relocation')insist(typeof input.relocationMiles==='number'&&Number.isFinite(input.relocationMiles)&&input.relocationMiles>p.relocationMiles,'statutory_relocation_not_eligible',409);
-  const coolingOff=reasonCode==='cooling-off'?coolingWindows(tx.state,pack,terms).filter(w=>documentedAt>=terms.acceptedAt&&(!w.renewal||documentedAt>=w.opensAt)&&(!w.deadline||documentedAt<w.deadline)).sort((a,b)=>Number(!!b.renewal)-Number(!!a.renewal))[0]:null;
+  const coolingOff=reasonCode==='cooling-off'?coolingWindows(tx.state,pack,terms).filter(w=>documentedAt>=terms.acceptedAt&&(!w.renewal||documentedAt>=w.opensAt)&&(!w.deadline||documentedAt<w.deadline)).sort((a,b)=>Number(!!a.renewal)-Number(!!b.renewal))[0]:null;
   if(reasonCode==='cooling-off')insist(coolingOff,'cooling_off_window_ended',409);
   const prior=cancellationForTerms(tx.state,terms.id);insist(prior?.status!=='applied','contract_already_ended',409);
   const value=reasonCode==='cooling-off'?coolingRefund(tx.state,pack,documentedAt,{packIds:coolingAgreementPackIds(tx.state,{id:terms.id,packId:pack.id,termsId:terms.id,coolingOff}),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,pack.personId)].filter(Boolean),policy:p}):unusedPrepaid(tx.state,pack,documentedAt);

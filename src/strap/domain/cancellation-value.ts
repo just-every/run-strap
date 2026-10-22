@@ -14,7 +14,7 @@ export function recordContractPrepayment(tx: Transaction, input: Record<string,u
   const prior = list(tx.state,'contractPrepayment').find(a => a.reference === reference);
   if (prior) { insist(prior.packId === pack.id && prior.paymentId === payment.id && prior.chargeId === charge.id && prior.amountCents === amountCents,'prepayment_changed',409); return prior; }
   insist(!list(tx.state,'charge').some(c=>c.reversesChargeId===charge.id),'charge_already_reversed',409);
-  insist(payment.amountCents > 0 && charge.amountCents > 0 && charge.packId === pack.id && charge.personId === payment.personId,'prepayment_evidence_mismatch',409);
+  insist(payment.amountCents > 0 && charge.amountCents > 0 && charge.packId === pack.id && charge.personId === payment.personId && (!payment.chargeId || payment.chargeId === charge.id),'prepayment_evidence_mismatch',409);
   const allocations = list(tx.state,'contractPrepayment');
   insist(allocations.filter(a => a.paymentId === payment.id).reduce((n,a) => n+a.amountCents,0)+amountCents <= payment.amountCents,'receipt_overallocated',409);
   insist(allocations.filter(a => a.chargeId === charge.id).reduce((n,a) => n+a.amountCents,0)+amountCents <= charge.amountCents,'charge_overallocated',409);
@@ -32,8 +32,15 @@ export function unusedPrepaid(state: State, pack: RecordData, effectiveAt: strin
   }
   const elapsed = Math.max(0,at-start-frozen), unused = Math.max(0,duration-Math.min(duration,elapsed));
   const allocations = list(state,'contractPrepayment').filter(a => a.packId === pack.id), paidCents = allocations.reduce((n,a) => n+a.amountCents,0);
-  const payerIds = new Set([pack.personId,...allocations.map(a=>a.payerId),...list(state,'contractAuthority').filter(g=>g.personId===pack.personId&&g.kind==='payer'&&!g.revokedAt&&g.memberAcceptedAt&&g.delegateAcceptedAt).map(g=>g.delegateId)]);
-  const unresolvedReceipt = list(state,'payment').some(p => payerIds.has(p.personId) && p.amountCents > 0 && list(state,'contractPrepayment').filter(a => a.paymentId === p.id).reduce((n,a) => n+a.amountCents,0) < p.amountCents);
+  const prepayments = list(state,'contractPrepayment'), charges = list(state,'charge');
+  // Only a receipt eligible for a still-unallocated charge on this pack can
+  // delay valuation. Booking-fee receipts and a delegate's own money cannot.
+  const availableCharges = charges.filter(c => c.packId === pack.id && c.amountCents > 0
+    && !charges.some(r => r.reversesChargeId === c.id)
+    && prepayments.filter(a => a.chargeId === c.id).reduce((n,a) => n+a.amountCents,0) < c.amountCents);
+  const unresolvedReceipt = list(state,'payment').some(p => p.amountCents > 0
+    && prepayments.filter(a => a.paymentId === p.id).reduce((n,a) => n+a.amountCents,0) < p.amountCents
+    && availableCharges.some(c => c.personId === p.personId && (!p.chargeId || p.chargeId === c.id)));
   const complete = !unresolvedReceipt;
   let cumulative=0,allocatedRefund=0;
   const payers=[...new Set(allocations.map(a=>a.payerId))].sort().map(payerId=>{const prepaidCents=allocations.filter(a=>a.payerId===payerId).reduce((n,a)=>n+a.amountCents,0);cumulative+=prepaidCents;const next=rounded(BigInt(cumulative)*BigInt(unused),BigInt(duration)),unusedCents=next-allocatedRefund;allocatedRefund=next;return {payerId,prepaidCents,unusedCents};});

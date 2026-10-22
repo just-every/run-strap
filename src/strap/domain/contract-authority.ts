@@ -57,8 +57,14 @@ export function revokeContractAuthority(tx: Transaction, input: Record<string,un
   const owner=tx.who.role==='owner'&&tx.who.isOwner,member=tx.who.role==='member';
   insist(owner||member&&(tx.who.personId===grant.delegateId||grant.kind==='payer'&&tx.who.personId===grant.personId),'contract_authority_not_found',404);
   const reason=owner?text(input.reason,'reason',500):null;
+  let request = {};
+  if (owner && grant.kind === 'payer') {
+    insist([grant.personId,grant.delegateId].includes(input.requestedByPersonId),'payer_revocation_party_required');
+    request = {revocationRequestedByPersonId:input.requestedByPersonId,
+      revocationRequestEvidenceReference:text(input.requestEvidenceReference,'requestEvidenceReference',200)};
+  }
   if (grant.revokedAt) return grant;
-  const revoked = {...grant,revokedAt:now(),revokedBy:tx.who.id,revocationReason:reason}; tx.put('contractAuthority',revoked); return revoked;
+  const revoked = {...grant,...request,revokedAt:now(),revokedBy:tx.who.id,revocationReason:reason}; tx.put('contractAuthority',revoked); return revoked;
 }
 export const activeContractAuthorities = (state: State, personId: string) => list(state,'contractAuthority').filter(g => g.personId === personId && !g.revokedAt && g.delegateAcceptedAt && (g.kind === 'payer' ? !!g.memberAcceptedAt : g.kind === 'minor-guardian' && (guardianAuthorityEndsAt(g) ?? '')>now()) && state.people.some(p => p.id === g.delegateId && p.active && !p.erasedAt));
 export function canCancelContract(state: State, who: Actor, personId: string, termsId?:string) {
