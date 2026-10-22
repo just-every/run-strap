@@ -8,7 +8,7 @@ export async function coolingOffCases(h){
   await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',businessHours:hours})
   const save=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
   const agreement=async({region='TX',amount=10000,acceptedAt='2026-01-05T09:00:00.000Z',deliveredAt=acceptedAt,renewal,intervalMonths=1}={})=>{
-    const member=await h.person('Cooling '+sequence)
+    const member=await h.person('Cooling'+sequence)
     const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:amount,expiresAt:'2099-12-31T00:00:00.000Z'})).id})
     let pack=(await h.state()).packs.find(p=>p.id===approved.id)
     const preview=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths,requestId:key()})
