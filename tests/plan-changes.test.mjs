@@ -291,7 +291,7 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
   await h.db.prepare("UPDATE st_contract_connections SET origin=? WHERE id='billing'").bind(previousOrigin).run();
   for(const term of billing.terms.filter(r=>r.acceptedAt&&['active','needs_review'].includes(r.status)))await saveRecord('recurringTerms',{...term,billingOrigin:previousOrigin});
   const reconnect={previousOrigin,connectionId:connection.connectionId,requestId:'synthetic-strap-510'};
-  assert.equal((await h.cmd('plan.recurring.reconnect',reconnect,invoiceMember.cookie,403)).error,'forbidden');
+  assert.equal((await h.cmd('plan.recurring.reconnect',reconnect,invoiceMember.cookie,403)).error,'owner_required');
   const moved=await h.cmd('plan.recurring.reconnect',reconnect);assert.ok(moved.agreementIds.includes(annual.id));assert.deepEqual(await h.cmd('plan.recurring.reconnect',reconnect),moved);
   billing=(await h.state()).recurring;const currentAgreement=billing.terms.find(r=>r.id===annual.id);assert.deepEqual(currentAgreement.acknowledgement,annual.acknowledgement);assert.equal(currentAgreement.billingOrigin,h.origin);assert.equal(currentAgreement.nextRenewalAt,due);
   assert.ok((await h.state(invoiceMember.cookie)).notices.some(n=>n.subject==='Recurring invoices moved to the new studio address'));

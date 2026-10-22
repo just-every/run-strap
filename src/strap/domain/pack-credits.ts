@@ -113,7 +113,7 @@ function planSummary(state: State, pack: RecordData, reservations: Map<string,st
   const through = allowanceAt(pack,new Date(Math.max(Date.parse(planStart(pack)),Math.min(at,expiresAt-1))).toISOString());
   const finalPeriod = periodOf(plan,allowanceAt(pack,new Date(expiresAt-1).toISOString()),zone);
   const rows = periods(plan,held.map(item => allowanceAt(pack,item.start)),zone,planStart(pack),through).map(p => {
-    const calendarEndsAt = periodEndsAt(plan,p.start,zone), last = p.start === finalPeriod;
+    const calendarEndsAt = periodEndsAt(plan,p.start,zone), last = expiresAt <= Date.parse(calendarEndsAt) || !!pack.allowanceExpiresAt && p.start === finalPeriod;
     const endsAt = last ? pack.expiresAt : calendarEndsAt, ended = Date.parse(endsAt) <= at;
     return {...p,endsAt,calendarEndsAt,...(pack.allowanceExpiresAt && last ? {carriedOut:0,allowanceExpiresAt:pack.allowanceExpiresAt,accessExpiresAt:pack.expiresAt} : {}),ended,...counts(held.filter(item => periodOf(plan,allowanceAt(pack,item.start),zone) === p.start).map(item => item.id)),
       returned:returns.filter(e => periodOfBooking(e.bookingId) === p.start).length,
