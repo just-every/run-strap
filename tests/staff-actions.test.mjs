@@ -39,10 +39,41 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,(name==='plan.change.prepare'||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
+    let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
+    const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     const actions={
+      'contract.authority.accept':async door=>{
+        ({member:contractMember,pack:contractPack}=await nativeContract('Dalia'));contractDelegate=await h.person('Rosa');
+        contractGrant=await h.cmd('contract.authority.save',{personId:contractMember.id,delegateId:contractDelegate.id,kind:'payer',evidenceReference:'synthetic-strap-701'});
+        const r=await checkAudit(door,{id:contractGrant.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'member_action_required');
+        await h.cmd('contract.authority.accept',{id:contractGrant.id},contractMember.cookie);await h.cmd('contract.authority.accept',{id:contractGrant.id},contractDelegate.cookie);
+      },
+      'contract.authority.revoke':async door=>{const r=await checkAudit(door,{id:contractGrant.id,reason:'Member withdrew delegation by phone',requestId:randomUUID(),channel:'phone'});assert.ok(r.result.revokedAt)},
+      'plan.cancellation.stop':async door=>{const r=await checkAudit(door,{packId:contractPack.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'scheduled');assert.equal(r.result.terminatedBy,r.after.actor.id)},
+      'plan.cancellation.statutory':async door=>{const {member,pack}=await nativeContract('Imani');const r=await checkAudit(door,{packId:pack.id,reasonCode:'cooling-off',documentedAt:new Date().toISOString(),evidenceReference:'synthetic-strap-702',requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'applied');assert.equal(r.after.cancellations.statements.filter(s=>s.cancellationId===r.result.id).length,1)},
+      'plan.cancellation.request':async door=>{
+        const {member,pack}=await nativeContract('Selena');const input={packId:pack.id,effectiveAt:at(72),reason:'Member phoned for an early end',requestId:randomUUID(),channel:'phone'};
+        contractRequest=await h.cmd('plan.cancellation.request',{...input,requestId:randomUUID()},member.cookie);
+        const r=await checkAudit(door,{...input,cancellationRequestId:contractRequest.id});assert.equal(r.result.status,'preview');
+        contractCancel=await h.cmd('plan.cancellation.confirm',{id:r.result.id,key:r.result.key,requestId:randomUUID(),channel:'phone'});
+      },
+      'plan.cancellation.withdraw.prepare':async door=>{
+        const stopped=await h.cmd('plan.cancellation.stop',{packId:contractPack.id,requestId:randomUUID()},contractMember.cookie);
+        // The owner terminated this one; an owner can withdraw only their own action.
+        const own=await checkAudit('plan.cancellation.withdraw.prepare',{id:stopped.id,requestId:randomUUID(),channel:'phone'});assert.equal(own.result.requiresFreshAcceptance,true);
+        const {member,pack}=await nativeContract('Camila');const memberCancel=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:randomUUID()},member.cookie);
+        const r=await checkAudit(door,{id:memberCancel.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'member_action_required');
+        contractCancel=memberCancel;contractMember=member;contractPack=pack;contractWithdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:memberCancel.id,requestId:randomUUID()},member.cookie);
+      },
+      'plan.cancellation.withdraw.confirm':async door=>{
+        const r=await checkAudit(door,{id:contractWithdrawal.id,requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'member_action_required');
+        await h.cmd('plan.cancellation.withdraw.confirm',{id:contractWithdrawal.id,key:contractWithdrawal.key,requestId:randomUUID()},contractMember.cookie);
+        assert.equal((await h.state()).cancellations.cancellations.find(c=>c.id===contractCancel.id).status,'withdrawn');
+      },
+
       'freeze.request':async door=>{
         freezeMember=await h.person('Marisol');freezeType=await h.cmd('freeze.type.save',{name:'Travel',reason:'Agreed absence',feeCents:1000,defaultLengthDays:30,maxLengthDays:90,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:false});
         freezePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:freezeMember.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id});
@@ -110,7 +141,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       },
       'plan.recurring.stop':async door=>{
         const input={id:invoiceTerms.id,reason:'Member withdrew future invoice agreement by phone',channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input);
-        assert.equal(r.result.status,'stopped');assert.equal((await h.state(invoiceMember.cookie)).recurring.terms.find(t=>t.id===invoiceTerms.id).status,'stopped');
+        assert.equal(r.result.status,'scheduled');assert.equal((await h.state(invoiceMember.cookie)).recurring.terms.find(t=>t.id===invoiceTerms.id).status,'cancellation_scheduled');
         await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
       },
       'makeup.guardian.accept':async door=>{
@@ -340,6 +371,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if(entry.name==='contract.authority.revoke')input.id=contractGrant.id;
+      if(['plan.cancellation.stop','plan.cancellation.statutory'].includes(entry.name))input.packId=contractPack.id;
       if (entry.name==='freeze.request') Object.assign(input,{packId:freezePack.id,freezeTypeId:freezeType.id,startAt:'2098-01-02',reason:'Unrelated member'});
       if (entry.name==='freeze.accept') input.id=freezePreview.id;
       if (entry.name==='freeze.end.accept') input.id=freezeEnd.id;
@@ -358,7 +391,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         const other=(await h.state()).bookings.find(b=>b.personId===ben.id&&b.status==='booked');input.id=other.id
         if (entry.memberDoor.staff==='booking.move') input.classId=near.id
       }
-      const denial=['absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw'].includes(entry.name)?404:403
+      const denial=['absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw','contract.authority.revoke','plan.cancellation.stop','plan.cancellation.statutory'].includes(entry.name)?404:403
       await refused(h,entry.memberDoor.staff,input,ana.cookie,denial)
       if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,denial)
       const before=(await h.state()).version

@@ -48,6 +48,8 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     })
     for (const key of [...keys,'profile',...Array.from({length:7},(_,i) => [`opens_${i+1}`,`closes_${i+1}`]).flat()]) delete input[key]
   }
+  if(name.startsWith('plan.cancellation.')){for(const prefix of ['effective','documented','settled']){if(input[prefix+'Date']){if(!date.test(String(input[prefix+'Date']))||!/^\d\d:\d\d(?::\d\d)?$/.test(String(input[prefix+'Time'])))fail('Choose a cancellation date and time');input[prefix+'At']=new Date(Date.parse(localInstant(String(input[prefix+'Date']),String(input[prefix+'Time']).slice(0,5),zoneOf(timeZone)))+Number(String(input[prefix+'Time']).split(':')[2]??0)*1000).toISOString();}delete input[prefix+'Date'];delete input[prefix+'Time'];}for(const key of ['coolingOffDays','relocationMiles'])if(input[key]!==undefined&&input[key]!=='')input[key]=Number(input[key]);else delete input[key];for(const key of ['cancellationRequestId','exceptionReason'])if(input[key]==='')delete input[key];}
+  if(name==='contract.prepayment.record'||name==='plan.cancellation.refund.settle'){input.amountCents=cents(input.amount,'the recorded amount');delete input.amount;}
   if (name === 'freeze.type.save') {
     input.feeCents=cents(input.freezeFee ?? '0','freeze fee');delete input.freezeFee;
     for (const key of ['defaultLengthDays','maxLengthDays']) input[key]=Number(input[key]);

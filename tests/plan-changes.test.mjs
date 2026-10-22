@@ -312,3 +312,43 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
   assert.equal((await h.cmd('plan.recurring.reconnect',{...reconnect,requestId:'synthetic-strap-511'},h.owner,409)).error,'fresh_member_acceptance_required');
 
 }))
+
+
+test('PLAN-007: one-step member, payer and guardian cancellation supersedes freezes, preserves exact paid-value refunds and ends once across restart', {timeout:240000},()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/New_York'});
+  const nina=await h.person('Nina'),payer=await h.person('Oscar'),guest=await h.person('Mira'),guardian=await h.person('Jo'),child=await h.person('Kira'),stranger=await h.person('Noah'),coach=await h.person('Ian','instructor');
+  const day=86400000,now=Date.now(),iso=ms=>new Date(ms).toISOString(),date=days=>iso(now+days*day).slice(0,10);
+  const sell=async(who,extra={})=>{const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:6,amountCents:12000,expiresAt:iso(now+90*day),...extra})).id});return(await h.state()).packs.find(p=>p.id===ack.id)};
+  const agree=async(pack,who)=>{const p=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-'+pack.id});return h.cmd('plan.recurring.accept',{id:p.id,key:p.key},who.cookie)};
+  const save=async(kind,value)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(value),kind,value.id).run();
+  const publish=async(title,start)=>{const d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title,service:'Mat',room:title,start,end:iso(Date.parse(start)+1800000),capacity:8,instructorId:coach.id}]})).id})).classes[0]};
+  const pack=await sell(nina,{guestTerms:{passes:1,period:'month',rollover:0,services:['Mat'],perGuest:10,windowDays:365,excess:'charge',priceCents:2500}}),terms=await agree(pack,nina);
+  const type=await h.cmd('freeze.type.save',{name:'Travel',reason:'Family travel',feeCents:1000,defaultLengthDays:2,maxLengthDays:30,allowedStartDays:[1,2,3,4,5,6,7]});
+  const freeze=await h.cmd('freeze.prepare',{packId:pack.id,freezeTypeId:type.id,startAt:date(2),endAt:date(4),requestId:'synthetic-strap-601'});await h.cmd('freeze.accept',{id:freeze.id,key:freeze.key},nina.cookie);await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,requestId:'synthetic-strap-602'});
+  const later=await publish('Future Mat',iso(now+91*day)),own=await h.cmd('booking.book',{classId:later.id},nina.cookie);
+  await h.cmd('guest.consent.save',{sponsorEmail:nina.email,consent:true},guest.cookie);const q=await h.cmd('guest.preview',{sponsorId:nina.id,guestId:guest.id,packId:pack.id,classId:later.id},nina.cookie),seat=await h.cmd('guest.book',{id:q.id,confirm:true},nina.cookie);
+  const cancelled=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-603'},nina.cookie);assert.equal(cancelled.status,'scheduled');assert.equal(cancelled.effectiveAt,pack.expiresAt);
+  assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).status,'withdrawn');assert.equal((await h.state()).charges.filter(c=>c.freezeId===freeze.id).reduce((n,c)=>n+c.amountCents,0),0);
+  assert.deepEqual(await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-603'},nina.cookie),cancelled);
+  assert.equal((await h.state(stranger.cookie)).cancellations.cancellations.length,0);
+  await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-604'},h.owner,403);
+  const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-605'},nina.cookie);await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-606'},nina.cookie);
+  assert.equal((await h.state()).recurring.terms.find(t=>t.id===terms.id).status,'stopped','withdrawal never restores invoice authority');
+  const fresh=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-607'});assert.equal((await h.state()).recurring.terms.find(t=>t.id===fresh.id).status,'preview');await h.cmd('plan.recurring.accept',{id:fresh.id,key:fresh.key},nina.cookie);
+  const authority=await h.cmd('contract.authority.save',{personId:nina.id,delegateId:payer.id,kind:'payer',evidenceReference:'synthetic-strap-608'});await h.cmd('contract.authority.accept',{id:authority.id},payer.cookie);
+  await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-609'},payer.cookie,404);await h.cmd('contract.authority.accept',{id:authority.id},nina.cookie);
+  const payerCancel=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-610'},payer.cookie);assert.equal(payerCancel.terminatedBy,(await h.state(payer.cookie)).actor.id);
+  assert.ok((await h.state(payer.cookie)).notices.some(n=>n.subject==='Cancellation confirmed'));
+  const cutoff=iso(Date.now()+1800);await save('contractCancellation',{...payerCancel,effectiveAt:cutoff});await save('pack',{...(await h.state()).packs.find(p=>p.id===pack.id),expiresAt:cutoff});
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(cutoff)-Date.now()+100)));await(await h.mf.getWorker()).scheduled();await h.setAuth({});await(await h.mf.getWorker()).scheduled();
+  let state=await h.state();assert.equal(state.cancellations.cancellations.find(c=>c.id===payerCancel.id).status,'applied');assert.equal(state.cancellations.statements.filter(c=>c.cancellationId===payerCancel.id).length,1);assert.ok([own.id,seat.id].every(id=>state.bookings.find(b=>b.id===id).status==='cancelled'));assert.equal(state.recurring.invoices.length,0);assert.ok((await h.state(guest.cookie)).notices.some(n=>n.subject==='Guest booking cancelled'));
+  const childPack=await sell(child);await agree(childPack,child);const grant=await h.cmd('contract.authority.save',{personId:child.id,delegateId:guardian.id,kind:'minor-guardian',adultOn:date(730),evidenceReference:'synthetic-strap-611'});await h.cmd('contract.authority.accept',{id:grant.id},guardian.cookie);await h.cmd('contract.authority.revoke',{id:grant.id},child.cookie,404);
+  assert.equal((await h.cmd('plan.cancellation.stop',{packId:childPack.id,requestId:'synthetic-strap-612'},guardian.cookie)).status,'scheduled');
+  const prepaid=await sell(nina,{expiresAt:iso(Date.now()+30*day)});await agree(prepaid,nina);await save('pack',{...prepaid,termStartAt:iso(Date.now()-30*day)});
+  const payment=await h.cmd('payment.record',{personId:nina.id,amountCents:12000,reference:'synthetic-strap-613'}),charge=(await h.state()).charges.find(c=>c.packId===prepaid.id&&c.amountCents===12000);
+  const allocation={packId:prepaid.id,paymentId:payment.id,chargeId:charge.id,amountCents:12000,reference:'synthetic-strap-614'};await h.cmd('contract.prepayment.record',allocation);await h.cmd('contract.prepayment.record',{...allocation,reference:'synthetic-strap-615'},h.owner,409);
+  const ended=await h.cmd('plan.cancellation.statutory',{packId:prepaid.id,reasonCode:'relocation',relocationMiles:30,documentedAt:iso(Date.now()-1000),evidenceReference:'synthetic-strap-616',requestId:'synthetic-strap-617'},nina.cookie);assert.equal(ended.status,'applied');
+  state=await h.state();const refund=state.cancellations.refunds.find(r=>r.cancellationId===ended.id);assert.equal(refund.status,'refund_due');assert.ok(refund.amountCents>5900&&refund.amountCents<6100);assert.equal(refund.amountCents,Number((2n*12000n*BigInt(refund.formula.unusedMs)+BigInt(refund.formula.durationMs))/(2n*BigInt(refund.formula.durationMs))));
+  const settle={id:refund.id,payerId:nina.id,amountCents:refund.amountCents,reference:'synthetic-strap-618',settledAt:iso(Date.now()-1000)};await h.cmd('plan.cancellation.refund.settle',settle);await h.cmd('plan.cancellation.refund.settle',settle);assert.equal((await h.state()).cancellations.settlements.filter(r=>r.refundId===refund.id).length,1);assert.equal((await h.state()).cancellations.refunds.find(r=>r.id===refund.id).status,'settled');
+  if(process.env.STRAP_PROOF_DIR)await(await import('./cancellations-browser.mjs')).cancellationsBrowser(h,{nina,payer,guardian,child,stranger});
+}))

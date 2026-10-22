@@ -33,6 +33,10 @@ type Row = Record<string, unknown>
 const relationships = [
   { from: 'st_records.data.recurringTermsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'recurringInvoice', when: 'kind=pack or kind=charge' },
+  { from: 'st_records.data.cancellationId', to: 'st_records.id', kind: 'contractCancellation' },
+  { from: 'st_records.data.termsId', to: 'st_records.id', kind: 'recurringTerms' },
+  { from: 'st_records.data.delegateId', to: 'st_people.id' },
+  { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=contractPrepayment' },
   { from: 'st_records.data.freezeId', to: 'st_records.id', kind: 'freeze' },
   { from: 'st_records.data.freezeTypeId', to: 'st_records.id', kind: 'freezeType' },
   { from: 'st_records.data.freezeRequestId', to: 'st_records.id', kind: 'freezeRequest' },

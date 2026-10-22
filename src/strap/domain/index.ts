@@ -1,3 +1,6 @@
+import { requestCancellation, prepareCancellation, confirmCancellation, prepareWithdrawCancellation, confirmWithdrawCancellation, applyDueCancellations, cancellationsSnapshot, stopCancellation, statutoryCancellation, saveCancellationPolicy, cancellationBlocks, launchCancellationWithdrawal } from './contract-cancellations';
+import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
+import { recordContractPrepayment, reconcileCancellationRefund, settleCancellationRefund } from './cancellation-value';
 import { acceptFreeze, acceptFreezeEnd, launchFreezeAcceptance, launchFreezeEndAcceptance, declineFreezeRequest, withdrawFreezeRequest, withdrawFreeze, freezeWithdrawal } from './freeze-lifecycle';
 import { requestFreeze, prepareFreeze, confirmFreeze, prepareEndFreeze, confirmEndFreeze, saveFreezeType, applyDueFreezes, freezesSnapshot } from './freezes';
 import { prepareRecurringTerms, acceptRecurringTerms, stopRecurringTerms, reconnectRecurringBilling, applyDueRecurringInvoices, recurringSnapshot, recurringForPack } from './contract-billing';
@@ -48,6 +51,22 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'plan.cancellation.policy.save':defineCommand(saveCancellationPolicy,['owner'],{staffRight:'contract-change'}),
+  'contract.authority.save':defineCommand(saveContractAuthority,['owner'],{staffRight:'member-record'}),
+  'contract.authority.launch':defineCommand(launchContractAuthority,['owner'],{staffRight:'member-record'}),
+  'plan.cancellation.withdraw.launch':defineCommand(launchCancellationWithdrawal,['owner'],{staffRight:'contract-change'}),
+  'contract.authority.accept':defineCommand(acceptContractAuthority,['member'],{member:{staff:'contract.authority.launch',right:'member-record',ownStep:true}}),
+  'contract.authority.revoke':defineCommand(revokeContractAuthority,['owner','member'],{member:{staff:'contract.authority.revoke',right:'member-record'},staffRight:'member-record'}),
+  'contract.prepayment.record':defineCommand(recordContractPrepayment,['owner'],{staffRight:'collection'}),
+  'plan.cancellation.stop':defineCommand(stopCancellation,['owner','member'],{member:{staff:'plan.cancellation.stop',right:'contract-change'},staffRight:'contract-change'}),
+  'plan.cancellation.statutory':defineCommand(statutoryCancellation,['owner','member'],{member:{staff:'plan.cancellation.statutory',right:'contract-change'},staffRight:'contract-change'}),
+  'plan.cancellation.request':defineCommand(requestCancellation,['member'],{member:{staff:'plan.cancellation.prepare',right:'contract-change'}}),
+  'plan.cancellation.prepare':defineCommand(prepareCancellation,['owner'],{staffRight:'contract-change'}),
+  'plan.cancellation.confirm':defineCommand(confirmCancellation,['owner'],{staffRight:'contract-change'}),
+  'plan.cancellation.withdraw.prepare':defineCommand(prepareWithdrawCancellation,['owner','member'],{member:{staff:'plan.cancellation.withdraw.launch',right:'contract-change',ownStep:true},staffRight:'contract-change'}),
+  'plan.cancellation.withdraw.confirm':defineCommand(confirmWithdrawCancellation,['owner','member'],{member:{staff:'plan.cancellation.withdraw.launch',right:'contract-change',ownStep:true},staffRight:'contract-change'}),
+  'plan.cancellation.refund.reconcile':defineCommand(reconcileCancellationRefund,['owner'],{staffRight:'refund'}),
+  'plan.cancellation.refund.settle':defineCommand(settleCancellationRefund,['owner'],{staffRight:'refund'}),
   'freeze.type.save':defineCommand(saveFreezeType,['owner']),
   'freeze.request':defineCommand(requestFreeze,['member'],{member:{staff:'freeze.prepare',right:'contract-change'}}),
   'freeze.accept':defineCommand(acceptFreeze,['member'],{member:{staff:'freeze.accept.launch',right:'contract-change',ownStep:true}}),
@@ -64,7 +83,7 @@ export const handlers = {
   'plan.recurring.reconnect':defineCommand(reconnectRecurringBilling,['owner'],{staffRight:'contract-change'}),
   'plan.recurring.prepare':defineCommand(prepareRecurringTerms,['owner'],{staffRight:'membership-sale'}),
   'plan.recurring.accept':defineCommand(acceptRecurringTerms,['member'],{member:{staff:'plan.recurring.prepare',right:'membership-sale',ownStep:true}}),
-  'plan.recurring.stop':defineCommand(stopRecurringTerms,['owner','member'],{member:{staff:'plan.recurring.stop',right:'contract-change'},staffRight:'contract-change'}),
+  'plan.recurring.stop':defineCommand((tx,input)=>{const terms=record(tx.state,input.id,'recurringTerms');return terms.acceptedAt&&terms.currentPackId ? stopCancellation(tx,{...input,packId:terms.currentPackId}) : stopRecurringTerms(tx,input);},['owner','member'],{member:{staff:'plan.recurring.stop',right:'contract-change'},staffRight:'contract-change'}),
   'absence.policy.save':defineCommand(saveAbsencePolicy,['owner']),
   'makeup.guardian.save':defineCommand(saveMakeupGuardian,['owner'],{staffRight:'member-record'}),
   'makeup.guardian.accept':defineCommand(acceptMakeupGuardian,['member'],{member:{staff:'makeup.guardian.launch',right:'member-record',ownStep:true}}),
@@ -173,6 +192,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if (!spec) throw new DomainError('unknown_command',404);
   insist(who.role !== 'finance','owner_required',403);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
+  if(['plan.recurring.prepare','plan.recurring.accept'].includes(name)){const packId=String(input.packId??tx.state.records.get(String(input.id))?.data.packId??'');insist(!cancellationBlocks(tx.state,packId,'9999-12-31T00:00:00.000Z'),'withdraw_cancellation_before_new_agreement',409);}
   if (name.startsWith('plan.change.')) {
     const packId=String(input.packId ?? tx.state.records.get(String(input.id))?.data.packId ?? '');
     insist(!recurringForPack(tx.state,packId),'stop_recurring_invoices_before_plan_change',409);
@@ -182,7 +202,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  applyDueFreezes(tx); if(name!=='plan.recurring.stop') await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
+  applyDueCancellations(tx); applyDueFreezes(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
   const result = await spec.run(tx,input,context);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);
   if (name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
@@ -194,7 +214,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
 export async function sweep(db: D1Database, context: NoticeContext) {
   const loaded = await loadSystem(db), tx = new Transaction(db,loaded.state,loaded.who);
-  tx.notices = context; applyDueFreezes(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); processClassReminders(tx);
+  tx.notices = context; applyDueCancellations(tx); applyDueFreezes(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); processClassReminders(tx);
   if (tx.sql.length) await tx.commit();
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -241,7 +261,7 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
   const frozen=freezesSnapshot(state,who);frozen.freezes=frozen.freezes.map(f=>({...f,withdrawal:freezeWithdrawal(state,record(state,f.id,'freeze'))}));
-  return {freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
+  return {cancellations:cancellationsSnapshot(state,who),freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
     demand:owner ? {classes:demandEvidence(state),availability:demandAvailability(state)} : null,drafts:owner?await Promise.all(list(state,'draft').map(async (d): Promise<RecordData> => ({...d,...(d.recommendation ? {stale:await recommendationStale(state,d)} : {})}))):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],

@@ -1,3 +1,4 @@
+import { cancellationBlocks } from './contract-cancellations';
 import { packFreezeBlocks } from './freezes';
 import { id, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -10,6 +11,7 @@ import { putNotice, reserveMail, titleOf, whenText } from './notices';
 
 function facts(tx: Transaction, input: Record<string,unknown>) {
   const sponsor = guestSponsor(tx,input), guest = person(tx.state,input.guestId), pack = record(tx.state,input.packId,'pack'), entry = record(tx.state,input.classId,'class');
+  insist(!cancellationBlocks(tx.state,pack.id,entry.start),'membership_cancelled',409);
   insist(!packFreezeBlocks(tx.state,pack.id,entry.start),'membership_frozen',409);
   insist(pack.personId === sponsor.id,'guest_pack_not_owned',403);
   insist(guest.id !== sponsor.id && guestConsent(tx.state,sponsor.id,guest.id),'guest_consent_required',403);
@@ -52,6 +54,7 @@ export function bookGuest(tx: Transaction, input: Record<string,unknown>) {
 }
 export function assertGuestTarget(tx: Transaction, booking: RecordData, entry: RecordData) {
   const pack = record(tx.state,booking.guestPackId,'pack');
+  insist(!cancellationBlocks(tx.state,pack.id,entry.start),'membership_cancelled',409);
   insist(!packFreezeBlocks(tx.state,pack.id,entry.start),'membership_frozen',409);
   insist(guestConsent(tx.state,booking.sponsorId,booking.personId),'guest_consent_required',403);
   const refusal = guestPassRefusal(tx.state,pack,entry,booking.personId,booking.id);

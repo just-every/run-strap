@@ -147,7 +147,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         assert.equal((await h.state(member.cookie)).freezes.requests.find(r=>r.id===ownRequest.id).status,'withdrawn')
         await ownRequestPanel.scrollIntoViewIfNeeded();await shot(mine,'member-withdrawn-request')
         await mine.locator(`[data-recurring="${proposal.id}"]`).getByRole('button',{name:'Stop future invoices now',exact:true}).click()
-        assert.equal((await h.state(member.cookie)).recurring.terms.find(t=>t.id===proposal.id).status,'stopped')
+        assert.equal((await h.state(member.cookie)).recurring.terms.find(t=>t.id===proposal.id).status,'cancellation_scheduled')
         assert.equal((await h.state(stranger.cookie)).freezes.requests.length,0)
       } finally {for(const context of contexts)await context.close()}
     }
