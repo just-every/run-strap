@@ -327,10 +327,11 @@ test('PLAN-007: one-step member, payer and guardian cancellation supersedes free
   const freeze=await h.cmd('freeze.prepare',{packId:pack.id,freezeTypeId:type.id,startAt:date(2),endAt:date(4),requestId:'synthetic-strap-601'});await h.cmd('freeze.accept',{id:freeze.id,key:freeze.key},nina.cookie);await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,requestId:'synthetic-strap-602'});
   const later=await publish('Future Mat',iso(now+91*day)),own=await h.cmd('booking.book',{classId:later.id},nina.cookie);
   await h.cmd('guest.consent.save',{sponsorEmail:nina.email,consent:true},guest.cookie);const q=await h.cmd('guest.preview',{sponsorId:nina.id,guestId:guest.id,packId:pack.id,classId:later.id},nina.cookie),seat=await h.cmd('guest.book',{id:q.id,confirm:true},nina.cookie);
+  const unrelated=await sell(stranger),unrelatedCharge=(await h.state()).charges.find(c=>c.packId===unrelated.id);
   const cancelled=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-603'},nina.cookie);assert.equal(cancelled.status,'scheduled');assert.equal(cancelled.effectiveAt,pack.expiresAt);
   assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).status,'withdrawn');assert.equal((await h.state()).charges.filter(c=>c.freezeId===freeze.id).reduce((n,c)=>n+c.amountCents,0),0);
   assert.deepEqual(await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-603'},nina.cookie),cancelled);
-  assert.equal((await h.state(stranger.cookie)).cancellations.cancellations.length,0);
+  assert.equal((await h.state(stranger.cookie)).cancellations.cancellations.length,0);assert.ok(!JSON.stringify((await h.state(nina.cookie)).cancellations).includes(unrelatedCharge.id),'member cancellation keys and valuation disclose no unrelated debt');
   await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-604'},h.owner,403);
   const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-605'},nina.cookie);await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-606'},nina.cookie);
   assert.equal((await h.state()).recurring.terms.find(t=>t.id===terms.id).status,'stopped','withdrawal never restores invoice authority');
