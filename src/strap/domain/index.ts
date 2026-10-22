@@ -219,7 +219,8 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const result = await spec.run(tx,input,context);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);
   if (name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
-  if (staff) retainStaffAction(tx,name,name.startsWith('intro.') && input.exceptionReason || name === 'intro.purchase' && tx.state.records.get(String(input.id))?.data.exceptionReason ? 'price' : spec.staffRight!,input,result,before,priorIds);
+  const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
+  if (staff) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
   processRecognition(tx);
   await tx.commit(); return result;
 }

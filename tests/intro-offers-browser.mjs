@@ -20,8 +20,9 @@ export async function introOffersBrowser(h) {
         const signIn=async cookie=>{await context.clearCookies();const index=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,index),value:cookie.slice(index+1),url:h.origin}]);};
         const page=await context.newPage();
         const capture=async(name,locator)=>{
-          await locator.scrollIntoViewIfNeeded();
+          await locator.evaluate(el=>el.scrollIntoView({block:'start'}));
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal overflow at '+width);
+          for(const text of await locator.locator('[data-intro-preview] > p, [data-intro-offer] > p, p').all()) { if(await text.isVisible()) assert.ok((await text.boundingBox()).width > 190,'intro prose has readable block width'); }
           await page.screenshot({path:join(directory,`PLAN-004-${name}-${width}.png`),fullPage:false});
         };
         await signIn(h.owner);await page.goto(h.origin+'/app/packs#intro-offers');
