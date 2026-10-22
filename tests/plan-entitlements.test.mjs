@@ -432,6 +432,7 @@ test('Intro offers: verified person and household eligibility, exact once-only s
   const q=await quote(ana), racing=await quote(alias);
   assert.deepEqual([q.days,q.credits,q.amountCents,q.renewsAutomatically,q.collection],[14,2,3900,false,'studio-balance-only']);
   assert.ok(!JSON.stringify(q).includes(alias.id),'the member preview does not reveal linked accounts');
+  assert.match((await h.send('/app/packs',undefined,ana.cookie)).text,/Eligible services: Mat/,'the exact sale review discloses its service restriction');
   await refused('intro.purchase',{id:q.id,key:'changed',confirm:true},ana.cookie,409,'intro_confirmation_required');
   await refused('intro.purchase',{id:q.id,key:q.key,confirm:true},ben.cookie,404,'intro_not_found');
   const sale=await buy(q,ana.cookie);assert.deepEqual(await buy(q,ana.cookie),sale);

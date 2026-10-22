@@ -28,6 +28,7 @@ export function introOffersPanel(s: any, chosen = '') {
     const expired = p.validUntil <= new Date().toISOString();
     return `<article data-intro-preview="${h(p.id)}"><h3>${h(p.offerName)} · exact purchase preview</h3>`
       +(staff ? `<p>${h(person(s,p.personId))}</p>` : '')
+      +`<p>Eligible services: ${h(p.eligibleServices.join(', ') || 'All classes')}.</p>`
       +`<p>${p.credits} visits · ${p.days} elapsed days starting when confirmed. <strong>${money(p.amountCents)} added to the studio balance once.</strong> No payment is collected.</p><p>Class starts must be before the exact expiry shown on your purchase receipt. Ordinary service, waiver, capacity and cancellation rules apply. Unused visits expire. No automatic renewal; any recurring offer needs your separate acceptance.</p>`
       +(p.exceptionReason ? `<p>Owner-approved eligibility exception: ${h(p.exceptionReason)}</p>` : '')
       +`<p>Preview valid until ${when(s,p.validUntil)}. Eligibility is checked again on confirmation.</p>`
