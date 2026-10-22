@@ -37,15 +37,15 @@ export async function introOffersBrowser(h) {
         for(const person of [member,deskMember]){
           await section.getByText('Verify intro eligibility identity',{exact:true}).click();
           const verification=section.locator('form[action*="name=intro.identity.verify"]');
-          await verification.getByLabel('Member',{exact:true}).selectOption(person.id);
+          await verification.locator('select[name=personId]').selectOption(person.id);
           await verification.getByLabel('Identity verification reason',{exact:true}).fill('Identity and household checked at the desk');
           await verification.getByRole('checkbox').check();
           await capture('identity-'+(person.id===member.id?'member':'desk'),verification);
           await verification.getByRole('button',{name:'Record verified identity',exact:true}).click();
         }
         const card=section.locator(`[data-intro-offer="${offer.id}"]`),desk=card.locator('form[action*="name=intro.preview"]');
-        await desk.getByLabel('Member',{exact:true}).selectOption(deskMember.id);
-        await desk.getByLabel('Sale channel',{exact:true}).selectOption('phone');
+        await desk.locator('select[name=personId]').selectOption(deskMember.id);
+        await desk.locator('select[name=channel]').selectOption('phone');
         await desk.getByRole('button',{name:'Preview intro purchase',exact:true}).click();
         let preview=(await h.state()).intros.previews.filter(q=>q.personId===deskMember.id&&q.status==='preview').at(-1);
         let review=section.locator(`[data-intro-preview="${preview.id}"]`);
@@ -54,11 +54,11 @@ export async function introOffersBrowser(h) {
         let sale=(await h.state()).intros.sales.find(r=>r.personId===deskMember.id);
         assert.ok(sale);assert.equal((await h.state()).staffActions.filter(a=>a.command==='intro.purchase'&&a.after.id===sale.id).length,1);
         // A duplicate is refused visibly. The reasoned owner exception has its own exact confirmation.
-        await section.locator(`[data-intro-offer="${offer.id}"]`).getByLabel('Member',{exact:true}).selectOption(deskMember.id);
+        await section.locator(`[data-intro-offer="${offer.id}"]`).locator('select[name=personId]').selectOption(deskMember.id);
         await section.locator(`[data-intro-offer="${offer.id}"]`).getByRole('button',{name:'Preview intro purchase',exact:true}).click();
         const alert=page.getByRole('alert');assert.match(await alert.innerText(),/intro already used/);await capture('duplicate-refused',alert);
         const exception=section.locator(`[data-intro-offer="${offer.id}"] form[action*="name=intro.preview"]`);
-        await exception.getByLabel('Member',{exact:true}).selectOption(deskMember.id);
+        await exception.locator('select[name=personId]').selectOption(deskMember.id);
         await exception.getByText('Eligibility exception (owner only)',{exact:true}).click();
         await exception.getByLabel('Eligibility exception reason',{exact:true}).fill('Owner-approved repeat after studio closure');
         await exception.getByRole('button',{name:'Preview intro purchase',exact:true}).click();
