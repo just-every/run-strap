@@ -23,6 +23,7 @@ export async function renewalsBrowser(h,{packs}) {
         await context.addCookies([{name:h.owner.slice(0,at),value:h.owner.slice(at+1),url:h.origin}])
         const page = await context.newPage()
         const capture = async name => {
+          await page.evaluate(() => document.fonts.ready)
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth),true,`RPT-007 ${name} fits ${width}`)
           if (proof) await page.screenshot({path:join(proof,`RPT-007-${name}-${width}.png`),fullPage:true})
         }

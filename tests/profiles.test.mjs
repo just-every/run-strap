@@ -176,11 +176,11 @@ test('MEM-001: migrated, booked, attended, paid and waived source histories rema
   let full=await h.state();assert.ok(full.bookings.find(b=>b.id===booking.id).alerts.some(a=>a.text==='Private owner alert'))
   for(const cookie of [member.cookie,target.cookie,coach.cookie])assert.ok(!(await h.send('/api/strap/state',undefined,cookie)).text.includes('Private owner alert'))
   const pairing=await h.cmd('kiosk.pair',{label:'Restricted-note privacy'})
-  const paired=await h.send('/kiosk/pair',{token:new URL(pairing.pairUrl).searchParams.get('token')})
+  const paired=await h.mf.dispatchFetch(h.origin+'/kiosk/pair',{method:'POST',headers:{origin:h.origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:new URL(pairing.pairUrl).searchParams.get('token')}),redirect:'manual'})
   assert.equal(paired.status,303)
   const kiosk=paired.headers.get('set-cookie').split(';')[0]
-  const lookup=await h.send('/kiosk/lookup',{q:'migrated'},kiosk)
-  assert.equal(lookup.status,200);assert.ok(!lookup.text.includes('Private owner alert'))
+  const lookup=await h.mf.dispatchFetch(h.origin+'/kiosk/lookup',{method:'POST',headers:{origin:h.origin,cookie:kiosk,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({q:'migrated'}),redirect:'manual'})
+  assert.equal(lookup.status,200);assert.ok(!(await lookup.text()).includes('Private owner alert'))
   const reply=await h.cmd('member.message.send',{text:'Thank you for the class',requestId:'synthetic-strap-member-reply'},member.cookie)
   const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,h.owner)).value
   for(const source of [pack.id,booking.id,payment.id,reply.id])assert.ok(history.timeline.some(e=>e.id===source))
