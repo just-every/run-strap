@@ -54,6 +54,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         assert.equal(await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0,'staff must wait for exact member acceptance')
         await preview.scrollIntoViewIfNeeded();await shot(staff,'staff-preview')
         await mine.goto(h.origin+'/app/packs#freezes')
+        await shot(mine,'member-preview-before-scroll');assert.equal(await mine.locator(`[data-freeze="${freeze.id}"]`).count(),1,(await mine.locator('body').innerText()).slice(-5000));
         await mine.locator(`[data-freeze="${freeze.id}"]`).scrollIntoViewIfNeeded();await shot(mine,'member-preview')
         assert.equal(await mine.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0)
         await mine.locator(`[data-freeze="${freeze.id}"]`).getByRole('button',{name:'I accept this exact freeze',exact:true}).click()
