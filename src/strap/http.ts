@@ -90,7 +90,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
-  const hold = await mfaHold(env, who, { path, name, privileged: privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.')) || await staffRightsCommand(env, name, input) })
+  const hold = await mfaHold(env, who, { path, name, privileged: privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 

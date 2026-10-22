@@ -1,5 +1,7 @@
 import { humanOwner, id, insist, instant, integer, list, now, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
+import { refundSettlementWindow } from './cancellation-calendar';
+import { contractRegion } from './contract-copies';
 
 /** Link actual external receipt evidence, never assume a catalog price was paid. */
 export function recordContractPrepayment(tx: Transaction, input: Record<string,unknown>) {
@@ -39,14 +41,15 @@ export function unusedPrepaid(state: State, pack: RecordData, effectiveAt: strin
 export function retainRefundDue(tx: Transaction, cancellation: RecordData) {
   const key = `refund-due:${cancellation.id}`, prior = tx.state.records.get(key)?.data;
   if (prior) return prior;
-  const value = unusedPrepaid(tx.state,record(tx.state,cancellation.packId,'pack'),cancellation.effectiveAt);
-  const due = {valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
+  const pack=record(tx.state,cancellation.packId,'pack'),valuationAt=cancellation.coolingOff?.renewal?pack.termStartAt??pack.createdAt:cancellation.effectiveAt;
+  const value = unusedPrepaid(tx.state,pack,valuationAt),refundDeadline=cancellation.refundDeadline??refundSettlementWindow(tx.state,now(),[contractRegion(tx.state,cancellation.personId)].filter(Boolean));
+  const due = {valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,valuationAt,settleBy:refundDeadline.settleBy,refundDeadline,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
   tx.put('cancellationRefund',due); return due;
 }
 export function reconcileCancellationRefund(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);const due=record(tx.state,input.id,'cancellationRefund'),c=record(tx.state,due.cancellationId,'contractCancellation');
   insist(!due.settledCents,'refund_already_settled',409);
-  const value=unusedPrepaid(tx.state,due.valuationPack,c.effectiveAt),updated={...due,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation?'needs_allocation':'refund_due',reconciledAt:now(),reconciledBy:tx.who.id};
+  const value=unusedPrepaid(tx.state,due.valuationPack,due.valuationAt??c.effectiveAt),updated={...due,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation?'needs_allocation':'refund_due',reconciledAt:now(),reconciledBy:tx.who.id};
   tx.put('cancellationRefund',updated);return updated;
 }
 export function settleCancellationRefund(tx: Transaction, input: Record<string,unknown>) {

@@ -1,3 +1,4 @@
+import { recordContractDelivery, saveContractRegion } from './contract-copies';
 import { requestCancellation, prepareCancellation, confirmCancellation, prepareWithdrawCancellation, confirmWithdrawCancellation, applyDueCancellations, cancellationsSnapshot, stopCancellation, statutoryCancellation, saveCancellationPolicy, cancellationBlocks, launchCancellationWithdrawal } from './contract-cancellations';
 import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
 import { recordContractPrepayment, reconcileCancellationRefund, settleCancellationRefund } from './cancellation-value';
@@ -51,6 +52,8 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'contract.copy.delivery.record':defineCommand(recordContractDelivery,['owner'],{staffRight:'contract-change'}),
+  'contract.jurisdiction.save':defineCommand(saveContractRegion,['owner'],{staffRight:'member-record'}),
   'plan.cancellation.policy.save':defineCommand(saveCancellationPolicy,['owner'],{staffRight:'contract-change'}),
   'contract.authority.save':defineCommand(saveContractAuthority,['owner'],{staffRight:'member-record'}),
   'contract.authority.launch':defineCommand(launchContractAuthority,['owner'],{staffRight:'member-record'}),

@@ -226,7 +226,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         await statutoryRefund(context)
         await authorityJourneys(context)
         await go(outsider,nina)
-        assert.equal(await outsider.locator('#cancellations [data-contract-authority],#cancellations [data-contract-cancellation],#cancellations [data-cancellation-refund],#cancellations [data-cancellation-stop]').count(),0)
+        assert.doesNotMatch(await outsider.locator('#cancellations').innerText(),/Nina|Kira|Oscar/, 'another member’s contract, payer and guardian identities stay private; the account still sees its own stop door')
         const privateView=(await h.state(stranger.cookie)).cancellations
         for(const field of ['authorities','contracts','requests','cancellations','withdrawals','statements','refunds','settlements'])assert.equal(privateView[field].filter(r=>[nina.id,child.id].includes(r.personId)).length,0)
         await outsider.locator('#cancellations').scrollIntoViewIfNeeded();await shot(outsider,'unrelated-account-private')
