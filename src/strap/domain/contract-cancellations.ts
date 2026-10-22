@@ -1,3 +1,4 @@
+import { coolingOffDeadline } from './cancellation-calendar';
 import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent, bookingCredit } from './pack-credits';
@@ -16,8 +17,8 @@ const live=(c:RecordData)=>c.status==='scheduled';
 const fingerprint=(input:Record<string,unknown>)=>JSON.stringify(Object.keys(input).sort().map(k=>[k,input[k]]));
 export const cancellationForTerms=(state:State,termsId:string)=>list(state,'contractCancellation').find(c=>c.termsId===termsId&&['scheduled','applied'].includes(c.status))??null;
 export const cancellationBlocks=(state:State,packId:string,classStart:string)=>list(state,'contractCancellation').some(c=>c.packId===packId&&['scheduled','applied'].includes(c.status)&&classStart>=c.effectiveAt);
-const policy=(state:State)=>state.records.get('cancellation-policy')?.data??{id:'cancellation-policy',coolingOffDays:3,relocationMiles:25};
-export function saveCancellationPolicy(tx:Transaction,input:Record<string,unknown>){humanOwner(tx.who);const p={id:'cancellation-policy',coolingOffDays:integer(input.coolingOffDays,'coolingOffDays',1,365),relocationMiles:integer(input.relocationMiles??25,'relocationMiles',1,1000),updatedAt:now(),updatedBy:tx.who.id};tx.put('cancellationPolicy',p);return p;}
+const policy=(state:State)=>state.records.get('cancellation-policy')?.data??{id:'cancellation-policy',coolingOffDays:5,relocationMiles:25};
+export function saveCancellationPolicy(tx:Transaction,input:Record<string,unknown>){humanOwner(tx.who);const p={id:'cancellation-policy',coolingOffDays:integer(input.coolingOffDays,'coolingOffDays',5,365),relocationMiles:integer(input.relocationMiles??25,'relocationMiles',1,1000),updatedAt:now(),updatedBy:tx.who.id};tx.put('cancellationPolicy',p);return p;}
 function replay(tx:Transaction,kind:string,input:Record<string,unknown>){const requestId=text(input.requestId,'requestId',100),requestBasis=fingerprint(input),prior=list(tx.state,kind).find(c=>c.createdBy===tx.who.id&&c.requestId===requestId);if(prior)insist(prior.requestBasis===requestBasis,'cancellation_request_changed',409);return {prior,requestId,requestBasis};}
 function contract(state:State,packId:unknown){
   const pack=record(state,packId,'pack');person(state,pack.personId);
@@ -65,7 +66,7 @@ export function statutoryCancellation(tx:Transaction,input:Record<string,unknown
   const reasonCode=text(input.reasonCode,'reasonCode',30),documentedAt=instant(input.documentedAt,'documentedAt'),evidenceReference=text(input.evidenceReference,'evidenceReference',200),p=policy(tx.state);
   insist(['death','disability','relocation','cooling-off'].includes(reasonCode),'invalid_statutory_reason');insist(documentedAt<=now(),'documented_request_must_be_past');
   if(reasonCode==='relocation')insist(typeof input.relocationMiles==='number'&&Number.isFinite(input.relocationMiles)&&input.relocationMiles>p.relocationMiles,'statutory_relocation_not_eligible',409);
-  if(reasonCode==='cooling-off')insist(Date.parse(documentedAt)<=Date.parse(terms.acceptedAt)+p.coolingOffDays*86400000,'cooling_off_window_ended',409);
+  if(reasonCode==='cooling-off'){const deadline=coolingOffDeadline(tx.state,terms.acceptedAt,p.coolingOffDays);insist(!deadline||documentedAt<deadline,'cooling_off_window_ended',409);}
   // Supersede any later cancellation without permitting a second refund identity.
   const prior=cancellationForTerms(tx.state,terms.id);if(prior){insist(prior.status!=='applied','contract_already_ended',409);tx.put('contractCancellation',{...prior,status:'superseded',supersededAt:now()});}
   const c=prepare(tx,input,'statutory',documentedAt,reasonCode,null),documented={...c,reasonCode,documentedAt,evidenceReference,policy:{...p}};
