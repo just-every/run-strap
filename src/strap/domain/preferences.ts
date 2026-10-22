@@ -13,7 +13,7 @@ export function preferencesOf(state: State,personId: string): RecordData {
 }
 export function suppressMarketing(tx: Transaction,personId: string,channel: string | null,reason: string) {
   for(const message of list(tx.state,'marketingMessage').filter(m => m.personId === personId && (!channel || m.channel === channel) && ['queued','held'].includes(m.status)))
-    tx.put('marketingMessage',{...message,status:'suppressed',suppressionReason:reason,suppressedAt:now()});
+    tx.put('marketingMessage',{...message,status:'suppressed',holdReason:null,suppressionReason:reason,suppressedAt:now()});
 }
 export function permission(state: State,personId: string,channel: MarketingChannel) {
   const p=preferencesOf(state,personId);

@@ -45,12 +45,12 @@ export function reviewRenewalQueue(tx:Transaction) {
   for(const message of list(tx.state,'marketingMessage').filter(m=>['queued','held'].includes(m.status))) {
     const denied=permission(tx.state,message.personId,message.channel);
     if(denied){suppressMarketing(tx,message.personId,message.channel,denied);continue;}
-    if(!rows.some(r=>r.packId===message.packId)){tx.put('marketingMessage',{...message,status:'suppressed',suppressionReason:'source_no_longer_eligible',suppressedAt:at});continue;}
+    if(!rows.some(r=>r.packId===message.packId)){tx.put('marketingMessage',{...message,status:'suppressed',holdReason:null,suppressionReason:'source_no_longer_eligible',suppressedAt:at});continue;}
     const sequence=record(tx.state,message.sequenceId,'renewalSequence');
     const held=!sequence.enabled?'sequence_paused':inQuietHours(tx.state,message.personId,at)?'quiet_hours':message.channel!=='inApp'?'provider_delivery_unavailable':null;
     if(held){tx.put('marketingMessage',{...message,status:'held',holdReason:held});continue;}
     tx.put('memberMessage',{id:'in-app:'+message.sequenceId+':'+message.packId,marketingMessageId:message.id,personId:message.personId,text:message.text,at,actorId:tx.who.id,actorRole:'owner',staffMade:true,channel:'in-app-marketing',sequenceId:sequence.id});
-    tx.put('marketingMessage',{...message,status:'delivered',deliveredAt:at,outcome:'in-app-recorded'});
+    tx.put('marketingMessage',{...message,status:'delivered',holdReason:null,deliveredAt:at,outcome:'in-app-recorded'});
   }
   return {id:id(),messages:list(tx.state,'marketingMessage')};
 }

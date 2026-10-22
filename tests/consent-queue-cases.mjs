@@ -42,6 +42,7 @@ export async function consentQueueCases(h) {
   assert.equal((await h.state()).marketingMessages.find(m=>m.id===nativeMessage.id).holdReason,'sequence_paused')
   await h.cmd('renewal.sequence.set',{id:native.id,enabled:true});await h.cmd('renewal.queue.review',{})
   assert.equal((await h.state()).marketingMessages.find(m=>m.id===nativeMessage.id).status,'delivered')
+  assert.equal((await h.state()).marketingMessages.find(m=>m.id===nativeMessage.id).holdReason,null,'a delivered outcome does not retain a misleading current pause reason')
   await h.cmd('renewal.queue.review',{});assert.equal((await h.state(member.cookie)).memberMessages.filter(m=>m.marketingMessageId===nativeMessage.id).length,1)
   const another=await sequence('inApp'),anotherMessage=await enroll(another)
   await choose({marketingInApp:false});assert.equal((await h.state()).marketingMessages.find(m=>m.id===anotherMessage.id).status,'suppressed')
