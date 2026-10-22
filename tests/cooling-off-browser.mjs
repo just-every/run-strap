@@ -16,14 +16,14 @@ export async function coolingOffBrowser(h,cases){
       }
       const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-007-cooling-${label}-${width}.png`)})}
       for(const [name,a] of Object.entries(cases)){
-        await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',businessHours:a.hours})
+        await h.cmd('studio.save',{location:a.studio.location,timeZone:'America/Phoenix',address:a.studio.address??null,businessHours:a.hours})
         const page=await pageFor(a.member.cookie);await page.goto(h.origin+'/app/packs#cancellations')
         const copy=page.locator(`[data-contract-copy="${a.terms.id}"]`)
         await copy.scrollIntoViewIfNeeded();assert.match(await copy.innerText(),/Cooling-off closes/);assert.match(await copy.innerText(),/Governing rule:/)
         assert.ok((await copy.innerText()).includes(a.window.governingRule.label));assert.equal(await copy.locator('[data-cooling-window] time').getAttribute('datetime'),a.window.deadline)
         await shot(page,name+'-closing-instant');await page.context().close();contexts.splice(contexts.indexOf(page.context()),1)
       }
-      const a=width===1440?cases.ga:cases.gaMobile;await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',businessHours:a.hours});const staff=await pageFor(h.owner)
+      const a=width===1440?cases.ga:cases.gaMobile;await h.cmd('studio.save',{location:a.studio.location,timeZone:'America/Phoenix',address:a.studio.address??null,businessHours:a.hours});const staff=await pageFor(h.owner)
       await staff.goto(h.origin+'/app/packs?person='+a.member.id+'#cancellations')
       const copy=staff.locator(`[data-contract-copy="${a.terms.id}"]`)
       await copy.getByText('Record member state for statutory rules',{exact:true}).click()
