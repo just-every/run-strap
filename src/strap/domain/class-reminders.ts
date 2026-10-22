@@ -52,7 +52,7 @@ export function processClassReminders(tx: Transaction) {
     const sourceId = `reminder:${booking.id}:${entry.id}:${Date.parse(entry.start).toString(36)}`;
     if (tx.state.records.has(sourceId)) continue;
     tx.future(entry.start); tx.reached(new Date(Date.parse(entry.start)-rule.leadMinutes*60_000).toISOString());
-    const subject = `Class reminder: ${titleOf(entry)}, ${whenText(tx.state,entry.start)}`;
+    const subject = `Class reminder: ${titleOf(entry)}, ${whenText(tx.state,entry.start,entry.timeZone)}`;
     const body = 'Your class is coming up. Review your booking and its current cancellation policy in Strap.';
     putNotice(tx,{id:`notice:${sourceId}`,personId:member.id,bookingId:booking.id,classId:entry.id,reminderId:sourceId,subject,body});
     const delivery = reserveMail(tx,tx.notices,{id:`mail:${sourceId}`,sourceKind:'reminder',sourceId,personId:member.id,bookingIds:[booking.id],subject,body});

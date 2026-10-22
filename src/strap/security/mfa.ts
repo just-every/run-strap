@@ -20,7 +20,7 @@ const text = (input: Record<string, unknown>, key: string, max: number, optional
 }
 
 /** Owners (the human, never an agent key) and finance staff must have a second factor for the privileged doors. */
-export const covered = (who: Actor) => (who.role === 'owner' && who.isOwner) || who.role === 'finance'
+export const covered = (who: Actor) => (who.role === 'owner' && who.isOwner) || who.role === 'finance' || who.role === 'manager'
 
 type Factor = { id: string; kind: 'totp' | 'passkey'; label: string; status: string; sealed_secret: string | null; last_step: number; credential_id: string | null; public_key: string | null; sign_count: number; created_at: number }
 const binding = (factor: string, operator: string) => `${factor}:${operator}`
@@ -49,7 +49,7 @@ export async function standing(env: Bindings, who: Actor) {
   return { covered: covered(who), usable, unreadable, verifiedAt: session?.verified_at ?? null, method: session?.method ?? null, reason }
 }
 
-const requirePerson = (who: Actor) => { if (!who.sessionId || !['owner', 'finance', 'member', 'instructor'].includes(who.role) || (who.role === 'owner' && !who.isOwner)) fail('person_required', 403) }
+const requirePerson = (who: Actor) => { if (!who.sessionId || !['owner', 'finance', 'manager', 'member', 'instructor'].includes(who.role) || (who.role === 'owner' && !who.isOwner)) fail('person_required', 403) }
 
 /** Adding a factor beside a working one needs this session to have presented it. */
 async function requireEnrollable(env: Bindings, who: Actor, request: Request) {
@@ -274,7 +274,7 @@ export async function factorCounts(env: Bindings) {
 export async function auditEvents(env: Bindings) {
   return (await all<any>(env, 'SELECT * FROM st_security_audit ORDER BY at DESC, id LIMIT 500')).map(row => {
     const detail = JSON.parse(row.detail)
-    return { id: row.id, at: new Date(row.at).toISOString(), personId: row.subject_id, actorId: row.actor_id, actorRole: 'owner', command: row.action, action: row.action, right: row.action.startsWith('finance.') || row.action === 'mfa.reset' ? 'access' : 'security', channel: 'app', reason: detail.reason ?? null, before: null, after: { actor: row.actor_email, subject: row.subject_email, ...detail } }
+    return { id: row.id, at: new Date(row.at).toISOString(), personId: row.subject_id, actorId: row.actor_id, actorRole: 'owner', command: row.action, action: row.action, right: row.action.startsWith('finance.') || row.action.startsWith('manager.') || row.action === 'mfa.reset' ? 'access' : 'security', channel: 'app', reason: detail.reason ?? null, before: null, after: { actor: row.actor_email, subject: row.subject_email, ...detail } }
   })
 }
 

@@ -27,7 +27,7 @@ const cancellationText = (r: any) => r.cancellation.treatment === 'flat' ? money
 export function teachingPayPage(s: any) {
   const pay = s.teachingPay, rules = rows(s,'payRules')
   const lines = pay.rows.map((r: any)=>`<tr data-pay-class="${h(r.classId)}">`
-    + cell('Class',`${h(r.title)}<small>${when(s,r.start)} · ${h(person(s,r.instructorId))}</small>`)
+    + cell('Class',`${h(r.title)}<small>${when(s, r.start, r.timeZone)} · ${h(person(s,r.instructorId))}</small>`)
     + cell('Calculation',`${h(r.status)}<small>${h(r.attendees)} attended · ${h(durationText(r))}</small><small>${h(rateText(r.substitute ? r.rule?.substitute : r.rule))}${r.substitute ? ' · approved substitute' : ''}${r.rule ? ' · version '+h(r.ruleVersion) : ''}</small>${r.calculation ? `<small>Gross ${money(r.calculation.grossCents)} · minimum uplift ${money(r.calculation.minimumAppliedCents)}${r.classStatus === 'cancelled' ? ' · '+h(cancellationText(r.rule)) : ''}</small>` : ''}${r.adjustments.map((a: any)=>`<small>Adjustment ${money(a.amountCents)}: ${h(a.reason)} · ${when(s,a.createdAt)}</small>`).join('')}`)
     + cell('Teaching pay',r.totalCents == null ? 'Unavailable' : money(r.totalCents))
     + cell('Sources',`<a href="/app?class=${encodeURIComponent(r.classId)}#class-${h(r.classId)}">Roster</a>${owner(s) && r.ruleId ? `<details><summary>Reasoned adjustment</summary>${form('pay.adjust',path,hidden('classId',r.classId)+hidden('instructorId',r.instructorId)+hidden('requestId',crypto.randomUUID())+field('adjustment','Adjustment in USD','','text','required inputmode="decimal"')+field('reason','Reason','','text','required maxlength="500"'),'Record adjustment','quiet')}</details>` : ''}`)+'</tr>').join('')

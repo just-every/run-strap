@@ -45,6 +45,9 @@ import { adjustPack, approvePack, approveReminder, balance, preparePack, prepare
 import { erasePerson, savePerson } from './people';
 import { memberProfile, profileSnapshot, saveMemberProfile, saveOwnProfile } from './profiles';
 import { saveStudio, studioSettings } from './studio';
+import { locations, placed, saveLocation } from './locations';
+import { ledgerLocation } from '../location-scope';
+import { setPackLocations } from './pack-locations';
 import { packSummary } from './pack-credits';
 import { classSpots, moveSpot, saveSpotLayout, seatCapacity, spotLayouts } from './spots';
 import { saveUnavailability, removeUnavailability } from './scheduling';
@@ -154,6 +157,8 @@ export const handlers = {
   'pack.prepare':defineCommand(preparePack,['owner','agent']),
   'pack.approve':defineCommand(approvePack,['owner']),
   'pack.adjust':defineCommand(adjustPack,['owner']),
+  'pack.locations.set':defineCommand(setPackLocations,['owner']),
+  'location.save':defineCommand(saveLocation,['owner']),
   'fee.collect':defineCommand(collectFee,['owner'],{staffRight:'collection'}),
   'fee.waive':defineCommand(waiveFee,['owner'],{staffRight:'fee-waiver'}),
   'payment.record':defineCommand(recordPayment,['owner']),
@@ -201,7 +206,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if (who.role === 'agent') insist(['recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = handlers[name as keyof typeof handlers];
   if (!spec) throw new DomainError('unknown_command',404);
-  insist(who.role !== 'finance','owner_required',403);
+  insist(who.role !== 'finance' && who.role !== 'manager','owner_required',403);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
   if(name==='plan.recurring.prepare')insist(tx.who.role==='owner'&&tx.who.isOwner,'owner_required',403);
   if(name==='plan.recurring.accept'){insist(tx.who.role==='member','member_acceptance_required',403);const proposal=record(tx.state,input.id,'recurringTerms');insist(proposal.personId===tx.who.personId,'recurringTerms_not_found',404);}
@@ -251,6 +256,26 @@ export async function financeSnapshot(db: D1Database, who: Actor) {
   const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as Record<string,unknown>;
   return {actor:loaded.who,people:(full.people as Person[]).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active})),...Object.fromEntries(financeKeys.map(key => [key,full[key]]))};
 }
+/** STUDIO-002: a manager reads the revenue and attendance inputs of their locations only: classes, bookings, sales and receipts
+ * attributed to those locations, and balances recomputed from those rows, never a member's whole studio balance. */
+const managerKeys = ['bookingActions','bookings','charges','classes','packs','payments','studio','version'];
+export async function managerSnapshot(db: D1Database, who: Actor) {
+  const loaded = await load(db,who);
+  insist(loaded.who.role === 'manager','owner_required',403);
+  const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as unknown as Record<string,any[]>;
+  const scope = new Set(loaded.who.locationIds), ledger = {classes:full.classes,bookings:full.bookings,packs:full.packs,charges:full.charges};
+  const own = (row: RecordData) => scope.has(ledgerLocation(row,ledger));
+  const classes = full.classes.filter(c => scope.has(c.locationId)), classIds = new Set(classes.map(c => c.id));
+  const charges = full.charges.filter(own), payments = full.payments.filter(own), packs = full.packs.filter(p => scope.has(p.locationId ?? 'studio'));
+  const visible = new Set([...charges,...payments].map(r => r.personId));
+  const balances = [...visible].sort().map(personId => ({personId,balanceCents:charges.filter(r => r.personId === personId).reduce((n,r) => n+r.amountCents,0)-payments.filter(r => r.personId === personId).reduce((n,r) => n+r.amountCents,0)}));
+  const people = (full.people as unknown as Person[]).filter(p => visible.has(p.id) || packs.some(pack => pack.personId === p.id)).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}));
+  const places = (full.locations as unknown as {id:string;name:string;timeZone:string}[]).filter(l => scope.has(l.id));
+  // The business's own identity and clock, never the original location's address, phone or hours unless it is one of theirs.
+  const studio = {id:'studio',location:places.map(l => l.name).join(' · '),timeZone:places[0]?.timeZone ?? 'UTC',legalName:(full.studio as unknown as {legalName?:string}|null)?.legalName ?? null};
+  return {actor:loaded.who,people,locations:places,studio,version:full.version,classes,packs,charges,payments,balances,
+    bookings:full.bookings.filter(b => classIds.has(b.classId)),bookingActions:full.bookingActions.filter(a => classIds.has(a.classId))};
+}
 export async function snapshot(db: D1Database, who: Actor, origin?: string) {
   const loaded = await load(db,who);
   const connection=await db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
@@ -275,8 +300,8 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
   const frozen=freezesSnapshot(state,who);frozen.freezes=frozen.freezes.map(f=>({...f,withdrawal:freezeWithdrawal(state,record(state,f.id,'freeze'))}));
-  return {intros:introSnapshot(state,who),cancellations:await cancellationsSnapshot(state,who),freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
-    demand:owner ? {classes:demandEvidence(state),availability:demandAvailability(state)} : null,drafts:owner?await Promise.all(list(state,'draft').map(async (d): Promise<RecordData> => ({...d,...(d.recommendation ? {stale:await recommendationStale(state,d)} : {})}))):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
+  return {intros:introSnapshot(state,who),cancellations:await cancellationsSnapshot(state,who),freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,...placed(state,c),occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
+    demand:owner ? {classes:demandEvidence(state),availability:demandAvailability(state)} : null,drafts:owner?await Promise.all(list(state,'draft').map(async (d): Promise<RecordData> => ({...d,...(d.recommendation ? {stale:await recommendationStale(state,d)} : {})}))):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),locations:locations(state),packLocationChanges:who.role === 'owner' ? list(state,'packLocationChange') : [],acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],
     balances:state.people.filter(p => !p.erasedAt && (owner || p.id === who.personId)).map(p => ({personId:p.id,balanceCents:balance(state,p.id)}))};

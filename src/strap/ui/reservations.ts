@@ -20,7 +20,7 @@ export function reservationsPanel(s: any, personId: string, back: string) {
   if (!personId || !['member','owner'].includes(s.actor.role)) return '';
   const memberFields = owner(s) ? hidden('personId',personId) + actionChannel() : '';
   const classes = rows(s,'classes').filter(c => c.seriesId && c.status === 'published' && Date.parse(c.start) > Date.now()).sort((a,b) => a.start.localeCompare(b.start));
-  const choices: [unknown,unknown][] = [['','Choose a recurring class'],...classes.map(c => [c.id,`${c.title} · ${when(s,c.start).replace(/<[^>]*>/g,'')}`] as [unknown,unknown])];
+  const choices: [unknown,unknown][] = [['','Choose a recurring class'],...classes.map(c => [c.id,`${c.title} · ${when(s, c.start, c.timeZone).replace(/<[^>]*>/g,'')}`] as [unknown,unknown])];
   const editor = classes.length ? form('reservation.prepare',back,memberFields + hidden('requestId',crypto.randomUUID()) + select('classId','First class',choices) + field('throughDate','Reserve through (inclusive)','','date','required'), 'Preview recurring reservation') : emptyLine('The studio has no published recurring classes.');
   const previews = rows(s,'reservationPreviews').filter(r => r.personId === personId && r.status === 'preview').slice(-5).reverse().map(r => {
     const cancelling = r.operation === 'cancel';

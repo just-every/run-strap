@@ -9,6 +9,7 @@ export interface Tab { href: string; label: string; glyph: string; count?: numbe
 
 export function tabs(s: any): Tab[] {
   const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
+  if (s.actor.role === 'manager') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
   if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length
   if (owner(s)) return [
@@ -41,7 +42,7 @@ export function tabs(s: any): Tab[] {
   return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
 }
 
-const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member', finance: 'Finance' } as Record<string, string>)[s.actor.role] ?? s.actor.role
+const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member', finance: 'Finance', manager: 'Manager' } as Record<string, string>)[s.actor.role] ?? s.actor.role
 
 export function shell(s: any, current: string, title: string, top: string, content: string, notices: string) {
   const name = h(branding.name), me = s.displayName || s.actor.email

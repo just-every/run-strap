@@ -1,6 +1,6 @@
 // Today (pick F): the day's classes as a timeline, the open class's roster, and
 // the exception that needs a person: open spots the waitlist cannot fill.
-import { attendance, classRoom, classTitle, classesOn, currentClass, stuckWaitlist } from './facts'
+import { attendance, classPlace, classRoom, classTitle, classesOn, currentClass, stuckWaitlist } from './facts'
 import { clock, dayLong, dayShort, length, studioToday } from './format'
 import { icon } from './icons'
 import { roster } from './roster'
@@ -29,10 +29,10 @@ function classCard(s: any, c: any, open: boolean, link: (id: string) => string, 
   const room = classRoom(c)
   const spots = `<span class="pill${full ? ' full' : ''}">${booked.length} of ${c.occupancy.total}</span>`
     + (waiting.length ? `<span class="pill wait">Waitlist <b>${waiting.length}</b></span>` : `<span class="pill quiet">${c.occupancy.total - booked.length} open</span>`)
-  const head = `<div class="class-head"><div class="class-time"><strong>${h(clock(s, c.start))}</strong><span>${h(length(c.start, c.end))}</span></div>`
-    + `<div class="class-name"><strong>${h(classTitle(c))}</strong>${room ? `<span>${h(room)}</span>` : ''}${stuck ? `<span class="flag">${icon('alert')}Waitlist stuck</span>` : ''}${c.status === 'cancelled' ? `<span class="flag">${icon('alert')}Cancelled: ${h(c.cancelReason)}</span>` : ''}</div>`
+  const head = `<div class="class-head"><div class="class-time"><strong>${h(clock(s, c.start, c.timeZone))}</strong><span>${h(length(c.start, c.end))}</span></div>`
+    + `<div class="class-name"><strong>${h(classTitle(c))}</strong>${room ? `<span>${h(room)}</span>` : ''}${classPlace(s, c) ? `<span>${h(classPlace(s, c))}</span>` : ''}${stuck ? `<span class="flag">${icon('alert')}Waitlist stuck</span>` : ''}${c.status === 'cancelled' ? `<span class="flag">${icon('alert')}Cancelled: ${h(c.cancelReason)}</span>` : ''}</div>`
     + `<div class="teacher">${avatar(c.instructorName ?? person(s, c.instructorId), 'plum')}<span>${h(c.instructorName ?? person(s, c.instructorId))}</span></div>`
-    + `<div class="spots">${spots}</div><a class="toggle" href="${h(open ? link('') : link(c.id))}" aria-label="${open ? 'Close' : 'Open'} the roster for ${h(classTitle(c))} at ${h(clock(s, c.start))}"${open ? ' aria-expanded="true"' : ''}>${icon(open ? 'up' : 'chevron')}</a></div>`
+    + `<div class="spots">${spots}</div><a class="toggle" href="${h(open ? link('') : link(c.id))}" aria-label="${open ? 'Close' : 'Open'} the roster for ${h(classTitle(c))} at ${h(clock(s, c.start, c.timeZone))}"${open ? ' aria-expanded="true"' : ''}>${icon(open ? 'up' : 'chevron')}</a></div>`
   const body = (stuck ? exception(s, c, stuck) : '') + (open ? roster(s, c, back) : '') + (!open && !stuck && full && c.occupancy.total <= 16 ? strip(s, booked) : '')
   return `<article class="class-card${open ? ' open' : ''}${stuck ? ' exception' : ''}${past ? ' past' : ''}" id="class-${h(c.id)}">${head}${body}</article>`
 }

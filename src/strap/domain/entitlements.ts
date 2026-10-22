@@ -99,10 +99,11 @@ const overAllocated = (plan: Plan, starts: string[], zone: string, firstAt: stri
 
 /** Why this pack's plan cannot hold one more visit in a class starting at
  * `start` now, or null. `except` is the booking being moved or restored. */
-export function planRefusal(pack: RecordData, start: string, held: Held[], zone: string, at: string, except?: string): string | null {
+/** Plan hours read on the class's own clock (`hoursZone`); periods count on the studio's. */
+export function planRefusal(pack: RecordData, start: string, held: Held[], zone: string, at: string, except?: string, hoursZone = zone): string | null {
   const plan = planOf(pack);
   if (!plan) return null;
-  if (!inPlanHours(plan,start,zone)) return 'outside_plan_hours';
+  if (!inPlanHours(plan,start,hoursZone)) return 'outside_plan_hours';
   const others = held.filter(item => item.id !== except);
   const upcoming = (value: string) => Date.parse(value) > Date.parse(at);
   if (plan.maxUpcoming !== null && upcoming(start) && others.filter(item => item.booked && upcoming(item.start)).length >= plan.maxUpcoming) return 'plan_upcoming_limit_reached';

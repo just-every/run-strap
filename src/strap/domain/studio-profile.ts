@@ -1,4 +1,5 @@
 import { insist, text } from './types';
+import { phoneDigits } from './phone';
 
 const optional = (value: unknown, name: string, max: number) => value === '' || value === null ? null : text(value,name,max);
 const states = new Set('AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS GU MP PR VI'.split(' '));
@@ -10,6 +11,7 @@ export function studioProfile(input: Record<string,unknown>) {
   for (const [key,max] of [['legalName',160],['receiptDetails',1000]] as const) {
     if (key in input) result[key] = optional(input[key],key,max);
   }
+  if ('phone' in input) result.phone = phoneDigits(input.phone);
   if ('address' in input) {
     const address = input.address;
     if (address === null) result.address = null;

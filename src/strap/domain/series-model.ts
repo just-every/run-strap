@@ -1,6 +1,7 @@
 import { addDays, localDate, localInstant, mondayOf } from '../zone';
 import { insist, integer, list, now, record, text, type RecordData, type State } from './types';
 import { studioSettings } from './studio';
+import { locationById, ORIGINAL_LOCATION } from './locations';
 
 export function civilDate(value: unknown) {
   const date = text(value,'date',10);
@@ -19,15 +20,16 @@ export function studioZone(state: State) {
   const studio = studioSettings(state); insist(studio,'studio_settings_required'); return studio!;
 }
 export function recurrence(state: State, input: Record<string,unknown>) {
-  const studio = studioZone(state), startDate = civilDate(input.startDate), endDate = civilDate(input.endDate);
+  studioZone(state);
+  const place = locationById(state,input.locationId ?? ORIGINAL_LOCATION), startDate = civilDate(input.startDate), endDate = civilDate(input.endDate);
   insist(endDate >= startDate,'series_end_must_follow_start');
   const intervalWeeks = integer(input.intervalWeeks ?? 1,'interval_weeks',1,52), dates: string[] = [];
   for (let date = startDate; date <= endDate; date = addDays(date,intervalWeeks*7)) {
     insist(dates.length < 104,'series_maximum_104_occurrences'); dates.push(date);
   }
   const minutes = integer(input.minutes,'minutes',5,600), time = text(input.time,'time',5);
-  for (const date of dates) wallStart(date,time,studio.timeZone);
-  return {startDate,endDate,intervalWeeks,time,minutes,timeZone:studio.timeZone,location:studio.location,dates};
+  for (const date of dates) wallStart(date,time,place.timeZone);
+  return {startDate,endDate,intervalWeeks,time,minutes,timeZone:place.timeZone,location:place.name,locationId:place.id,dates};
 }
 export function seriesSelection(state: State, input: Record<string,unknown>, cancelling = false) {
   const selected = record(state,input.classId,'class');

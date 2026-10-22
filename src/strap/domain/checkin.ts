@@ -1,3 +1,4 @@
+import { phoneDigits } from './phone';
 import { humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import { countsCredits } from './entitlements';
 import type { Transaction } from './store';
@@ -5,6 +6,7 @@ import { balance } from './money';
 import { latestWaiver } from './bookings';
 import { recordCheckin } from './attendance';
 import { studioSettings } from './studio';
+import { classZone } from './locations';
 import { localDate } from '../zone';
 
 // ATT-001 doors beyond the staff roster: a member's own account, the paired
@@ -15,7 +17,7 @@ import { localDate } from '../zone';
 const opensMinutes = 60, closesMinutes = 30;
 const shift = (at: string, minutes: number) => new Date(Date.parse(at) + minutes * 60_000).toISOString();
 export function inWindow(state: State, entry: RecordData, at = now()) {
-  const zone = studioSettings(state)?.timeZone ?? 'UTC';
+  const zone = classZone(state,entry);
   return at >= shift(entry.start,-opensMinutes) && at < shift(entry.start,closesMinutes) && localDate(at,zone) === localDate(entry.start,zone);
 }
 function fenceWindow(tx: Transaction, entry: RecordData) {
@@ -30,13 +32,7 @@ export const memberCheckin = (state: State, personId: string) => state.records.g
 const newCode = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
 const normalCode = (value: unknown) => text(value,'code',64).replace(/[\s-]/g,'').toUpperCase();
 
-/** A US phone as its 10 digits: punctuation, spaces and a leading 1 are dropped. */
-export function phoneDigits(value: unknown): string | null {
-  if (value === undefined || value === null || String(value).trim() === '') return null;
-  const digits = String(value).replace(/[\s().+-]/g,'');
-  insist(/^1?\d{10}$/.test(digits),'invalid_phone');
-  return digits.slice(-10);
-}
+export { phoneDigits };
 export function savePhone(tx: Transaction, personId: string, value: unknown) {
   const phone = phoneDigits(value), current = memberCheckin(tx.state,personId);
   if (!current && phone === null) return;

@@ -30,7 +30,7 @@ export function reminderTasksPanel(s: any) {
   const tasks = rows(s,'reminderTasks').filter(task => task.status === 'open');
   const content = tasks.map(task => '<tr>'
     + cell('Member',h(person(s,task.personId)))
-    + cell('Class',`${h(rows(s,'classes').find(entry => entry.id === task.classId)?.title ?? 'Class')}<small>${when(s,task.start)}</small>`)
+    + cell('Class',`${h(rows(s,'classes').find(entry => entry.id === task.classId)?.title ?? 'Class')}<small>${when(s, task.start, task.timeZone)}</small>`)
     + cell('Outcome',`${h(outcome[task.deliveryStatus] ?? task.deliveryStatus)}${task.provider ? `<small>Provider: ${h(task.provider)}</small>` : ''}`)
     + cell('Follow-up',form('reminder.task.complete','/app/studio',hidden('id',task.id)+hidden('requestId',crypto.randomUUID())
       + field('reason','Follow-up outcome','','text','required maxlength="500"'),'Complete follow-up','quiet','small'))

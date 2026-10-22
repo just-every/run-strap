@@ -9,7 +9,7 @@ export function substitutionsPage(s: any, _notice: any = {}) {
   const data = s.substitutions, isOwner = owner(s);
   const classes = rows(s,'classes').filter(c => c.status === 'published' && c.start > new Date().toISOString() && (isOwner || c.instructorId === s.actor.personId));
   const request = panel('Request coverage',body(form('substitution.request',path,
-    select('classId','Class',[['','Choose a class'],...classes.map(c => [c.id,`${c.title} · ${when(s,c.start)} · ${c.instructorName}`] as [unknown,unknown])])
+    select('classId','Class',[['','Choose a class'],...classes.map(c => [c.id,`${c.title} · ${when(s, c.start, c.timeZone)} · ${c.instructorName}`] as [unknown,unknown])])
     + field('reason','Coverage request reason','','text','required maxlength="300"') + hidden('requestId',crypto.randomUUID()),'Request substitute')));
   const requests = data.requests.map((r: any) => {
     const c = rows(s,'classes').find(c => c.id === r.classId), candidates = data.candidates.filter((p: any) => p.requestId === r.id);
@@ -21,7 +21,7 @@ export function substitutionsPage(s: any, _notice: any = {}) {
         + cell('Availability',p.available?'Available':p.conflicts.map((conflict: any) => `${h(conflict.resource.label)}: ${h(conflict.record.title ?? conflict.record.reason)} · ${when(s,conflict.occupiedStart)} – ${when(s,conflict.occupiedEnd)}`).join('<br>'))+'</tr>').join('') || '<tr><td colspan="3">No other active instructors.</td></tr>')}</div>`
         + (choices.length ? form('substitution.prepare',path,hidden('requestId',r.id)+select('instructorId','Available qualified substitute',choices.map((p: any) => [p.instructorId,p.instructorName])),'Preview substitution','quiet') : emptyLine('Approve a service qualification and resolve availability before previewing.')) : '')+'</div>';
   }).join('');
-  const drafts = isOwner ? data.drafts.map((d: any) => `<div data-substitution-draft="${h(d.id)}"><h3>${h(d.before.title)} · ${statusPill(d.status)}</h3><p>${h(d.before.instructorName)} → ${h(d.after.instructorName)} · ${when(s,d.after.start)}</p>`
+  const drafts = isOwner ? data.drafts.map((d: any) => `<div data-substitution-draft="${h(d.id)}"><h3>${h(d.before.title)} · ${statusPill(d.status)}</h3><p>${h(d.before.instructorName)} → ${h(d.after.instructorName)} · ${when(s, d.after.start, d.after.timeZone)}</p>`
     + `<p>${h(d.reason)}</p><p>Credits unchanged · no money movement · ${h(d.impact.notices)} member notices</p>`
     + `<p>Substitute pay: ${d.pay.rate ? `${h(rateText(d.pay.rate))} · minimum ${money(d.pay.rate.minimumCents)} · rule version ${h(d.pay.ruleVersion)}` : 'Unavailable; configure an applicable substitute rate in Teaching pay.'}</p><p class="meta">${h(d.email)}</p>`
     + d.impact.classes.flatMap((c: any) => c.bookings.map((b: any) => `<details><summary>Notice for ${h(person(s,b.personId))}</summary><p>${h(b.subject)}</p><p>${h(b.body)}</p></details>`)).join('')

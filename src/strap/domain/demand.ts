@@ -59,7 +59,7 @@ export async function prepareRecommendation(tx: Transaction, input: Record<strin
     insist(Object.keys(proposal).every(key => (action === 'coverage' ? ['instructorId'] : ['start','end']).includes(key)),'invalid_recommendation_change');
   }
   const fields = classFields(tx,{...(before ?? {}),...proposal});
-  const zone = studioSettings(tx.state)?.timeZone ?? 'UTC', date = localDate(fields.start,zone);
+  const zone = fields.timeZone ?? studioSettings(tx.state)?.timeZone ?? 'UTC', date = localDate(fields.start,zone);
   const after: RecordData = {...(before ?? {}),...fields,id:before?.id ?? fields.id,localDate:date,week:mondayOf(date)};
   insist(!before || (action === 'coverage' ? after.instructorId !== before.instructorId : after.start !== before.start || after.end !== before.end),'recommendation_has_no_change');
   if (action === 'coverage') insist(qualifiedForService(tx.state,after.instructorId,after.service),'substitution_qualification_required',409);

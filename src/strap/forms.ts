@@ -20,29 +20,44 @@ function zoneOf(timeZone: string | undefined) {
 }
 
 /** One class row of the week editor: day of the week, start time, length, title, room, spots and instructor. */
-function classRow(input: Record<string, unknown>, i: number, week: string, timeZone: string) {
+function classRow(input: Record<string, unknown>, i: number, week: string, zoneAt: (locationId: unknown) => string) {
   const get = (key: string) => String(input[`c${i}_${key}`] ?? '').trim()
   if (!get('title')) return null
   const day = Number(get('day')), minutes = Number(get('minutes'))
   if (!Number.isInteger(day) || day < 0 || day > 6) fail(`Choose a day for class ${i + 1}`)
   if (!clock.test(get('time'))) fail(`Choose a start time for class ${i + 1}`)
   if (!Number.isInteger(minutes) || minutes < 5 || minutes > 600) fail(`Enter a length in minutes for class ${i + 1}`)
-  const start = localInstant(addDays(week, day), get('time'), timeZone)
+  const locationId = get('locationId'), start = localInstant(addDays(week, day), get('time'), zoneAt(locationId))
   return {
-    title: get('title'), service: get('service') || get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
+    ...(locationId ? { locationId } : {}), title: get('title'), service: get('service') || get('title'), room: get('room'), equipment: get('equipment').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     bufferBeforeMinutes: Number(get('bufferBeforeMinutes')), bufferAfterMinutes: Number(get('bufferAfterMinutes')),
     start, end: new Date(Date.parse(start) + minutes * 60_000).toISOString(),
     capacity: Number(get('capacity')), ...(get('onlineCapacity') ? { onlineCapacity: Number(get('onlineCapacity')) } : {}), instructorId: get('instructorId'),
   }
 }
 
-export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
+export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  // A class, room or closure at a location is entered on that location's clock; anything else on the studio's.
+  const zoneAt = (locationId: unknown) => locationId ? locations.find(l => l.id === locationId)?.timeZone ?? fail('Choose one of the studio’s locations') : zoneOf(timeZone)
   if (name === 'intro.offer.save') for (const key of ['days','returnAfterDays']) if (input[key] !== undefined) input[key] = Number(input[key]);
   if (name === 'intro.identity.verify') { input.householdChecked = input.householdChecked === 'true'; for (const key of ['samePersonAsId','householdWithId']) if (input[key] === '') delete input[key]; }
   if (name === 'intro.preview' && input.exceptionReason === '') delete input.exceptionReason;
   if (name === 'intro.purchase') input.confirm = input.confirm === 'true';
-  if (name === 'studio.save' && input.profile === 'true') {
+  if (name === 'pack.prepare' || name === 'pack.locations.set') {
+    const picked = Object.keys(input).filter(key => key.startsWith('lc_') && input[key] === 'true').map(key => key.slice(3))
+    for (const key of Object.keys(input)) if (key.startsWith('lc_')) delete input[key]
+    if (input.allLocations === 'true') input.eligibleLocations = 'all'
+    else if (picked.length) input.eligibleLocations = picked
+    else if (name === 'pack.locations.set') fail('Choose where the plan is valid')
+    delete input.allLocations
+  }
+  if (name === 'pack.prepare' || name === 'payment.record') { if (input.locationId === '') delete input.locationId }
+  if (name === 'manager.grant') {
+    input.locationIds = Object.keys(input).filter(key => key.startsWith('loc_')).map(key => key.slice(4))
+    for (const key of Object.keys(input)) if (key.startsWith('loc_')) delete input[key]
+  }
+  if ((name === 'studio.save' || name === 'location.save') && input.profile === 'true') {
     const keys = ['line1','line2','city','region','postalCode']
     input.address = keys.some(key => String(input[key] ?? '').trim())
       ? Object.fromEntries([...keys.map(key => [key,String(input[key] ?? '').trim()]),['country','US']]) : null
@@ -112,6 +127,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   }
   if (name === 'integration.create' || name === 'integration.events') {
     input.events = Object.keys(input).filter(key => key.startsWith('ev_') && input[key] === 'true').map(key => key.slice(3))
+    if (name === 'integration.create' && Object.keys(input).some(key => key.startsWith('lc_'))) input.locations = Object.keys(input).filter(key => key.startsWith('lc_') && input[key] === 'true').map(key => key.slice(3))
     if (name === 'integration.create') input.scopes = Object.keys(input).filter(key => key.startsWith('sc_') && input[key] === 'true').map(key => key.slice(3))
   }
   if (name === 'booking.bulk.cancel') input.ids = Object.keys(input).filter(key => key.startsWith('b_') && input[key] === 'true').map(key => key.slice(2))
@@ -179,21 +195,21 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     return { classId, scope, reason, change }
   }
   if (name === 'classes.prepare') {
-    const week = String(input.week ?? ''), zone = zoneOf(timeZone)
+    const week = String(input.week ?? '')
     if (!date.test(week)) fail('Choose the Monday that starts the week')
     const rows = Number(input.rows)
-    const classes = Array.from({ length: Number.isInteger(rows) && rows > 0 && rows <= 100 ? rows : 0 }, (_, i) => classRow(input, i, week, zone)).filter(Boolean)
+    const classes = Array.from({ length: Number.isInteger(rows) && rows > 0 && rows <= 100 ? rows : 0 }, (_, i) => classRow(input, i, week, zoneAt)).filter(Boolean)
     if (!classes.length) fail('Add at least one class to the week')
     return { week, classes }
   }
   if (name === 'closure.prepare' && input.scope !== 'class') {
-    const zone = zoneOf(timeZone)
+    const zone = zoneAt(input.locationId)
     if (!date.test(String(input.startDate)) || !clock.test(String(input.startTime)) || !date.test(String(input.endDate)) || !clock.test(String(input.endTime))) fail('Choose when the closure starts and ends')
-    return { scope: input.scope, room: input.room, reason: input.reason, start: localInstant(String(input.startDate), String(input.startTime), zone), end: localInstant(String(input.endDate), String(input.endTime), zone) }
+    return { scope: input.scope, ...(input.locationId ? { locationId: input.locationId } : {}), room: input.room, reason: input.reason, start: localInstant(String(input.startDate), String(input.startTime), zone), end: localInstant(String(input.endDate), String(input.endTime), zone) }
   }
   if (name === 'scheduling.unavailable.save') {
-    const zone = zoneOf(timeZone)
-    return { ...input, resourceId: input.resourceKind === 'instructor' ? input.instructorId : input.resourceId,
+    const zone = zoneAt(input.resourceKind === 'instructor' ? undefined : input.locationId || undefined)
+    return { ...input, ...(input.locationId ? {} : { locationId: undefined }), resourceId: input.resourceKind === 'instructor' ? input.instructorId : input.resourceId,
       start: localInstant(String(input.startDate), String(input.startTime), zone),
       end: localInstant(String(input.endDate), String(input.endTime), zone) }
   }

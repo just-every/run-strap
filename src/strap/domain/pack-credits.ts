@@ -6,20 +6,23 @@ import { id, insist, list, now, record, type RecordData, type State } from './ty
 import type { Transaction } from './store';
 import { allowanceAt, countsCredits, heldVisits, periodEndsAt, periodOf, periods, planOf, planRefusal, planStart, visitsLeft } from './entitlements';
 import { studioSettings } from './studio';
+import { classZone, packLocationEligible } from './locations';
 
 /** Service labels are identities within a studio, independent of rooms. */
 export const serviceKey = (value: string) => value.trim().replace(/\s+/g,' ').toLowerCase();
-export function packServiceEligible(pack: RecordData, entry: RecordData) {
+export function packServiceOnly(pack: RecordData, entry: RecordData) {
   const services: string[] = pack.eligibleServices ?? [];
   const service = entry.service ?? String(entry.title).split(' · ')[0];
   return !services.length || services.some(value => serviceKey(value) === serviceKey(service));
 }
+/** The class's service and its location are both permitted by the pack (STUDIO-002 eligibility is explicit). */
+export const packServiceEligible = (pack: RecordData, entry: RecordData) => packServiceOnly(pack,entry) && packLocationEligible(pack,entry);
 export const studioZone = (state: State): string => studioSettings(state)?.timeZone ?? 'UTC';
 const startOf = (state: State) => (classId: string) => state.records.get(classId)?.data.start as string | undefined;
 export const packHeld = (state: State, pack: RecordData) => heldVisits(pack,list(state,'booking'),startOf(state));
 /** PLAN-002: why the pack's plan cannot hold one more visit in this class now. */
 export const planBlock = (state: State, pack: RecordData, entry: RecordData, except?: string) =>
-  cancellationBlocks(state,pack.id,entry.start) ? 'membership_cancelled' : packFreezeBlocks(state,pack.id,entry.start) ? 'membership_frozen' : pack.entitlement ? planRefusal(pack,entry.start,packHeld(state,pack),studioZone(state),now(),except) : null;
+  cancellationBlocks(state,pack.id,entry.start) ? 'membership_cancelled' : packFreezeBlocks(state,pack.id,entry.start) ? 'membership_frozen' : pack.entitlement ? planRefusal(pack,entry.start,packHeld(state,pack),studioZone(state),now(),except,classZone(state,entry)) : null;
 /** A pack can take one more booking in this class: a credit or a plan visit. */
 export const packCanSeat = (state: State, pack: RecordData, entry: RecordData, except?: string) =>
   (!countsCredits(pack) || pack.remaining > 0) && !planBlock(state,pack,entry,except);

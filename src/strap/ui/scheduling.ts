@@ -1,3 +1,4 @@
+import { locationChoices, manyLocations } from './facts'
 import { schedulingConflicts, type SchedulingConflict } from '../domain/scheduling'
 import { when } from './format'
 import { body, cell, emptyLine, field, form, h, hidden, panel, rows, select, table, textarea } from './shared'
@@ -21,11 +22,12 @@ export function conflictDetails(s: any, conflicts: SchedulingConflict[]) {
 
 export function availabilityPanel(s: any) {
   const entries = rows(s, 'unavailability').filter(r => r.status === 'active').sort((a, b) => a.start.localeCompare(b.start))
-  const list = entries.length ? `<div class="table-wrap">${table(['Resource', 'Unavailable', 'Reason', ''], entries.map(r => `<tr>${cell('Resource', `${h(r.resourceKind)}: ${h(r.resourceName)}`)}${cell('Unavailable', `${when(s, r.start)} – ${when(s, r.end)}`)}${cell('Reason', h(r.reason))}${cell('', form('scheduling.unavailable.remove', '/app/classes', hidden('id', r.id), 'Remove', 'quiet'), 'right')}</tr>`).join(''))}</div>` : emptyLine('No availability exceptions recorded.')
+  const list = entries.length ? `<div class="table-wrap">${table(['Resource', 'Unavailable', 'Reason', ''], entries.map(r => `<tr>${cell('Resource', `${h(r.resourceKind)}: ${h(r.resourceName)}`)}${cell('Unavailable', `${when(s, r.start, r.timeZone)} – ${when(s, r.end)}`)}${cell('Reason', h(r.reason))}${cell('', form('scheduling.unavailable.remove', '/app/classes', hidden('id', r.id), 'Remove', 'quiet'), 'right')}</tr>`).join(''))}</div>` : emptyLine('No availability exceptions recorded.')
   const instructors = rows(s, 'people').filter(p => p.active && p.role === 'instructor')
   const editor = s.studio ? form('scheduling.unavailable.save', '/app/classes',
     select('resourceKind', 'Resource type', [['instructor', 'Instructor'], ['room', 'Room'], ['equipment', 'Equipment / reformer']], 'instructor')
     + select('instructorId', 'Instructor (for instructor exceptions)', instructors.map(p => [p.id, p.name]), '', '')
+    + (manyLocations(s) ? select('locationId', 'Location (for a room or equipment exception)', locationChoices(s), 'studio', '') : '')
     + field('resourceId', 'Room or equipment / reformer name', '', 'text', 'maxlength="100"')
     + field('startDate', 'From date', '', 'date', 'required') + field('startTime', 'From time', '', 'time', 'required')
     + field('endDate', 'Until date', '', 'date', 'required') + field('endTime', 'Until time', '', 'time', 'required')

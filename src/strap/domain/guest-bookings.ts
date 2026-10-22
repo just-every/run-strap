@@ -45,7 +45,7 @@ export function bookGuest(tx: Transaction, input: Record<string,unknown>) {
   tx.put('booking',booking); guestLedger(tx,booking,'reserve');
   if (f.amountCents) tx.put('charge',{id:id(),personId:f.payerId,bookingId:booking.id,classId:f.entry.id,amountCents:f.amountCents,reason:'guest_drop_in',createdAt:now(),createdBy:tx.who.id});
   tx.put('guestBookingDraft',{...draft,status:'booked',bookingId:booking.id});
-  const subject = `Guest booking confirmed: ${titleOf(f.entry)}`, body = `${subject}, ${whenText(tx.state,f.entry.start)}. ${f.funding === 'pass' ? 'One guest pass is reserved; your own credits are unchanged.' : `$${(f.amountCents/100).toFixed(2)} was added to the payer’s studio balance; no payment was collected.`}`;
+  const subject = `Guest booking confirmed: ${titleOf(f.entry)}`, body = `${subject}, ${whenText(tx.state,f.entry.start,f.entry.timeZone)}. ${f.funding === 'pass' ? 'One guest pass is reserved; your own credits are unchanged.' : `$${(f.amountCents/100).toFixed(2)} was added to the payer’s studio balance; no payment was collected.`}`;
   for (const personId of new Set([f.guest.id,f.sponsor.id,f.payerId])) {
     putNotice(tx,{id:`notice:guest:${booking.id}:${personId}`,personId,bookingId:booking.id,classId:f.entry.id,subject,body});
     reserveMail(tx,tx.notices,{id:`mail:guest:${booking.id}:${personId}`,sourceKind:'booking',sourceId:booking.id,personId,bookingIds:[booking.id],subject,body});

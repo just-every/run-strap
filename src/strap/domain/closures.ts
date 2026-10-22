@@ -2,7 +2,8 @@ import { humanOwner, id, instant, insist, list, now, record, text, type RecordDa
 import type { Transaction } from './store';
 import { mailBasis, seriesBasis } from './series-model';
 import { bookingCredit } from './pack-credits';
-import { resourceLabel, roomOf } from './scheduling';
+import { placeKey, resourceLabel, roomOf } from './scheduling';
+import { locationOf, locations, placeId } from './locations';
 import { mailNotConfigured, putNotice, reserveMail, titleOf, whenText, type NoticeContext } from './notices';
 
 // SCHED-008. The owner (manager until STAFF-001) cancels one class, or closes a
@@ -28,12 +29,12 @@ function scopeOf(state: State, input: Record<string,unknown>) {
   }
   const start = instant(input.start,'start'), end = instant(input.end,'end');
   insist(end > start,'closure_end_must_follow_start');
-  return {scope,start,end,...(scope === 'room' ? {room:resourceLabel(text(input.room,'room',100))} : {})};
+  return {scope,locationId:placeId(state,input.locationId),start,end,...(scope === 'room' ? {room:resourceLabel(text(input.room,'room',100))} : {})};
 }
 function affected(state: State, scope: Record<string,any>) {
   const at = now();
   return list(state,'class').filter(c => c.status === 'published' && c.start > at && (scope.scope === 'series' ? scope.classIds.includes(c.id) : scope.scope === 'class' ? c.id === scope.classId
-    : c.start < scope.end && c.end > scope.start && (scope.scope === 'location' || key(roomOf(c)) === key(scope.room))))
+    : c.start < scope.end && c.end > scope.start && locationOf(c) === (scope.locationId ?? 'studio') && (scope.scope === 'location' || key(roomOf(c)) === key(scope.room))))
     .sort((a,b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
 }
 /** What confirming would do now, member by member. */
@@ -41,7 +42,7 @@ export function closureImpact(state: State, scope: Record<string,any>) {
   const classes = affected(state,scope).map(c => {
     const seats = list(state,'booking').filter(b => b.classId === c.id && ['booked','offered','waitlisted'].includes(b.status))
       .sort((a,b) => a.status.localeCompare(b.status) || a.id.localeCompare(b.id));
-    return {classId:c.id,title:c.title,start:c.start,end:c.end,room:roomOf(c),
+    return {classId:c.id,title:c.title,start:c.start,end:c.end,room:roomOf(c),timeZone:c.timeZone ?? null,locationId:locationOf(c),location:locations(state).find(l => l.id === locationOf(c))?.name ?? null,
       bookings:seats.map(b => ({bookingId:b.id,personId:b.personId,status:b.status,creditReturned:b.status === 'booked' && !!(b.packId || b.guestPackId || b.makeupCreditId)}))};
   });
   const bookings = classes.flatMap(c => c.bookings);
@@ -86,9 +87,9 @@ export async function confirmClosure(tx: Transaction, input: Record<string,unkno
       const booking = record(tx.state,seat.bookingId,'booking');
       if (booking.status === 'booked') bookingCredit(tx,booking,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:'class_cancelled'});
       tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:tx.who.id,cancelledByRole:tx.who.role,cancellation:booking.status === 'booked' ? 'class_cancelled' : 'waitlist_closed',refunded:booking.status === 'booked' && !!(booking.packId || booking.guestPackId || booking.makeupCreditId),feeCents:0,closureId:closure.id});
-      const title = titleOf(entry), when = whenText(tx.state,entry.start);
-      const body = `${title} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? booking.makeupCreditId ? 'Your makeup credit is available again until its original expiry.' : booking.guestPackId ? 'Your guest pass was returned or the guest charge reversed.' : booking.packId ? 'Your class credit is back in your pack.' : 'Your unpaid visit is closed; no credit was used.' : 'Your waitlist spot is closed; no credit was used.'}`;
-      const notice = {id:`notice:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,closureId:closure.id,subject:`Cancelled: ${title}, ${when}`,body};
+      const title = titleOf(entry), when = whenText(tx.state,entry.start,entry.timeZone), place = locations(tx.state).length > 1 && entry.location ? ` at ${entry.location}` : '';
+      const body = `${title}${place} on ${when} is cancelled. Reason: ${closure.reason}. ${booking.status === 'booked' ? booking.makeupCreditId ? 'Your makeup credit is available again until its original expiry.' : booking.guestPackId ? 'Your guest pass was returned or the guest charge reversed.' : booking.packId ? 'Your class credit is back in your pack.' : 'Your unpaid visit is closed; no credit was used.' : 'Your waitlist spot is closed; no credit was used.'}`;
+      const notice = {id:`notice:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,closureId:closure.id,subject:`Cancelled: ${title}${place}, ${when}`,body};
       insist(!tx.state.records.has(notice.id),'notice_exists',409);
       putNotice(tx,notice);
       const letter = mail.get(booking.personId) ?? {subjects:[],lines:[],bookingIds:[]};
@@ -98,7 +99,7 @@ export async function confirmClosure(tx: Transaction, input: Record<string,unkno
   // One email per member per closure, covering all of their bookings in it.
   for (const [personId,letter] of mail) deliveries.push(reserveMail(tx,context,{id:`mail:${closure.id}:${personId}`,sourceKind:'closure',sourceId:closure.id,personId,bookingIds:letter.bookingIds,
     subject:letter.subjects.length === 1 ? letter.subjects[0] : `Cancelled: ${letter.subjects.length} of your classes`,body:letter.lines.join('\n\n')}));
-  if (closure.scope === 'room') tx.put('unavailability',{id:`closure-room:${closure.id}`,resourceKind:'room',resourceId:closure.room,resourceName:closure.room,start:closure.start,end:closure.end,
+  if (closure.scope === 'room') tx.put('unavailability',{id:`closure-room:${closure.id}`,resourceKind:'room',resourceId:placeKey(closure.locationId)+closure.room,resourceName:closure.room,locationId:closure.locationId,start:closure.start,end:closure.end,
     reason:`Closed: ${closure.reason}`,status:'active',closureId:closure.id,createdAt:at,createdBy:tx.who.id,updatedAt:at,updatedBy:tx.who.id});
   const applied = {...closure,status:'applied',impact,appliedAt:at,appliedBy:tx.who.id};
   tx.put('closure',applied);
@@ -108,8 +109,8 @@ export async function confirmClosure(tx: Transaction, input: Record<string,unkno
 /** New classes cannot be scheduled into an applied location closure. */
 export function refuseLocationClosures(state: State, classes: RecordData[]) {
   for (const c of classes) {
-    const closed = list(state,'closure').find(x => x.status === 'applied' && x.scope === 'location' && c.start < x.end && c.end > x.start);
-    insist(!closed,`Location closed ${closed?.start} to ${closed?.end}: ${closed?.reason}`,409);
+    const closed = list(state,'closure').find(x => x.status === 'applied' && x.scope === 'location' && (x.locationId ?? 'studio') === locationOf(c) && c.start < x.end && c.end > x.start);
+    insist(!closed,`${closed?.locationId && closed.locationId !== 'studio' ? `${locations(state).find(l => l.id === closed.locationId)?.name ?? 'Location'} closed` : 'Location closed'} ${closed?.start} to ${closed?.end}: ${closed?.reason}`,409);
   }
 }
 

@@ -14,7 +14,7 @@ export function makeupsPanel(s: any) {
   const participantName = (id: string) => data.participants?.find((p: any)=>p.id===id)?.name ?? 'Participant';
   const staff = owner(s), classes = rows(s,'classes'), classLabel = (classId: string) => {
     const entry = classes.find(c => c.id === classId);
-    return entry ? `${entry.title} · ${whenLabel(s,entry.start)}` : 'Original class';
+    return entry ? `${entry.title} · ${whenLabel(s, entry.start, entry.timeZone)}` : 'Original class';
   };
   const report = data.bookings.filter((b: any) => b.status === 'booked' && b.packId && !b.attendance && !b.makeupCreditId).map((b: any) =>
     `<div data-absence-booking="${h(b.id)}"><h3>${h(participantName(b.personId))} · ${h(classLabel(b.classId))}</h3>` + form('absence.preview',path,hidden('id',b.id)+request()+field('reason','Absence reason','','text','required maxlength="500"')+(staff ? channel() : ''),'Review absence')+'</div>').join('');

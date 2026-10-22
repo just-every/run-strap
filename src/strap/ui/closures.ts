@@ -1,7 +1,7 @@
 // SCHED-008 screens: the owner closes a room or the location, or cancels a
 // class, from an impact preview; afterwards each affected member's notice and
 // email outcome is shown exactly as recorded. Members read their notices.
-import { classTitle, upcoming } from './facts'
+import { classTitle, locationChoices, manyLocations, upcoming } from './facts'
 import { clock, dayOf, dayShort, when } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, person, rows, select, textarea } from './shared'
 
@@ -18,13 +18,13 @@ export const delivery = (d: any) => d ? ({
   paused: 'Email paused after restore; in-app notice only until you reconnect member email',
 } as Record<string, string>)[d.status] ?? d.status : ''
 
-const at = (s: any, value: string) => `${dayShort(s, dayOf(s, value))} · ${clock(s, value)}`
-const scopeText = (s: any, c: any) => c.scope === 'class' ? 'One class' : `${c.scope === 'room' ? `Room ${c.room}` : 'Whole location'}, ${at(s, c.start)} to ${at(s, c.end)}`
+const at = (s: any, value: string, zone?: string | null) => `${dayShort(s, dayOf(s, value, zone ?? undefined))} · ${clock(s, value, zone ?? undefined)}`
+const scopeText = (s: any, c: any) => c.scope === 'class' ? 'One class' : `${c.scope === 'room' ? `Room ${c.room}` : 'Whole location'}${manyLocations(s) ? ` at ${rows(s, 'locations').find(l => l.id === (c.locationId ?? 'studio'))?.name ?? 'the original location'}` : ''}, ${at(s, c.start, rows(s, 'locations').find(l => l.id === (c.locationId ?? 'studio'))?.timeZone)} to ${at(s, c.end, rows(s, 'locations').find(l => l.id === (c.locationId ?? 'studio'))?.timeZone)}`
 
 function impactList(s: any, c: any, deliveries: any[] = []) {
   const i = c.impact
   if (!i.classes.length) return emptyLine('No upcoming class is affected.')
-  return i.classes.map((x: any) => `<p><strong>${h(classTitle(x))}</strong> · ${h(at(s, x.start))}${x.room ? ` · ${h(x.room)}` : ''}</p><ul class="impact">${x.bookings.map((b: any) => `<li>${h(person(s, b.personId))}: ${b.status === 'booked' ? b.creditReturned ? 'credit returns to their pack' : 'unpaid visit closes, no credit used' : 'waitlist spot closes, no credit used'}${c.status === 'applied' ? ` · in-app notice · ${h(delivery(deliveries.find(d => d.sourceKind === 'closure' && d.sourceId === c.id && d.personId === b.personId)))}` : ''}</li>`).join('') || '<li>No bookings.</li>'}</ul>`).join('')
+  return i.classes.map((x: any) => `<p><strong>${h(classTitle(x))}</strong> · ${h(at(s, x.start, x.timeZone))}${manyLocations(s) && x.location ? ` · ${h(x.location)}` : ''}${x.room ? ` · ${h(x.room)}` : ''}</p><ul class="impact">${x.bookings.map((b: any) => `<li>${h(person(s, b.personId))}: ${b.status === 'booked' ? b.creditReturned ? 'credit returns to their pack' : 'unpaid visit closes, no credit used' : 'waitlist spot closes, no credit used'}${c.status === 'applied' ? ` · in-app notice · ${h(delivery(deliveries.find(d => d.sourceKind === 'closure' && d.sourceId === c.id && d.personId === b.personId)))}` : ''}</li>`).join('') || '<li>No bookings.</li>'}</ul>`).join('')
 }
 
 const totals = (c: any) => `<p class="meta">${c.impact.classes.length} ${c.impact.classes.length === 1 ? 'class' : 'classes'} cancelled · ${c.impact.members} ${c.impact.members === 1 ? 'member' : 'members'} notified · ${c.impact.creditsReturned} credits returned · ${c.impact.waitlistClosed} waitlist spots closed · no money moves (card refunds arrive with billing).</p>`
@@ -36,6 +36,7 @@ export function closuresPanel(s: any) {
   const done = rows(s, 'closures').filter(c => c.status === 'applied').sort((a, b) => b.appliedAt.localeCompare(a.appliedAt)).map(c => `<details class="more"><summary>${h(scopeText(s, c))}: ${h(c.reason)} · confirmed ${when(s, c.appliedAt)}</summary><div class="panel-body">${totals(c)}${impactList(s, c, rows(s, 'noticeDeliveries'))}</div></details>`).join('')
   const prepare = form('closure.prepare', '/app/classes', select('scope', 'What to close', [['class', 'Cancel one class'], ['room', 'Close a room'], ['location', 'Close the whole location']], 'class')
     + select('classId', 'Class (for one class)', [['', 'Choose a class'], ...open.map(c => [c.id, `${classTitle(c)} · ${at(s, c.start)}`] as [unknown, unknown])], '', '')
+    + (manyLocations(s) ? select('locationId', 'Location (for a room or location closure)', locationChoices(s), 'studio', '') : '')
     + field('room', 'Room (for a room closure)', '', 'text', 'maxlength="100"')
     + `<div class="row2">${field('startDate', 'Closed from (date)', '', 'date')}${field('startTime', 'Time', '', 'time')}</div><div class="row2">${field('endDate', 'Until (date)', '', 'date')}${field('endTime', 'Time', '', 'time')}</div>`
     + textarea('reason', 'Reason members will see', '', 'required maxlength="300" rows="2"'), 'Preview the impact', 'quiet')

@@ -4,30 +4,32 @@ import type { NoticeContext } from './notices';
 type Native = State['operator'];
 type PersonRow = Omit<Person, 'active' | 'erasedAt'> & { active: number; erased_at: number | null };
 const asPerson = (p: PersonRow): Person => ({ id:p.id,name:p.name,email:p.email,role:p.role,active:!!p.active,version:p.version,erasedAt:p.erased_at });
-function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = []): Actor {
+function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = [], managers: Map<string,string[]> = new Map()): Actor {
   insist(native?.status === 'active', 'signed_in_required', 401);
   const linked = people.find(p => p.active && !p.erasedAt && p.email?.toLowerCase() === native.email.toLowerCase());
   if (native.role === 'owner') return {id:native.id,email:native.email,role:requestedAgent?'agent':'owner',isOwner:true,...(linked && !requestedAgent ? {personId:linked.id}: {})};
   insist(!requestedAgent && linked, 'active_person_required', 403);
+  if (!finance.includes(linked.id) && managers.has(linked.id)) return {id:native.id,email:native.email,role:'manager',personId:linked.id,isOwner:false,locationIds:managers.get(linked.id)};
   return {id:native.id,email:native.email,role:finance.includes(linked.id) ? 'finance' : linked.role,personId:linked.id,isOwner:false};
 }
 const financeIds = (rows: unknown[]) => (rows as {person_id:string}[]).map(r => r.person_id);
+const managerScopes = (rows: unknown[]) => new Map((rows as {person_id:string;location_ids:string}[]).map(r => [r.person_id,JSON.parse(r.location_ids) as string[]]));
 export async function actor(db: D1Database, input: { userId: string; email: string; isOwner: boolean }): Promise<Actor> {
   const results = await db.batch([
     db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(input.userId),
-    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'),
+    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'),
   ]);
-  return resolve(results[0].results[0] as Native | undefined, (results[1].results as unknown as PersonRow[]).map(asPerson), false, financeIds(results[2].results));
+  return resolve(results[0].results[0] as Native | undefined, (results[1].results as unknown as PersonRow[]).map(asPerson), false, financeIds(results[2].results), managerScopes(results[3].results));
 }
 export async function load(db: D1Database, who: Actor): Promise<{ state: State; who: Actor }> {
   const rows = await db.batch([
     db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
     db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
-    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'),
+    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'),
   ]);
   const people = (rows[1].results as unknown as PersonRow[]).map(asPerson);
-  const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results));
-  insist(current.role === who.role && current.personId === who.personId && current.email === who.email, 'actor_changed', 403);
+  const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results), managerScopes(rows[5].results));
+  insist(current.role === who.role && current.personId === who.personId && current.email === who.email && JSON.stringify(current.locationIds) === JSON.stringify(who.locationIds), 'actor_changed', 403);
   current.sessionId = who.sessionId;
   const meta = rows[0].results[0] as {version:number};
   const state: State = {version:Number(meta.version),people,operator:rows[3].results[0] as Native,records:new Map()};

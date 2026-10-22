@@ -5,7 +5,8 @@ import { loadSystem } from './domain/store'
 import { list, shortName } from './domain/types'
 import { studioSettings } from './domain/studio'
 import { hash } from './credentials'
-import { booleanAttendanceReads, eventDelivery, scopeCatalogue } from './integrations'
+import { booleanAttendanceReads, eventDelivery, keyLocations, scopeCatalogue } from './integrations'
+import { locations as allLocations } from './domain/locations'
 import { attendanceRows, memberRefs } from './integration-attendance'
 
 export const schemaVersions = ['1']
@@ -31,15 +32,19 @@ const cursorAfter = (entry: { start: string; id: string }) => 'c1.' + btoa(JSON.
 
 /** Both scopes page the same classes. Attendance exposes outcome rows (API-003) to a key holding a
  * member-reference key and booleans only to older keys; roster fields remain unchanged. Erased people never appear. */
-async function classPage(env: Bindings, url: URL, attendance: 'roster' | 'boolean' | 'outcomes' = 'roster', refKey: string | null = null) {
+async function classPage(env: Bindings, url: URL, granted: string[], attendance: 'roster' | 'boolean' | 'outcomes' = 'roster', refKey: string | null = null) {
   const { limit, after } = page(url), { state } = await loadSystem(env.DB)
+  // Another location's data is refused, not silently filtered away, when a key asks for it by name.
+  const asked = url.searchParams.get('location')
+  if (asked !== null && !granted.includes(asked)) refuse(403, 'location_not_granted', { locations: granted })
   const people = new Map(state.people.filter(p => !p.erasedAt).map(p => [p.id, p]))
-  const classes = list(state, 'class').sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
+  const classes = list(state, 'class').filter(c => granted.includes(c.locationId ?? 'studio')).sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
     .filter(c => !after || c.start > after[0] || (c.start === after[0] && c.id > after[1]))
   const shown = classes.slice(0, limit), bookings = list(state, 'booking')
   const refs = attendance === 'outcomes' ? await memberRefs(refKey!, [...people.values()]) : new Map<string, string>()
   return {
-    location: { id: 'studio', name: studioSettings(state)?.location ?? null },
+    location: { id: granted[0], name: allLocations(state).find(l => l.id === granted[0])?.name ?? null },
+    locations: allLocations(state).filter(l => granted.includes(l.id)).map(l => ({ id: l.id, name: l.name })),
     data: shown.map(c => attendance === 'outcomes' ? {
       id: c.id, title: c.title, service: c.service, start: c.start, end: c.end, status: c.status,
       attendance: attendanceRows(bookings.filter(b => b.classId === c.id), people, refs),
@@ -93,12 +98,12 @@ export async function integrationResponse(request: Request, env: Bindings): Prom
     if (!schemaVersions.includes(version!)) refuse(400, 'unsupported_schema_version', { supported: schemaVersions })
     const scopes: string[] = JSON.parse(key.scopes)
     if (url.pathname === '/api/strap/integration/key') return await respond(200, {
-      schemaVersion: version, id: key.id, label: key.label, location: key.location, rateLimit,
+      schemaVersion: version, id: key.id, label: key.label, location: key.location, locations: keyLocations(key), rateLimit,
       scopes: scopes.map(scope => ({ name: scope, ...scopeCatalogue[scope as keyof typeof scopeCatalogue], ...(scope === 'attendance:read' && !key.member_ref_key ? { reads: booleanAttendanceReads } : {}) })),
       events: JSON.parse(key.events).map((name: string) => ({ name, delivery: eventDelivery })),
     })
-    if (url.pathname === '/api/strap/integration/roster' && scopes.includes('roster:read')) return await respond(200, { schemaVersion: version, scope: 'roster:read', ...await classPage(env, url) })
-    if (url.pathname === '/api/strap/integration/attendance' && scopes.includes('attendance:read')) return await respond(200, { schemaVersion: version, scope: 'attendance:read', ...await classPage(env, url, key.member_ref_key ? 'outcomes' : 'boolean', key.member_ref_key) })
+    if (url.pathname === '/api/strap/integration/roster' && scopes.includes('roster:read')) return await respond(200, { schemaVersion: version, scope: 'roster:read', ...await classPage(env, url, keyLocations(key)) })
+    if (url.pathname === '/api/strap/integration/attendance' && scopes.includes('attendance:read')) return await respond(200, { schemaVersion: version, scope: 'attendance:read', ...await classPage(env, url, keyLocations(key), key.member_ref_key ? 'outcomes' : 'boolean', key.member_ref_key) })
     refuse(403, 'scope_not_granted', { scopes })
   } catch (error) {
     const refusal = error as Refusal

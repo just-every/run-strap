@@ -12,8 +12,8 @@ export async function authMfaResponse(request: Request, env: Bindings): Promise<
   try {
     const who = { ...await actor(env.DB, { userId: session.operator.id, email: session.operator.email, isOwner: session.operator.role === 'owner' }), sessionId: session.id }
     const hold = await mfaHold(env, who, { path, privileged: true })
-    if (!hold && who.role !== 'finance') return null
-    return Response.json({ error: hold?.code ?? 'finance_reports_only' }, { status: 403, headers: { 'cache-control': 'no-store' } })
+    if (!hold && who.role !== 'finance' && who.role !== 'manager') return null
+    return Response.json({ error: hold?.code ?? `${who.role}_reports_only` }, { status: 403, headers: { 'cache-control': 'no-store' } })
   } catch (error) {
     return Response.json({ error: 'access_refused' }, { status: Number((error as any).status) || 403, headers: { 'cache-control': 'no-store' } })
   }

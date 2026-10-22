@@ -43,6 +43,17 @@ function people(s: any) {
   return panel('Who can sign in', body(`<p>Another owner resets a person’s second factors; you cannot reset your own. First confirm a fresh email link in this session and enter a reason. Their sessions end at once and they enroll again. Every reset appears in the staff history as <code>mfa.reset</code>.</p>${form('mfa.step-up', '/app/security', hidden('purpose', 'reset'), 'Confirm email before a reset', 'quiet')}<div class="table-wrap">${table(['Person', 'Role', 'Factors', ''], resets)}</div>`), { icon: 'users' })
     + panel('Finance users', body(`<p>A finance user opens the revenue and collections report and its downloads, behind a second factor, and nothing else. Invite the person from People first.</p>${grants ? `<div class="table-wrap">${table(['Person', ''], grants)}</div>` : emptyLine('No finance users.')}`
       + form('finance.grant', '/app/security', select('id', 'Person', [['', 'Choose a member with an email'], ...members.filter(p => !finance.has(p.id)).map(p => [p.id, `${p.name} (${p.email})`] as [string, string])], '', 'required'), 'Make finance user')), { icon: 'report' })
+    + managersPanel(s, members, finance)
+}
+
+/** STUDIO-002: location managers read the revenue and attendance reports of their locations, behind a second factor, and nothing else. */
+function managersPanel(s: any, members: any[], finance: Set<string>) {
+  const grants = new Map<string, string[]>((s.access.managers as any[]).map(m => [m.personId, m.locationIds]))
+  const places = rows(s, 'locations'), name = (id: string) => places.find(l => l.id === id)?.name ?? id
+  const lines = rows(s, 'people').filter(p => grants.has(p.id)).map(p => `<tr>${cell('Person', `<strong>${h(p.name)}</strong><small>${h(p.email)}</small>`)}${cell('Locations', h(grants.get(p.id)!.map(name).join(', ')))}${cell('', form('manager.revoke', '/app/security', hidden('id', p.id), 'Remove manager access', 'quiet', 'small'))}</tr>`).join('')
+  const checks = `<fieldset class="days"><legend>Locations they manage</legend>${places.map(l => `<label class="check"><input type="checkbox" name="loc_${h(l.id)}" value="true"> ${h(l.name)}</label>`).join('')}</fieldset>`
+  return panel('Location managers', body(`<p>A manager opens the revenue and attendance reports for the locations you choose, behind a second factor, and nothing else. Invite the person from People first.</p>${lines ? `<div class="table-wrap">${table(['Person', 'Locations', ''], lines)}</div>` : emptyLine('No location managers.')}`
+    + form('manager.grant', '/app/security', select('id', 'Person', [['', 'Choose a member with an email'], ...members.filter(p => !finance.has(p.id)).map(p => [p.id, `${p.name} (${p.email})`] as [string, string])], '', 'required') + checks, 'Make location manager')), { icon: 'pin' })
 }
 
 export function securityPage(s: any, query: URLSearchParams, notice: any) {

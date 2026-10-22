@@ -47,7 +47,7 @@ function expire(tx: Transaction, entry: RecordData) {
     tx.reached(booking.offer.expiresAt);
     tx.put('booking',{...booking,status:'cancelled',cancelledAt:at,cancelledBy:'system',cancelledByRole:'system',cancellation:'offer_expired',refunded:false,feeCents:0,offer:{...booking.offer,expiredAt:at}});
     putNotice(tx,{id:`notice:expired:${booking.id}`,personId:booking.personId,bookingId:booking.id,classId:entry.id,
-      subject:`Offer expired: ${titleOf(entry)}, ${whenText(tx.state,entry.start)}`,body:'The spot was not claimed in time, so it went to the next person waiting. You are off the waitlist; no credit was used.'});
+      subject:`Offer expired: ${titleOf(entry)}, ${whenText(tx.state,entry.start,entry.timeZone)}`,body:'The spot was not claimed in time, so it went to the next person waiting. You are off the waitlist; no credit was used.'});
   }
 }
 
@@ -72,12 +72,12 @@ export function promote(tx: Transaction, entry: RecordData) {
     const cutoff = lateCutoff(candidate,entry), late = now() >= cutoff;
     if (policy.lateWindow !== 'promote') { if (late) tx.reached(cutoff); else tx.future(cutoff); }
     if (late && policy.lateWindow === 'none') continue;
-    const title = titleOf(entry), when = whenText(tx.state,entry.start);
+    const title = titleOf(entry), when = whenText(tx.state,entry.start,entry.timeZone);
     if (candidate.moveFromBookingId || (late && policy.lateWindow === 'offer') || policy.mode === 'offer') {
       const expiresAt = new Date(Math.min(Date.parse(now())+policy.claimMinutes*60_000,Date.parse(entry.start))).toISOString();
       const offer = {id:id(),sentAt:now(),expiresAt,claimMinutes:policy.claimMinutes,...(source ? {sourceTerms:cancellationEffect(source,sourceEntry!).key} : {}),reason:late && policy.lateWindow === 'offer' ? 'late_window' : 'policy',policyRevision:policy.revision};
       tx.put('booking',{...candidate,status:'offered',offer});
-      const body = `A spot opened in ${title} on ${when}. Claim it in Strap by ${whenText(tx.state,expiresAt)}; after that it goes to the next person waiting. ${candidate.moveFromBookingId ? source?.packId ? 'Your original seat and credit stay reserved until you confirm the move. Claiming carries that credit; it does not use another.' : 'Your original unpaid visit stays booked until you confirm the move; no credit is used.' : 'A credit is used only when you claim it.'}`;
+      const body = `A spot opened in ${title} on ${when}. Claim it in Strap by ${whenText(tx.state,expiresAt,entry.timeZone)}; after that it goes to the next person waiting. ${candidate.moveFromBookingId ? source?.packId ? 'Your original seat and credit stay reserved until you confirm the move. Claiming carries that credit; it does not use another.' : 'Your original unpaid visit stays booked until you confirm the move; no credit is used.' : 'A credit is used only when you claim it.'}`;
       putNotice(tx,{id:`notice:offer:${candidate.id}`,personId:candidate.personId,bookingId:candidate.id,classId:entry.id,subject:`Spot offered: ${title}, ${when}`,body});
       reserveMail(tx,tx.notices,{id:`mail:offer:${candidate.id}`,category:'waitlist_offer',sourceKind:'booking',sourceId:candidate.id,personId:candidate.personId,bookingIds:[candidate.id],subject:`Spot offered: ${title}, ${when}`,body});
     } else {

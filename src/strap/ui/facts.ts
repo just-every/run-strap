@@ -1,7 +1,8 @@
 // Facts the screens read from the studio's records: who is in a class, which
 // credit a member can use, what they owe, and who needs a follow-up. Each is
 // derived from stored records only, by the same rules the domain applies.
-import { packServiceEligible } from '../domain/pack-credits'
+import { packServiceEligible, packServiceOnly } from '../domain/pack-credits'
+import { packLocationEligible } from '../domain/locations'
 import { countsCredits, heldVisits, planRefusal } from '../domain/entitlements'
 import { rows } from './shared'
 import { dayOf } from './format'
@@ -10,7 +11,7 @@ import { roomOf } from '../domain/scheduling'
 const now = () => Date.now()
 const time = (value: unknown) => Date.parse(String(value))
 
-export const classesOn = (s: any, date: string) => rows(s, 'classes').filter(c => dayOf(s, c.start) === date).sort((a, b) => a.start.localeCompare(b.start))
+export const classesOn = (s: any, date: string) => rows(s, 'classes').filter(c => dayOf(s, c.start, c.timeZone) === date).sort((a, b) => a.start.localeCompare(b.start))
 export const upcoming = (s: any) => rows(s, 'classes').filter(c => time(c.end) > now()).sort((a, b) => a.start.localeCompare(b.start))
 
 export function attendance(s: any, classId: string) {
@@ -24,9 +25,14 @@ export function attendance(s: any, classId: string) {
 /** The title before " · " is the class; after it, the room. */
 export const classTitle = (c: any) => String(c.title).split(' · ')[0]
 export const classRoom = (c: any) => roomOf(c)
+/** The studio's locations, and a select of them when there is more than one (STUDIO-002); one location needs no choice. */
+export const manyLocations = (s: any) => rows(s, 'locations').length > 1
+export const locationChoices = (s: any): [string, string][] => rows(s, 'locations').map(l => [l.id, l.name])
+/** The class's location, named only when the studio has several. */
+export const classPlace = (s: any, c: any) => manyLocations(s) ? String(c.location ?? '') : ''
 
 /** Why a PLAN-002 plan cannot hold one more visit in this class now (pack-credits.ts planBlock). */
-export const planBlock = (s: any, p: any, c: any) => p.entitlement ? planRefusal(p, c.start, heldVisits(p, rows(s, 'bookings'), id => rows(s, 'classes').find(x => x.id === id)?.start), s.studio?.timeZone ?? 'UTC', new Date().toISOString()) : null
+export const planBlock = (s: any, p: any, c: any) => p.entitlement ? planRefusal(p, c.start, heldVisits(p, rows(s, 'bookings'), id => rows(s, 'classes').find(x => x.id === id)?.start), s.studio?.timeZone ?? 'UTC', new Date().toISOString(), undefined, c.timeZone ?? s.studio?.timeZone ?? 'UTC') : null
 /** A pack can take one more booking in this class: a credit or a plan visit. */
 export const packCanSeat = (s: any, p: any, c: any) => (!countsCredits(p) || p.remaining > 0) && !planBlock(s, p, c)
 /** The credit or plan Strap would use to seat this member in this class (bookings.ts eligiblePack). */
@@ -38,7 +44,8 @@ const planReasons: Record<string, string> = { outside_plan_hours: 'Outside your 
 /** The plan refusal a member sees when no credit or plan covers this class. */
 export const planReason = (s: any, personId: string, c: any) => {
   const codes = rows(s, 'packs').filter(p => p.personId === personId && p.entitlement && packServiceEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now()).map(p => planBlock(s, p, c)).filter(Boolean)
-  return codes.length ? planReasons[codes[0]!] ?? null : null
+  if (codes.length) return planReasons[codes[0]!] ?? null
+  return rows(s, 'packs').some(p => p.personId === personId && packServiceOnly(p, c) && !packLocationEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now()) ? 'Your plan is not valid at this location' : null
 }
 /** What a pack has left now, in words. */
 export const packLeft = (p: any) => countsCredits(p) ? `${p.remaining} of ${p.credits} left`

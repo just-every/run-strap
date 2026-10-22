@@ -4,7 +4,8 @@ import { humanOwner, id, insist, list, now, person, record, text, type RecordDat
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly, windowOpen } from './booking-policy';
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
-import { appendPackEvent, bookingCredit, packCanSeat, packServiceEligible, planBlock } from './pack-credits';
+import { appendPackEvent, bookingCredit, packCanSeat, packServiceEligible, packServiceOnly, planBlock } from './pack-credits';
+import { packLocationEligible } from './locations';
 import { bookingHistory, staffReason } from './booking-history';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
@@ -37,7 +38,8 @@ export function planRefused(state: State, personId: string, entry: RecordData) {
     const code = planBlock(state,pack,entry);
     if (code) return {pack,code};
   }
-  return null;
+  const elsewhere = list(state,'pack').find(p => p.personId === personId && packServiceOnly(p,entry) && !packLocationEligible(p,entry) && p.expiresAt > entry.start && p.expiresAt > now());
+  return elsewhere ? {pack:elsewhere,code:'plan_location_not_eligible'} : null;
 }
 function ownMember(tx: Transaction) {
   insist(tx.who.role === 'member' || tx.who.role === 'instructor','member_required',403);

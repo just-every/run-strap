@@ -3,6 +3,9 @@ import type { Transaction } from './store';
 import { approveDraft } from './drafts';
 import { refuseSchedulingConflicts, schedulingConflicts, schedulingFields } from './scheduling';
 import { refuseLocationClosures } from './closures';
+import { locationById, ORIGINAL_LOCATION } from './locations';
+import { studioSettings } from './studio';
+import type { State } from './types';
 
 // Adapted from Dial availability/windows.ts -> weekdayForDate in timezone.ts.
 // Source: dial/src/core/features/availability/{windows,timezone}.ts
@@ -34,9 +37,16 @@ function checkClasses(tx: Transaction, classes: RecordData[], week: string) {
   checkAllocations(tx,classes);
 }
 /** Shared class normalization for week and recurring timetable doors. */
+/** STUDIO-002: a class belongs to one location and is entered and shown on that location's clock. */
+function placement(state: State, entry: Record<string,unknown>) {
+  const key = entry.locationId ?? ORIGINAL_LOCATION;
+  if (key === ORIGINAL_LOCATION && !studioSettings(state)) return {};
+  const place = locationById(state,key);
+  return {locationId:place.id,location:place.name,timeZone:place.timeZone};
+}
 export function classFields(tx: Transaction, entry: Record<string,unknown>): RecordData {
   const instructor = person(tx.state,entry.instructorId);
-  return {id:id(),title:text(entry.title,'title',160),service:text(entry.service || entry.title,'service',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),onlineCapacity:integer(entry.onlineCapacity ?? entry.capacity,'online_capacity',0,integer(entry.capacity,'capacity',1,1000)),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...schedulingFields(entry)};
+  return {id:id(),title:text(entry.title,'title',160),service:text(entry.service || entry.title,'service',160),start:instant(entry.start,'start'),end:instant(entry.end,'end'),localDate:String(entry.start).slice(0,10),capacity:integer(entry.capacity,'capacity',1,1000),onlineCapacity:integer(entry.onlineCapacity ?? entry.capacity,'online_capacity',0,integer(entry.capacity,'capacity',1,1000)),instructorId:instructor.id,instructorName:instructor.name,instructorVersion:instructor.version,...placement(tx.state,entry),...schedulingFields(entry)};
 }
 
 export function prepareClasses(tx: Transaction, input: Record<string, unknown>) {

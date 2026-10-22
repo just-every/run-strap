@@ -27,7 +27,7 @@ const codeCard = (code: any, label: string) => `<div class="checkin-code">${qrSv
 export function memberCheckin(s: any) {
   const open = rows(s, 'bookings').filter(b => b.personId === s.actor.personId && b.status === 'booked' && b.checkinOpen)
     .map(b => ({ b, c: rows(s, 'classes').find(c => c.id === b.classId) })).filter(x => x.c)
-  const seats = open.map(({ b, c }) => `<p>${h(classTitle(c))} · ${h(clock(s, c.start))} ${b.checkedInAt || b.attendance ? '<span class="pill done">Checked in</span>' : form('attendance.self', '/app', hidden('id', b.id), 'Check in', 'primary', 'small')}</p>`).join('')
+  const seats = open.map(({ b, c }) => `<p>${h(classTitle(c))} · ${h(clock(s, c.start, c.timeZone))} ${b.checkedInAt || b.attendance ? '<span class="pill done">Checked in</span>' : form('attendance.self', '/app', hidden('id', b.id), 'Check in', 'primary', 'small')}</p>`).join('')
   const code = rows(s, 'checkinCodes').find(c => c.personId === s.actor.personId)
   return panel('Check in', body(`${seats || '<p class="meta">Check-in opens an hour before each class you booked.</p>'}${code ? `${codeCard(code, 'Your check-in code')}<p class="meta">Show this code at the studio’s kiosk or front desk.</p>` : form('checkin.code', '/app', '', 'Show my check-in code', 'quiet', 'small')}`), { icon: 'scan' })
 }

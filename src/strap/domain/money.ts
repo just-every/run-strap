@@ -6,6 +6,7 @@ import { promoteAll } from './bookings';
 import { settleUnpaid } from './desk';
 import { appendPackEvent, packEvents } from './pack-credits';
 import { countsCredits, parsePlan } from './entitlements';
+import { packPlaces, placeId } from './locations';
 
 export function balance(state: State, personId: string) {
   return list(state,'charge').filter(r => r.personId === personId).reduce((sum,r) => sum+r.amountCents,0)
@@ -23,7 +24,7 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   if (entitlement && entitlement.kind !== 'credits') insist(input.credits === undefined || input.credits === null || input.credits === '','plan_has_no_credit_count');
   const guestTerms = parseGuestTerms(input.guestTerms);
   const initiationFeeCents = integer(input.initiationFeeCents === undefined ? 0 : input.initiationFeeCents,'initiationFeeCents',0,100_000_000);
-  const draft = {guestTerms,eligibleServices,priorityBooking,...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const draft = {guestTerms,eligibleServices,priorityBooking,...packPlaces(tx.state,input),...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -35,7 +36,7 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
@@ -77,7 +78,7 @@ export function recordPayment(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const member = person(tx.state,input.personId,false), reference = text(input.reference,'reference',160);
   insist(!list(tx.state,'payment').some(p => p.reference === reference),'payment_reference_used',409);
-  const payment = {id:id(),personId:member.id,amountCents:integer(input.amountCents,'amountCents',1,100_000_000),reference,createdAt:now(),recordedBy:tx.who.id};
+  const payment = {id:id(),personId:member.id,locationId:placeId(tx.state,input.locationId),amountCents:integer(input.amountCents,'amountCents',1,100_000_000),reference,createdAt:now(),recordedBy:tx.who.id};
   tx.put('payment',payment); return payment;
 }
 // Adapted Nectar src/nectar/collections.ts reminderBasis/basisKey and

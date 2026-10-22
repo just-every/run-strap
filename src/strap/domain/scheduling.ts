@@ -1,5 +1,6 @@
 import { humanOwner, id, instant, integer, insist, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
+import { locationById } from './locations';
 
 type ResourceKind = 'instructor' | 'room' | 'equipment';
 interface Resource { kind: ResourceKind; id: string; label: string }
@@ -15,11 +16,14 @@ export const resourceLabel = (value: string) => value.trim().replace(/\s+/g, ' '
 const resourceKey = (value: string) => resourceLabel(value).toLowerCase();
 export const roomOf = (c: RecordData): string => c.room ?? String(c.title ?? '').split(' · ').slice(1).join(' · ');
 
+/** Rooms and equipment belong to a location (STUDIO-002); instructors belong to the business. The original location keeps its plain keys. */
+export const placeKey = (locationId: unknown) => locationId && locationId !== 'studio' ? `${locationId}:` : '';
 export function classResources(c: RecordData): Resource[] {
+  const place = placeKey(c.locationId);
   return [
     {kind:'instructor' as const,id:c.instructorId,label:c.instructorName ?? c.instructorId},
-    ...(roomOf(c) ? [{kind:'room' as const,id:resourceKey(roomOf(c)),label:roomOf(c)}] : []),
-    ...(c.equipment ?? []).map((label: string) => ({kind:'equipment' as const,id:resourceKey(label),label})),
+    ...(roomOf(c) ? [{kind:'room' as const,id:place+resourceKey(roomOf(c)),label:roomOf(c)}] : []),
+    ...(c.equipment ?? []).map((label: string) => ({kind:'equipment' as const,id:place+resourceKey(label),label})),
   ];
 }
 
@@ -71,10 +75,12 @@ export function saveUnavailability(tx: Transaction, input: Record<string,unknown
   const previous = input.id ? record(tx.state,input.id,'unavailability') : null;
   const kind = text(input.resourceKind,'resource_kind');
   insist(['instructor','room','equipment'].includes(kind),'invalid_resource_kind');
-  const resourceId = kind === 'instructor' ? person(tx.state,input.resourceId).id : resourceLabel(text(input.resourceId,'resource',100));
-  const instructor = kind === 'instructor' ? person(tx.state,resourceId) : null;
+  const label = kind === 'instructor' ? person(tx.state,input.resourceId).id : resourceLabel(text(input.resourceId,'resource',100));
+  const instructor = kind === 'instructor' ? person(tx.state,label) : null;
   insist(!instructor || instructor.role === 'instructor','instructor_required');
-  const entry = {id:previous?.id ?? id(),resourceKind:kind,resourceId,resourceName:instructor?.name ?? resourceId,
+  const place = kind === 'instructor' || input.locationId === undefined ? undefined : locationById(tx.state,input.locationId).id;
+  const resourceId = place ? placeKey(place)+label : label;
+  const entry = {id:previous?.id ?? id(),resourceKind:kind,resourceId,resourceName:instructor?.name ?? label,...(place ? {locationId:place} : {}),
     start:instant(input.start,'start'),end:instant(input.end,'end'),reason:text(input.reason,'reason',300),status:'active',
     createdAt:previous?.createdAt ?? now(),createdBy:previous?.createdBy ?? tx.who.id,updatedAt:now(),updatedBy:tx.who.id};
   insist(entry.end > entry.start,'unavailability_end_must_follow_start');

@@ -55,7 +55,7 @@ function effect(s: any, value: any) {
   if (value.offerId && value.offerName && value.days) return `Intro ${value.packId ? 'purchase' : 'preview'}: ${h(value.offerName)} · ${value.credits} visits for ${value.days} days · ${money(value.amountCents)} studio-balance charge${value.exceptionReason ? ` · eligibility exception: ${h(value.exceptionReason)}` : ''}${value.expiresAt ? ` · ends ${when(s,value.expiresAt)}` : ''}`;
   if (Array.isArray(value.outcomes)) {
     const items = value.cancellationEffects ?? value.outcomes;
-    return `Recurring reservation · ${h(value.status)}<br>` + items.map((o: any) => `${when(s,o.start)} · ${h(value.status === 'cancelled' ? 'Cancelled' : value.operation === 'cancel' ? 'To cancel' : o.status)}${o.reason ? ` · ${h(o.reason.replace(/_/g,' '))}` : ''}${o.effect ? ` · ${o.effect.creditReturned ? 'credit returns' : 'no credit returned'} · ${money(o.effect.feeCents)} fee` : ''}`).join('<br>');
+    return `Recurring reservation · ${h(value.status)}<br>` + items.map((o: any) => `${when(s, o.start, o.timeZone)} · ${h(value.status === 'cancelled' ? 'Cancelled' : value.operation === 'cancel' ? 'To cancel' : o.status)}${o.reason ? ` · ${h(o.reason.replace(/_/g,' '))}` : ''}${o.effect ? ` · ${o.effect.creditReturned ? 'credit returns' : 'no credit returned'} · ${money(o.effect.feeCents)} fee` : ''}`).join('<br>');
   }
   if ('emergencyContact' in value) return profileText(value)
   if (typeof value.issued === 'boolean') return value.issued ? `Check-in code revision ${h(value.codeRevision)}${value.codeIssuedAt ? ` · issued ${when(s,value.codeIssuedAt)}` : ''}` : 'No check-in code issued'

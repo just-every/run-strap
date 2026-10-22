@@ -1,9 +1,11 @@
 import { field, h, hidden, textarea } from './shared'
+import { phoneText } from './profile'
 
 export function studioProfileFields(studio: any = {}) {
   const address = studio.address ?? {}, hours = studio.businessHours ?? []
   return hidden('profile','true')
     + field('legalName','Legal studio name',studio.legalName ?? '', 'text','maxlength="160" autocomplete="organization"')
+    + field('phone','Studio phone (US number)',phoneText(studio.phone),'tel','autocomplete="tel" maxlength="20" placeholder="(615) 555-0100"','A 10-digit US number; a leading +1 is assumed')
     + '<fieldset><legend>US studio address</legend>'
     + field('line1','Street address',address.line1 ?? '','text','maxlength="160" autocomplete="address-line1"')
     + field('line2','Suite or unit',address.line2 ?? '','text','maxlength="160" autocomplete="address-line2"')
