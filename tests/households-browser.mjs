@@ -16,7 +16,7 @@ export async function householdsBrowser(h, { priya, sam, miaId, noahId, mat, flo
         await desk.page.goto(h.origin + '/app/households')
         const panel = desk.page.locator(`#household-${home.id}`)
         const text = await panel.innerText()
-        for (const fact of ['Okafor family', 'Priya', 'Mia Okafor', 'Ola Okafor', 'Aunt Ada', 'Sam has been asked to become the payer']) assert.ok(text.includes(fact), `${fact} in ${JSON.stringify(text.slice(0, 1500))}`)
+        for (const fact of ['Okafor family', 'Priya', 'Mia Okafor', 'Ola Okafor', 'Aunt Ada', width === 1440 ? 'Sam has been asked to become the payer' : 'Payer: Sam']) assert.ok(text.includes(fact), `${fact} in ${JSON.stringify(text.slice(0, 1500))}`)
         await shot(desk.page, width, 'desk-household', 'Okafor family')
       } finally { await desk.context.close() }
       const guardian = await session(h, priya.cookie, width, browser)

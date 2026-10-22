@@ -449,7 +449,7 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from the code and tests at commit `fe5b0869b93c543c1d3a5b32444c2aa81a9f7c6e` (22 October 2026); the ruled freeze foundation is DONE and the native cancellation/refund foundation remains PARTIAL with the remaining legal, provider and product gaps named below.
+Judged from the code and tests at commit `61343c66bc17860836dcdd7945a95caa6297db44` (22 October 2026); locations (STUDIO-001, STUDIO-002) are DONE and households (MEM-002) PARTIAL; the ruled freeze foundation is DONE and the native cancellation/refund foundation remains PARTIAL with the remaining legal, provider and product gaps named below.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |

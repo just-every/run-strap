@@ -90,7 +90,7 @@ export async function managerBrowser(h, cookie, { name, other }) {
           await manager.page.goto(h.origin + path)
           const text = await manager.page.locator('main').innerText()
           assert.ok(text.includes(name) && !text.includes(other), `${path} names ${name} only`)
-          await shot(manager.page, width, `manager${path.slice(4)}`, heading)
+          await shot(manager.page, width, `manager-${path.slice(5)}`, heading)
         }
         assert.equal((await manager.page.goto(h.origin + '/app/people')).status(), 403)
       } finally { await manager.context.close() }
