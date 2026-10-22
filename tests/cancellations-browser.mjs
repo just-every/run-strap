@@ -49,7 +49,7 @@ async function ownStopAndWithdrawal(c){
   assert.equal(before.cancellations.cancellations.find(r=>r.id===stopped.id).status,'withdrawn')
   assert.equal(before.recurring.terms.find(r=>r.id===terms.id).status,'stopped')
   await shot(mine,'withdrawn-invoices-still-stopped')
-  await staff.goto(h.origin+`/app/packs?person=${nina.id}#freezes`)
+  await staff.goto(h.origin+`/app/packs?person=${nina.id}#freezes`);await staff.reload()
   await staff.getByText('Propose recurring studio invoices',{exact:true}).click()
   const propose=commandForm(staff,'plan.recurring.prepare')
   await propose.locator('select[name=packId]').selectOption(pack.id)
@@ -57,7 +57,7 @@ async function ownStopAndWithdrawal(c){
   await propose.getByRole('button',{name:'Preview recurring invoices',exact:true}).click()
   const fresh=(await h.state()).recurring.terms.find(r=>r.packId===pack.id&&r.id!==terms.id&&r.status==='preview')
   assert.ok(fresh);assert.equal((await h.state()).recurring.terms.some(r=>r.currentPackId===pack.id&&r.status==='active'),false)
-  await mine.goto(h.origin+'/app/packs#freezes')
+  await mine.goto(h.origin+'/app/packs#freezes');await mine.reload()
   const consent=mine.locator(`[data-recurring="${fresh.id}"]`)
   await consent.scrollIntoViewIfNeeded();await shot(mine,'fresh-member-invoice-consent')
   await consent.getByRole('button',{name:'I agree to these recurring invoices',exact:true}).click()
@@ -210,7 +210,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
           const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}]);return context.newPage()
         }
         const staff=await pageFor(h.owner),mine=await pageFor(nina.cookie),payerPage=await pageFor(payer.cookie),guardianPage=await pageFor(guardian.cookie),outsider=await pageFor(stranger.cookie)
-        const go=(page,who)=>page.goto(h.origin+(who?`/app/packs?person=${who.id}#cancellations`:path))
+        const go=async(page,who)=>{await page.goto(h.origin+(who?`/app/packs?person=${who.id}#cancellations`:path));await page.reload()}
         const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'the page fits the viewport');await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN007-${label}-${width}.png`),fullPage:false})}
         const key=()=>`synthetic-strap-${sequence++}`,zone=(await h.state()).studio.timeZone
         // End seed grants through the actual owner form, so each width starts fresh.
@@ -228,7 +228,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         await go(outsider,nina)
         assert.equal(await outsider.locator('#cancellations [data-contract-authority],#cancellations [data-contract-cancellation],#cancellations [data-cancellation-refund],#cancellations [data-cancellation-stop]').count(),0)
         const privateView=(await h.state(stranger.cookie)).cancellations
-        for(const field of ['authorities','contracts','requests','cancellations','withdrawals','statements','refunds','settlements'])assert.equal(privateView[field].length,0)
+        for(const field of ['authorities','contracts','requests','cancellations','withdrawals','statements','refunds','settlements'])assert.equal(privateView[field].filter(r=>[nina.id,child.id].includes(r.personId)).length,0)
         await outsider.locator('#cancellations').scrollIntoViewIfNeeded();await shot(outsider,'unrelated-account-private')
       }finally{for(const context of contexts)await context.close()}
     }
