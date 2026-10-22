@@ -160,9 +160,9 @@ async function authorityJourneys(c){
     await go(page)
     await page.locator(`[data-contract-authority="${grant.id}"]`).getByRole('button',{name:'Accept my cancellation authority',exact:true}).click()
   }
+  const payerPlan=await saleAndAgreement(h,nina,key())
   const payerGrant=await record(nina,payer,'payer')
   await accept(mine,payerGrant);await accept(payerPage,payerGrant)
-  const payerPlan=await saleAndAgreement(h,nina,key())
   await go(payerPage)
   const payerStop=payerPage.locator(`[data-cancellation-stop="${payerPlan.terms.id}"]`)
   assert.equal(await payerStop.locator('[name=reason]').count(),0)

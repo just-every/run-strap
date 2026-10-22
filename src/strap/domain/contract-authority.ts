@@ -16,7 +16,9 @@ export function saveContractAuthority(tx: Transaction, input: Record<string,unkn
   const evidenceReference = text(input.evidenceReference,'evidenceReference',200);
   const prior = list(tx.state,'contractAuthority').find(g => g.personId === member.id && g.delegateId === delegate.id && g.kind === kind && !g.revokedAt);
   if (prior) { insist(prior.evidenceReference === evidenceReference && prior.adultOn === adultOn,'authority_changed',409); return prior; }
-  const grant = {id:id(),personId:member.id,delegateId:delegate.id,kind,adultOn,adultAt,evidenceReference,verifiedAt:now(),verifiedBy:tx.who.id,memberAcceptedAt:null,delegateAcceptedAt:null,revokedAt:null};
+  const agreementIds=kind==='payer'?list(tx.state,'recurringTerms').filter(t=>t.personId===member.id&&t.acceptedAt&&t.currentPackId).map(t=>t.id):[];
+  insist(kind!=='payer'||agreementIds.length>0,'accepted_recurring_terms_required',409);
+  const grant = {agreementIds,id:id(),personId:member.id,delegateId:delegate.id,kind,adultOn,adultAt,evidenceReference,verifiedAt:now(),verifiedBy:tx.who.id,memberAcceptedAt:null,delegateAcceptedAt:null,revokedAt:null};
   tx.put('contractAuthority',grant); return grant;
 }
 export function acceptContractAuthority(tx: Transaction, input: Record<string,unknown>) {
@@ -38,17 +40,17 @@ export function revokeContractAuthority(tx: Transaction, input: Record<string,un
   const revoked = {...grant,revokedAt:now(),revokedBy:tx.who.id,revocationReason:reason}; tx.put('contractAuthority',revoked); return revoked;
 }
 export const activeContractAuthorities = (state: State, personId: string) => list(state,'contractAuthority').filter(g => g.personId === personId && !g.revokedAt && g.delegateAcceptedAt && (g.kind === 'payer' ? !!g.memberAcceptedAt : g.kind === 'minor-guardian' && g.adultAt>now()) && state.people.some(p => p.id === g.delegateId && p.active && !p.erasedAt));
-export function canCancelContract(state: State, who: Actor, personId: string) {
+export function canCancelContract(state: State, who: Actor, personId: string, termsId?:string) {
   if(!state.people.some(p=>p.id===personId&&p.active&&!p.erasedAt))return false;
-  return who.role === 'owner' && who.isOwner || who.role === 'member' && (who.personId === personId || activeContractAuthorities(state,personId).some(g => g.delegateId === who.personId));
+  return who.role === 'owner' && who.isOwner || who.role === 'member' && (who.personId === personId || activeContractAuthorities(state,personId).some(g => g.delegateId === who.personId && (g.kind==='minor-guardian'||!!termsId&&g.agreementIds?.includes(termsId))));
 }
-export function authorizeContractCancellation(tx:Transaction,personId:string){
-  insist(canCancelContract(tx.state,tx.who,personId),'contract_not_found',404);
-  if(tx.who.role==='member'&&tx.who.personId!==personId){const grant=activeContractAuthorities(tx.state,personId).find(g=>g.delegateId===tx.who.personId);insist(grant,'contract_not_found',404);if(grant.kind==='minor-guardian')tx.future(grant.adultAt);}
+export function authorizeContractCancellation(tx:Transaction,personId:string,termsId:string){
+  insist(canCancelContract(tx.state,tx.who,personId,termsId),'contract_not_found',404);
+  if(tx.who.role==='member'&&tx.who.personId!==personId){const grant=activeContractAuthorities(tx.state,personId).find(g=>g.delegateId===tx.who.personId&&(g.kind==='minor-guardian'||g.agreementIds?.includes(termsId)));insist(grant,'contract_not_found',404);if(grant.kind==='minor-guardian')tx.future(grant.adultAt);}
 }
-export const contractRecipients = (state: State, personId: string) => [...new Set([personId,...activeContractAuthorities(state,personId).filter(g => g.kind === 'payer').map(g => g.delegateId)])];
+export const contractRecipients = (state: State, personId: string, termsId:string) => [...new Set([personId,...activeContractAuthorities(state,personId).filter(g => g.kind === 'payer'&&g.agreementIds?.includes(termsId)).map(g => g.delegateId)])];
 export function contractAuthoritySnapshot(state: State, who: Actor) {
-  return list(state,'contractAuthority').filter(g => who.role === 'owner' && who.isOwner || who.role === 'member' && [g.personId,g.delegateId].includes(who.personId)).map(g => who.role === 'owner' ? g : {id:g.id,personId:g.personId,delegateId:g.delegateId,kind:g.kind,adultOn:g.adultOn,adultAt:g.adultAt,memberAcceptedAt:g.memberAcceptedAt,delegateAcceptedAt:g.delegateAcceptedAt,revokedAt:g.revokedAt});
+  return list(state,'contractAuthority').filter(g => who.role === 'owner' && who.isOwner || who.role === 'member' && [g.personId,g.delegateId].includes(who.personId)).map(g => who.role === 'owner' ? g : {id:g.id,personId:g.personId,participantName:person(state,g.personId,false).name,delegateName:person(state,g.delegateId,false).name,delegateId:g.delegateId,agreementIds:g.agreementIds,agreements:(g.agreementIds??[]).flatMap((id:string)=>{const t=state.records.get(id)?.data;return t?[{amountCents:t.amountCents,intervalMonths:t.intervalMonths,firstDueAt:t.firstDueAt,timeZone:t.timeZone}]:[];}),kind:g.kind,adultOn:g.adultOn,adultAt:g.adultAt,memberAcceptedAt:g.memberAcceptedAt,delegateAcceptedAt:g.delegateAcceptedAt,revokedAt:g.revokedAt});
 }
 
 export function launchContractAuthority(tx:Transaction,input:Record<string,unknown>){humanOwner(tx.who);text(input.requestId,'requestId',100);const grant=record(tx.state,input.id,'contractAuthority');return {id:id(),personId:grant.personId,previewId:grant.id,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23cancellations'};}
