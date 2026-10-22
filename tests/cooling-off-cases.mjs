@@ -2,18 +2,19 @@ import assert from 'node:assert/strict'
 
 /** Recorded historical contracts use the real HTTP doors, not a production clock override. */
 export async function coolingOffCases(h){
-  let sequence=800
+  let sequence=800,personIndex=0
+  const names=['Georgia Reed','Grace Ward','Carmen Diaz','Clara Mills','Maya Chen','Iris Cole','Daria Lane','Nolan Vega','Alice Vale','Owen Ross','Mila Reed','Ian Cole','Nadia Park','Wren Lee','Holly Reid','Mara Stone','Gia Ford','Greta Lane','Cara Hill','James Ellis','Harper Reed','Leo Ames']
   const key=()=>`synthetic-strap-${sequence++}`
   const hours=[1,2,3,4,5,6].map(day=>({day,opens:'09:00',closes:'17:00'}))
   await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',businessHours:hours})
   const save=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
   const agreement=async({region='TX',amount=10000,acceptedAt='2026-01-05T09:00:00.000Z',deliveredAt=acceptedAt,renewal,intervalMonths=1}={})=>{
-    const member=await h.person('Cooling'+sequence)
-    const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:amount,expiresAt:'2099-12-31T00:00:00.000Z'})).id})
+    const member=await h.person('member'+sequence);await h.cmd('person.save',{id:member.id,name:names[personIndex++],email:member.email,role:'member',active:true})
+    const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:amount,expiresAt:'2027-01-05T07:00:00.000Z'})).id})
     let pack=(await h.state()).packs.find(p=>p.id===approved.id)
     const preview=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths,requestId:key()})
     const terms=await h.cmd('plan.recurring.accept',{id:preview.id,key:preview.key},member.cookie)
-    await save('recurringTerms',{...terms,acceptedAt})
+    await save('recurringTerms',{...terms,acceptedAt});pack={...pack,termStartAt:acceptedAt,createdAt:acceptedAt};await save('pack',pack)
     await h.cmd('contract.jurisdiction.save',{personId:member.id,region,evidenceReference:key()})
     let contract=(await h.state()).cancellations.contracts.find(t=>t.id===terms.id)
     if(deliveredAt)await h.cmd('contract.copy.delivery.record',{termsId:terms.id,digest:contract.copy.digest,deliveredAt,evidenceReference:key(),requestId:key()})
