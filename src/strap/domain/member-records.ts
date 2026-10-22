@@ -83,6 +83,9 @@ export function confirmMemberMerge(tx: Transaction,input: Record<string,unknown>
   tx.sql.push(tx.statement('UPDATE st_people SET active=0,version=version+1 WHERE id=?',source.id));
   return merged;
 }
+// Front desk reads credits, bookings and attendance; prices, fees and payers stay in the owner's financial history.
+const deskPack = (r: RecordData) => ({id:r.id,personId:r.personId,plan:r.entitlement?.name ?? 'Class credits',credits:r.credits,remaining:r.remaining,expiresAt:r.expiresAt,locationId:r.locationId});
+const deskBooking = (r: RecordData) => ({id:r.id,personId:r.personId,classId:r.classId,status:r.status,attendance:r.attendance ?? null,createdAt:r.createdAt,cancelledAt:r.cancelledAt ?? null});
 /** Dated source records, never synthetic merged balances, permissions or consent. */
 export function memberHistory(state: State,who: Actor,personId: string) {
   requireMemberRecord(state,who,personId);
@@ -95,7 +98,8 @@ export function memberHistory(state: State,who: Actor,personId: string) {
       record:kind === 'staffAction' ? {id:r.id,personId:r.personId,command:r.command,actorId:r.actorId,actorRole:r.actorRole,staffMade:r.staffMade,channel:r.channel,right:r.right,at:r.at} : r})))
     .filter(e => who.role === 'owner' || (['profileChange','memberMessage','memberInvitation'].includes(e.kind) || (e.kind === 'staffAction' && ['member.record.create','profile.save.staff','member.record.invite','member.message.send.staff'].includes(e.record.command)))).sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
   return {personId:member.id,profile:profileOf(state,member),sourceIdentities:ids.map(key => person(state,key,false)),timeline,
-    notes:who.role === 'owner' ? own('memberNote') : [],preferences:own('memberPreference').map(p => visiblePreferences(p,who)),packs:own('pack'),bookings:own('booking'),waivers:own('acknowledgement'),
+    notes:who.role === 'owner' ? own('memberNote') : [],preferences:own('memberPreference').map(p => visiblePreferences(p,who)),
+    packs:who.role === 'owner' ? own('pack') : own('pack').map(deskPack),bookings:who.role === 'owner' ? own('booking') : own('booking').map(deskBooking),waivers:own('acknowledgement'),
     ledger:who.role === 'owner' ? [...own('charge').map(r => ({...r,kind:'charge'})),...own('payment').map(r => ({...r,kind:'payment'}))] : [],
     merges:who.role === 'owner' ? list(state,'memberMerge').filter(m => ids.includes(m.sourceId) || ids.includes(m.targetId)) : []};
 }
