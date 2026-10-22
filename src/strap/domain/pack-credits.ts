@@ -3,7 +3,7 @@ import { releaseMakeupCredit } from './makeups';
 import { guestLedger, releaseGuest } from './guest-bookings';
 import { id, insist, list, now, record, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { countsCredits, heldVisits, periodEndsAt, periodOf, periods, planOf, planRefusal, planStart, visitsLeft } from './entitlements';
+import { allowanceAt, countsCredits, heldVisits, periodEndsAt, periodOf, periods, planOf, planRefusal, planStart, visitsLeft } from './entitlements';
 import { studioSettings } from './studio';
 
 /** Service labels are identities within a studio, independent of rooms. */
@@ -108,12 +108,14 @@ function planSummary(state: State, pack: RecordData, reservations: Map<string,st
   const totals = {...counts([...reservations.keys()]),returned:returns.length};
   if (plan.kind === 'unlimited') return {kind:plan.kind,...totals,periods:[],left:null};
   const startOfClass = (classId: string) => state.records.get(classId)?.data.start as string | undefined;
-  const periodOfBooking = (bookingId: string) => { const start = startOfClass(state.records.get(bookingId)?.data.classId); return start ? periodOf(plan,start,zone) : null; };
+  const periodOfBooking = (bookingId: string) => { const start = startOfClass(state.records.get(bookingId)?.data.classId); return start ? periodOf(plan,allowanceAt(pack,start),zone) : null; };
   // Periods run from the plan's start through now (or its earlier expiry), never before the start.
-  const through = new Date(Math.max(Date.parse(planStart(pack)),Math.min(at,expiresAt))).toISOString();
-  const rows = periods(plan,held.map(item => item.start),zone,planStart(pack),through).map(p => {
-    const endsAt = periodEndsAt(plan,p.start,zone), last = expiresAt <= Date.parse(endsAt), ended = Date.parse(endsAt) <= at || (last && expiresAt <= at);
-    return {...p,endsAt,ended,...counts(held.filter(item => periodOf(plan,item.start,zone) === p.start).map(item => item.id)),
+  const through = allowanceAt(pack,new Date(Math.max(Date.parse(planStart(pack)),Math.min(at,expiresAt-1))).toISOString());
+  const finalPeriod = periodOf(plan,allowanceAt(pack,new Date(expiresAt-1).toISOString()),zone);
+  const rows = periods(plan,held.map(item => allowanceAt(pack,item.start)),zone,planStart(pack),through).map(p => {
+    const calendarEndsAt = periodEndsAt(plan,p.start,zone), last = p.start === finalPeriod;
+    const endsAt = last ? pack.expiresAt : calendarEndsAt, ended = Date.parse(endsAt) <= at;
+    return {...p,endsAt,calendarEndsAt,...(pack.allowanceExpiresAt && last ? {carriedOut:0,allowanceExpiresAt:pack.allowanceExpiresAt,accessExpiresAt:pack.expiresAt} : {}),ended,...counts(held.filter(item => periodOf(plan,allowanceAt(pack,item.start),zone) === p.start).map(item => item.id)),
       returned:returns.filter(e => periodOfBooking(e.bookingId) === p.start).length,
       expired:ended ? Math.max(0,p.allowance-p.used-(last ? 0 : p.carriedOut)) : 0};
   });

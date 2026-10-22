@@ -52,20 +52,12 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     input.feeCents=cents(input.freezeFee ?? '0','freeze fee');delete input.freezeFee;
     for (const key of ['defaultLengthDays','maxLengthDays']) input[key]=Number(input[key]);
     input.allowedStartDays=String(input.allowedStartDaysText ?? '').split(',').map(v=>Number(v.trim()));delete input.allowedStartDaysText;
-    input.allowOpenEnded=input.allowOpenEnded==='yes';
+    input.allowOpenEnded=input.allowOpenEnded==='yes';for(const key of ['maxFreezes','maxDays']){if(input[key]!==undefined&&input[key]!=='')input[key]=Number(input[key]);else delete input[key];}
   }
   if (name==='plan.recurring.prepare') input.intervalMonths=Number(input.intervalMonths);
   if (['freeze.request','freeze.prepare','freeze.end.prepare'].includes(name)) {
-    for (const prefix of ['start','end']) {
-      const day=String(input[prefix+'Date'] ?? ''), time=String(input[prefix+'Time'] ?? '');
-      if (day || time) {
-        if (!date.test(day)||!/^\d\d:\d\d(?::\d\d)?$/.test(time)) fail('Choose both the freeze date and time');
-        const seconds=Number(time.split(':')[2] ?? 0);if(seconds>59) fail('Choose a valid freeze time');
-        input[prefix+'At']=new Date(Date.parse(localInstant(day,time.slice(0,5),zoneOf(timeZone)))+seconds*1000).toISOString();
-      }
-      delete input[prefix+'Date'];delete input[prefix+'Time'];
-    }
-    if (input.openEnded==='yes') input.endAt=null; delete input.openEnded;
+    for(const prefix of ['start','end']) { const day=String(input[prefix+'Date']??'');if(day){if(!date.test(day))fail('Choose a freeze date');input[prefix+'At']=day;}delete input[prefix+'Date'];delete input[prefix+'Time'];}
+    if(input.openEnded==='yes')input.endAt=null;delete input.openEnded;
     if ('freezeFee' in input) { input.feeCents=cents(input.freezeFee,'freeze fee');delete input.freezeFee; }
     for (const key of ['exceptionReason','freezeRequestId']) if(input[key]==='') delete input[key];
   }

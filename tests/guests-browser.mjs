@@ -86,7 +86,7 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
             await page.locator(`form[action*="name=booking.cancel"]:has(input[value="${booked}"]) button`).click();
             const end=await h.state(); assert.equal(end.bookings.find(b=>b.id===booked).status,'cancelled');
             assert.equal(end.charges.filter(c=>c.bookingId===booked).reduce((n,c)=>n+c.amountCents,0),0);
-            const allowance=page.locator('#guests details').filter({hasText:'guest passes left this period'}).first(); await allowance.locator('summary').first().click();
+            const allowance=page.locator('#guests details').filter({hasText:'guest passes left in the current paid allowance'}).first(); await allowance.locator('summary').first().click();
             const ledger=page.locator('#guests').getByText('Guest-pass ledger',{exact:true}); await ledger.click();
             assert.match(await page.locator('#guests').innerText(),/One|reserve|transfer|return/);
           }

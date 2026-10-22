@@ -1,3 +1,4 @@
+import { studioDayInstant, calendarDays, shiftCalendarDays } from './freeze-calendar';
 import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent, bookingCredit, studioZone } from './pack-credits';
@@ -8,7 +9,6 @@ const live = (f: RecordData) => ['scheduled','active'].includes(f.status);
 const inside = (f: RecordData, at: string) => at >= f.startAt && (!f.endAt || at < f.endAt);
 export const packFreezeBlocks = (state: State, packId: string, at: string) => list(state,'freeze').some(f => f.packId === packId && live(f) && inside(f,at));
 const pending = (state: State, packId: string) => list(state,'freeze').some(f => f.packId === packId && live(f));
-const plus = (at: string, ms: number) => new Date(Date.parse(at)+ms).toISOString();
 const weekday = (state: State, at: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(new Intl.DateTimeFormat('en-US',{timeZone:studioZone(state),weekday:'short'}).format(new Date(at)))+1;
 const fingerprint = (input: Record<string,unknown>) => JSON.stringify(Object.keys(input).sort().map(k => [k,input[k]]));
 function replay(tx: Transaction, kind: string, input: Record<string,unknown>) {
@@ -26,20 +26,30 @@ export function saveFreezeType(tx: Transaction, input: Record<string,unknown>) {
   const allowedStartDays = [...new Set(days.map(d => integer(d,'allowedStartDays',1,7)))];
   const defaultLengthDays = integer(input.defaultLengthDays,'defaultLengthDays',1,366), maxLengthDays = integer(input.maxLengthDays ?? 366,'maxLengthDays',defaultLengthDays,3660);
   insist(input.allowOpenEnded === undefined || typeof input.allowOpenEnded === 'boolean','invalid_allowOpenEnded');
-  const type = {id:current?.id ?? id(),name:text(input.name,'name',100),reason:text(input.reason,'reason',500),feeCents:integer(input.feeCents,'feeCents',0,100_000_000),
+  const optionalCap = (key: string) => input[key] === undefined || input[key] === '' || input[key] === null ? null : integer(input[key],key,1,365);
+  const type = {maxFreezes:optionalCap('maxFreezes'),maxDays:optionalCap('maxDays'),id:current?.id ?? id(),name:text(input.name,'name',100),reason:text(input.reason,'reason',500),feeCents:integer(input.feeCents,'feeCents',0,100_000_000),
     defaultLengthDays,maxLengthDays,allowedStartDays,allowOpenEnded:input.allowOpenEnded === true,revision:(current?.revision ?? 0)+1,updatedBy:tx.who.id,updatedAt:now()};
   tx.put('freezeType',type); return type;
 }
+function assertFreezeCaps(state: State, type: RecordData, startAt: string, endAt: string | null, personId: string) {
+  if (!type.maxFreezes && !type.maxDays) return;
+  insist(endAt,'freeze_cap_requires_end',409);
+  const since = shiftCalendarDays(startAt,-365,studioZone(state));
+  const previous = list(state,'freeze').filter(f=>f.personId===personId && f.freezeTypeId===type.id && f.confirmedAt && !['withdrawn','declined'].includes(f.status) && f.startAt>since && f.startAt<=startAt);
+  insist(!type.maxFreezes || previous.length < type.maxFreezes,'freeze_count_cap_reached',409);
+  const days = previous.reduce((n,f)=>n+(f.endAt ? calendarDays(f.startAt,f.endAt,studioZone(state)) : 365),0)+calendarDays(startAt,endAt,studioZone(state));
+  insist(!type.maxDays || days<=type.maxDays,'freeze_day_cap_reached',409);
+}
 function terms(state: State, input: Record<string,unknown>, memberRequest = false) {
-  const type = record(state,input.freezeTypeId,'freezeType'), startAt = instant(input.startAt,'startAt');
-  const endAt = input.endAt === null ? null : input.endAt === undefined || input.endAt === '' ? plus(startAt,type.defaultLengthDays*86_400_000) : instant(input.endAt,'endAt');
+  const type = record(state,input.freezeTypeId,'freezeType'), startAt = studioDayInstant(input.startAt,studioZone(state));
+  const endAt = input.endAt === null ? null : input.endAt === undefined || input.endAt === '' ? shiftCalendarDays(startAt,type.defaultLengthDays,studioZone(state)) : studioDayInstant(input.endAt,studioZone(state));
   insist(startAt > now(),'freeze_start_must_be_future');
   insist(!endAt || endAt > startAt,'freeze_end_must_follow_start');
   insist(!memberRequest || endAt,'member_freeze_end_required');
   const feeCents = input.feeCents === undefined ? type.feeCents : integer(input.feeCents,'feeCents',0,100_000_000);
   const reason = input.reason ? text(input.reason,'reason',500) : type.reason;
   const exceptions = [!type.allowedStartDays.includes(weekday(state,startAt)) ? 'start_day' : null,
-    endAt && Date.parse(endAt)-Date.parse(startAt)>type.maxLengthDays*86_400_000 ? 'length' : null,
+    endAt && calendarDays(startAt,endAt,studioZone(state))>type.maxLengthDays ? 'length' : null,
     !endAt && !type.allowOpenEnded ? 'open_ended' : null,feeCents !== type.feeCents ? 'fee' : null].filter(Boolean);
   return {freezeTypeId:type.id,typeName:type.name,startAt,endAt,reason,feeCents,exceptions};
 }
@@ -49,7 +59,7 @@ function affected(state: State, packId: string, freeze: RecordData) {
     return c && c.start > now() && inside(freeze,c.start) ? [{booking:b,class:c}] : [];
   }).sort((a,b) => a.booking.id.localeCompare(b.booking.id));
 }
-function source(state: State, pack: RecordData, freeze: RecordData) {
+export function freezeBasis(state: State, pack: RecordData, freeze: RecordData) {
   // Full records bind allocation changes, attendance, class moves, consent and policy revisions.
   return JSON.stringify({pack,member:person(state,pack.personId,false),type:record(state,freeze.freezeTypeId,'freezeType'),recurring:recurringBasis(state,pack.id),
     affected:affected(state,pack.id,freeze).map(effect => ({...effect,fundingPack:effect.booking.packId ? state.records.get(effect.booking.packId)?.data ?? null : null})),freezes:list(state,'freeze').filter(f => f.packId === pack.id && live(f)),
@@ -58,13 +68,13 @@ function source(state: State, pack: RecordData, freeze: RecordData) {
 function freezeEffects(state: State, pack: RecordData, freeze: RecordData) {
   const bookings = affected(state,pack.id,freeze).map(({booking:b,class:c}) => ({bookingId:b.id,classId:c.id,title:c.title,start:c.start,status:b.status,packId:b.packId ?? null,
     creditReturned:b.status === 'booked' && !!(b.packId || b.guestPackId || b.makeupCreditId),feeCents:0,effect:b.guestPackId ? 'cancel and return guest pass or reverse guest price once' : b.makeupCreditId ? 'cancel and return linked makeup credit with original expiry' : b.packId ? 'cancel and return original funding once' : 'cancel; no funding used'}));
-  const durationMs = freeze.endAt ? Date.parse(freeze.endAt)-Date.parse(freeze.startAt) : null;
-  const revisedExpiresAt = durationMs === null ? null : plus(pack.expiresAt,durationMs), recurring = recurringBasis(state,pack.id);
-  return {durationMs,bookings,remainingCredits:pack.remaining,creditsReturned:bookings.filter(b => b.creditReturned && !!b.packId && (!state.records.get(b.packId!)?.data.entitlement || state.records.get(b.packId!)?.data.entitlement.kind === 'credits')).length,
+  const durationDays = freeze.endAt ? calendarDays(freeze.startAt,freeze.endAt,studioZone(state)) : null;
+  const revisedExpiresAt = durationDays === null ? null : shiftCalendarDays(pack.expiresAt,durationDays,studioZone(state)), recurring = recurringBasis(state,pack.id);
+  return {durationDays,bookings,remainingCredits:pack.remaining,creditsReturned:bookings.filter(b => b.creditReturned && !!b.packId && (!state.records.get(b.packId!)?.data.entitlement || state.records.get(b.packId!)?.data.entitlement.kind === 'credits')).length,
     originalExpiresAt:pack.expiresAt,revisedExpiresAt,originalRenewalAt:recurring?.nextRenewalAt ?? null,revisedRenewalAt:recurring ? revisedExpiresAt : null,
     renewalAmountCents:recurring?.amountCents ?? null,recurringTermsId:recurring?.id ?? null,
     access:'This plan cannot fund classes starting in the freeze interval. Bookings on other plans and separate makeup credits stay unchanged.',
-    billing:recurring ? 'An agreed recurring invoice moves by the freeze duration; it adds the agreed amount to the studio balance once. No payment is collected.' : 'This finite pack has no automatic renewal. Its expiry moves by the freeze duration.',
+    billing:recurring ? 'An agreed recurring invoice moves by the frozen calendar days; it adds the agreed amount to the studio balance once. No payment is collected.' : 'This finite pack has no automatic renewal. Its expiry moves by the frozen calendar days.',
     autopays:[],paymentCollection:'none'};
 }
 export function requestFreeze(tx: Transaction, input: Record<string,unknown>) {
@@ -74,6 +84,7 @@ export function requestFreeze(tx: Transaction, input: Record<string,unknown>) {
   const dates = terms(tx.state,input,true); text(input.reason,'reason',500);
   insist(pack.expiresAt > dates.startAt,'freeze_start_outside_term',409);
   insist(!pending(tx.state,pack.id),'freeze_pending',409);
+  assertFreezeCaps(tx.state,record(tx.state,dates.freezeTypeId,'freezeType'),dates.startAt,dates.endAt,pack.personId);
   const request = {id:id(),personId:pack.personId,packId:pack.id,...dates,requestId:prior.requestId,requestBasis:prior.requestBasis,status:'requested',createdAt:now(),createdBy:tx.who.id};
   tx.put('freezeRequest',request); return request;
 }
@@ -90,9 +101,10 @@ export function prepareFreeze(tx: Transaction, input: Record<string,unknown>) {
   const exceptionReason = input.exceptionReason ? text(input.exceptionReason,'exceptionReason',500) : null;
   const changedRequest = request && ['startAt','endAt','feeCents','reason','freezeTypeId'].some(k => request[k] !== dates[k as keyof typeof dates]);
   insist(!(dates.exceptions.length || changedRequest) || exceptionReason,'exception_reason_required');
-  const freeze = {id:id(),personId:pack.personId,packId:pack.id,...dates,requestId:prior.requestId,requestBasis:prior.requestBasis,freezeRequestId:request?.id ?? null,
+  assertFreezeCaps(tx.state,record(tx.state,dates.freezeTypeId,'freezeType'),dates.startAt,dates.endAt,pack.personId);
+  const freeze = {requiresAcceptance:dates.feeCents>0 || !!changedRequest || dates.exceptions.length>0,acceptedAt:null,originalAllowanceExpiresAt:pack.allowanceExpiresAt ?? null,id:id(),personId:pack.personId,packId:pack.id,...dates,requestId:prior.requestId,requestBasis:prior.requestBasis,freezeRequestId:request?.id ?? null,
     exceptionReason,approvedExceptionBy:exceptionReason ? tx.who.id : null,changedRequest:!!changedRequest,status:'preview',createdAt:now(),createdBy:tx.who.id};
-  const preview = {...freeze,effects:freezeEffects(tx.state,pack,freeze),basis:source(tx.state,pack,freeze)};
+  const preview = {...freeze,effects:freezeEffects(tx.state,pack,freeze),basis:freezeBasis(tx.state,pack,freeze)};
   const saved = {...preview,key:JSON.stringify(preview)};
   tx.put('freeze',saved); return saved;
 }
@@ -102,7 +114,10 @@ export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
   if (freeze.confirmedAt) { insist(freeze.confirmedBy === tx.who.id && freeze.confirmationRequestId === input.requestId && freeze.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return freeze; }
   insist(freeze.status === 'preview' && freeze.startAt > now(),'freeze_preview_expired',409);
   const pack = record(tx.state,freeze.packId,'pack');
-  insist(source(tx.state,pack,freeze) === freeze.basis,'freeze_source_changed',409);
+  insist(!freeze.requiresAcceptance || (freeze.acceptedAt && freeze.acceptanceBasis === freeze.basis),'freeze_member_acceptance_required',409);
+  if (freeze.freezeRequestId) insist(record(tx.state,freeze.freezeRequestId,'freezeRequest').status === 'requested','freeze_request_closed',409);
+  assertFreezeCaps(tx.state,record(tx.state,freeze.freezeTypeId,'freezeType'),freeze.startAt,freeze.endAt,pack.personId);
+  insist(freezeBasis(tx.state,pack,freeze) === freeze.basis,'freeze_source_changed',409);
   insist(!pending(tx.state,pack.id),'freeze_pending',409); tx.future(freeze.startAt);
   const actionId = id(), at = now();
   for (const effect of freeze.effects.bookings) {
@@ -114,6 +129,7 @@ export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
     bookingHistory(tx,'cancel',booking,cancelled,{reason:'Agreed membership freeze',channel:input.channel ?? 'desk'}, {id:cancelled.cancellationId,parentActionId:actionId});
   }
   if (freeze.effects.revisedExpiresAt) {
+    tx.put('pack',{...record(tx.state,pack.id,'pack'),allowanceExpiresAt:pack.allowanceExpiresAt ?? pack.expiresAt});
     appendPackEvent(tx,record(tx.state,pack.id,'pack'),{type:'adjust',credits:0,expiresAt:freeze.effects.revisedExpiresAt,reason:`Freeze ${freeze.id}`});
     moveRecurringRenewal(tx,pack.id,freeze.effects.revisedExpiresAt,freeze.id);
   }
@@ -126,25 +142,25 @@ export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
   return confirmed;
 }
 function noticeBody(f: RecordData) {
-  return `Freeze from ${f.startAt} until ${f.endAt ?? 'staff agree a resumption date'}. Freeze fee $${(f.feeCents/100).toFixed(2)} added to the studio balance once; no payment collected. ${f.effects.access} ${f.effects.bookings.length} future booking(s) cancelled with original funding returned once and no cancellation fee. Term expiry ${f.effects.revisedExpiresAt ?? 'will move by the elapsed freeze when staff agree the end'}. ${f.effects.billing} ${f.effects.revisedRenewalAt ? `Next invoice ${f.effects.revisedRenewalAt}, $${(f.effects.renewalAmountCents/100).toFixed(2)}.` : ''}`;
+  return `Freeze from ${f.startAt} until ${f.endAt ?? 'staff agree a resumption date'}. Freeze fee $${(f.feeCents/100).toFixed(2)} added to the studio balance once; no payment collected. ${f.effects.access} ${f.effects.bookings.length} future booking(s) cancelled with original funding returned once and no cancellation fee. Term expiry ${f.effects.revisedExpiresAt ?? 'will move by the frozen calendar days when staff agree the end'}. ${f.effects.billing} ${f.effects.revisedRenewalAt ? `Next invoice ${f.effects.revisedRenewalAt}, $${(f.effects.renewalAmountCents/100).toFixed(2)}.` : ''}`;
 }
-function endBasis(state: State, freeze: RecordData) {
+export function freezeEndBasis(state: State, freeze: RecordData) {
   return JSON.stringify({freeze,pack:record(state,freeze.packId,'pack'),recurring:recurringBasis(state,freeze.packId),member:person(state,freeze.personId,false)});
 }
 export function prepareEndFreeze(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const prior = replay(tx,'freezeEnd',input); if (prior.prior) return prior.prior;
   const freeze = record(tx.state,input.id,'freeze'); insist(live(freeze),'freeze_not_live',409);
-  const endAt = instant(input.endAt,'endAt');
+  const endAt = studioDayInstant(input.endAt,studioZone(tx.state));
   insist(endAt > now() && endAt > freeze.startAt && (!freeze.endAt || endAt < freeze.endAt),'invalid_early_resumption');
-  const reason = text(input.reason,'reason',500), revisedExpiresAt = plus(freeze.effects.originalExpiresAt,Date.parse(endAt)-Date.parse(freeze.startAt));
+  const reason = text(input.reason,'reason',500), revisedExpiresAt = shiftCalendarDays(freeze.effects.originalExpiresAt,calendarDays(freeze.startAt,endAt,studioZone(tx.state)),studioZone(tx.state));
   const pack = record(tx.state,freeze.packId,'pack'), expected = freeze.effects.revisedExpiresAt ?? freeze.effects.originalExpiresAt;
   insist(pack.expiresAt === expected,'freeze_term_changed',409);
   // Do not shorten the term past an allocation which survived the original preview.
   insist(!list(tx.state,'booking').some(b => b.packId === pack.id && b.status === 'booked' && (tx.state.records.get(b.classId)?.data.start ?? '') >= revisedExpiresAt),'resumption_conflicts_with_bookings',409);
   const preview = {id:id(),freezeId:freeze.id,personId:freeze.personId,packId:freeze.packId,endAt,reason,revisedExpiresAt,
     revisedRenewalAt:recurringBasis(tx.state,freeze.packId) ? revisedExpiresAt : null,renewalAmountCents:freeze.effects.renewalAmountCents,feeCents:0,bookingsRestored:[],
-    status:'preview',requestId:prior.requestId,requestBasis:prior.requestBasis,createdBy:tx.who.id,createdAt:now(),basis:endBasis(tx.state,freeze)};
+    requiresAcceptance:true,acceptedAt:null,status:'preview',requestId:prior.requestId,requestBasis:prior.requestBasis,createdBy:tx.who.id,createdAt:now(),basis:freezeEndBasis(tx.state,freeze)};
   const saved = {...preview,key:JSON.stringify(preview)}; tx.put('freezeEnd',saved); return saved;
 }
 export function confirmEndFreeze(tx: Transaction, input: Record<string,unknown>) {
@@ -152,11 +168,12 @@ export function confirmEndFreeze(tx: Transaction, input: Record<string,unknown>)
   const end = record(tx.state,input.id,'freezeEnd'); insist(input.key === end.key,'preview_changed',409);
   if (end.status === 'confirmed') { insist(end.confirmedBy === tx.who.id && end.confirmationRequestId === input.requestId && end.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return end; }
   const freeze = record(tx.state,end.freezeId,'freeze');
+  insist(end.acceptedAt && end.acceptanceBasis === end.basis,'freeze_member_acceptance_required',409);
   insist(end.endAt > now() && live(freeze),'freeze_end_preview_expired',409);
-  insist(end.basis === endBasis(tx.state,freeze),'freeze_source_changed',409); tx.future(end.endAt);
+  insist(end.basis === freezeEndBasis(tx.state,freeze),'freeze_source_changed',409); tx.future(end.endAt);
   appendPackEvent(tx,record(tx.state,freeze.packId,'pack'),{type:'adjust',credits:0,expiresAt:end.revisedExpiresAt,reason:`Early resumption ${end.id}`});
   moveRecurringRenewal(tx,freeze.packId,end.revisedExpiresAt,freeze.id);
-  const updated = {...freeze,endAt:end.endAt,endReason:end.reason,endPreviewId:end.id,effects:{...freeze.effects,revisedExpiresAt:end.revisedExpiresAt,revisedRenewalAt:end.revisedRenewalAt,durationMs:Date.parse(end.endAt)-Date.parse(freeze.startAt)}};
+  const updated = {...freeze,endAt:end.endAt,endReason:end.reason,endPreviewId:end.id,effects:{...freeze.effects,revisedExpiresAt:end.revisedExpiresAt,revisedRenewalAt:end.revisedRenewalAt,durationDays:calendarDays(freeze.startAt,end.endAt,studioZone(tx.state))}};
   tx.put('freeze',updated);
   const confirmed = {...end,status:'confirmed',confirmedBy:tx.who.id,confirmationRequestId:input.requestId,confirmationBasis:fingerprint(input),confirmedAt:now()}; tx.put('freezeEnd',confirmed);
   contractNotice(tx,`freeze-end:${end.id}`,freeze.personId,'Earlier resumption agreed',`${noticeBody(updated)} Previously cancelled bookings are not automatically restored. No additional freeze fee.`);
@@ -177,6 +194,6 @@ export function freezesSnapshot(state: State, who: Actor) {
   const visible = (r: RecordData) => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId);
   const allowed = who.role === 'owner' || who.role === 'member';
   return {types:allowed ? list(state,'freezeType') : [],requests:list(state,'freezeRequest').filter(visible),freezes:list(state,'freeze').filter(visible).map(f => ({...f,
-    stale:f.status === 'preview' && (f.startAt <= now() || !state.records.has(f.packId) || f.basis !== source(state,record(state,f.packId,'pack'),f))})),
-    ends:list(state,'freezeEnd').filter(visible).map(e => ({...e,stale:e.status === 'preview' && (e.endAt <= now() || e.basis !== endBasis(state,record(state,e.freezeId,'freeze')))}))};
+    stale:f.status === 'preview' && (f.startAt <= now() || !state.records.has(f.packId) || f.basis !== freezeBasis(state,record(state,f.packId,'pack'),f))})),
+    ends:list(state,'freezeEnd').filter(visible).map(e => ({...e,stale:e.status === 'preview' && (e.endAt <= now() || e.basis !== freezeEndBasis(state,record(state,e.freezeId,'freeze')))}))};
 }

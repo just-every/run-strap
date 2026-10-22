@@ -1,5 +1,5 @@
 import { integer, insist, list, now, record, text, type RecordData, type State } from './types';
-import { nextPeriod, periodOf, periods, type Plan } from './entitlements';
+import { allowanceAt, nextPeriod, periodOf, periods, planStart, type Plan } from './entitlements';
 import { studioZone, packServiceEligible } from './pack-credits';
 
 export interface GuestTerms {
@@ -24,15 +24,18 @@ const passStarts = (state: State, pack: RecordData, except?: string) => list(sta
 export function guestPeriods(state: State, pack: RecordData, through = now(), except?: string) {
   if (!pack.guestTerms) return [];
   const p = plan(pack.guestTerms), zone = studioZone(state);
-  return periods(p,passStarts(state,pack,except),zone,pack.createdAt,through).map(row => ({...row,endsOn:nextPeriod(p,row.start)}));
+  const paidThrough = new Date(Math.max(Date.parse(planStart(pack)),Math.min(Date.parse(through),Date.parse(pack.expiresAt)-1))).toISOString();
+  const finalPeriod = periodOf(p,allowanceAt(pack,new Date(Date.parse(pack.expiresAt)-1).toISOString()),zone);
+  return periods(p,passStarts(state,pack,except).map(at => allowanceAt(pack,at)),zone,planStart(pack),allowanceAt(pack,paidThrough))
+    .map(row => ({...row,endsOn:nextPeriod(p,row.start),...(pack.allowanceExpiresAt && row.start === finalPeriod ? {carriedOut:0,allowanceExpiresAt:pack.allowanceExpiresAt,accessExpiresAt:pack.expiresAt} : {})}));
 }
 export function guestPassRefusal(state: State, pack: RecordData, entry: RecordData, guestId: string, except?: string) {
   const terms: GuestTerms = pack.guestTerms;
   insist(terms,'guest_allowance_required',409);
   insist(pack.expiresAt > now() && pack.expiresAt > entry.start && pack.createdAt <= entry.start,'guest_allowance_expired',409);
   insist(packServiceEligible({id:pack.id,eligibleServices:terms.services},entry),'guest_service_ineligible',409);
-  const p = plan(terms), zone = studioZone(state), starts = [...passStarts(state,pack,except),entry.start];
-  if (periods(p,starts,zone,pack.createdAt).some(row => row.used > row.allowance)) return 'guest_allowance_used';
+  const p = plan(terms), zone = studioZone(state), starts = [...passStarts(state,pack,except),entry.start].map(at => allowanceAt(pack,at));
+  if (periods(p,starts,zone,planStart(pack)).some(row => row.used > row.allowance)) return 'guest_allowance_used';
   const times = list(state,'booking').filter(b => b.id !== except && b.personId === guestId && b.guestFunding === 'pass' && guestHolds(b)).map(b => Date.parse(record(state,b.classId,'class').start));
   times.push(Date.parse(entry.start)); times.sort((a,b) => a-b);
   // Check every rolling window, including future bookings already held. Booking
@@ -43,7 +46,7 @@ export function guestPassRefusal(state: State, pack: RecordData, entry: RecordDa
 }
 export function guestAllowanceSummary(state: State, pack: RecordData) {
   if (!pack.guestTerms) return null;
-  const period = periodOf(plan(pack.guestTerms),now(),studioZone(state));
+  const period = periodOf(plan(pack.guestTerms),allowanceAt(pack,now()),studioZone(state));
   const rows = guestPeriods(state,pack), current = rows.find(row => row.start === period);
   return {terms:pack.guestTerms,periods:rows,expiresAt:pack.expiresAt,left:pack.expiresAt > now() ? Math.max(0,(current?.allowance ?? pack.guestTerms.passes)-(current?.used ?? 0)) : 0};
 }

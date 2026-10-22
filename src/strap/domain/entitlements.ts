@@ -47,6 +47,10 @@ export const planOf = (pack: RecordData): Plan | null => pack.entitlement ?? nul
 /** Credit packs spend and return credits; visit and unlimited plans hold visits. */
 export const countsCredits = (pack: RecordData) => (pack.entitlement?.kind ?? 'credits') === 'credits';
 export const planStart = (pack: RecordData): string => pack.termStartAt ?? pack.createdAt;
+/** A freeze extends access to unused paid visits, not the number of paid periods.
+ * Only allowance accounting uses this date; class policy keeps the real start. */
+export const allowanceAt = (pack: RecordData, at: string): string => pack.allowanceExpiresAt && Date.parse(at) >= Date.parse(pack.allowanceExpiresAt)
+  ? new Date(Date.parse(pack.allowanceExpiresAt)-1).toISOString() : at;
 
 /** A booking holds one of the pack's visits while booked (attended and no-show
  * included) and after a late cancel that kept it; release ends the hold. */
@@ -102,7 +106,7 @@ export function planRefusal(pack: RecordData, start: string, held: Held[], zone:
   const others = held.filter(item => item.id !== except);
   const upcoming = (value: string) => Date.parse(value) > Date.parse(at);
   if (plan.maxUpcoming !== null && upcoming(start) && others.filter(item => item.booked && upcoming(item.start)).length >= plan.maxUpcoming) return 'plan_upcoming_limit_reached';
-  if (plan.kind === 'visits' && overAllocated(plan,[...others.map(item => item.start),start],zone,planStart(pack))) return 'plan_visits_used';
+  if (plan.kind === 'visits' && overAllocated(plan,[...others.map(item => allowanceAt(pack,item.start)),allowanceAt(pack,start)],zone,planStart(pack))) return 'plan_visits_used';
   return null;
 }
 
@@ -110,9 +114,9 @@ export function planRefusal(pack: RecordData, start: string, held: Held[], zone:
 export function visitsLeft(pack: RecordData, held: Held[], zone: string, at: string) {
   const plan = planOf(pack);
   if (!plan || plan.kind !== 'visits') return null;
-  const starts = held.map(item => item.start);
+  const starts = held.map(item => allowanceAt(pack,item.start)), target = allowanceAt(pack,at);
   let left = 0;
-  while (left < plan.visits!+plan.rollover && !overAllocated(plan,[...starts,...Array(left+1).fill(at)],zone,planStart(pack))) left++;
+  while (left < plan.visits!+plan.rollover && !overAllocated(plan,[...starts,...Array(left+1).fill(target)],zone,planStart(pack))) left++;
   return left;
 }
 

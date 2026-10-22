@@ -1,5 +1,6 @@
+import { acceptFreeze, acceptFreezeEnd, launchFreezeAcceptance, launchFreezeEndAcceptance, declineFreezeRequest, withdrawFreezeRequest, withdrawFreeze, freezeWithdrawal } from './freeze-lifecycle';
 import { requestFreeze, prepareFreeze, confirmFreeze, prepareEndFreeze, confirmEndFreeze, saveFreezeType, applyDueFreezes, freezesSnapshot } from './freezes';
-import { prepareRecurringTerms, acceptRecurringTerms, stopRecurringTerms, applyDueRecurringInvoices, recurringSnapshot, recurringForPack } from './contract-billing';
+import { prepareRecurringTerms, acceptRecurringTerms, stopRecurringTerms, reconnectRecurringBilling, applyDueRecurringInvoices, recurringSnapshot, recurringForPack } from './contract-billing';
 import { saveMakeupGuardian, acceptMakeupGuardian, revokeMakeupGuardian, launchMakeupGuardian } from './makeup-authority';
 import { saveAbsencePolicy, previewAbsence, reportAbsence, bookMakeup, makeupSnapshot } from './makeups';
 import { previewGuestBooking, bookGuest, guestSnapshot } from './guest-bookings';
@@ -49,10 +50,18 @@ export type { Actor, Person } from './types';
 export const handlers = {
   'freeze.type.save':defineCommand(saveFreezeType,['owner']),
   'freeze.request':defineCommand(requestFreeze,['member'],{member:{staff:'freeze.prepare',right:'contract-change'}}),
+  'freeze.accept':defineCommand(acceptFreeze,['member'],{member:{staff:'freeze.accept.launch',right:'contract-change',ownStep:true}}),
+  'freeze.accept.launch':defineCommand(launchFreezeAcceptance,['owner'],{staffRight:'contract-change'}),
+  'freeze.end.accept':defineCommand(acceptFreezeEnd,['member'],{member:{staff:'freeze.end.accept.launch',right:'contract-change',ownStep:true}}),
+  'freeze.end.accept.launch':defineCommand(launchFreezeEndAcceptance,['owner'],{staffRight:'contract-change'}),
+  'freeze.decline':defineCommand(declineFreezeRequest,['owner'],{staffRight:'contract-change'}),
+  'freeze.request.withdraw':defineCommand(withdrawFreezeRequest,['owner','member'],{member:{staff:'freeze.request.withdraw',right:'contract-change'},staffRight:'contract-change'}),
+  'freeze.withdraw':defineCommand(withdrawFreeze,['owner','member'],{member:{staff:'freeze.withdraw',right:'contract-change'},staffRight:'contract-change'}),
   'freeze.prepare':defineCommand(prepareFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.confirm':defineCommand(confirmFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.prepare':defineCommand(prepareEndFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.confirm':defineCommand(confirmEndFreeze,['owner'],{staffRight:'contract-change'}),
+  'plan.recurring.reconnect':defineCommand(reconnectRecurringBilling,['owner'],{staffRight:'contract-change'}),
   'plan.recurring.prepare':defineCommand(prepareRecurringTerms,['owner'],{staffRight:'membership-sale'}),
   'plan.recurring.accept':defineCommand(acceptRecurringTerms,['member'],{member:{staff:'plan.recurring.prepare',right:'membership-sale',ownStep:true}}),
   'plan.recurring.stop':defineCommand(stopRecurringTerms,['owner','member'],{member:{staff:'plan.recurring.stop',right:'contract-change'},staffRight:'contract-change'}),
@@ -173,7 +182,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  applyDueFreezes(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
+  applyDueFreezes(tx); if(name!=='plan.recurring.stop') await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
   const result = await spec.run(tx,input,context);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);
   if (name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
@@ -208,11 +217,12 @@ export async function financeSnapshot(db: D1Database, who: Actor) {
   const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as Record<string,unknown>;
   return {actor:loaded.who,people:(full.people as Person[]).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active})),...Object.fromEntries(financeKeys.map(key => [key,full[key]]))};
 }
-export async function snapshot(db: D1Database, who: Actor) {
+export async function snapshot(db: D1Database, who: Actor, origin?: string) {
   const loaded = await load(db,who);
-  return snapshotFor(loaded.state,loaded.who);
+  const connection=await db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
+  return snapshotFor(loaded.state,loaded.who,connection,origin);
 }
-async function snapshotFor(state: State, who: Actor) {
+async function snapshotFor(state: State, who: Actor, connection?: {connection_id:string;origin:string}|null, origin?: string) {
   const owner = who.role === 'owner' || who.role === 'agent';
   const allClasses = list(state,'class');
   const classes = owner || who.role === 'member' ? allClasses : allClasses.filter(c => c.instructorId === who.personId);
@@ -230,7 +240,8 @@ async function snapshotFor(state: State, who: Actor) {
   const timetableBasis = owner ? await seriesBasis(state) : null;
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
-  return {freezes:freezesSnapshot(state,who),recurring:recurringSnapshot(state,who),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
+  const frozen=freezesSnapshot(state,who);frozen.freezes=frozen.freezes.map(f=>({...f,withdrawal:freezeWithdrawal(state,f)}));
+  return {freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:own('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:own('packCreditEvent'),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
     demand:owner ? {classes:demandEvidence(state),availability:demandAvailability(state)} : null,drafts:owner?await Promise.all(list(state,'draft').map(async (d): Promise<RecordData> => ({...d,...(d.recommendation ? {stale:await recommendationStale(state,d)} : {})}))):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),studio:studioSettings(state),acknowledgements:own('acknowledgement'),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? own('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],

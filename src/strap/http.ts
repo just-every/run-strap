@@ -47,7 +47,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
   }
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-  const current = await snapshot(env.DB, who), deliveries = await noticeDeliveries(env, who.role)
+  const current = await snapshot(env.DB, who, env.AUTH_ORIGIN), deliveries = await noticeDeliveries(env, who.role)
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
@@ -192,7 +192,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       const reminderFile = path.match(/^\/api\/strap\/reminders\/([\w-]+)\.txt$/)
       if (reminderFile) {
         if (who.role !== 'owner') fail('Only the owner exports reminders', 403)
-        const current = await snapshot(env.DB, who)
+        const current = await snapshot(env.DB, who, env.AUTH_ORIGIN)
         const draft = current.drafts.find((d: any) => d.id === reminderFile[1] && d.type === 'reminder' && d.status === 'approved')
         if (!draft) fail('Approved reminder not found', 404)
         return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="strap-reminder-${reminderFile[1]}.txt"` } })

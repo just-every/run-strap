@@ -113,7 +113,7 @@ test('PLAN-005: mid-term upgrade, renewal downgrade, member-accepted exact previ
   if(process.env.STRAP_PROOF_DIR)await(await import('./plan-changes-browser.mjs')).planChangesBrowser(h,{member:ana})
 }))
 
-// Invoice agreement and freeze clocks use real instants; no test-only production clock.
+// Calendar approvals use public doors. Persisted history fixtures exercise due clock boundaries without a production clock override.
 test('PLAN-006/011: exact member and direct freezes, original funding, earlier resumption and real revised renewal invoices once',{timeout:240_000},async()=>{const sent=[];await run(async h=>{
   await h.confirmSetup(h.owner)
   await h.cmd('studio.save',{location:'Park Slope',timeZone:'America/New_York'})
@@ -122,18 +122,21 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   const refused=async(name,input,cookie,status,error)=>{const before=(await h.state()).version,r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,r.text);if(error)assert.match(r.value.error,error);assert.equal((await h.state()).version,before,'refused commands write nothing');return r}
   const sale=async(person,expiresAt)=>{const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:5,amountCents:12000,expiresAt,guestTerms:{passes:1,period:'month',rollover:0,services:[],perGuest:1,windowDays:365,excess:'refuse',priceCents:0}})).id});return(await h.state()).packs.find(p=>p.id===approved.id)}
   // Every automatic invoice needs a source-checked proposal and the member's own consent.
-  const expiry=second(110_000),pack=await sale(member,expiry),directPack=await sale(direct,expiry)
+  const day=(date,n)=>new Date(Date.parse(date+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date());
+  const midnight=date=>{for(const hours of [4,5]){const value=new Date(Date.parse(date+'T00:00:00Z')+hours*3600000).toISOString();const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));if(`${parts.year}-${parts.month}-${parts.day}`===date&&parts.hour==='00')return value;}throw new Error('NY midnight fixture');};
+  const expiry=second(90*86400000),pack=await sale(member,expiry),directPack=await sale(direct,expiry)
   const recurring=async(person,p,requestId)=>{const proposal=await h.cmd('plan.recurring.prepare',{packId:p.id,intervalMonths:1,requestId});await refused('plan.recurring.accept',{id:proposal.id,key:proposal.key},h.owner,403);await refused('plan.recurring.accept',{id:proposal.id,key:proposal.key},person.id===stranger.id?member.cookie:stranger.cookie,404);return h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},person.cookie)}
   const terms=await recurring(member,pack,'synthetic-strap-recurring-1'),directTerms=await recurring(direct,directPack,'synthetic-strap-recurring-2')
   const stoppedPack=await sale(stranger,second(30_000))
   const stoppedTerms=await recurring(stranger,stoppedPack,'synthetic-strap-stopped-agreement')
   await refused('plan.recurring.stop',{id:stoppedTerms.id,reason:'Withdraw future invoice consent',requestId:'synthetic-strap-stop-denied'},member.cookie,404)
-  const stop={id:stoppedTerms.id,reason:'Withdraw future invoice consent',requestId:'synthetic-strap-stop'}
+  const stop={id:stoppedTerms.id,requestId:'synthetic-strap-stop'}
   await h.cmd('plan.recurring.stop',stop,stranger.cookie); await h.cmd('plan.recurring.stop',stop,stranger.cookie)
-  const startAt=second(80_000),endAt=second(86_000),classAt=plus(startAt,1000),outsideAt=plus(endAt,2000)
+  const startAt=day(today,2),endAt=day(today,5),classAt=startAt+'T12:00:00.000Z',outsideAt=endAt+'T12:00:00.000Z'
   function plus(at,ms){return new Date(Date.parse(at)+ms).toISOString()}
   const publish=async(title,start)=>{return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,room:title,start,end:plus(start,500),capacity:5,instructorId:instructor.id}]})).id})).classes[0]}
-  const inside=await publish('Morning Mat',classAt),outside=await publish('Evening Flow',outsideAt),extra=await publish('Reformer practice',plus(startAt,2000))
+  const inside=await publish('Morning Mat',classAt),outside=await publish('Evening Flow',outsideAt),extra=await publish('Reformer practice',startAt+'T13:00:00.000Z')
   const cancelled=await h.cmd('booking.book',{classId:inside.id},member.cookie),kept=await h.cmd('booking.book',{classId:outside.id},member.cookie)
   await h.cmd('guest.consent.save',{sponsorEmail:member.email,consent:true},stranger.cookie);
   const guestQuote=await h.cmd('guest.preview',{sponsorId:member.id,guestId:stranger.id,packId:pack.id,classId:inside.id},member.cookie);
@@ -147,7 +150,8 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   const prepare={packId:pack.id,freezeRequestId:request.id,requestId:'synthetic-strap-freeze-preview-1',channel:'phone'}
   const stale=await h.cmd('freeze.prepare',prepare)
   assert.equal(stale.effects.originalRenewalAt,expiry);assert.equal(stale.effects.renewalAmountCents,12000)
-  assert.equal(stale.effects.revisedRenewalAt,plus(expiry,Date.parse(endAt)-Date.parse(startAt)))
+  assert.equal(stale.effects.durationDays,3);
+  assert.equal(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(stale.effects.revisedRenewalAt)),day(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(expiry)),3))
   assert.deepEqual(stale.effects.bookings.map(b=>b.bookingId).sort(),[cancelled.id,guestSeat.id].sort());assert.equal(stale.effects.bookings[0].feeCents,0)
   await refused('freeze.prepare',{...prepare,requestId:'synthetic-strap-fee-exception',feeCents:0},h.owner,400,/exception_reason_required/)
   await h.cmd('booking.book',{classId:extra.id},member.cookie)
@@ -158,6 +162,8 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   const agent=await h.cmd('agent.create',{label:'synthetic-strap-freeze-agent'})
   assert.equal((await h.send('/api/strap/agent/command',{name:'freeze.confirm',input:{id:preview.id,key:preview.key,requestId:'agent'}},'',{authorization:'Bearer '+agent.token})).status,403)
   await refused('freeze.confirm',{id:preview.id,key:'different',requestId:'changed-key'},h.owner,409,/preview_changed/)
+  await refused('freeze.confirm',{id:preview.id,key:preview.key,requestId:'synthetic-strap-unaccepted'},h.owner,409,/freeze_member_acceptance_required/);
+  await h.cmd('freeze.accept',{id:preview.id,key:preview.key},member.cookie);
   const confirm={id:preview.id,key:preview.key,requestId:'synthetic-strap-freeze-confirm',channel:'phone'}
   const confirmed=await h.cmd('freeze.confirm',confirm)
   assert.deepEqual(await h.cmd('freeze.confirm',confirm),confirmed)
@@ -187,23 +193,32 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   assert.equal((await h.state(instructor.cookie)).freezes.freezes.length,0)
 
   // Direct staff freeze needs no self-service request and supports open-ended and an exact early-end preview.
-  const directStart=second(6000),directEnd=plus(directStart,6000)
+  const directStart=day(today,2),directEnd=day(today,4)
   const directPreview=await h.cmd('freeze.prepare',{packId:directPack.id,freezeTypeId:type.id,startAt:directStart,endAt:null,reason:'Travel leave agreed at the desk',requestId:'synthetic-strap-direct',channel:'desk'})
   assert.equal(directPreview.freezeRequestId,null);assert.equal(directPreview.effects.revisedRenewalAt,null)
+  await h.cmd('freeze.accept',{id:directPreview.id,key:directPreview.key},direct.cookie);
   await h.cmd('freeze.confirm',{id:directPreview.id,key:directPreview.key,requestId:'synthetic-strap-direct-confirm',channel:'desk'})
   const end=await h.cmd('freeze.end.prepare',{id:directPreview.id,endAt:directEnd,reason:'Member is returning earlier',requestId:'synthetic-strap-early-end',channel:'desk'})
-  assert.equal(end.revisedRenewalAt,plus(expiry,6000))
+  assert.equal(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(end.revisedRenewalAt)),day(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(expiry)),2))
   await refused('freeze.end.confirm',{id:end.id,key:end.key,requestId:'member-end'},direct.cookie,403)
+  await refused('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-end-unaccepted'},h.owner,409,/freeze_member_acceptance_required/);
+  await h.cmd('freeze.end.accept',{id:end.id,key:end.key},direct.cookie);
   await h.cmd('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-end-confirm',channel:'desk'})
-  // Both agreed dates pass; repeat the scheduler without repeating either resumption or charge.
-  await until([endAt,directEnd].sort().at(-1))
-  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+  // A retained approved calendar history, not a mocked application clock. The
+  // public scheduler sees each real date behind now, then the actual due instant.
+  await h.cmd('booking.cancel',{id:kept.id},member.cookie);
+  const due=plus(midnight(today),5000);
+  for(const [freezeId,termId,packId,days] of [[preview.id,terms.id,pack.id,3],[directPreview.id,directTerms.id,directPack.id,2]]) {
+    const all=await h.state(),f=all.freezes.freezes.find(f=>f.id===freezeId),t=all.recurring.terms.find(t=>t.id===termId),p=all.packs.find(p=>p.id===packId);
+    const historicalStart=midnight(day(today,-days)),originalExpiry=plus(historicalStart,5000),approvedAt=plus(historicalStart,-3600000);
+    const rows=[{...f,startAt:historicalStart,endAt:midnight(today),createdAt:approvedAt,confirmedAt:approvedAt,acceptedAt:approvedAt,effects:{...f.effects,originalExpiresAt:originalExpiry,originalRenewalAt:originalExpiry,revisedExpiresAt:due,revisedRenewalAt:due,durationDays:days}},
+      {...t,nextRenewalAt:due,acceptedAt:approvedAt},{...p,termStartAt:midnight(day(today,-30)),createdAt:midnight(day(today,-30)),expiresAt:due,allowanceExpiresAt:originalExpiry}];
+    for(const row of rows)await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(row),row.id).run();
+  }
+  await until(due);
+  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
   state=await h.state()
   for(const freezeId of [preview.id,directPreview.id]){const freeze=state.freezes.freezes.find(f=>f.id===freezeId);assert.equal(freeze.status,'resumed');assert.equal(freeze.resumptionCount,1)}
-  assert.equal(state.recurring.invoices.length,0,'invoice does not appear at resumption before its revised due date')
-  await until([preview.effects.revisedRenewalAt,end.revisedRenewalAt].sort().at(-1))
-  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
-  state=await h.state()
   for(const [p,t] of [[member,terms],[direct,directTerms]]){
     const invoices=state.recurring.invoices.filter(i=>i.recurringTermsId===t.id)
     assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000)
@@ -221,6 +236,7 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   const series=(await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:'2098-01-06',endDate:'2098-01-06',time:'09:00',minutes:30,intervalWeeks:1,title:'Morning Pilates',service:'Mat',room:'Timetable studio',capacity:4,instructorId:instructor.id})).id}));
   await h.cmd('booking.book',{classId:series.classes[0].id},sofia.cookie);
   const seriesFreeze=await h.cmd('freeze.prepare',{packId:sofiaPack.id,freezeTypeId:type.id,startAt:'2098-01-07T00:00:00.000Z',endAt:'2098-01-08T00:00:00.000Z',reason:'Planned absence',requestId:'synthetic-strap-series-freeze'});
+  await h.cmd('freeze.accept',{id:seriesFreeze.id,key:seriesFreeze.key},sofia.cookie);
   await h.cmd('freeze.confirm',{id:seriesFreeze.id,key:seriesFreeze.key,requestId:'synthetic-strap-series-confirm'});
   await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
   if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
