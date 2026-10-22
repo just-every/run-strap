@@ -5,6 +5,7 @@ import { chromium } from '@playwright/test'
 
 const dateAt=(zone,days)=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(Date.now()+days*86_400_000)).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`}
 export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
+  typeId=(await h.cmd('freeze.type.save',{name:'Travel',reason:'Planned travel agreed with the studio',feeCents:1000,defaultLengthDays:30,maxLengthDays:90,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:false})).id
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {
@@ -17,7 +18,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
           const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}]);return context.newPage()
         }
         const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN-006-${label}-${width}.png`),fullPage:false})}
-        const sale=async who=>{const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:8,amountCents:14000,expiresAt:'2099-12-31T00:00:00Z'})).id});return(await h.state()).packs.find(p=>p.id===ack.id)}
+        const sale=async who=>{const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:8,amountCents:14000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id});return(await h.state()).packs.find(p=>p.id===ack.id)}
         const pack=await sale(member),directPack=await sale(direct),packId=pack.id,directPackId=directPack.id,zone=(await h.state()).studio.timeZone
         const staff=await pageFor(h.owner),mine=await pageFor(member.cookie),directMine=await pageFor(direct.cookie)
         // The actual recurring-consent forms precede any freeze: no balance agreement is inferred.
@@ -29,7 +30,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         await recurring.getByRole('button',{name:'Preview recurring invoices',exact:true}).click()
         const proposal=(await h.state()).recurring.terms.find(t=>t.packId===packId)
         assert.ok(proposal)
-        await mine.goto(h.origin+'/app/packs#freezes')
+        await mine.goto(h.origin+'/app/packs#freezes');await mine.reload()
         assert.match(await mine.locator(`[data-recurring-consent="${proposal.id}"]`).innerText(),/until stopped/)
         await mine.locator(`[data-recurring="${proposal.id}"]`).getByRole('button',{name:'I agree to these recurring invoices',exact:true}).click()
         assert.equal((await h.state(member.cookie)).recurring.terms.find(t=>t.id===proposal.id).status,'active')
@@ -53,7 +54,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         await preview.getByText(/Freeze fee \$10\.00/).waitFor()
         assert.equal(await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0,'staff must wait for exact member acceptance')
         await preview.scrollIntoViewIfNeeded();await shot(staff,'staff-preview')
-        await mine.goto(h.origin+'/app/packs#freezes')
+        await mine.goto(h.origin+'/app/packs#freezes');await mine.reload()
         await shot(mine,'member-preview-before-scroll');assert.equal(await mine.locator(`[data-freeze="${freeze.id}"]`).count(),1,(await mine.locator('body').innerText()).slice(-5000));
         await mine.locator(`[data-freeze="${freeze.id}"]`).scrollIntoViewIfNeeded();await shot(mine,'member-preview')
         assert.equal(await mine.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0)
@@ -103,7 +104,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         const directFreeze=(await h.state()).freezes.freezes.find(f=>f.packId===directPackId)
         assert.equal(directFreeze.freezeRequestId,null)
         assert.equal(await staff.locator(`[data-freeze="${directFreeze.id}"]`).getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0)
-        await directMine.goto(h.origin+'/app/packs#freezes')
+        await directMine.goto(h.origin+'/app/packs#freezes');await directMine.reload()
         await directMine.locator(`[data-freeze="${directFreeze.id}"]`).getByRole('button',{name:'I accept this exact freeze',exact:true}).click()
         await staff.reload()
         await staff.locator(`[data-freeze="${directFreeze.id}"]`).getByRole('button',{name:'Approve this exact freeze',exact:true}).click()
@@ -118,7 +119,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         assert.equal((await h.state()).packs.find(p=>p.id===directPackId).expiresAt,directPack.expiresAt)
         // Closed requests remain visible; members can withdraw without a reason.
         const requestViaForm=async(pack,reason)=>{
-          await mine.goto(h.origin+'/app/packs#freezes')
+          await mine.goto(h.origin+'/app/packs#freezes');await mine.reload()
           const type=mine.locator(`[data-freeze-type="${typeId}"]`);await type.locator('summary').click()
           const ask=type.locator('form[action*="name=freeze.request"]')
           await ask.locator('select[name=packId]').selectOption(pack.id)
@@ -136,7 +137,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         await decline.scrollIntoViewIfNeeded();await shot(staff,'staff-decline-request')
         await decline.getByRole('button',{name:'Decline freeze request',exact:true}).click()
         assert.equal((await h.state()).freezes.requests.find(r=>r.id===declineRequest.id).status,'declined')
-        await mine.goto(h.origin+'/app/packs#freezes')
+        await mine.goto(h.origin+'/app/packs#freezes');await mine.reload()
         await mine.locator(`[data-freeze-request="${declineRequest.id}"]`).scrollIntoViewIfNeeded();await shot(mine,'member-declined-request')
         const ownRequest=await requestViaForm(await sale(member),'A request the member then withdraws')
         const ownRequestPanel=mine.locator(`[data-freeze-request="${ownRequest.id}"]`)
