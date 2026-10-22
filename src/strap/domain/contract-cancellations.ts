@@ -88,7 +88,7 @@ export async function statutoryCancellation(tx:Transaction,input:Record<string,u
   if(reasonCode==='relocation')insist(typeof input.relocationMiles==='number'&&Number.isFinite(input.relocationMiles)&&input.relocationMiles>p.relocationMiles,'statutory_relocation_not_eligible',409);
   const coolingOff=reasonCode==='cooling-off'?coolingWindows(tx.state,pack,terms).filter(w=>documentedAt>=terms.acceptedAt&&(!w.renewal||documentedAt>=w.opensAt)&&(!w.deadline||documentedAt<w.deadline)).sort((a,b)=>Number(!!b.renewal)-Number(!!a.renewal))[0]:null;
   if(reasonCode==='cooling-off')insist(coolingOff,'cooling_off_window_ended',409);
-  const value=reasonCode==='cooling-off'?coolingRefund(tx.state,pack,documentedAt,{packIds:coolingAgreementPackIds(tx.state,{packId:pack.id,termsId:terms.id,coolingOff}),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,pack.personId)].filter(Boolean),policy:p}):unusedPrepaid(tx.state,pack,documentedAt);
+  const value=reasonCode==='cooling-off'?coolingRefund(tx.state,pack,documentedAt,{packIds:coolingAgreementPackIds(tx.state,{id:terms.id,packId:pack.id,termsId:terms.id,coolingOff}),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,pack.personId)].filter(Boolean),policy:p}):unusedPrepaid(tx.state,pack,documentedAt);
   const basis=await source(tx.state,pack,terms,documentedAt);
   if(input.previewOnly===true||input.previewOnly==='yes'){
     const preview={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,reasonCode,documentedAt,evidenceReference,relocationMiles:input.relocationMiles??null,value,coolingOff,basis,createdBy:tx.who.id,createdAt:now()};tx.put('statutoryRefundPreview',preview);return preview;
