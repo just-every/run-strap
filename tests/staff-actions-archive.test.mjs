@@ -138,3 +138,42 @@ test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 
     assert.deepEqual(after.acknowledgements,originalAcknowledgements,'restored staff requests never add or rewrite the member-owned acknowledgement')
   } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
 })
+
+test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original member links, preference sources and queued suppression data without automatic marketing execution or restored staff sessions',{timeout:240000},async()=>{
+  const temp=await mkdtemp(join(tmpdir(),'strap-consent-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
+  let h
+  try {
+    await checkout(source);await checkout(restored)
+    await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6})
+    h=await harness({root:source});await setup(h,h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
+    const member=await h.person('ArchiveConsent'),duplicate=await h.person('ArchiveDuplicate'),desk=await h.person('ArchiveDesk')
+    const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:6000,expiresAt:new Date(Date.now()+20*86400000).toISOString()})).id})
+    const preference=await h.cmd('preferences.save',{revision:0,marketingInApp:true,marketingSms:false,accessibility:'Restricted archived preference',consentStatement:'I request native renewal messages',requestId:'synthetic-strap-archive-preference'},member.cookie)
+    await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:true,memberIds:[member.id]})
+    await h.cmd('member.message.send',{text:'Original duplicate source message',requestId:'synthetic-strap-archive-message'},duplicate.cookie)
+    const review=await h.cmd('member.merge.prepare',{sourceId:duplicate.id,targetId:member.id,reason:'Reviewed duplicate history',requestId:'synthetic-strap-archive-merge'})
+    const merged=await h.cmd('member.merge.confirm',{id:review.id,key:review.key,requestId:'synthetic-strap-archive-confirm'})
+    const preview=await h.cmd('renewal.sequence.prepare',{name:'Archived native renewal',channel:'inApp',text:'Review renewal options',maxMessages:5})
+    const rule=await h.cmd('renewal.sequence.approve',{id:preview.id,key:preview.key})
+    const row=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.packId===pack.id)
+    const queued=await h.cmd('renewal.sequence.enroll',{packId:pack.id,sequenceId:rule.id,basis:row.basis})
+    const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
+    assert.ok(portable.tables.st_records.some(r=>r.kind==='memberPreferenceEvent'))
+    assert.ok(portable.manifest.relationships.some(r=>r.from==='st_records.data.sourceId'&&r.to==='st_people.id'))
+    await h.close();h=null
+    await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
+    h=await harness({root:restored});const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
+    const original=await h.send('/api/strap/preferences.json?personId='+member.id,undefined,owner)
+    assert.equal(original.status,200);assert.deepEqual(original.value.preference,preference);assert.equal(original.value.history[0].source,'signed-in-member')
+    const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,owner)).value
+    assert.ok(history.merges.some(m=>m.id===merged.id));assert.ok(history.timeline.some(e=>e.record.text==='Original duplicate source message'))
+    for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
+    const state=await h.state(owner)
+    assert.equal(state.marketingMessages.find(m=>m.id===queued.id).status,'queued','restore and cron never automatically execute native marketing')
+    assert.equal(state.memberMessages.length,0,'owner state does not expose a member-only conversation projection')
+    const staff=await h.signIn(desk.email)
+    assert.equal((await h.send('/api/strap/state',undefined,staff)).status,403,'restored front desk must enroll a fresh second factor before opening records')
+    assert.equal((await h.send('/api/strap/command',{name:'member.record.create',input:{name:'Refused',email:'refused@studio.example',requestId:'synthetic-strap-restored'}},staff)).status,403)
+    assert.equal((await h.send('/auth/invite',{email:'refused@studio.example'},staff)).status,403,'generic native invitation remains closed after restore')
+  } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
+})

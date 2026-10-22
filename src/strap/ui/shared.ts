@@ -13,7 +13,7 @@ export const field = (name: string, label: string, value: unknown = '', type = '
   `<label class="field"><span>${h(label)}${hint ? ` <span class="hint">${h(hint)}</span>` : ''}</span><input name="${h(name)}" type="${h(type)}" value="${h(value)}" ${attrs}></label>`
 export const textarea = (name: string, label: string, value: unknown = '', attrs = '') => `<label class="field">${h(label)}<textarea name="${h(name)}" ${attrs}>${h(value)}</textarea></label>`
 export const select = (name: string, label: string, choices: [unknown, unknown][], value: unknown = '', attrs = 'required') =>
-  `<label class="field">${h(label)}<select name="${h(name)}" ${attrs}>${choices.map(([id, text]) => `<option value="${h(id)}"${id === value ? ' selected' : ''}>${h(text)}</option>`).join('')}</select></label>`
+  `<label class="field">${h(label)}<select aria-label="${h(label)}" name="${h(name)}" ${attrs}>${choices.map(([id, text]) => `<option value="${h(id)}"${id === value ? ' selected' : ''}>${h(text)}</option>`).join('')}</select></label>`
 export const personSelect = (s: any, selected: unknown = '', label = 'Member') => select('personId', label, [['', 'Choose a member'], ...rows(s, 'people').filter(p => p.active && p.role === 'member').sort((a, b) => a.name.localeCompare(b.name)).map(p => [p.id, p.name] as [unknown, unknown])], selected)
 
 /**

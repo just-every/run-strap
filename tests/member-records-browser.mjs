@@ -55,5 +55,10 @@ export async function mergedHistoryBrowser(h,{member}) {
     await capture('restricted-note')
     await page.getByText('Review a duplicate identity',{exact:true}).click()
     await capture('merge-review-form')
+    const state=await h.state(),entry=state.classes.find(c=>c.title==='History class')
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:state.studio.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(entry.start)).map(p=>[p.type,p.value]))
+    await page.goto(h.origin+'/app?day='+[parts.year,parts.month,parts.day].join('-')+'&class='+entry.id)
+    await page.getByText('Private owner alert',{exact:true}).waitFor()
+    await capture('owner-checkin-alert')
   })
 }

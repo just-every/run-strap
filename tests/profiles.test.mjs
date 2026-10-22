@@ -175,6 +175,12 @@ test('MEM-001: migrated, booked, attended, paid and waived source histories rema
   await h.cmd('member.note.add',{personId:member.id,text:'Private owner alert',alert:true,requestId:'synthetic-strap-note'})
   let full=await h.state();assert.ok(full.bookings.find(b=>b.id===booking.id).alerts.some(a=>a.text==='Private owner alert'))
   for(const cookie of [member.cookie,target.cookie,coach.cookie])assert.ok(!(await h.send('/api/strap/state',undefined,cookie)).text.includes('Private owner alert'))
+  const pairing=await h.cmd('kiosk.pair',{label:'Restricted-note privacy'})
+  const paired=await h.send('/kiosk/pair',{token:new URL(pairing.pairUrl).searchParams.get('token')})
+  assert.equal(paired.status,303)
+  const kiosk=paired.headers.get('set-cookie').split(';')[0]
+  const lookup=await h.send('/kiosk/lookup',{q:'migrated'},kiosk)
+  assert.equal(lookup.status,200);assert.ok(!lookup.text.includes('Private owner alert'))
   const reply=await h.cmd('member.message.send',{text:'Thank you for the class',requestId:'synthetic-strap-member-reply'},member.cookie)
   const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,h.owner)).value
   for(const source of [pack.id,booking.id,payment.id,reply.id])assert.ok(history.timeline.some(e=>e.id===source))

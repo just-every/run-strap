@@ -2,6 +2,7 @@ import { preferencesPanel } from './preferences';
 import { body, cell, field, form, h, hidden, panel, select, table, textarea } from './shared';
 import { money, when } from './format';
 import { actionChannel } from './booking-rules';
+const reference=(value:unknown) => h(value).replace(/([a-zA-Z0-9]{16})/g,'$1<wbr>');
 const identity = () => hidden('requestId',crypto.randomUUID())+actionChannel();
 const summary = (s:any,event:any) => {
   const r=event.record;
@@ -14,8 +15,8 @@ const summary = (s:any,event:any) => {
 };
 export function memberHistoryPanel(s:any,p:any,back:string) {
   const history=s.memberRecords?.find((r:any) => r.personId === p.id);if(!history)return '';
-  const events=history.timeline.map((e:any) => `<li data-member-event="${h(e.id)}"><p>${h(e.kind)} · ${when(s,e.at || new Date(0).toISOString())}</p><p>${h(summary(s,e))}</p><small>Source member ${h(e.personId)} · record ${h(e.id)}</small></li>`).join('');
-  const ledger=history.ledger.map((r:any) => `<tr>${cell('Entry',h(r.kind))}${cell('Amount',money(r.amountCents))}${cell('Source',h(r.personId)+'<br>'+h(r.id))}</tr>`).join('');
+  const events=history.timeline.map((e:any) => `<li data-member-event="${h(e.id)}"><p>${h(e.kind)} · ${when(s,e.at || new Date(0).toISOString())}</p><p>${h(summary(s,e))}</p><small>Source member ${reference(e.personId)} · record ${reference(e.id)}</small></li>`).join('');
+  const ledger=history.ledger.map((r:any) => `<tr>${cell('Entry',h(r.kind))}${cell('Amount',money(r.amountCents))}${cell('Source',reference(r.personId)+'<br>'+reference(r.id))}</tr>`).join('');
   const owner=s.actor.role === 'owner';
   const notes=owner?`<details><summary>Restricted notes and check-in alerts</summary>${history.notes.map((n:any) => `<p>${h(n.text)}${n.alert?' · Owner check-in alert':''} · ${when(s,n.at)}</p>`).join('')}${form('member.note.add',back,hidden('personId',p.id)+identity()+textarea('text','Restricted note','','required maxlength="2000"')+select('alert','Show at owner check-in',[['false','No'],['true','Yes']]),'Add restricted note')}</details>`:'';
   const preview=s.memberMergePreviews?.filter((m:any) => m.targetId === p.id && m.status === 'preview').at(-1);

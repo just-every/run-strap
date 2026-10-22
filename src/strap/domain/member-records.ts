@@ -88,7 +88,7 @@ export function memberHistory(state: State,who: Actor,personId: string) {
   requireMemberRecord(state,who,personId);
   const member = person(state,personId,false); insist(member.role === 'member','member_required');
   const ids = who.role === 'owner' ? linkedMemberIds(state,personId) : [personId], own = (kind: string) => list(state,kind).filter(r => ids.includes(r.personId));
-  const kinds = ['pack','packCreditEvent','booking','charge','payment','acknowledgement','profileChange','staffAction','memberMessage','memberInvitation','memberMerge','memberPreferenceEvent'];
+  const kinds = ['pack','packCreditEvent','booking','charge','payment','acknowledgement','profileChange','staffAction','memberMessage','memberInvitation','memberMerge','memberPreferenceEvent','notice','waiverLaunch','messagePreferenceEvent'];
   const timeline = kinds.flatMap(kind => own(kind).map(r => ({kind,id:r.id,personId:r.personId,at:r.at ?? r.createdAt ?? r.acknowledgedAt ?? r.confirmedAt ?? '',record:r})))
     .filter(e => who.role === 'owner' || (['profileChange','memberMessage','memberInvitation'].includes(e.kind) || (e.kind === 'staffAction' && ['member.record.create','profile.save.staff','member.record.invite','member.message.send.staff'].includes(e.record.command)))).sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
   return {personId:member.id,profile:profileOf(state,member),sourceIdentities:ids.map(key => person(state,key,false)),timeline,
