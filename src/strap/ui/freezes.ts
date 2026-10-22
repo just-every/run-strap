@@ -12,6 +12,9 @@ const exact = (s: any, at: string | null) => at ? packExpiration(s,at) : 'Agreed
 function preview(s: any, freeze: any, staff: boolean) {
   const e = freeze.effects
   const currentExpiry = rows(s,'packs').find(p=>p.id===freeze.packId)?.expiresAt
+  const appliedWithdrawal = freeze.status === 'withdrawn' && !!freeze.confirmedAt
+  const closedPreview = ['withdrawn','declined'].includes(freeze.status) && !freeze.confirmedAt
+  const feeEffect = appliedWithdrawal ? 'reversed once after withdrawal' : closedPreview ? 'not charged; this preview was closed' : freeze.confirmedAt ? 'added to the studio balance once' : 'added to the studio balance once only if approved'
   const bookings = e.bookings.length ? `<ul>${e.bookings.map((b: any) => `<li>${h(b.title)} · ${exact(s,b.start)}: ${h(b.effect)}; no cancellation fee.</li>`).join('')}</ul>` : '<p>No future bookings are affected.</p>'
   const needsAcceptance = freeze.requiresAcceptance && !freeze.acceptedAt
   const acceptance = freeze.status === 'preview' && !freeze.stale && needsAcceptance
@@ -26,12 +29,12 @@ function preview(s: any, freeze: any, staff: boolean) {
     + form('freeze.withdraw',path,hidden('id',freeze.id)+hidden('withdrawKey',withdrawal.key)+identity()+(staff ? textarea('reason','Reason for withdrawing freeze','','required maxlength="500"')+channel() : ''),'Withdraw this scheduled freeze','quiet')+'</details>' : ''
   return `<article data-freeze="${h(freeze.id)}"><h3>${h(staff ? person(s,freeze.personId)+' · ' : '')}${h(freeze.typeName)} · ${statusPill(freeze.stale ? 'stale' : freeze.status)}</h3>`
     + `<p>${exact(s,freeze.startAt)} → ${exact(s,freeze.endAt)}</p><p>Reason: ${h(freeze.reason)}</p>`
-    + `<p><strong>Freeze fee ${money(freeze.feeCents)}, ${freeze.status === 'withdrawn' ? 'reversed once after withdrawal' : 'added to the studio balance once'}. No payment is collected.</strong></p>`
-    + (freeze.status === 'withdrawn' ? `<p>The scheduled freeze was withdrawn. Its fee and date moves were reversed once.${currentExpiry ? ' Current term expiry: '+exact(s,currentExpiry)+'.' : ''} Previously cancelled classes stay cancelled.</p>` : `<p>Term expiry: ${exact(s,e.originalExpiresAt)} → ${exact(s,e.revisedExpiresAt)}. Added days grant no new period allowance. Existing credits and visits stay allocated, except the classes listed below whose original funding returns once.</p>`)
-    + (freeze.status === 'withdrawn' ? '<p>The plan can fund eligible classes again under its restored expiry.</p>' : `<p>${h(e.access)}</p><p>${h(e.billing)}</p>`)
-    + (e.originalRenewalAt && freeze.status !== 'withdrawn' ? `<p>Next invoice: ${exact(s,e.originalRenewalAt)} → ${exact(s,e.revisedRenewalAt)} · ${money(e.renewalAmountCents)}. No scheduled card or bank collections.</p>` : '')
+    + `<p><strong>Freeze fee ${money(freeze.feeCents)}, ${feeEffect}. No payment is collected.</strong></p>`
+    + (closedPreview ? '<p>The request was closed before approval. No fee, booking or term date changed.</p>' : appliedWithdrawal ? `<p>The scheduled freeze was withdrawn. Its fee and date moves were reversed once.${currentExpiry ? ' Current term expiry: '+exact(s,currentExpiry)+'.' : ''} Previously cancelled classes stay cancelled.</p>` : `<p>Term expiry: ${exact(s,e.originalExpiresAt)} → ${exact(s,e.revisedExpiresAt)}. Added days grant no new period allowance. Existing credits and visits stay allocated, except the classes listed below whose original funding returns once.</p>`)
+    + (closedPreview ? '' : appliedWithdrawal ? '<p>The plan can fund eligible classes again under its restored expiry.</p>' : `<p>${h(e.access)}</p><p>${h(e.billing)}</p>`)
+    + (e.originalRenewalAt && !appliedWithdrawal && !closedPreview ? `<p>Next invoice: ${exact(s,e.originalRenewalAt)} → ${exact(s,e.revisedRenewalAt)} · ${money(e.renewalAmountCents)}. No scheduled card or bank collections.</p>` : '')
     + `<p>Available credits at preview: ${h(e.remainingCredits)}. ${h(e.creditsReturned)} credit(s) return across the affected packs; visit holds return to their original plan.</p>`
-    + bookings + (freeze.exceptionReason ? `<p>Studio-approved exception: ${h(freeze.exceptionReason)}</p>` : '')
+    + (closedPreview ? '' : bookings) + (freeze.exceptionReason ? `<p>Studio-approved exception: ${h(freeze.exceptionReason)}</p>` : '')
     + (freeze.stale ? '<p>This preview is stale. Prepare another preview before approving.</p>' : '')
     + (freeze.acceptedAt ? `<p>The member accepted this exact preview ${when(s,freeze.acceptedAt)}.</p>` : '')
     + (freeze.resumedAt ? `<p>Resumed once at ${exact(s,freeze.resumedAt)}.</p>` : '') + acceptance + approval + end + withdraw + '</article>'
