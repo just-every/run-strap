@@ -160,9 +160,10 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
     assert.ok(portable.tables.st_records.some(r=>r.kind==='memberPreferenceEvent'))
     assert.ok(portable.manifest.relationships.some(r=>r.from==='st_records.data.sourceId'&&r.to==='st_people.id'))
+    const originalOwner=h.owner
     await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
-    h=await harness({root:restored});const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
+    h=await harness({root:restored,owner:originalOwner});assert.equal((await h.send('/api/strap/state',undefined,originalOwner)).status,401,'native sessions never restore');const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
     const original=await h.send('/api/strap/preferences.json?personId='+member.id,undefined,owner)
     assert.equal(original.status,200);assert.deepEqual(original.value.preference,preference);assert.equal(original.value.history[0].source,'signed-in-member')
     const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,owner)).value
