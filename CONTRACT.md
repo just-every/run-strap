@@ -449,7 +449,7 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from c34 source `1af667944f18` (22 October 2026) and the subsequent ct batch-7 assertions; updated rows cite the current code and public-door acceptance evidence.
+Judged from the code and tests at commit `1af667944f1865302b3510258bb139d6ae1a351f` (22 October 2026); the subsequent ct batch-7 assertions complete PLAN-006, and updated rows cite the current code and public-door acceptance evidence.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
