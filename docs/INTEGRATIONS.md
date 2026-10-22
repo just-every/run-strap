@@ -19,7 +19,7 @@ The catalogue has two separate read-only scopes. Scopes are fixed when a key is 
 | `roster:read` | Classes (id, title, service, start and end in UTC, capacity, published or cancelled) with each booking's id and status (booked, waitlisted, offered or cancelled) and the attendee's first name and last initial | Attendance, money, packs, payments, fees, balances, email addresses, phone numbers, emergency contacts, notes, cancellation reasons and instructor names |
 | `attendance:read` | Per seat: booking id, a member reference only this key can use, first name and last initial, outcome (booked, attended, no-show, excused, late cancel or early cancel), check-in time and channel, cancellation time and who cancelled, and whether the owner corrected it | Correction, cancellation or waiver reasons, notes, health answers, contact details, full names, person ids, kiosk ids, money, fees, credits, packs, instructor names or pay |
 
-A key covers your studio's one location. Keys for chosen locations arrive with multiple locations (STUDIO-002). Other read scopes, such as contact details or money, and any write scope each need their own approved addition before Strap offers them. People you have erased never appear.
+A key names the locations it reads when it is created (the form lists your locations once you have more than one); roster and attendance rows come only from those locations, a location the key was not given is refused with `location_not_granted`, and a key made before you added a location reads only your original location. Other read scopes, such as contact details or money, and any write scope each need their own approved addition before Strap offers them. People you have erased never appear.
 
 ## Read the roster
 

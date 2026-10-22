@@ -36,7 +36,7 @@ export async function locationsBrowser(h, { la, ana }) {
         await locations.locator('summary', { hasText: 'Add a location' }).click()
         const form = locations.locator('form').filter({ has: page.getByRole('button', { name: 'Add location', exact: true }) })
         await form.getByLabel('Location name', { exact: true }).fill(name)
-        await form.getByLabel('Time zone', { exact: true }).selectOption('America/Phoenix')
+        await form.locator('select[name="timeZone"]').selectOption('America/Phoenix')
         await form.getByLabel('Phone (US number)', { exact: true }).fill('(602) 555-0123')
         await form.getByLabel('Street address', { exact: true }).fill('1 Camelback Road')
         await form.getByLabel('City', { exact: true }).fill('Phoenix')
