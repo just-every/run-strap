@@ -13,7 +13,7 @@ export function preferencesPanel(s:any,personId:string,back:string,staff=false) 
       + field('consentStatement','Consent statement for any marketing opt-in','','text','maxlength="500"')+(staff?field('sourceReference','Source of the member’s stated permission','','text','maxlength="200"'):'')
       + toggle('contactEmail','Prefer contact by email',p.contactChannels.email)+toggle('contactSms','Prefer contact by SMS',p.contactChannels.sms)
       + field('preferredTimes','Preferred class times',p.preferredTimes,'text','maxlength="500"')+field('preferredClasses','Preferred classes',p.preferredClasses,'text','maxlength="500"')
-      + (!staff?textarea('accessibility','Accessibility requests (member and owner only)',p.accessibility,'maxlength="2000"')+toggle('feedback','Separate feedback-request permission',p.feedback):'')
+      + (!staff?textarea('accessibility','Accessibility requests (member and owner only)',p.accessibility,'maxlength="2000"')+toggle('feedback','Separate feedback-request permission',p.feedback):s.actor.role === 'owner'?textarea('accessibility','Accessibility requests (member and owner only)',p.accessibility,'maxlength="2000"'):'')
       + toggle('attendanceSharing','Share my rows with studio integration keys',p.attendanceSharing)
       + field('timeZone','My local time zone',p.timeZone,'text','required')+field('quietStart','Quiet hours start',p.quietStart,'time','required')+field('quietEnd','Quiet hours end',p.quietEnd,'time','required'),'Save preference record')
     + `<p><a href="/api/strap/preferences.json${staff?'?personId='+encodeURIComponent(personId):''}">Export preference record</a></p>`;

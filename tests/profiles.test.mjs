@@ -224,15 +224,17 @@ test('MEM-006: transactional choices stay independent of channel marketing conse
   await h.cmd('preferences.save.staff',{...staff,revision:2,bookingEmail:true,requestId:'synthetic-strap-forbidden-booking'},desk.cookie,403)
   const optout={personId:member.id,revision:2,marketingSms:false,channel:'phone',requestId:'synthetic-strap-phone-optout'}
   await h.cmd('preferences.save.staff',optout,desk.cookie)
+  await h.cmd('preferences.save.staff',{personId:member.id,revision:3,accessibility:'Owner-recorded access request',channel:'phone',sourceReference:'Member phone request',requestId:'synthetic-strap-owner-accessibility'})
   const history=(await h.send('/api/strap/preferences.json?personId='+member.id,undefined,h.owner)).value.history
-  assert.deepEqual(history.slice(-2).map(e=>[e.staffMade,e.channel,e.source]),[[true,'phone','staff-phone'],[true,'phone','staff-phone']])
-  assert.equal((await h.state()).staffActions.filter(a=>a.command==='preferences.save.staff').length,2)
+  assert.equal(history.at(-1).after.accessibility,'Owner-recorded access request');assert.equal(history.at(-1).actorRole,'owner')
+  assert.deepEqual(history.filter(e=>e.actorRole==='front-desk').slice(-2).map(e=>[e.staffMade,e.channel,e.source]),[[true,'phone','staff-phone'],[true,'phone','staff-phone']])
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='preferences.save.staff').length,3)
   // The owner creates a real scoped key through the app, with its native one-time secret.
   const keyPage=await h.mf.dispatchFetch(h.origin+'/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({label:'Preference sharing','sc_attendance:read':'true',location:'studio'}),redirect:'manual'})
   const token=(await keyPage.text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
   const attendance=async()=>{const r=await h.mf.dispatchFetch(h.origin+'/api/strap/integration/attendance',{headers:{authorization:'Bearer '+token,'strap-schema-version':'1',host:new URL(h.origin).host}});assert.equal(r.status,200);return r.json()}
   assert.ok((await attendance()).data.some(c=>c.attendance.length>0))
-  await h.cmd('preferences.save',{revision:3,attendanceSharing:false,requestId:'synthetic-strap-sharing-off'},member.cookie)
+  await h.cmd('preferences.save',{revision:4,attendanceSharing:false,requestId:'synthetic-strap-sharing-off'},member.cookie)
   assert.ok((await attendance()).data.every(c=>c.attendance.length===0),'sharing opt-out removes the member rows from an existing key immediately')
   if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./preferences-browser.mjs')).preferencesBrowser(h,{member,desk})
 }))

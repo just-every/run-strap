@@ -29,7 +29,7 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
   if(staff)requireMemberRecord(tx.state,tx.who,memberId);
   else {insist(tx.who.role === 'member','member_required',403);insist(input.personId === undefined || input.personId === memberId,'own_preference_required',403);}
   const member=person(tx.state,memberId);insist(member.role === 'member','member_required');
-  if(staff)insist(input.bookingEmail === undefined && input.feedback === undefined && input.accessibility === undefined,'member_owned_choice_required',403);
+  if(staff)insist(input.bookingEmail === undefined && input.feedback === undefined && (tx.who.role === 'owner' || input.accessibility === undefined),'member_owned_choice_required',403);
   const requestId=text(input.requestId,'requestId',80),requestBasis=JSON.stringify(Object.keys(input).sort().map(k => [k,input[k]]));
   const prior=list(tx.state,'memberPreferenceEvent').find(e => e.actorId === tx.who.id && e.requestId === requestId);
   if(prior){insist(prior.requestBasis === requestBasis,'preference_request_changed',409);return visiblePreferences(prior.after,tx.who);}
