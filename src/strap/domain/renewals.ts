@@ -1,3 +1,4 @@
+import { preferencesOf, permission } from './preferences';
 import { countsCredits } from './entitlements';
 import { unusedPrepaid } from './cancellation-value';
 import { createLead } from './leads';
@@ -43,14 +44,15 @@ export function renewalWorklist(state: State, who: Actor, query: URLSearchParams
       reasonCode:cancellation?.mode === 'early' ? cancellation.reasonCode ?? 'other' : null,
       remainingCredits:countsCredits(pack) ? pack.remaining : null,remainingValueCents:value.amountCents,
       valueBasis:{paidCents:value.paidCents,needsAllocation:value.needsAllocation,method:'unused receipt-allocated elapsed access; half-up cents'},lastVisit:visits.at(-1) ?? null,
-      renewalStatus:terms?.status ?? 'not-recorded',contactPermission:'unavailable',reasons,
+      sequenceEnrollments:list(state,'marketingMessage').filter(m=>m.packId===pack.id).map(m=>({id:m.id,sequenceId:m.sequenceId,status:m.status,channel:m.channel})),
+      renewalStatus:terms?.status ?? 'not-recorded',contactPermission:Object.fromEntries(['email','sms','inApp'].map(channel => [channel,permission(state,member.id,channel as 'email'|'sms'|'inApp') ?? 'confirmed'])),reasons,
       followup:lead ? {leadId:lead.id,ownerId:lead.ownerId,stage:lead.stage,nextAction:lead.nextAction,dueAt:lead.dueAt} : null,
       basis:JSON.stringify([state.version,pack.id,pack.creditRevision ?? 0,pack.expiresAt,pack.remaining])}];
   }).sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.packId.localeCompare(b.packId));
-  return {asOf,through,days,lowCredits,rows,coverage:'Native finite packs, fixed-term visit/unlimited plans, intro offers, stopped invoice renewals, scheduled terminations and freeze endings. Value is unused receipt-allocated prepaid access at the report time, rounded half-up; an unallocated eligible receipt makes it unavailable. This is not a refund quote or collection. Provider autopay, marketing permission and approved sequences remain unavailable.'};
+  return {asOf,through,days,lowCredits,rows,coverage:'Native finite packs, fixed-term visit/unlimited plans, intro offers, stopped invoice renewals, scheduled terminations and freeze endings. Value is unused receipt-allocated prepaid access at the report time, rounded half-up; an unallocated eligible receipt makes it unavailable. This is not a refund quote or collection. Channel-specific permission and approved native renewal sequence enrollment are recorded. Native in-app review is explicit; SMS/email delivery and provider-autopay endings remain unavailable.'};
 }
 
-export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','kind','termExpiresAt','freezeEndsAt','terminationId','reasonCode','valueBasis','lastVisit','renewalStatus','contactPermission','reasons','followup'];
+export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','kind','termExpiresAt','freezeEndsAt','terminationId','reasonCode','valueBasis','sequenceEnrollments','lastVisit','renewalStatus','contactPermission','reasons','followup'];
 
 export function renewalCsv(report: ReturnType<typeof renewalWorklist>) {
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"';

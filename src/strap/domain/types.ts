@@ -1,5 +1,5 @@
 export interface Actor {
-  id: string; email: string; role: 'owner' | 'instructor' | 'member' | 'finance' | 'manager' | 'agent' | 'kiosk' | 'system';
+  id: string; email: string; role: 'owner' | 'instructor' | 'member' | 'finance' | 'manager' | 'front-desk' | 'agent' | 'kiosk' | 'system';
   personId?: string; locationIds?: string[]; isOwner: boolean; kioskId?: string; sessionId?: string;
 }
 export interface Person {

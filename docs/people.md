@@ -1,7 +1,7 @@
 # People and access
 
 Everyone who signs in to Strap is a person in **People**: your members and your instructors. The owner adds them, and
-only the owner grants or ends access.
+only the owner grants or ends access. The owner may grant the bounded member-record right described below.
 
 ## Add a person
 
@@ -69,3 +69,21 @@ For an authenticated native owner, `GET /api/strap/staff-history` returns `timeZ
 strings and data cells are JSON values, matching Strap's portable-exit convention; `before` and `after` contain JSON
 text when present, and null when absent or erased. Only explicit audit fields are exported, without internal replay
 payloads or command results. Keep these downloads private like your other studio records.
+
+## Member-record staff and unified history
+
+The owner grants **Member-record staff access** in People to a member sign-in identity, selects the exact member records it may open and separately allows creation. The person signs in again and enrolls a second factor. Front desk can create an active member profile from a phone or desk request, explicitly send its invitation once, and edit assigned contacts with before/after provenance. Repeating the same request never sends another invitation. Submission is recorded separately from delivery; an interrupted attempt remains uncertain. Changing or revoking a grant invalidates previous sessions and pending native invitation authority. Generic account-management routes remain closed to front desk.
+
+**Unified member history** links dated packs, usage, bookings, attendance, waivers, native conversation messages, profile and staff changes, and the owner's original charge/receipt ledger. **My profile** includes the member's native conversation and reply. This is an in-app conversation, not an SMS or email inbox. Restricted notes and their check-in alerts are owner-only; front desk, members, instructors, kiosks and agents cannot read them.
+
+Only the owner reviews duplicate identities. The preview names both identities and retained history; changed facts invalidate confirmation. Confirmation links history and retires the source sign-in. Original records, credits, money, waivers and consent keep their source identities; no authority transfers to the target. The owner cannot reactivate a retired source identity. This conservative merge and staff-scope policy awaits contract approval; it is not a promise of legal identity verification or automatic financial consolidation.
+
+## Channel preferences and privacy
+
+Members open **My profile → Channel preferences and privacy**. Marketing starts off independently for email, SMS and in-app messages. Booking email is separate: opting out preserves in-app notices, and only the member can reverse that choice. Sign-in/security, receipts, failed-payment and required legal messages retain their existing rules. Preferred classes/times and contact channels do not grant marketing permission. Accessibility requests remain visible only to the member and owner. The initially-off feedback choice is member-owned and authorizes no feedback delivery today.
+
+Front desk changes assigned channel preferences with the member's stated permission and source reference. Opt-out suppresses queued and future marketing immediately. A verbal SMS opt-in stays pending until a valid signed reply from the member's uniquely matched phone confirms it. STOP suppresses all matching members for a shared phone; a positive reply on an ambiguous phone confirms nobody. START alone cannot reverse a STOP. The owner configures the Twilio consent callback separately; no SMS transport is included. External marketing synchronization is explicitly pending.
+
+Members may remove their rows from existing roster and attendance integration keys. Re-enabling sharing requires a new recorded consent statement. The owner or authorized staff may export the preference record with its dated source history; other members, instructors and agents cannot. Exports and notes stay private.
+
+Quiet hours always include 8 pm–10 am on the member's chosen local clock and can be stricter. These defaults, shared-phone confirmation and restricted-access rules await contract approval. No provider delivery or complete MSG-008 acceptance is claimed.

@@ -187,3 +187,7 @@ test('MSG-002: the confirmation/reminder opt-out leaves waitlist-offer preferenc
   assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'offer-message-'+sent.length})
  }})
 })
+
+test('MEM-006 / MSG-008 / RPT-007: signed STOP suppresses queued and future SMS, verbal re-entry waits for member reply, and native renewal queue honors permission, quiet hours, pause and replay',()=>run(async h=>{
+  await(await import('./consent-queue-cases.mjs')).consentQueueCases(h)
+}))

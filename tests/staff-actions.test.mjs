@@ -39,13 +39,25 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
     const actions={
+      'preferences.save':async door=>{
+        const own=await h.cmd('preferences.save',{revision:0,marketingEmail:false,preferredTimes:'Mornings',requestId:randomUUID()},ana.cookie);
+        const input={personId:ben.id,revision:0,marketingEmail:false,preferredTimes:'Mornings',requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+        assert.equal(r.result.preferredTimes,own.preferredTimes);assert.equal(r.event.right,'member-record');assert.equal(r.event.personId,ben.id);
+        assert.deepEqual(await h.cmd(door,input),r.result);
+      },
+      'member.message.send':async door=>{
+        const own=await h.cmd('member.message.send',{text:'Member asks about next class',requestId:randomUUID()},ana.cookie);
+        const input={personId:ana.id,text:'Staff reply in the studio conversation',requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+        assert.equal(own.staffMade,false);assert.equal(r.result.staffMade,true);assert.equal(r.event.personId,ana.id);
+        assert.deepEqual(await h.cmd(door,input),r.result);assert.ok((await h.state(ana.cookie)).memberMessages.some(m=>m.id===r.result.id));
+      },
       'intro.preview':async door=>{
         introMember=await h.person('IntroMemberPair');introDeskMember=await h.person('IntroDeskPair');
         for(const member of [introMember,introDeskMember])await h.cmd('intro.identity.verify',{personId:member.id,householdChecked:true,reason:'Verified identity and household'});

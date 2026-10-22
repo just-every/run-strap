@@ -2,6 +2,7 @@
 import { createPortability } from '@runeditrun/rer/modules/portability';
 // @ts-ignore The CLI and Worker share this JavaScript archive policy.
 import archivePolicy from '../archive-policy.mjs';
+import { requireMemberRecord } from './member-records';
 import { humanOwner, id, insist, integer, person, text } from './types';
 import { phoneDigits, savePhone } from './checkin';
 import { profileOf, recordProfileChange } from './profiles';
@@ -12,9 +13,17 @@ async function hash(value: string) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b => b.toString(16).padStart(2,'0')).join('');
 }
 export async function savePerson(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
+  humanOwner(tx.who); return writePerson(tx,input);
+}
+export async function saveDeskPerson(tx: Transaction,input: Record<string,unknown>) {
+  requireMemberRecord(tx.state,tx.who);
+  insist(!input.id && input.role === 'member' && input.active === true,'desk_member_creation_only',403);
+  return writePerson(tx,input);
+}
+async function writePerson(tx: Transaction, input: Record<string,unknown>) {
   const previous = input.id ? person(tx.state,text(input.id,'id',100),false) : null;
   if (previous && input.version !== undefined) insist(previous.version === integer(input.version,'version',1,Number.MAX_SAFE_INTEGER),'person_changed',409);
+  insist(!previous || input.active !== true || ![...tx.state.records.values()].some(r => r.kind === 'memberMerge' && r.data.sourceId === previous.id),'merged_source_identity_retired',409);
   const email = text(input.email,'email',254).toLowerCase(), name = text(input.name,'name',160);
   insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),'invalid_email');
   const role = input.role ?? previous?.role ?? 'member', active = input.active ?? previous?.active ?? true;

@@ -1,3 +1,6 @@
+import { smsConsentWebhook } from './consent-webhook'
+import { preferenceExport } from './domain/preferences'
+import { memberHistory, requireMemberRecord } from './domain/member-records'
 import { historyExport, historyCsv } from './staff-history'
 import { retentionReport } from './retention-report'
 import { leadReport } from './lead-report'
@@ -40,8 +43,9 @@ async function access(env: Bindings) {
 }
 
 async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
-  const human = ['owner', 'finance', 'manager', 'member', 'instructor'].includes(who.role)
+  const human = ['owner', 'finance', 'manager', 'front-desk', 'member', 'instructor'].includes(who.role)
   const mfa = human ? await mfaView(env, who) : null
+  if (who.role === 'front-desk') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? '',mfa};
   if (who.role === 'finance') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
     return { ...await financeSnapshot(env.DB, who), classes: [], displayName: operator?.name ?? '', mfa }
@@ -72,7 +76,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
   if (name.startsWith('finance.')) return financeCommand(env, who, name, input)
   if (name.startsWith('manager.')) return managerCommand(env, who, name, input)
-  if (name.startsWith('agent.') || name === 'person.invite') return credentialCommand(request, env, who, name, input)
+  if (name.startsWith('agent.') || name === 'person.invite' || name === 'member.record.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('integration.')) return integrationCommand(env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
   if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
@@ -95,9 +99,11 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
+  if (who.role === 'front-desk' && !['/app','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && name && !['member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.')) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !managerRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
-  const hold = await mfaHold(env, who, { path, name, privileged: privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
+  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 
@@ -123,6 +129,7 @@ export async function strapScheduled(original: Bindings) {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if (path === '/api/strap/consent/twilio') return smsConsentWebhook(request,runtimeBindings(original))
   if (path === '/kiosk' || path.startsWith('/kiosk/')) return kioskResponse(request, runtimeBindings(original))
   if (path.startsWith('/api/strap/integration/')) return integrationResponse(request, runtimeBindings(original))
   if (!path.startsWith('/api/strap/') && path !== '/app' && !path.startsWith('/app/')) return null
@@ -139,6 +146,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
       if (reportStaff(who) && path === '/app') return new Response(null, { status: 303, headers: { ...headers, location: '/app/revenue' } })
+      if (path === '/api/strap/preferences.json') {const loaded=await load(env.DB,who);return Response.json(preferenceExport(loaded.state,loaded.who,url.searchParams.get('personId') ?? who.personId ?? ''),{headers:{...headers,'content-disposition':'attachment; filename=strap-preferences.json'}});}
+      if (path === '/api/strap/member-history') {
+        const loaded = await load(env.DB,who);return json(memberHistory(loaded.state,loaded.who,url.searchParams.get('personId') ?? ''));
+      }
       if (path === '/api/strap/staff-history' || path === '/api/strap/staff-history.csv') {
         if (who.role !== 'owner') fail('owner_required',403)
         // The security audit (factor enrollment, resets, finance grants) joins the staff-made actions in the owner's history.

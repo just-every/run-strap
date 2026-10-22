@@ -110,3 +110,123 @@ test('APP-003: members edit their own name, phone and emergency contact; the own
     if(process.env.STRAP_PROOF_DIR) await (await import('./profiles-browser.mjs')).profilesBrowser(h,{ana,ben,entry})
   })
 })
+
+test('MEM-001: scoped member-record staff create phoned-in profiles, invite once and edit contacts with canonical provenance; MFA, denied scope and revocation close every door without writes',()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
+  const desk=await h.person('RecordDesk'),member=await h.person('RecordMember'),other=await h.person('RecordOther')
+  const refused=async(name,input,cookie,status=403)=>{const v=(await h.state()).version;await h.cmd(name,input,cookie,status);assert.equal((await h.state()).version,v)}
+  const create={name:'Phoned Member',email:'phoned-member@studio.example',phone:'5125550101',channel:'phone',requestId:'synthetic-strap-desk-create'}
+  await refused('member.record.create',create,desk.cookie)
+  await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:true,memberIds:[member.id]})
+  assert.equal((await h.send('/api/strap/state',undefined,desk.cookie)).status,401,'grant changes retire existing native sessions')
+  desk.cookie=await h.signIn(desk.email)
+  await refused('member.record.create',create,desk.cookie)
+  assert.equal((await h.send('/api/strap/command',{name:'member.record.create',input:create},desk.cookie)).value.error,'mfa_enrollment_required')
+  await h.enroll(desk.cookie)
+  for(const path of ['/auth/invite','/auth/operator/status','/auth/operator/role']) {
+    const v=(await h.state()).version
+    assert.equal((await h.send(path,{email:'unscoped@studio.example',role:'member',operatorId:member.id,status:'inactive'},desk.cookie)).status,403)
+    assert.equal((await h.state()).version,v)
+  }
+  const made=await h.cmd('member.record.create',create,desk.cookie)
+  assert.deepEqual(await h.cmd('member.record.create',create,desk.cookie),made)
+  assert.equal((await h.state()).staffActions.filter(a=>a.requestId===create.requestId).length,1)
+  const input={personId:made.id,phone:'5125550102',emergencyName:'Emergency Person',emergencyPhone:'5125550103',channel:'phone',requestId:'synthetic-strap-desk-edit'}
+  await h.cmd('profile.save.staff',input,desk.cookie)
+  const actions=(await h.state()).staffActions.filter(a=>a.personId===made.id)
+  assert.deepEqual(actions.map(a=>a.command).sort(),['member.record.create','profile.save.staff'])
+  const edited=actions.find(a=>a.command==='profile.save.staff');assert.equal(edited.actorRole,'front-desk');assert.equal(edited.channel,'phone');assert.equal(edited.before.phone,'5125550101');assert.equal(edited.after.phone,'5125550102')
+  await refused('profile.save.staff',{...input,personId:other.id},desk.cookie)
+  assert.equal((await h.send('/api/strap/member-history?personId='+other.id,undefined,desk.cookie)).status,403)
+  const history=(await h.send('/api/strap/member-history?personId='+made.id,undefined,desk.cookie)).value
+  assert.equal(history.profile.phone,'5125550102');assert.ok(history.timeline.some(e=>e.record.command==='member.record.create'))
+  const invite={personId:made.id,channel:'phone',requestId:'synthetic-strap-desk-invite'}
+  const invitation=await h.cmd('member.record.invite',invite,desk.cookie)
+  assert.equal(invitation.status,'submitted')
+  const beforeMail=Number((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n)
+  assert.deepEqual(await h.cmd('member.record.invite',invite,desk.cookie),invitation)
+  assert.equal(Number((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n),beforeMail)
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='member.record.invite'&&a.personId===made.id).length,1)
+  assert.equal((await h.send('/api/strap/command',{name:'member.note.add',input:{personId:made.id,text:'Forbidden',alert:true}},desk.cookie)).status,403)
+  if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./member-records-browser.mjs')).memberRecordsBrowser(h,{desk,member:made})
+  await h.cmd('member.record.grant',{personId:desk.id,enabled:false,canCreate:false,memberIds:[]})
+  await refused('profile.save.staff',{...input,requestId:'synthetic-strap-after-revoke'},desk.cookie,401)
+  desk.cookie=await h.signIn(desk.email)
+  await refused('profile.save.staff',{...input,requestId:'synthetic-strap-after-signin'},desk.cookie)
+  await refused('member.record.invite',invite,desk.cookie)
+  assert.equal((await h.send('/api/strap/member-history?personId='+made.id,undefined,desk.cookie)).status,403)
+}))
+
+test('MEM-001: migrated, booked, attended, paid and waived source histories remain linked after exact owner-reviewed duplicate merge; restricted alert notes never enter member, instructor or kiosk views',()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
+  const csv='MemberId,FirstName,LastName,Email\nsynthetic-strap-1,Migrated,Member,migrated-history@studio.example\n'
+  const preview=await h.cmd('import.preview',{csv});let job=(await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})).job
+  while(job.state==='applying')job=(await h.cmd('import.resume',{jobId:job.id})).job
+  const imported=(await h.state()).people.find(p=>p.email==='migrated-history@studio.example')
+  await h.cmd('person.save',{...imported,active:true});await h.cmd('person.invite',{id:imported.id})
+  const member={...imported,cookie:await h.signIn(imported.email)},target=await h.person('CanonicalMember'),coach=await h.person('HistoryCoach','instructor')
+  const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const waiver=await h.cmd('waiver.publish',{text:'Studio waiver for source history'})
+  await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
+  const start=new Date(Date.now()+1500).toISOString(),session=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'History class',start,end:new Date(Date.parse(start)+60000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0]
+  const booking=await h.cmd('booking.book',{classId:session.id},member.cookie)
+  await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+  const payment=await h.cmd('payment.record',{personId:member.id,amountCents:10000,reference:'synthetic-strap-history-payment'})
+  await h.cmd('member.note.add',{personId:member.id,text:'Private owner alert',alert:true,requestId:'synthetic-strap-note'})
+  let full=await h.state();assert.ok(full.bookings.find(b=>b.id===booking.id).alerts.some(a=>a.text==='Private owner alert'))
+  for(const cookie of [member.cookie,target.cookie,coach.cookie])assert.ok(!(await h.send('/api/strap/state',undefined,cookie)).text.includes('Private owner alert'))
+  const reply=await h.cmd('member.message.send',{text:'Thank you for the class',requestId:'synthetic-strap-member-reply'},member.cookie)
+  const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,h.owner)).value
+  for(const source of [pack.id,booking.id,payment.id,reply.id])assert.ok(history.timeline.some(e=>e.id===source))
+  assert.ok(history.waivers.some(a=>a.waiverId===waiver.id));assert.ok(history.ledger.some(r=>r.id===payment.id))
+  const stale=await h.cmd('member.merge.prepare',{sourceId:member.id,targetId:target.id,reason:'Owner checked both records',requestId:'synthetic-strap-merge-stale'})
+  await h.cmd('profile.save.staff',{personId:member.id,phone:'5125550199',requestId:'synthetic-strap-source-change'})
+  const v=(await h.state()).version;await h.cmd('member.merge.confirm',{id:stale.id,key:stale.key,requestId:'synthetic-strap-stale-confirm'},h.owner,409);assert.equal((await h.state()).version,v)
+  const reviewed=await h.cmd('member.merge.prepare',{sourceId:member.id,targetId:target.id,reason:'Owner verified duplicate with both source identities',requestId:'synthetic-strap-merge'})
+  const confirm={id:reviewed.id,key:reviewed.key,requestId:'synthetic-strap-confirm-merge'}
+  const merged=await h.cmd('member.merge.confirm',confirm);assert.deepEqual(await h.cmd('member.merge.confirm',confirm),merged)
+  assert.equal((await h.send('/api/strap/state',undefined,member.cookie)).status,403,'retired source sign-in loses access')
+  const linked=(await h.send('/api/strap/member-history?personId='+target.id,undefined,h.owner)).value
+  assert.deepEqual(new Set(linked.sourceIdentities.map(p=>p.id)),new Set([member.id,target.id]))
+  for(const source of [pack.id,booking.id,payment.id,reply.id])assert.ok(linked.timeline.some(e=>e.id===source&&e.personId===member.id))
+  assert.equal(merged.authorityTransferred,false);assert.equal((await h.state(target.cookie)).packs.length,0,'history linking transfers no credit authority')
+  if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./member-records-browser.mjs')).mergedHistoryBrowser(h,{member:target})
+}))
+
+test('MEM-006: transactional choices stay independent of channel marketing consent, staff provenance, member-owned sensitive choices, exports and integration sharing opt-out',()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
+  const member=await h.person('PreferenceMember'),desk=await h.person('PreferenceDesk'),coach=await h.person('PreferenceCoach','instructor')
+  const own={revision:0,bookingEmail:false,marketingEmail:true,marketingSms:false,marketingInApp:false,consentStatement:'I request email marketing only',preferredTimes:'Early mornings',preferredClasses:'Mat and flow',accessibility:'Private access request',feedback:false,attendanceSharing:true,requestId:'synthetic-strap-preference'}
+  const saved=await h.cmd('preferences.save',own,member.cookie)
+  assert.equal(saved.marketing.email,'confirmed');assert.equal(saved.marketing.sms,'denied');assert.equal((await h.state(member.cookie)).messagePreference.optedOut,true)
+  assert.deepEqual(await h.cmd('preferences.save',own,member.cookie),saved)
+  const exported=(await h.send('/api/strap/preferences.json',undefined,member.cookie)).value
+  assert.equal(exported.preference.preferredTimes,'Early mornings');assert.equal(exported.history.length,1);assert.equal(exported.history[0].source,'signed-in-member');assert.ok(Date.parse(exported.history[0].at))
+  await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:6000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const start=at(30),session=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Preference flow',start,end:new Date(Date.parse(start)+60*minute).toISOString(),capacity:4,instructorId:coach.id}]})).id})).classes[0]
+  await h.cmd('booking.book',{classId:session.id},member.cookie)
+  assert.ok((await h.state(member.cookie)).notices.length>0,'transactional in-app notice survives booking-email opt-out')
+  assert.equal((await h.send('/api/strap/preferences.json?personId='+member.id,undefined,coach.cookie)).status,403)
+  await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:false,memberIds:[member.id]});desk.cookie=await h.signIn(desk.email);await h.enroll(desk.cookie)
+  const staff={personId:member.id,revision:1,marketingSms:true,consentStatement:'Member requested SMS by phone',sourceReference:'Recorded phone request',channel:'phone',requestId:'synthetic-strap-verbal-optin'}
+  const pending=await h.cmd('preferences.save.staff',staff,desk.cookie)
+  assert.equal(pending.marketing.sms,'pending');assert.equal(pending.accessibility,undefined)
+  assert.ok(!(await h.send('/api/strap/state',undefined,desk.cookie)).text.includes('Private access request'))
+  const v=(await h.state()).version
+  await h.cmd('preferences.save.staff',{...staff,revision:2,feedback:true,requestId:'synthetic-strap-forbidden-feedback'},desk.cookie,403)
+  assert.equal((await h.state()).version,v)
+  await h.cmd('preferences.save.staff',{...staff,revision:2,bookingEmail:true,requestId:'synthetic-strap-forbidden-booking'},desk.cookie,403)
+  const optout={personId:member.id,revision:2,marketingSms:false,channel:'phone',requestId:'synthetic-strap-phone-optout'}
+  await h.cmd('preferences.save.staff',optout,desk.cookie)
+  const history=(await h.send('/api/strap/preferences.json?personId='+member.id,undefined,h.owner)).value.history
+  assert.deepEqual(history.slice(-2).map(e=>[e.staffMade,e.channel,e.source]),[[true,'phone','staff-phone'],[true,'phone','staff-phone']])
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='preferences.save.staff').length,2)
+  // The owner creates a real scoped key through the app, with its native one-time secret.
+  const keyPage=await h.mf.dispatchFetch(h.origin+'/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({label:'Preference sharing','sc_attendance:read':'true',location:'studio'}),redirect:'manual'})
+  const token=(await keyPage.text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
+  const attendance=async()=>{const r=await h.mf.dispatchFetch(h.origin+'/api/strap/integration/attendance',{headers:{authorization:'Bearer '+token,'strap-schema-version':'1',host:new URL(h.origin).host}});assert.equal(r.status,200);return r.json()}
+  assert.ok((await attendance()).data.some(c=>c.attendance.length>0))
+  await h.cmd('preferences.save',{revision:3,attendanceSharing:false,requestId:'synthetic-strap-sharing-off'},member.cookie)
+  assert.ok((await attendance()).data.every(c=>c.attendance.length===0),'sharing opt-out removes the member rows from an existing key immediately')
+  if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./preferences-browser.mjs')).preferencesBrowser(h,{member,desk})
+}))

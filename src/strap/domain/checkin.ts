@@ -139,6 +139,7 @@ export function checkinAlerts(state: State, booking: RecordData, who: Actor) {
     if (left === 0) alerts.push({type:'last_credit'});
     if (Date.parse(pack.expiresAt) - Date.parse(at) < 7 * 86_400_000) alerts.push({type:'pack_expiring',expiresAt:pack.expiresAt});
   }
+  if (who.role === 'owner') for (const note of list(state,'memberNote').filter(n => n.personId === booking.personId && n.alert)) alerts.push({type:'member_note',text:note.text});
   return alerts;
 }
 

@@ -9,6 +9,7 @@ export interface Tab { href: string; label: string; glyph: string; count?: numbe
 
 export function tabs(s: any): Tab[] {
   const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
+  if (s.actor.role === 'front-desk') return [{href:'/app/people',label:'Member records',glyph:'users'},security]
   if (s.actor.role === 'manager') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
   if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length

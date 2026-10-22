@@ -6,7 +6,7 @@ import { firstRunResponse } from './base/setup'
 import { fontHead } from './base/font-head'
 import { fontDocumentResponse } from './base/font-response'
 import { themeFrame } from './base/theme-frame'
-import { createOperatorAuth, createAuthHandler, createSignInHandler, type AuthConfig } from './modules/operator-auth/index.mjs'
+import { createOperatorAuth, defaultRolePolicy, createAuthHandler, createSignInHandler, type AuthConfig } from './modules/operator-auth/index.mjs'
 import { operatorMail } from './mail.server.mjs'
 import branding from './branding.json'
 
@@ -14,6 +14,8 @@ import branding from './branding.json'
 const theme = { href: '/rer-theme.css', productName: branding.name, accentColor: branding.primaryColor }
 
 export interface Bindings {
+ TWILIO_AUTH_TOKEN?: string
+ TWILIO_PHONE_NUMBER?: string
  DB: D1Database
  /** Built browser files; hosted deploys run the Worker first (staticAssetResponse). */
  ASSETS?: Fetcher
@@ -49,7 +51,14 @@ export interface Bindings {
 export const runtimeBindings = (env: Bindings): Bindings => env.RER_DEV_ORIGIN && env.AUTH_LOCAL === 'true' ? { ...env, AUTH_ORIGIN: env.RER_DEV_ORIGIN } : env
 export const authConfig = (env: Bindings): AuthConfig => ({ dependencies: true, origin: env.AUTH_ORIGIN, local: env.AUTH_LOCAL === 'true', OWNER_EMAIL: env.OWNER_EMAIL, SESSION_SECRET: env.SESSION_SECRET, SETUP_TOKEN: env.SETUP_TOKEN, MAIL_FROM: env.MAIL_FROM, branding: { productName: branding.name, accentColor: branding.primaryColor, signInPath: '/signin', theme: theme.href } })
 export function operatorAuth(env: Bindings) {
- return createOperatorAuth({ db: env.DB, config: authConfig(env), mailSender: operatorMail(env), clientIp: request => request.headers.get('CF-Connecting-IP') ?? '' })
+ return createOperatorAuth({ db: env.DB, config: authConfig(env), mailSender: operatorMail(env), rolePolicy: async input => {
+   if (defaultRolePolicy(input)) return true;
+   if (input.actor.status !== 'active' || input.action !== 'operators:invite' || input.role !== 'member') return false;
+   // authMfaResponse unconditionally refuses every generic management route for front desk.
+   // The product service checks MFA, exact member scope and explicit request provenance before invite().
+   // Base confirmation also uses this live grant check; revocation invalidates the issuer's version.
+   return !!await env.DB.prepare("SELECT 1 FROM st_people p JOIN st_records r ON r.id='member-record-grant:'||p.id WHERE lower(p.email)=lower(?) AND p.active=1 AND p.erased_at IS NULL AND json_extract(r.data,'$.enabled')=1").bind(input.actor.email).first();
+ }, clientIp: request => request.headers.get('CF-Connecting-IP') ?? '' })
 }
 
 const privateHeaders = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-robots-tag': 'noindex, nofollow' }

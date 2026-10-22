@@ -11,6 +11,9 @@ export async function authMfaResponse(request: Request, env: Bindings): Promise<
   if (!session) return null // Base independently refuses missing/invalid sessions.
   try {
     const who = { ...await actor(env.DB, { userId: session.operator.id, email: session.operator.email, isOwner: session.operator.role === 'owner' }), sessionId: session.id }
+    // Product-scoped front-desk invitations must use member.record.invite.
+    // No generic Base account-management door is available, even after MFA.
+    if (who.role === 'front-desk') return Response.json({error:'member_record_route_required'},{status:403,headers:{'cache-control':'no-store'}})
     const hold = await mfaHold(env, who, { path, privileged: true })
     if (!hold && who.role !== 'finance' && who.role !== 'manager') return null
     return Response.json({ error: hold?.code ?? `${who.role}_reports_only` }, { status: 403, headers: { 'cache-control': 'no-store' } })

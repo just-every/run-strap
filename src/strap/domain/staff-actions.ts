@@ -11,6 +11,7 @@ export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Ob
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
 export function staffBefore(tx: Transaction, name: string, input: Record<string,unknown>) {
+  if (name === 'preferences.save.staff') return tx.state.records.get('member-preference:'+String(input.personId))?.data ?? null;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));
   if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
   if (name === 'plan.recurring.prepare' || name === 'freeze.prepare') { const pack=tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
@@ -27,8 +28,7 @@ export function staffAfter(name: string, result: RecordData) {
   return structuredClone(result);
 }
 export function priorStaffRequest(tx: Transaction, name: string, input: Record<string,unknown>) {
-  if (tx.who.role !== 'owner' || !input.requestId) return null;
-  humanOwner(tx.who);
+  if (!['owner','front-desk'].includes(tx.who.role) || !input.requestId) return null;
   const requestId = text(input.requestId,'requestId',100), basis = requestBasis(input);
   const prior = staffActions(tx.state).find(a => a.actorId === tx.who.id && a.requestId === requestId);
   if (!prior) return null;

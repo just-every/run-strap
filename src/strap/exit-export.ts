@@ -31,6 +31,11 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.sourceId', to: 'st_people.id', when: 'kind=memberMerge or kind=memberMergePreview' },
+  { from: 'st_records.data.targetId', to: 'st_people.id', when: 'kind=memberMerge or kind=memberMergePreview' },
+  { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=memberRecordGrant' },
+  { from: 'st_records.data.sequenceId', to: 'st_records.id', kind: 'renewalSequence', when: 'kind=marketingMessage or kind=memberMessage' },
+  { from: 'st_records.data.marketingMessageId', to: 'st_records.id', kind: 'marketingMessage', when: 'kind=memberMessage' },
   { from: 'st_records.data.introSaleId', to: 'st_records.id', kind: 'introSale' },
   { from: 'st_records.data.introOfferId', to: 'st_records.id', kind: 'introOffer' },
   { from: 'st_records.data.offerId', to: 'st_records.id', kind: 'introOffer', when: 'kind=introPreview or kind=introSale' },
@@ -157,7 +162,7 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
       csv: { encoding: 'UTF-8', recordSeparator: 'CRLF', cellEncoding: 'JSON value inside RFC 4180 quoted field', headerEncoding: 'plain column name' },
       provenance: { jobs: 'ik_jobs', originals: 'ik_originals', originalChunks: 'ik_d1_original_chunks',
         sourceIdentities: 'ik_sources', effects: 'ik_provenance', history: 'ik_d1_history', batches: 'ik_batches' },
-      actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no auth identities or access rights are exported.',
+      actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no native auth identities are exported. Member-record grants travel as attributed studio data only and grant no authority to an independent receiver.',
       documents: { waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
         signedWaivers: { status: 'not_implemented', files: [] }, media: { status: 'not_implemented', files: [] },
         acknowledgementMeaning: 'Receipt of an exact waiver version; not a signature or signed waiver.' },

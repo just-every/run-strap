@@ -1,3 +1,4 @@
+import { memberHistoryPanel, memberRecordAccess, memberRecordDesk } from './member-records'
 import { reservationsPanel } from './reservations'
 import { feesPanel } from './fees'
 // People: members and instructors in a searchable list beside one person's own
@@ -30,6 +31,7 @@ function card(s: any, p: any, back: string) {
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
     + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
     + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
     + (p.role === 'member'
@@ -39,6 +41,7 @@ function card(s: any, p: any, back: string) {
 }
 
 export function peoplePage(s: any, query: URLSearchParams) {
+  if (s.actor.role === 'front-desk') return memberRecordDesk(s,query)
   const q = (query.get('q') ?? '').trim().toLowerCase()
   const all = rows(s, 'people').sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
   const list = q ? all.filter(p => p.name.toLowerCase().includes(q) || String(p.email).toLowerCase().includes(q)) : all
@@ -56,5 +59,6 @@ export function peoplePage(s: any, query: URLSearchParams) {
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
     + staffActionHistory(s, query)
+    + memberRecordAccess(s)
     + `</div><aside class="rail">${chosen ? card(s, chosen, back) : ''}${add}${cancellationReasonsPanel(s)}</aside></div>`
 }

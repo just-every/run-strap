@@ -7,6 +7,7 @@ import { qrSvg } from './qr'
 import { staffRequestFields } from './staff-actions'
 
 const alertText = (s: any, a: any) => ({
+  member_note: String(a.text ?? ''),
   balance_due: `Owes ${money(a.amountCents)}`,
   waiver_missing: 'Waiver not signed',
   waiver_outdated: `Waiver v${a.version} not signed`,

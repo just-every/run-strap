@@ -1,6 +1,7 @@
 import { humanOwner, id, insist, integer, list, now, person, text, type Actor, type Person, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { memberCheckin, phoneDigits, savePhone } from './checkin';
+import { requireMemberRecord } from './member-records';
 import { requestBasis, staffChannel } from './staff-actions';
 
 // APP-003: a member's profile is their name and sign-in email (st_people), the
@@ -79,7 +80,7 @@ export function saveOwnProfile(tx: Transaction, input: Record<string, unknown>) 
 
 /** The member-record staff door (the owner until STAFF-001): the same fields and fences. */
 export function saveMemberProfile(tx: Transaction, input: Record<string, unknown>) {
-  humanOwner(tx.who);
+  requireMemberRecord(tx.state,tx.who,input.personId);
   insist(input.email === undefined, 'sign_in_email_is_changed_in_access_settings');
   const member = person(tx.state, input.personId, false);
   insist(member.role === 'member', 'member_required');

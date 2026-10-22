@@ -210,7 +210,7 @@ test('RPT-007 / RPT-006: native plan endings and low-credit screen/HTTP worklist
   assert.deepEqual(report.rows.find(r=>r.packId===both.id).reasons,['expiring','low-credits'])
   assert.deepEqual(report.rows.find(r=>r.packId===low.id).reasons,['low-credits'])
   for (const row of report.rows) {
-    assert.equal(row.remainingValueCents,0); assert.equal(row.valueBasis.paidCents,0); assert.equal(row.contactPermission,'unavailable'); assert.equal(row.lastVisit,null)
+    assert.equal(row.remainingValueCents,0); assert.equal(row.valueBasis.paidCents,0); assert.deepEqual(row.contactPermission,{email:'permission_denied',sms:'permission_denied',inApp:'permission_denied'}); assert.equal(row.lastVisit,null)
     assert.equal(row.expiresAt,(await h.state()).packs.find(p=>p.id===row.packId).expiresAt)
   }
   assert.equal(Date.parse(report.through)-Date.parse(report.asOf),30*day)

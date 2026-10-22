@@ -1,3 +1,4 @@
+import { inviteMemberRecord } from './member-invitations'
 import { operatorAuth, type Bindings } from '../auth.server'
 import { actor, type Actor } from './domain'
 
@@ -25,6 +26,7 @@ export async function agentKeys(env: Bindings, who: Actor) {
 }
 
 export async function credentialCommand(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name === 'member.record.invite') return inviteMemberRecord(request,env,who,input)
   if (who.role !== 'owner') fail('Only the owner manages access', 403)
   if (name === 'agent.create') {
     const label = String(input.label ?? '').trim()
