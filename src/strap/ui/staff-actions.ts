@@ -70,6 +70,7 @@ function effect(s: any, value: any) {
   if(value.paymentId&&value.chargeId)return `Actual external receipt allocated · ${money(value.amountCents)}`;
   if(value.refundId&&value.reference)return `External refund settlement recorded · ${money(value.amountCents)}`;
   if(value.cancellationId&&'settledCents' in value)return `Refund due · ${value.amountCents===null?'awaiting receipt allocation':money(value.amountCents)} · ${h(value.status)}`;
+  if(value.documentedAt&&value.value)return `Statutory refund preview · ${h(value.reasonCode)} · documented ${when(s,value.documentedAt)} · ${value.value.amountCents===null?'awaiting receipt allocation':money(value.value.amountCents)} due · cancellation not submitted`;
   if(value.termsId&&value.effects&&value.effectiveAt)return `Membership cancellation · ${h(value.status)} · effective ${when(s,value.effectiveAt)} · ${value.effects.bookings.length} affected seats · no provider payment or refund`;
   if(value.termsId&&value.effectiveAt)return `Cancellation request · ${h(value.status)} · ${when(s,value.effectiveAt)}`;
   if(value.cancellationId&&value.requiresFreshAcceptance)return `Cancellation withdrawal · ${h(value.status)} · invoices stay stopped pending fresh member acceptance`;

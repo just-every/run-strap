@@ -44,7 +44,9 @@ export async function coolingOffCases(h){
   const ilPerson=await agreement({region:'IL',channel:'in-person'});assert.ok(!ilPerson.window.rules.some(r=>r.id==='IL-645-6-off-premises'));assert.equal(ilPerson.window.rules.find(r=>r.id==='IL-645-6').deadline,'2026-01-10T07:00:00.000Z');
   const ilUnknown=await agreement({region:'IL',channel:null});assert.equal(ilUnknown.window.rules.find(r=>r.id==='IL-645-6-off-premises').deadline,'2026-01-13T07:00:00.000Z');
   const ilPreopening=await agreement({region:'IL',channel:'in-person',openedOn:'2026-02-01'});assert.ok(ilPreopening.window.rules.some(r=>r.id==='IL-645-6-off-premises'));
+  await h.cmd('studio.save',{location:'Austin',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Austin',region:'TX',postalCode:'78701',country:'US'},businessHours:hours});
   const texas=await agreement({region:'TX'});assert.ok(!texas.window.rules.some(r=>r.region==='IL'));
+  await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:null,businessHours:hours});
   const delayed=await agreement({deliveredAt:'2026-01-07T09:00:00.000Z'});assert.equal(delayed.window.opensAt,'2026-01-07T09:00:00.000Z');assert.equal(delayed.window.deadline,'2026-01-15T07:00:00.000Z')
   const missing=await agreement({deliveredAt:null});assert.equal(missing.window.deadline,null);assert.equal((await cancel(missing,'2026-03-06T12:00:00.000Z')).status,'applied','no recorded copy delivery: day 60 remains timely')
   for(const [months,inside,outside] of [[12,'2026-01-27T12:00:00.000Z','2026-01-28T12:00:00.000Z'],[1,'2026-01-08T12:00:00.000Z','2026-01-09T12:00:00.000Z']]){

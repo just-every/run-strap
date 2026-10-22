@@ -12,6 +12,8 @@ export function saveContractRegion(tx: Transaction, input: Record<string,unknown
 }
 /** The complete native invoice contract retained at acceptance, excluding internal source facts. */
 export async function contractCopy(state: State, terms: RecordData) {
+  const delivered=list(state,'contractDelivery').filter(d=>d.termsId===terms.id&&d.document&&d.digest).sort((a,b)=>a.deliveredAt.localeCompare(b.deliveredAt))[0];
+  if(delivered)return {document:delivered.document,digest:delivered.digest};
   const pack = record(state,terms.packId,'pack');
   const document = {version:1,agreementId:terms.id,personId:terms.personId,memberName:person(state,terms.personId,false).name,
     consent:terms.acknowledgement?.text??terms.consent,acceptedAt:terms.acceptedAt??null,
