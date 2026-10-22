@@ -33,7 +33,9 @@ export async function consentQueueCases(h) {
   assert.ok(exportRecord.history.some(e=>e.source==='twilio-signed-webhook'&&e.sourceReference==='synthetic-strap-stop'))
   assert.ok((await h.send('/api/strap/exit.json',undefined,h.owner)).text.includes('pending_external_sync'),'external synchronization is explicitly pending, never reported complete')
   // The native queue rechecks permission, pause and quiet hours without an external transport.
-  const zones=['America/New_York','America/Los_Angeles','Pacific/Honolulu','Pacific/Guam'],zone=zones.find(timeZone=>{const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',hour:'2-digit'}).format(new Date()));return hour>=10&&hour<20});assert.ok(zone)
+  // Members can be traveling; choose a real local clock outside quiet hours so
+  // this public-door delivery case works at every UTC hour without faking application time.
+  const zones=['America/New_York','America/Los_Angeles','Pacific/Honolulu','Pacific/Guam','Europe/London','Asia/Singapore'],zone=zones.find(timeZone=>{const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',hour:'2-digit'}).format(new Date()));return hour>=10&&hour<20});assert.ok(zone)
   await choose({marketingInApp:true,consentStatement:'I request in-app renewal messages',timeZone:zone,quietStart:'00:00',quietEnd:'23:59'})
   const native=await sequence('inApp'),nativeMessage=await enroll(native);assert.deepEqual(await enroll(native),nativeMessage)
   await h.cmd('renewal.queue.review',{});assert.equal((await h.state()).marketingMessages.find(m=>m.id===nativeMessage.id).holdReason,'quiet_hours')
