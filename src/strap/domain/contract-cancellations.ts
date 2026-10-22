@@ -136,7 +136,7 @@ export async function prepareWithdrawCancellation(tx:Transaction,input:Record<st
   const preview={id:id(),personId:c.personId,packId:c.packId,cancellationId:c.id,status:'preview',basis:await withdrawalBasis(tx.state,c),reason:input.reason?text(input.reason,'reason',500):null,requiresFreshAcceptance:true,createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};const saved={...preview,key:id()};tx.put('cancellationWithdrawal',saved);return saved;
 }
 export async function confirmWithdrawCancellation(tx:Transaction,input:Record<string,unknown>){
-  const w=record(tx.state,input.id,'cancellationWithdrawal'),c=record(tx.state,w.cancellationId,'contractCancellation');authorizeWithdrawal(tx,c);insist(input.key===w.key,'preview_changed',409);
+  const w=record(tx.state,input.id,'cancellationWithdrawal'),c=record(tx.state,w.cancellationId,'contractCancellation');authorizeWithdrawal(tx,c);insist(w.createdBy===tx.who.id,'own_withdrawal_preview_required',403);insist(input.key===w.key,'preview_changed',409);
   if(w.confirmedAt){insist(w.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return w;}
   insist(live(c)&&c.effectiveAt>now()&&w.basis===await withdrawalBasis(tx.state,c),'cancellation_not_withdrawable',409);tx.future(c.effectiveAt);
   const terms=record(tx.state,c.termsId,'recurringTerms');tx.put('recurringTerms',{...terms,status:'stopped',requiresFreshAcceptance:true});tx.put('contractCancellation',{...c,status:'withdrawn',withdrawnAt:now(),withdrawnBy:tx.who.id,withdrawalId:w.id});

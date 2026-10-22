@@ -104,6 +104,7 @@ export async function authorityCases(h) {
   await denied('plan.cancellation.withdraw.prepare', {id:guardianStopped.id, requestId:requestId()}, guardian)
   assert.equal((await h.state()).cancellations.cancellations.find(row => row.id === guardianStopped.id).status, 'scheduled', 'expiry preserves a scheduled cancellation')
   assert.ok(!(await h.state(guardian.cookie)).cancellations.contracts.some(row => row.id === childTerms.id), 'expired guardian loses agreement access')
+  await h.cmd('plan.cancellation.withdraw.confirm',{id:revokedWithdrawal.id,key:revokedWithdrawal.key,requestId:requestId()},revokingMember.cookie,403);
   const restored = await h.cmd('plan.cancellation.withdraw.prepare', {id:guardianStopped.id, requestId:requestId()}, child.cookie)
   assert.equal(restored.requiresFreshAcceptance, true)
   await h.cmd('plan.cancellation.withdraw.confirm', {id:restored.id, key:restored.key, requestId:requestId()}, child.cookie)
@@ -132,6 +133,13 @@ export async function authorityCases(h) {
     await h.cmd('contract.authority.revoke', {id:stateGrant.id, reason:'Verified guardian evidence superseded'})
     await denied('plan.cancellation.stop', {packId:otherPack.id, requestId:requestId()}, guardian)
   }
+
+  const emancipating={personId:otherChild.id,delegateId:guardian.id,kind:'minor-guardian',birthOn:`${majorityYear-21}-12-15`,adultOn,evidenceReference:requestId()};
+  const emancipationGrant=await h.cmd('contract.authority.save',emancipating);await h.cmd('contract.authority.accept',{id:emancipationGrant.id},guardian.cookie);
+  const emancipatedOn=iso(Date.now()-day).slice(0,10);
+  const emancipated=await h.cmd('contract.authority.save',{...emancipating,emancipatedOn,emancipationEvidenceReference:requestId()});
+  assert.equal(emancipated.authorityEndsOn,emancipatedOn);assert.ok(emancipated.authorityEndsAt<iso(Date.now()));
+  await denied('plan.cancellation.stop',{packId:otherPack.id,requestId:requestId()},guardian);
 
   // Make both outstanding cancellations due as persisted history and run the
   // scheduler once: revocation cannot undo the stop or add an invoice.
