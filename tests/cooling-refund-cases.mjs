@@ -136,8 +136,8 @@ export async function coolingRefundCases(h) {
 }
 
 /** c35 regressions: public sales and receipts; only past invoice/clock facts are fixtures. */
-export async function cancellationFixCases(h,{scenario='all',previewOnly=false}={}) {
-  let sequence=scenario==='overlap'?3300:3100
+export async function cancellationFixCases(h,{scenario='all',previewOnly=false,fixtureOffset=0}={}) {
+  let sequence=(scenario==='overlap'?3300:3100)+fixtureOffset
   const key=()=>`synthetic-strap-${sequence++}`
   const start='2026-01-05T07:00:00.000Z', documentedAt='2026-01-06T07:00:00.000Z'
   const save=(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
