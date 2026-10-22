@@ -314,7 +314,7 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
 }))
 
 
-test('PLAN-007: one-step member, payer and guardian cancellation supersedes freezes, preserves exact paid-value refunds and ends once across restart', {timeout:240000},()=>run(async h=>{
+test('PLAN-007: one-step member, payer and guardian cancellation supersedes freezes, preserves exact paid-value refunds and ends once across restart', {timeout:240000},async()=>{await run(async h=>{
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/New_York'});
   const nina=await h.person('Nina'),payer=await h.person('Oscar'),guest=await h.person('Mira'),guardian=await h.person('Jo'),child=await h.person('Kira'),stranger=await h.person('Noah'),coach=await h.person('Ian','instructor');
   const day=86400000,now=Date.now(),iso=ms=>new Date(ms).toISOString(),date=days=>iso(now+days*day).slice(0,10);
@@ -354,7 +354,7 @@ test('PLAN-007: one-step member, payer and guardian cancellation supersedes free
   const cooling=await sell(guest),coolingTerms=await agree(cooling,guest);await save('recurringTerms',{...coolingTerms,acceptedAt:iso(Date.now()-6*day)});assert.equal((await h.cmd('plan.cancellation.statutory',{packId:cooling.id,reasonCode:'cooling-off',documentedAt:iso(Date.now()-100),evidenceReference:'synthetic-strap-619',requestId:'synthetic-strap-620'},guest.cookie)).status,'applied','weekends do not consume the protective business-day window');
   const lateTerms=await agree(unrelated,stranger);await save('recurringTerms',{...lateTerms,acceptedAt:iso(Date.now()-30*day)});const lateCopy=(await h.state()).cancellations.contracts.find(t=>t.id===lateTerms.id).copy;await h.cmd('contract.copy.delivery.record',{termsId:lateTerms.id,digest:lateCopy.digest,deliveredAt:iso(Date.now()-30*day),evidenceReference:'synthetic-strap-624',requestId:'synthetic-strap-625'});assert.equal((await h.cmd('plan.cancellation.statutory',{packId:unrelated.id,reasonCode:'cooling-off',documentedAt:iso(Date.now()-100),evidenceReference:'synthetic-strap-621',requestId:'synthetic-strap-622'},stranger.cookie,409)).error,'cooling_off_window_ended');
   if(process.env.STRAP_PROOF_DIR)await(await import('./cancellations-browser.mjs')).cancellationsBrowser(h,{nina,payer,guardian,child,stranger});
-}))
+});await run(async h=>{await h.confirmSetup(h.owner);await(await import('./contract-authority-cases.mjs')).authorityCases(h);});})
 
 
 test('PLAN-007: delivered contract copies and state-specific cooling clocks preserve the longest right and refund timely NY renewals',async()=>{await run(async h=>{

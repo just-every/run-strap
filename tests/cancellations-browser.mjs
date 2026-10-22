@@ -161,6 +161,8 @@ async function authorityJourneys(c){
     await page.locator(`[data-contract-authority="${grant.id}"]`).getByRole('button',{name:'Accept my cancellation authority',exact:true}).click()
   }
   const payerPlan=await saleAndAgreement(h,nina,key())
+  const retail={id:key(),personId:nina.id,reason:'retail',description:'Private retail purchase',amountCents:43127,createdAt:new Date().toISOString()};
+  await h.db.prepare('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,0)').bind(retail.id,'charge',JSON.stringify(retail)).run();
   const payerGrant=await record(nina,payer,'payer')
   await go(payerPage);assert.equal(await payerPage.locator(`[data-contract-authority="${payerGrant.id}"]`).count(),0,'the payer sees no new invitation or contract facts before participant consent');await shot(payerPage,'payer-before-participant-consent');
   await accept(mine,payerGrant);await accept(payerPage,payerGrant)
@@ -170,7 +172,8 @@ async function authorityJourneys(c){
   await payerStop.scrollIntoViewIfNeeded();await shot(payerPage,'payer-own-account-stop')
   await payerStop.getByRole('button',{name:'Stop renewal now',exact:true}).click()
   const cancelled=(await h.state(payer.cookie)).cancellations.cancellations.find(r=>r.termsId===payerPlan.terms.id&&r.status==='scheduled')
-  assert.ok(cancelled);assert.equal(cancelled.terminatedBy,await actor(h,payer))
+  assert.ok(cancelled);assert.equal(cancelled.terminatedBy,await actor(h,payer));assert.equal(cancelled.effects.existingBalanceCents,12000);assert.ok(!JSON.stringify((await h.state(payer.cookie)).cancellations).includes(retail.id));
+  const payerConfirmation=payerPage.locator(`[data-contract-cancellation="${cancelled.id}"]`);assert.match(await payerConfirmation.innerText(),/Covered-agreement balance \$120\.00/);assert.doesNotMatch(await payerConfirmation.innerText(),/431\.27|Private retail/);await payerConfirmation.scrollIntoViewIfNeeded();await shot(payerPage,'payer-covered-agreement-only');
   await go(mine)
   assert.equal(await mine.locator(`[data-contract-cancellation="${cancelled.id}"]`).getByRole('button',{name:'Preview withdrawal of my cancellation',exact:true}).count(),0,'the participant cannot withdraw the payer’s termination')
   const guardianGrant=await record(child,guardian,'minor-guardian')
@@ -183,6 +186,18 @@ async function authorityJourneys(c){
   const guardianState=await h.state(guardian.cookie),ended=guardianState.cancellations.cancellations.find(r=>r.termsId===childPlan.terms.id&&r.status==='scheduled')
   assert.ok(ended);assert.equal(ended.terminatedBy,await actor(h,guardian))
   assert.equal(guardianState.cancellations.authorities.find(g=>g.id===guardianGrant.id).memberAcceptedAt,null,'the child need not accept legal-guardian cancellation authority')
+  const expired={...(await h.state()).cancellations.authorities.find(g=>g.id===guardianGrant.id),adultAt:new Date(Date.now()-1000).toISOString(),authorityEndsAt:new Date(Date.now()-1000).toISOString()};
+  await h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(expired),'contractAuthority',expired.id).run();
+  await go(guardianPage);assert.equal(await guardianPage.locator(`[data-contract-cancellation="${ended.id}"]`).count(),0);
+  const expiredGrant=guardianPage.locator(`[data-contract-authority="${guardianGrant.id}"]`);assert.match(await expiredGrant.innerText(),/Ends/);await expiredGrant.scrollIntoViewIfNeeded();await shot(guardianPage,'guardian-expired-end-date');
+  assert.equal((await h.state()).cancellations.cancellations.find(r=>r.id===ended.id).status,'scheduled','expiry preserves a prior cancellation');
+  await go(await c.childPage());
+  const adult=c.adultPage;await adult.locator(`[data-contract-cancellation="${ended.id}"]`).getByRole('button',{name:'Preview withdrawal of my cancellation',exact:true}).click();
+  const restore=(await h.state(child.cookie)).cancellations.withdrawals.find(w=>w.cancellationId===ended.id&&w.status==='preview');
+  await adult.locator(`[data-cancellation-withdrawal="${restore.id}"]`).getByRole('button',{name:'Confirm withdrawal; keep invoices stopped',exact:true}).click();
+  assert.equal((await h.state()).recurring.terms.find(t=>t.id===childPlan.terms.id).status,'stopped');
+  await adult.locator(`[data-cancellation-withdrawal="${restore.id}"]`).scrollIntoViewIfNeeded();await shot(adult,'adult-restores-with-fresh-consent-required');
+  const newTerms=await h.cmd('plan.recurring.prepare',{packId:childPlan.pack.id,intervalMonths:1,requestId:key()});await go(adult);const consent=adult.locator(`[data-recurring="${newTerms.id}"]`);await consent.scrollIntoViewIfNeeded();await shot(adult,'adult-fresh-invoice-acceptance');await consent.getByRole('button',{name:'I agree to these recurring invoices',exact:true}).click();assert.equal((await h.state()).recurring.terms.find(t=>t.id===newTerms.id).status,'active');
   for(const [page,who,grant,label,cancellationId] of [[payerPage,payer,payerGrant,'payer',cancelled.id],[guardianPage,guardian,guardianGrant,'guardian',ended.id]]){
     await go(page)
     await page.locator(`[data-contract-authority="${grant.id}"]`).getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
@@ -221,7 +236,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
           await revoke.locator('textarea[name=reason]').fill('The named participant and delegate requested fresh reviewed authority')
           await revoke.getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
         }
-        const context={h,nina,payer,guardian,child,staff,mine,payerPage,guardianPage,go,shot,key,zone}
+        const adultPage=await pageFor(child.cookie);const context={h,nina,payer,guardian,child,staff,mine,payerPage,guardianPage,go,shot,key,zone,adultPage,childPage:async()=>adultPage}
         await ownStopAndWithdrawal(context)
         await ownerEarlyTermination(context)
         await statutoryRefund(context)

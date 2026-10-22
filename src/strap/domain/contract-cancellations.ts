@@ -8,7 +8,7 @@ import type { Transaction } from './store';
 import { appendPackEvent, bookingCredit } from './pack-credits';
 import { bookingHistory } from './booking-history';
 import { contractNotice } from './contract-billing';
-import { balance } from './money';
+import { contractBalance } from './contract-ledger';
 import { staffChannel } from './staff-actions';
 import { activeContractAuthorities, authorizeContractCancellation, canCancelContract, contractAuthoritySnapshot, contractRecipients } from './contract-authority';
 import { retainRefundDue, unusedPrepaid } from './cancellation-value';
@@ -33,7 +33,7 @@ export function saveCancellationPolicy(tx:Transaction,input:Record<string,unknow
 }
 function replay(tx:Transaction,kind:string,input:Record<string,unknown>){const requestId=text(input.requestId,'requestId',100),requestBasis=fingerprint(input),prior=list(tx.state,kind).find(c=>c.createdBy===tx.who.id&&c.requestId===requestId);if(prior)insist(prior.requestBasis===requestBasis,'cancellation_request_changed',409);return {prior,requestId,requestBasis};}
 function contract(state:State,packId:unknown){
-  const pack=record(state,packId,'pack');person(state,pack.personId);
+  const row=state.records.get(String(packId));insist(row?.kind==='pack','contract_not_found',404);const pack=row.data;person(state,pack.personId);
   const candidates=list(state,'recurringTerms').filter(t=>t.currentPackId===pack.id&&t.acceptedAt&&t.acceptedBy);
   const terms=candidates.find(t=>['active','needs_review','needs_reconnection'].includes(t.status))??candidates.sort((a,b)=>b.acceptedAt.localeCompare(a.acceptedAt)).at(0);
   insist(terms,'accepted_recurring_terms_required',409);return {pack,terms};
@@ -52,7 +52,7 @@ async function source(state:State,pack:RecordData,terms:RecordData,at:string){co
   changes:list(state,'planChange').filter(c=>c.packId===pack.id&&c.status==='accepted'),freezes:list(state,'freeze').filter(f=>f.packId===pack.id),charges:list(state,'charge').filter(r=>r.personId===pack.personId||affected(state,pack.id,at).some(b=>b.guestPackId&&r.bookingId===b.id)).map(r=>({id:r.id,amountCents:r.amountCents,personId:r.personId,packId:r.packId,bookingId:r.bookingId,reason:r.reason,reversesChargeId:r.reversesChargeId})),payments:list(state,'payment').filter(r=>r.personId===pack.personId||list(state,'contractPrepayment').some(a=>a.packId===pack.id&&a.paymentId===r.id)).map(r=>({id:r.id,personId:r.personId,amountCents:r.amountCents})),allocations:list(state,'contractPrepayment').filter(a=>a.packId===pack.id).map(a=>({id:a.id,paymentId:a.paymentId,chargeId:a.chargeId,payerId:a.payerId,amountCents:a.amountCents})),authorities:activeContractAuthorities(state,pack.personId).map(g=>({id:g.id,kind:g.kind,delegateId:g.delegateId,adultAt:g.adultAt,memberAcceptedAt:g.memberAcceptedAt,delegateAcceptedAt:g.delegateAcceptedAt})),cancellations:list(state,'contractCancellation').filter(c=>c.termsId===terms.id&&live(c))});const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(json));return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');}
 function effects(state:State,pack:RecordData,terms:RecordData,at:string):CancellationEffects{
   const reversals=guestReversals(state,pack.id,at),freezes=cancellationFreezeEffects(state,pack.id),feeReturns=freezes.reduce((n,f)=>n+(f.chargeId&&state.records.get(f.chargeId)?.data.personId===pack.personId?f.feeReversedCents:0),0);
-  return {id:`effects:${pack.id}`,effectiveAt:at,remainingCredits:pack.remaining,finalChargeCents:0,existingBalanceCents:balance(state,pack.personId),projectedFinalBalanceCents:balance(state,pack.personId)+reversals.filter(r=>r.personId===pack.personId).reduce((n,r)=>n+r.amountCents,0)-feeReturns,
+  return {id:`effects:${pack.id}`,effectiveAt:at,remainingCredits:pack.remaining,finalChargeCents:0,existingBalanceCents:contractBalance(state,terms.id),projectedFinalBalanceCents:contractBalance(state,terms.id)+reversals.filter(r=>r.personId===pack.personId).reduce((n,r)=>n+r.amountCents,0)-feeReturns,
     guestPriceReversals:reversals,freezes,unusedPrepaid:unusedPrepaid(state,pack,at),refundPolicy:'Unused allocated prepaid value is refund due, settled externally. Unallocated receipts remain visibly awaiting reconciliation. No provider refund or account credit is issued.',remainingValue:'Remaining credits expire as retained history; no forfeiture or invented commitment fee.',collection:'studio-balance-only',stoppedRenewalAt:terms.nextRenewalAt,
     bookings:affected(state,pack.id,at).map(b=>({id:b.id,bookingId:b.id,personId:b.personId,classId:b.classId,start:state.records.get(b.classId)?.data.start,packId:b.packId??null,guestPackId:b.guestPackId??null,status:b.status,effect:'cancel at effective instant; original funding returned once; no cancellation fee'}))};
 }
@@ -120,18 +120,27 @@ export async function confirmCancellation(tx:Transaction,input:Record<string,unk
   insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
   const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}return scheduled;
 }
+function mayWithdraw(state:State,who:Actor,c:RecordData){
+  if(c.terminatedBy===who.id)return canCancelContract(state,who,c.personId,c.termsId);
+  if(who.role!=='member'||who.personId!==c.personId||c.terminatedRole!=='member')return false;
+  // An ended delegate grant cannot keep an adult participant from restoring access.
+  return !activeContractAuthorities(state,c.personId).some(g=>c.terminatedBy===(g.delegateAcceptedBy??g.delegateId)&&(g.kind==='minor-guardian'||g.agreementIds?.includes(c.termsId)));
+}
+function authorizeWithdrawal(tx:Transaction,c:RecordData){
+  authorizeContractCancellation(tx,c.personId,c.termsId);insist(mayWithdraw(tx.state,tx.who,c),'terminator_required',403);
+}
 async function withdrawalBasis(state:State,c:RecordData){const json=JSON.stringify({c,pack:record(state,c.packId,'pack'),terms:record(state,c.termsId,'recurringTerms')});const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(json));return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');}
 export async function prepareWithdrawCancellation(tx:Transaction,input:Record<string,unknown>){
-  const c=record(tx.state,input.id,'contractCancellation');insist(c.terminatedBy===tx.who.id,'terminator_required',403);authorizeContractCancellation(tx,c.personId,c.termsId);
+  const c=record(tx.state,input.id,'contractCancellation');authorizeWithdrawal(tx,c);
   const r=replay(tx,'cancellationWithdrawal',input);if(r.prior)return r.prior;insist(live(c)&&c.effectiveAt>now(),'cancellation_not_withdrawable',409);
   const preview={id:id(),personId:c.personId,packId:c.packId,cancellationId:c.id,status:'preview',basis:await withdrawalBasis(tx.state,c),reason:input.reason?text(input.reason,'reason',500):null,requiresFreshAcceptance:true,createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};const saved={...preview,key:id()};tx.put('cancellationWithdrawal',saved);return saved;
 }
 export async function confirmWithdrawCancellation(tx:Transaction,input:Record<string,unknown>){
-  const w=record(tx.state,input.id,'cancellationWithdrawal'),c=record(tx.state,w.cancellationId,'contractCancellation');insist(c.terminatedBy===tx.who.id,'terminator_required',403);authorizeContractCancellation(tx,c.personId,c.termsId);insist(input.key===w.key,'preview_changed',409);
+  const w=record(tx.state,input.id,'cancellationWithdrawal'),c=record(tx.state,w.cancellationId,'contractCancellation');authorizeWithdrawal(tx,c);insist(input.key===w.key,'preview_changed',409);
   if(w.confirmedAt){insist(w.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return w;}
   insist(live(c)&&c.effectiveAt>now()&&w.basis===await withdrawalBasis(tx.state,c),'cancellation_not_withdrawable',409);tx.future(c.effectiveAt);
   const terms=record(tx.state,c.termsId,'recurringTerms');tx.put('recurringTerms',{...terms,status:'stopped',requiresFreshAcceptance:true});tx.put('contractCancellation',{...c,status:'withdrawn',withdrawnAt:now(),withdrawnBy:tx.who.id,withdrawalId:w.id});
-  const confirmed={...w,status:'confirmed',confirmedAt:now(),confirmedBy:tx.who.id,confirmationBasis:fingerprint(input),billingStatus:'stopped'};tx.put('cancellationWithdrawal',confirmed);notify(tx,c,`cancellation-withdraw:${w.id}`,'Cancellation withdrawn','The terminator withdrew the scheduled end of access. Invoices stay stopped. Resuming requires a fresh owner proposal and the member’s own acceptance of the exact invoice preview. No old charge is replayed; withdrawn freezes and cancelled seats stay withdrawn/cancelled.');return confirmed;
+  const confirmed={...w,status:'confirmed',confirmedAt:now(),confirmedBy:tx.who.id,confirmationBasis:fingerprint(input),billingStatus:'stopped'};tx.put('cancellationWithdrawal',confirmed);notify(tx,c,`cancellation-withdraw:${w.id}`,'Cancellation withdrawn','The authorized participant or terminator withdrew the scheduled end of access. Invoices stay stopped. Resuming requires a fresh owner proposal and the member’s own acceptance of the exact invoice preview. No old charge is replayed; withdrawn freezes and cancelled seats stay withdrawn/cancelled.');return confirmed;
 }
 export function launchCancellationWithdrawal(tx:Transaction,input:Record<string,unknown>){humanOwner(tx.who);text(input.requestId,'requestId',100);const target=tx.state.records.get(String(input.id));insist(target&&['contractCancellation','cancellationWithdrawal'].includes(target.kind),'contractCancellation_not_found',404);const c=target.kind==='cancellationWithdrawal'?record(tx.state,target.data.cancellationId,'contractCancellation'):target.data;return {id:id(),personId:c.personId,previewId:c.id,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23cancellations'};}
 /** Before invoices and check-in; promote freed seats after the transaction. */
@@ -146,15 +155,15 @@ export function applyDueCancellations(tx:Transaction){
       bookingHistory(tx,'cancel',b,after,{reason:c.reason,channel:c.channel==='member-self-service'?'desk':c.channel},{id:after.cancellationId,parentActionId:c.staffActionId,actorId:c.terminatedBy,actorRole:c.terminatedRole,staffMade:c.terminatedRole==='owner',right:c.terminatedRole==='owner'?'contract-change':null,channel:c.channel,reason:c.reason,comment:c.reason});
     }
     endCancellationFreezes(tx,c);appendPackEvent(tx,record(tx.state,pack.id,'pack'),{type:'adjust',credits:0,expiresAt:c.effectiveAt,reason:`Contract ended ${c.id}`});tx.put('recurringTerms',{...terms,status:'stopped',accessEndedAt:c.effectiveAt});
-    const statementId=`final-statement:${c.id}`;tx.put('cancellationStatement',{id:statementId,personId:c.personId,packId:pack.id,cancellationId:c.id,effectiveAt:c.effectiveAt,additionalChargeCents:0,balanceCents:balance(tx.state,c.personId),guestPriceReversals:reversals,refundId:refund?.id??null,refundDueCents:refund?.amountCents??null,collection:'external-settlement-only',createdAt:now()});
+    const statementId=`final-statement:${c.id}`;tx.put('cancellationStatement',{id:statementId,personId:c.personId,packId:pack.id,cancellationId:c.id,effectiveAt:c.effectiveAt,additionalChargeCents:0,balanceCents:contractBalance(tx.state,c.termsId),guestPriceReversals:reversals,refundId:refund?.id??null,refundDueCents:refund?.amountCents??null,collection:'external-settlement-only',createdAt:now()});
     for(const payerId of new Set(reversals.map(r=>r.personId)))if(payerId!==c.personId)contractNotice(tx,`cancellation-guest-reversal:${c.id}:${payerId}`,payerId,'Guest price reversed',`Original guest price reversed against your studio balance once. No account credit or provider refund was issued.`);
-    tx.put('contractCancellation',{...c,status:'applied',appliedAt:c.effectiveAt,processedAt:now(),statementId,refundId:refund?.id??null});notify(tx,c,`cancellation-effective:${c.id}`,'Membership ended',`${notice(c)} Final studio balance ${balance(tx.state,c.personId)} cents. Refund record ${refund?.id??'none'}.`);
+    tx.put('contractCancellation',{...c,status:'applied',appliedAt:c.effectiveAt,processedAt:now(),statementId,refundId:refund?.id??null});notify(tx,c,`cancellation-effective:${c.id}`,'Membership ended',`${notice(c)} Final covered-agreement balance ${contractBalance(tx.state,c.termsId)} cents. Refund record ${refund?.id??'none'}.`);
   }
 }
 export async function cancellationsSnapshot(state:State,who:Actor){
   const termsOf=(r:RecordData)=>r.termsId??(r.cancellationId?state.records.get(r.cancellationId)?.data.termsId:r.refundId?state.records.get(state.records.get(r.refundId)?.data.cancellationId)?.data.termsId:undefined);
   const visible=(r:RecordData)=>canCancelContract(state,who,r.personId,termsOf(r));
-  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:c.terminatedBy===who.id&&live(c)&&c.effectiveAt>now(),stale:c.status==='preview'&&(c.effectiveAt<=now()||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt))})));
+  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:mayWithdraw(state,who,c)&&live(c)&&c.effectiveAt>now(),stale:c.status==='preview'&&(c.effectiveAt<=now()||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt))})));
   return {policy:policy(state),statutoryPreviews:list(state,'statutoryRefundPreview').filter(p=>!p.submittedAt&&cancellationForTerms(state,p.termsId)?.status!=='applied'&&p.createdBy===who.id&&visible(p)),authorities:contractAuthoritySnapshot(state,who),contracts:await Promise.all(list(state,'recurringTerms').filter(t=>canCancelContract(state,who,t.personId,t.id)).filter(t=>t.currentPackId&&contract(state,t.currentPackId).terms.id===t.id).map(async t=>{const pack=record(state,t.currentPackId,'pack');return {id:t.id,personId:t.personId,participantName:person(state,t.personId,false).name,packId:t.currentPackId,status:t.status,acceptedAt:t.acceptedAt,nextRenewalAt:t.nextRenewalAt,pack,memberRegion:contractRegion(state,t.personId),copy:await contractCopy(state,t),deliveredAt:contractDeliveredAt(state,t.id),coolingOff:currentCooling(state,pack,t)};})),requests:list(state,'cancellationRequest').filter(visible),cancellations,
     withdrawals:await Promise.all(list(state,'cancellationWithdrawal').filter(visible).map(async w=>({...w,canConfirm:who.id===w.createdBy,stale:w.status==='preview'&&(!live(record(state,w.cancellationId,'contractCancellation'))||w.basis!==await withdrawalBasis(state,record(state,w.cancellationId,'contractCancellation')))}))),statements:list(state,'cancellationStatement').filter(visible),refunds:list(state,'cancellationRefund').filter(visible),settlements:list(state,'cancellationRefundSettlement').filter(visible)};
 }
