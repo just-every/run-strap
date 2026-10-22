@@ -41,8 +41,17 @@ function assertFreezeCaps(state: State, type: RecordData, startAt: string, endAt
     const since=shiftCalendarDays(anchor.startAt,-365,studioZone(state));
     const window=[...freezes,proposed].filter(f=>f.startAt>since&&f.startAt<=anchor.startAt);
     insist(!type.maxFreezes || window.length<=type.maxFreezes,'freeze_count_cap_reached',409);
-    const days=window.reduce((n,f)=>n+(f.endAt ? calendarDays(f.startAt,f.endAt,studioZone(state)) : 365),0);
-    insist(!type.maxDays || days<=type.maxDays,'freeze_day_cap_reached',409);
+
+  }
+  if(type.maxDays){
+    const intervals=[...freezes,proposed].map(f=>({startAt:String(f.startAt),endAt:String(f.endAt??shiftCalendarDays(endAt,365,studioZone(state)))}));
+    const anchors=new Set(intervals.flatMap(f=>[f.endAt,shiftCalendarDays(f.startAt,365,studioZone(state))]));
+    for(const anchor of anchors){
+      const since=shiftCalendarDays(anchor,-365,studioZone(state));
+      if(anchor<=startAt||since>=endAt)continue;
+      const days=intervals.reduce((total,f)=>{const start=f.startAt>since?f.startAt:since,end=f.endAt<anchor?f.endAt:anchor;return total+(end>start?calendarDays(start,end,studioZone(state)):0);},0);
+      insist(days<=type.maxDays,'freeze_day_cap_reached',409);
+    }
   }
 }
 function terms(state: State, input: Record<string,unknown>, memberRequest = false) {

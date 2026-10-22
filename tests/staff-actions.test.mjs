@@ -91,7 +91,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         assert.equal(r.result.status,'withdrawn');
         assert.equal(r.after.packs.find(p=>p.id===freezePack.id).expiresAt,freezePack.expiresAt);
         assert.equal(r.after.charges.filter(c=>c.freezeId===current.id).reduce((sum,c)=>sum+c.amountCents,0),0,'the fee debt reverses once');
-        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);assert.equal((await h.state()).charges.filter(c=>c.freezeId===current.id).reduce((sum,c)=>sum+c.amountCents,0),0,'replay never reverses a freeze fee twice');
       },
       'plan.recurring.accept':async door=>{
         invoiceMember=await h.person('Elena');invoicePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:invoiceMember.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id});
