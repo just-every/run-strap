@@ -121,6 +121,7 @@ export async function coolingRefundCases(h) {
   const death=await agreement({region:'NY',amountCents:30000,initiationFeeCents:0,days:30,unlimited:true})
   const deceased=await cancel(death,plus(start,10),'death')
   assert.equal(deceased.refund.amountCents,20000,'death retains the unused-time valuation rather than the cooling-off full-refund default')
+  await cancellationFixCases(h)
   const browserCases={}
   if(process.env.STRAP_PROOF_DIR){
     for(const width of [1440,390])browserCases[width]={
@@ -132,4 +133,80 @@ export async function coolingRefundCases(h) {
     }
   }
   return {ny,ended,georgia,ga,florida,fl,california,ca,death,deceased,browserCases}
+}
+
+/** c35 regressions: public sales and receipts; only past invoice/clock facts are fixtures. */
+export async function cancellationFixCases(h,{scenario='all',previewOnly=false}={}) {
+  let sequence=scenario==='overlap'?3300:3100
+  const key=()=>`synthetic-strap-${sequence++}`
+  const start='2026-01-05T07:00:00.000Z', documentedAt='2026-01-06T07:00:00.000Z'
+  const save=(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:null,businessHours:[1,2,3,4,5,6].map(day=>({day,opens:'09:00',closes:'17:00'}))})
+  await h.cmd('plan.cancellation.policy.save',{coolingOffDays:5,coolingDeductions:{}})
+  const sell=async(member,amountCents=5900,initiationFeeCents=19900)=>{
+    const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents,initiationFeeCents,expiresAt:'2099-01-05T07:00:00.000Z'})).id})
+    return (await h.state()).packs.find(p=>p.id===approved.id)
+  }
+  const pay=async(pack)=>{
+    const receipt=await h.cmd('payment.record',{personId:pack.personId,amountCents:pack.amountCents+pack.initiationFeeCents,reference:key()})
+    for(const charge of (await h.state()).charges.filter(c=>c.packId===pack.id))await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:charge.amountCents,reference:key()})
+    return receipt
+  }
+  const agree=async(pack,member)=>{
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:key()})
+    const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    await h.cmd('contract.jurisdiction.save',{personId:member.id,region:'NY',evidenceReference:key()})
+    return terms
+  }
+  const review=async(a)=>{
+    const facts={packId:a.pack.id,reasonCode:'cooling-off',documentedAt,evidenceReference:key(),requestId:key()}
+    const preview=await h.cmd('plan.cancellation.statutory',{...facts,previewOnly:true},a.member.cookie)
+    assert.equal(preview.value.amountCents,a.expected,a.label)
+    assert.equal(preview.value.needsAllocation,false)
+    assert.equal(preview.coolingOff.renewal,null,'the still-open initial window governs')
+    const ended=await h.cmd('plan.cancellation.statutory',{...facts,requestId:key(),previewId:preview.id},a.member.cookie)
+    const state=await h.state(),refund=state.cancellations.refunds.find(r=>r.cancellationId===ended.id)
+    assert.equal(refund.amountCents,a.expected);assert.equal(refund.status,'refund_due')
+    assert.equal(state.cancellations.settlements.filter(s=>s.refundId===refund.id).length,0)
+    const settlement=await h.cmd('plan.cancellation.refund.settle',{id:refund.id,payerId:a.member.id,amountCents:a.expected,reference:key(),settledAt:new Date(Date.now()-1000).toISOString()})
+    assert.equal(settlement.amountCents,a.expected,'unrelated receipts do not prevent external settlement')
+    assert.equal((await h.state()).cancellations.refunds.find(r=>r.id===refund.id).status,'settled')
+    return {preview,ended,refund}
+  }
+  const fixtures={}
+  if(scenario!=='overlap'){
+    const member=await h.person(key()),payer=await h.person(key()),instructor=await h.person(key(),'instructor')
+    let pack=await sell(member),terms=await agree(pack,member)
+    await pay(pack)
+    // A collected late-cancel fee belongs to its booking, never to a pack charge.
+    await h.cmd('bookingRule.save',{service:'c35 mat',cancelCutoffHours:72,lateCancelFeeCents:1500})
+    const at=new Date(Date.now()+86400000),week=new Date(Date.UTC(at.getUTCFullYear(),at.getUTCMonth(),at.getUTCDate()-(at.getUTCDay()+6)%7)).toISOString().slice(0,10)
+    const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'c35 mat',service:'c35 mat',room:key(),start:at.toISOString(),end:new Date(+at+3600000).toISOString(),capacity:2,instructorId:instructor.id}]})).id})).classes[0]
+    const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie)
+    await h.cmd('booking.cancel',{id:booking.id,mode:'late',cancelReason:'Other',channel:'desk',requestId:key()})
+    const fee=(await h.state()).fees.find(f=>f.bookingId===booking.id)
+    assert.equal(fee.amountCents,1500)
+    await h.cmd('fee.collect',{id:fee.id,reference:key()})
+    const grant=await h.cmd('contract.authority.save',{personId:member.id,delegateId:payer.id,kind:'payer',evidenceReference:key()})
+    await h.cmd('contract.authority.accept',{id:grant.id},member.cookie);await h.cmd('contract.authority.accept',{id:grant.id},payer.cookie)
+    await h.cmd('payment.record',{personId:payer.id,amountCents:4300,reference:key()})
+    const other=await sell(member,2000,0);await pay(other)
+    pack=(await h.state()).packs.find(p=>p.id===pack.id)
+    pack={...pack,termStartAt:start,createdAt:start};await save('pack',pack);await save('recurringTerms',{...terms,acceptedAt:start})
+    fixtures.receipts={member,pack,terms,documentedAt,expected:25800,label:'collected desk fee and payer receipts cannot hold a fully allocated agreement in needs_allocation'}
+    if(!previewOnly)await review(fixtures.receipts)
+  }
+  if(scenario!=='receipts'){
+    const member=await h.person(key()),original=await sell(member),terms=await agree(original,member)
+    await pay(original)
+    let pack=await sell(member,5900,0);await pay(pack)
+    const invoiceId=key(),acceptedAt='2025-01-05T07:00:00.000Z'
+    await save('pack',{...original,createdAt:acceptedAt,termStartAt:acceptedAt,expiresAt:start})
+    pack={...pack,createdAt:start,termStartAt:start,recurringTermsId:terms.id,invoiceId};await save('pack',pack)
+    await save('recurringTerms',{...terms,acceptedAt,currentPackId:pack.id})
+    await h.db.prepare('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,0)').bind(invoiceId,'recurringInvoice',JSON.stringify({id:invoiceId,personId:member.id,packId:pack.id,recurringTermsId:terms.id,dueAt:start,amountCents:5900,status:'open'})).run()
+    fixtures.overlap={member,pack,terms,documentedAt,expected:31700,label:'an open initial window refunds the original $258 plus the $59 renewal, rather than only the renewal'}
+    if(!previewOnly)await review(fixtures.overlap)
+  }
+  return fixtures
 }

@@ -164,5 +164,42 @@ export async function authorityCases(h) {
   assert.equal(finalPage.status, 200)
   assert.ok(!finalPage.text.includes('67.89') && !finalPage.text.includes('230.89'))
   assert.ok(!JSON.stringify(payerFinal.notices).includes('23089'), 'cancellation notices do not disclose the participant studio balance')
+  await payerRevocationCases(h)
   return {member, payer, guardian, child, otherChild, grant, childGrant, stopped, guardianStopped, statement}
+}
+
+/** The owner records a named party's request; studio initiative is refused without writes. */
+export async function payerRevocationCases(h) {
+  let sequence=3500
+  const key=()=>`synthetic-strap-${sequence++}`
+  for(const requester of ['participant','payer']){
+    const member=await h.person(key()),payer=await h.person(key()),stranger=await h.person(key())
+    const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:6,amountCents:12000,expiresAt:iso(Date.now()+90*day)})).id})
+    const preview=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:key()})
+    await h.cmd('plan.recurring.accept',{id:preview.id,key:preview.key},member.cookie)
+    const grant=await h.cmd('contract.authority.save',{personId:member.id,delegateId:payer.id,kind:'payer',evidenceReference:key()})
+    await h.cmd('contract.authority.accept',{id:grant.id},member.cookie);await h.cmd('contract.authority.accept',{id:grant.id},payer.cookie)
+    const stopped=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:key()},payer.cookie)
+    const facts={id:grant.id,reason:'Recorded request to revoke cancellation authority',requestId:key()}
+    for(const extra of [{},{requestedByPersonId:stranger.id,requestEvidenceReference:key()},{requestedByPersonId:member.id}]){
+      const before=(await h.state()).version
+      await h.cmd('contract.authority.revoke',{...facts,...extra},h.owner,400)
+      assert.equal((await h.state()).version,before,'studio initiative, an unrelated requester or missing request evidence cannot revoke or write')
+    }
+    const requestedByPersonId=requester==='participant'?member.id:payer.id,requestEvidenceReference=key()
+    const input={...facts,requestedByPersonId,requestEvidenceReference,channel:'phone'}
+    const revoked=await h.cmd('contract.authority.revoke',input)
+    assert.equal(revoked.revocationRequestedByPersonId,requestedByPersonId)
+    assert.equal(revoked.revocationRequestEvidenceReference,requestEvidenceReference)
+    assert.ok(revoked.revokedAt)
+    assert.deepEqual(await h.cmd('contract.authority.revoke',input),revoked,'the recorded staff request replays once')
+    const state=await h.state(),audit=state.staffActions.filter(a=>a.command==='contract.authority.revoke'&&a.after.id===grant.id)
+    assert.equal(audit.length,1);assert.equal(audit[0].channel,'phone')
+    assert.equal(audit[0].after.revocationRequestedByPersonId,requestedByPersonId)
+    assert.equal(audit[0].after.revocationRequestEvidenceReference,requestEvidenceReference)
+    assert.equal(state.cancellations.cancellations.find(c=>c.id===stopped.id).status,'scheduled')
+    const before=state.version
+    await h.cmd('plan.cancellation.withdraw.prepare',{id:stopped.id,requestId:key()},payer.cookie,404)
+    assert.equal((await h.state()).version,before)
+  }
 }
