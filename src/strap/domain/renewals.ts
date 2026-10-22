@@ -1,4 +1,5 @@
 import { countsCredits } from './entitlements';
+import { unusedPrepaid } from './cancellation-value';
 import { createLead } from './leads';
 import { humanOwner, insist, integer, list, now, record, text, type Actor, type State } from './types';
 import type { Transaction } from './store';
@@ -10,7 +11,7 @@ function number(query: URLSearchParams, name: string, fallback: number, min: num
   return integer(value === null ? fallback : Number(value),name,min,max);
 }
 
-/** RPT-007 partial: current finite credit packs only; no inferred consent or cash value. */
+/** Native term events share one row per pack; payment evidence alone supplies value. */
 export function renewalWorklist(state: State, who: Actor, query: URLSearchParams) {
   humanOwner(who);
   const days = number(query,'days',30,1,366), lowCredits = number(query,'lowCredits',1,0,10_000);
@@ -22,23 +23,34 @@ export function renewalWorklist(state: State, who: Actor, query: URLSearchParams
   ]);
   const rows = packs.flatMap(pack => {
     const member = state.people.find(p => p.id === pack.personId && p.role === 'member' && !p.erasedAt);
-    if (!member || !countsCredits(pack) || pack.expiresAt <= asOf || renewed.has(pack.id)) return [];
-    const reasons = [pack.expiresAt <= through ? 'expiring' : null,pack.remaining <= lowCredits ? 'low-credits' : null].filter((v): v is string => !!v);
+    if (!member || pack.expiresAt <= asOf || renewed.has(pack.id)) return [];
+    const terms = list(state,'recurringTerms').find(t => (t.currentPackId ?? t.packId) === pack.id && t.acceptedAt && ['active','stopped','cancellation_scheduled'].includes(t.status));
+    const cancellation = list(state,'contractCancellation').find(c => c.packId === pack.id && c.status === 'scheduled');
+    const freeze = list(state,'freeze').filter(f => f.packId === pack.id && ['scheduled','active'].includes(f.status) && f.endAt > asOf && f.endAt <= through).sort((a,b) => a.endAt.localeCompare(b.endAt))[0];
+    const kind = cancellation ? cancellation.mode === 'term_end' ? 'canceling-renewal' : 'termination' : terms?.status === 'stopped' ? 'canceling-renewal' : pack.introOfferId ? 'intro' : countsCredits(pack) ? 'pack' : 'fixed-term';
+    const endAt = cancellation?.effectiveAt ?? pack.expiresAt;
+    const reasons = [endAt > asOf && endAt <= through && terms?.status !== 'active' ? 'expiring' : null,
+      countsCredits(pack) && pack.remaining <= lowCredits ? 'low-credits' : null,freeze ? 'freeze-ending' : null].filter((v): v is string => !!v);
     if (!reasons.length) return [];
     const visits = list(state,'booking').filter(b => b.personId === member.id && b.status === 'booked' && b.attendance === 'attended')
       .map(b => state.records.get(b.classId)?.data.start as string | undefined).filter((v): v is string => !!v && v <= asOf).sort();
     const followup = state.records.get('renewal-followup:'+pack.id)?.data;
     const lead = followup ? state.records.get(followup.leadId)?.data : null;
-    return [{packId:pack.id,personId:member.id,member:member.name,plan:pack.entitlement?.name ?? 'Class credits',
-      expiresAt:pack.expiresAt,remainingCredits:pack.remaining,remainingValueCents:null,lastVisit:visits.at(-1) ?? null,
-      renewalStatus:'not-recorded',contactPermission:'unavailable',reasons,
+    const value = unusedPrepaid(state,pack,asOf);
+    return [{packId:pack.id,personId:member.id,member:member.name,plan:pack.entitlement?.name ?? 'Class credits',kind,
+      expiresAt:reasons.includes('expiring') || reasons.includes('low-credits') ? endAt : freeze.endAt,
+      termExpiresAt:pack.expiresAt,freezeEndsAt:freeze?.endAt ?? null,terminationId:cancellation?.id ?? null,
+      reasonCode:cancellation?.mode === 'early' ? cancellation.reasonCode ?? 'other' : null,
+      remainingCredits:countsCredits(pack) ? pack.remaining : null,remainingValueCents:value.amountCents,
+      valueBasis:{paidCents:value.paidCents,needsAllocation:value.needsAllocation,method:'unused receipt-allocated elapsed access; half-up cents'},lastVisit:visits.at(-1) ?? null,
+      renewalStatus:terms?.status ?? 'not-recorded',contactPermission:'unavailable',reasons,
       followup:lead ? {leadId:lead.id,ownerId:lead.ownerId,stage:lead.stage,nextAction:lead.nextAction,dueAt:lead.dueAt} : null,
       basis:JSON.stringify([state.version,pack.id,pack.creditRevision ?? 0,pack.expiresAt,pack.remaining])}];
   }).sort((a,b) => a.expiresAt.localeCompare(b.expiresAt) || a.packId.localeCompare(b.packId));
-  return {asOf,through,days,lowCredits,rows,coverage:'Finite credit packs only; other plan kinds, monetary remaining value and marketing permission are unavailable.'};
+  return {asOf,through,days,lowCredits,rows,coverage:'Native finite packs, fixed-term visit/unlimited plans, intro offers, stopped invoice renewals, scheduled terminations and freeze endings. Value is unused receipt-allocated prepaid access at the report time, rounded half-up; an unallocated eligible receipt makes it unavailable. This is not a refund quote or collection. Provider autopay, marketing permission and approved sequences remain unavailable.'};
 }
 
-export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','lastVisit','renewalStatus','contactPermission','reasons','followup'];
+export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','kind','termExpiresAt','freezeEndsAt','terminationId','reasonCode','valueBasis','lastVisit','renewalStatus','contactPermission','reasons','followup'];
 
 export function renewalCsv(report: ReturnType<typeof renewalWorklist>) {
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"';

@@ -112,7 +112,8 @@ export async function prepareCancellation(tx:Transaction,input:Record<string,unk
   insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
   insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
   const reason=text(merged.reason,'reason',500),c=await prepare(tx,{...input,packId:pack.id},'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
-  if(request){const linked={...c,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return c;
+  const coded={...c,reasonCode:input.reasonCode ? text(input.reasonCode,'reasonCode',50) : 'other'};tx.put('contractCancellation',coded);
+  if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
   humanOwner(tx.who);const c=record(tx.state,input.id,'contractCancellation');insist(input.key===c.key,'preview_changed',409);

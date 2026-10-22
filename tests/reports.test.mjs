@@ -190,7 +190,7 @@ test('RPT-001 / RPT-006: current sales, collections, refunds, fee reversals and 
   assert.equal((await read()).totals.activeMembers,2)
 }))
 
-test('RPT-007 / RPT-006: finite-pack expiry and low-credit screen/HTTP worklist, matching CSV, corrected visits and once-only assigned lead follow-up; other plan kinds remain partial', () => run(async h => {
+test('RPT-007 / RPT-006: native plan endings and low-credit screen/HTTP worklist, matching CSV, receipt value, corrected visits and once-only assigned lead follow-up', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   const ana = await h.person('RenewAna'), ben = await h.person('RenewBen'), coach = await h.person('RenewCoach','instructor')
   const day = 86_400_000, base = Date.now()
@@ -205,16 +205,16 @@ test('RPT-007 / RPT-006: finite-pack expiry and low-credit screen/HTTP worklist,
     assert.equal(response.status,200,response.text); assert.equal(response.headers.get('cache-control'),'no-store'); return response.value
   }
   let report = await read()
-  assert.deepEqual(new Set(report.rows.map(r=>r.packId)),new Set([soon.id,low.id,both.id]))
+  assert.deepEqual(new Set(report.rows.map(r=>r.packId)),new Set([soon.id,low.id,both.id,unlimited.id]))
   assert.equal(report.rows.filter(r=>r.packId===both.id).length,1)
   assert.deepEqual(report.rows.find(r=>r.packId===both.id).reasons,['expiring','low-credits'])
   assert.deepEqual(report.rows.find(r=>r.packId===low.id).reasons,['low-credits'])
   for (const row of report.rows) {
-    assert.equal(row.remainingValueCents,null); assert.equal(row.contactPermission,'unavailable'); assert.equal(row.lastVisit,null)
+    assert.equal(row.remainingValueCents,0); assert.equal(row.valueBasis.paidCents,0); assert.equal(row.contactPermission,'unavailable'); assert.equal(row.lastVisit,null)
     assert.equal(row.expiresAt,(await h.state()).packs.find(p=>p.id===row.packId).expiresAt)
   }
   assert.equal(Date.parse(report.through)-Date.parse(report.asOf),30*day)
-  assert.deepEqual(new Set((await read('days=45&lowCredits=0')).rows.map(r=>r.packId)),new Set([soon.id,far.id,low.id,both.id]))
+  assert.deepEqual(new Set((await read('days=45&lowCredits=0')).rows.map(r=>r.packId)),new Set([soon.id,far.id,low.id,both.id,unlimited.id]))
   assert.deepEqual((await read('days=1&lowCredits=0')).rows,[])
   for (const query of ['days=0','days=367','days=1.5','days=','days=-1','days=NaN','lowCredits=-1','lowCredits=10001','lowCredits=1.1']) {
     assert.equal((await h.send('/api/strap/reports/renewals?'+query,undefined,h.owner)).status,400)
@@ -271,6 +271,7 @@ test('RPT-007 / RPT-006: finite-pack expiry and low-credit screen/HTTP worklist,
   const version = (await h.state()).version
   await h.cmd('renewal.followup.create',{...task,packId:far.id,basis:stale.basis},h.owner,409)
   assert.equal((await h.state()).version,version)
+  await (await import('./renewal-plan-cases.mjs')).renewalPlanCases(h)
   if (process.env.STRAP_PROOF_DIR || process.env.CI) {
     const taskMembers = [await h.person('JordanLane'),await h.person('AveryChen')]
     for (const [member,name] of [[ana,'Ana Lopez'],[ben,'Ben Walker'],[taskMembers[0],'Jordan Lane'],[taskMembers[1],'Avery Chen']]) await h.cmd('person.save',{id:member.id,name,email:member.email,role:'member',active:true})

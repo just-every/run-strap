@@ -44,7 +44,9 @@ export async function renewalsBrowser(h,{packs}) {
         assert.deepEqual(await page.locator('[data-pack-id]').evaluateAll(rows => rows.map(row => row.dataset.packId)),csv.map(row => row.packId))
         for (const row of csv) {
           const entry = page.locator(`[data-pack-id="${row.packId}"]`)
-          assert.ok((await entry.innerText()).includes(String(row.remainingCredits)+' credits'))
+          assert.ok((await entry.innerText()).includes(row.remainingCredits === null ? 'No credit limit' : String(row.remainingCredits)+' credits'))
+          assert.ok((await entry.innerText()).includes(row.kind))
+          if (row.reasonCode) assert.ok((await entry.innerText()).includes(row.reasonCode))
           assert.ok((await entry.innerText()).includes(row.member))
           assert.equal(await entry.locator('time').first().getAttribute('datetime'),row.expiresAt)
           if (row.lastVisit) assert.equal(await entry.locator('time').nth(1).getAttribute('datetime'),row.lastVisit)
@@ -84,6 +86,10 @@ export async function renewalsBrowser(h,{packs}) {
         assert.equal(await page.locator('[data-pack-id]').count(),0)
         assert.equal((await downloadNativePair(page,'renewals-empty',width,'Download worklist CSV','Download worklist XLSX')).length,0)
         await capture('empty')
+        await page.goto(h.origin+'/app/packs#cancellations')
+        await page.getByText('Prepare an earlier termination',{exact:true}).click()
+        assert.equal(await page.getByLabel('Termination reason code',{exact:true}).inputValue(),'other')
+        await capture('termination-reason-code')
       } finally { await context.close() }
     }
   } finally { await browser.close() }

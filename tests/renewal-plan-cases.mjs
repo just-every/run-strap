@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict'
+
+// Folded into the existing public-door worklist journey; no private-state fixtures.
+export async function renewalPlanCases(h) {
+  const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
+  const member=await h.person('NativeRenewal'),introMember=await h.person('IntroRenewal')
+  const buy=async(days,extra={})=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:at(days),...extra})).id})
+  const fixed=await buy(20,{kind:'unlimited',credits:undefined,planName:'Fixed-term membership'}),outside=await buy(40,{kind:'visits',credits:undefined,visits:3,period:'week',planName:'Later fixed term'}),cancel=await buy(10),term=await buy(90),frozen=await buy(90)
+  const agree=async pack=>{const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-'+pack.id});return h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)}
+  const cancelTerms=await agree(cancel)
+  await h.cmd('plan.recurring.stop',{id:cancelTerms.id,requestId:'synthetic-strap-stop'},member.cookie)
+  await agree(term)
+  const preview=await h.cmd('plan.cancellation.prepare',{packId:term.id,effectiveAt:at(15),reason:'Member is relocating',reasonCode:'relocation',requestId:'synthetic-strap-termination'})
+  await h.cmd('plan.cancellation.confirm',{id:preview.id,key:preview.key,requestId:'synthetic-strap-confirm'})
+  const type=await h.cmd('freeze.type.save',{name:'Agreed travel',reason:'Member requested travel',feeCents:0,defaultLengthDays:5,maxLengthDays:30,allowedStartDays:[1,2,3,4,5,6,7]})
+  const freeze=await h.cmd('freeze.prepare',{packId:frozen.id,freezeTypeId:type.id,startAt:at(2).slice(0,10),endAt:at(7).slice(0,10),requestId:'synthetic-strap-freeze'})
+  await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,requestId:'synthetic-strap-freeze-confirm'})
+  await h.cmd('intro.identity.verify',{personId:introMember.id,householdChecked:true,reason:'Checked with member'})
+  const offer=await h.cmd('intro.offer.save',{name:'Seven-day intro',days:7,credits:3,amountCents:3000,eligibility:'new',limit:'person'})
+  const introPreview=await h.cmd('intro.preview',{personId:introMember.id,offerId:offer.id,requestId:'synthetic-strap-intro'},introMember.cookie)
+  const sale=await h.cmd('intro.purchase',{id:introPreview.id,key:introPreview.key,confirm:true,requestId:'synthetic-strap-intro-purchase'},introMember.cookie)
+  const report=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value
+  const mine=report.rows.filter(r=>[member.id,introMember.id].includes(r.personId))
+  assert.deepEqual(new Set(mine.map(r=>r.packId)),new Set([fixed.id,cancel.id,term.id,frozen.id,sale.packId]))
+  assert.ok(!mine.some(r=>r.packId===outside.id))
+  assert.deepEqual(mine.filter(r=>r.packId!==frozen.id).map(r=>r.kind).sort(),['canceling-renewal','fixed-term','intro','termination'])
+  assert.equal(mine.find(r=>r.packId===cancel.id).expiresAt,at(10))
+  assert.equal(mine.find(r=>r.packId===term.id).expiresAt,at(15))
+  assert.equal(mine.find(r=>r.packId===term.id).reasonCode,'relocation')
+  assert.equal(mine.find(r=>r.packId===frozen.id).freezeEndsAt,freeze.endAt)
+  assert.deepEqual(mine.find(r=>r.packId===frozen.id).reasons,['freeze-ending'])
+  assert.equal(mine.find(r=>r.packId===sale.packId).expiresAt,sale.expiresAt)
+  const receipt=await h.cmd('payment.record',{personId:member.id,amountCents:10000,reference:'synthetic-strap-renewal-receipt'})
+  assert.equal((await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.packId===fixed.id).remainingValueCents,null,'unallocated eligible receipts remain unknown')
+  const charge=(await h.state()).charges.find(c=>c.packId===fixed.id)
+  await h.cmd('contract.prepayment.record',{packId:fixed.id,paymentId:receipt.id,chargeId:charge.id,amountCents:10000,reference:'synthetic-strap-renewal-allocation'})
+  const valued=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.packId===fixed.id)
+  assert.equal(valued.remainingValueCents,10000);assert.equal(valued.valueBasis.paidCents,10000)
+  const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:preview.id,requestId:'synthetic-strap-withdraw'})
+  await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-withdraw-confirm'})
+  assert.ok(!(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.some(r=>r.packId===term.id),'withdrawing an early termination removes its 15-day row; retained 90-day access is out of range')
+  const follow=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.packId===frozen.id)
+  const input={packId:frozen.id,basis:follow.basis,ownerId:(await h.state()).actor.id,nextAction:'Review upcoming resumption',dueAt:at(3)}
+  const task=await h.cmd('renewal.followup.create',input)
+  assert.deepEqual(await h.cmd('renewal.followup.create',input),task)
+}
