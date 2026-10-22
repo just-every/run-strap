@@ -41,7 +41,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
         await ask.locator('select[name=packId]').selectOption(packId)
         for(const [prefix,date] of [['Freeze starts',dates[0]],['Resumption',dates[1]]])await ask.getByLabel(prefix+' date',{exact:true}).fill(date)
         assert.equal(await ask.locator('input[type=time]').count(),0)
-        await ask.getByLabel('Freeze reason',{exact:true}).fill('Family travel planned with the studio')
+        await ask.locator('textarea[name=reason]').fill('Family travel planned with the studio')
         await shot(mine,'member-request')
         await ask.getByRole('button',{name:'Request these freeze dates',exact:true}).click()
         const request=(await h.state(member.cookie)).freezes.requests.find(r=>r.packId===packId)
@@ -123,7 +123,7 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
           await ask.locator('select[name=packId]').selectOption(pack.id)
           await ask.getByLabel('Freeze starts date',{exact:true}).fill(dates[0])
           await ask.getByLabel('Resumption date',{exact:true}).fill(dates[1])
-          await ask.getByLabel('Freeze reason',{exact:true}).fill(reason)
+          await ask.locator('textarea[name=reason]').fill(reason)
           await ask.getByRole('button',{name:'Request these freeze dates',exact:true}).click()
           return(await h.state(member.cookie)).freezes.requests.find(r=>r.packId===pack.id&&r.status==='requested')
         }

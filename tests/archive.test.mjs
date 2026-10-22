@@ -213,13 +213,14 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await command(restored,['import','--input',archive,'--yes','--no-queue'])
     h=await harness({root:restored,...identity})
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
+    await h.confirmSetup(restoredOwner);await h.enroll(restoredOwner)
     // The harness's listening port changes on restart. Keep AUTH_ORIGIN and all
     // product requests on the original canonical origin through dispatchFetch.
     await h.setAuth({AUTH_ORIGIN:sourceOrigin})
     const state=async()=>{
       const response=await h.mf.dispatchFetch(sourceOrigin+'/api/strap/state',{headers:{host:new URL(sourceOrigin).host,origin:sourceOrigin,cookie:restoredOwner}})
-      assert.equal(response.status,200)
-      return response.json()
+      const body=await response.json();assert.equal(response.status,200,JSON.stringify(body))
+      return body
     }
     const retained=(await state()).recurring.terms.find(t=>t.id===agreed.id)
     assert.equal(retained.status,'active','the native archive retains the accepted agreement')
