@@ -118,6 +118,7 @@ async function refundPreviewAndSubmit(c,name,a,date,time,expected,deduction,form
   state=await h.state(a.member.cookie)
   const cancellation=state.cancellations.cancellations.find(r=>r.packId===a.pack.id)
   assert.equal(cancellation.status,'applied')
+  assert.equal(await page.locator(`[data-statutory-refund-preview="${preview.id}"]`).count(),0,'a submitted preview is replaced by its actual confirmation')
   const refund=state.cancellations.refunds.find(r=>r.cancellationId===cancellation.id)
   assert.equal(refund.amountCents,expected);assert.equal(refund.settledCents,0)
   assert.deepEqual(cancellation.effects.unusedPrepaid,preview.value)
