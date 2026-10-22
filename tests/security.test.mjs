@@ -122,7 +122,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   const held = await h.state(second)
   assert.deepEqual([held.teachingPay, held.integrations, held.agentKeys, held.memberMail], [null, [], [], null])
   assert.equal((await get(h, '/api/strap/mfa', second, 200)).value.required, true)
-  for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
+  for (const path of ['/api/strap/staff-history', '/api/strap/staff-history.csv', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/attendance.xlsx', '/api/strap/teaching-pay', '/api/strap/teaching-pay.csv', '/api/strap/exit.json', '/api/strap/preferences.json']) await unchanged(() => get(h, path, second, 403, 'mfa_enrollment_required'), path)
   for (const page of ['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent']) await unchanged(async () => { const r = await h.send(page, undefined, second); assert.equal(r.status, 403, page); assert.equal(r.headers.get('x-strap-refusal'), 'mfa_enrollment_required') }, page)
   assert.equal((await h.send('/app/people', undefined, second)).status, 200)
   for (const [name, input] of [['agent.create', { label: 'Assistant' }], ['integration.create', { label: 'Door' }], ['kiosk.pair', { label: 'Desk' }], ['pay.rule.save', {}], ['pay.adjust', adjustment], ['mail.connect', {}], ['finance.grant', { id: 'x' }], ['mfa.reset', { operatorId: first }]]) await unchanged(() => refused(h, name, input, second, 403, 'mfa_enrollment_required'), name)
@@ -159,6 +159,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   await unchanged(() => refused(h, 'mfa.passkey.options', { purpose: 'register' }, second, 403, 'step_up_required'), 'first passkey step-up')
   await emailStepUp(h, second)
   const enrolled = await enrollTotp(h, second)
+  await get(h, '/api/strap/preferences.json?personId='+member.id, second, 200)
   await unchanged(() => refused(h, 'mfa.remove', { factor: enrolled.factor }, second, 409, 'mfa_last_factor_required'), 'owner last factor')
   // A pending app does not count as a working second factor.
   await h.cmd('mfa.totp.start', { label: 'Not confirmed' }, second)

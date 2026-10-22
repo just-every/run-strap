@@ -9,7 +9,7 @@ import type { Actor } from '../domain'
 import { selfService, standing } from './mfa'
 
 const pages = new Set(['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent'])
-const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|staff-history|teaching-pay|reports\/revenue)$/
+const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|preferences\.json|staff-history|teaching-pay|reports\/revenue)$/
 export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path)
 export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch'].includes(name)
 
