@@ -37,14 +37,16 @@ export function reconstructExit(bundle, expectedCsv) {
     const people = new Map(bundle.tables.st_people.map(p => [p.id, p]))
     const records = bundle.tables.st_records.map(r => JSON.parse(r.data)), byId = new Map(records.map(r => [r.id, r]))
     for (const record of records) {
-      for (const key of ['personId','instructorId']) if (record[key]) assert.ok(people.has(record[key]), key + ' resolves')
-      for (const key of ['classId','packId','bookingId','draftId','waiverId','seriesId','seriesChangeId','closureId']) if (record[key]) assert.ok(byId.has(record[key]), key + ' resolves')
+      for (const key of ['personId','otherPersonId','instructorId']) if (record[key]) assert.ok(people.has(record[key]), key + ' resolves')
+      for (const key of ['classId','packId','bookingId','draftId','waiverId','seriesId','seriesChangeId','closureId','introSaleId','introOfferId','offerId','previewId']) if (record[key]) assert.ok(byId.has(record[key]), key + ' resolves')
       for (const key of ['classIds','closureIds']) for (const id of record[key] ?? []) assert.ok(byId.has(id),key + ' resolves')
     }
     const money = kind => records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === kind).reduce((sum, r) => sum + r.amountCents, 0)
-    assert.equal(money('charge'), 10000); assert.equal(money('payment'), 5000)
+    assert.equal(money('charge'), 13900);
+    assert.equal(records.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&!r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),10000,'original pack charge remains intact');
+    assert.equal(records.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),3900,'one intro charge reconstructs'); assert.equal(money('payment'), 5000)
     const creditHistory = records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'packCreditEvent').reduce((sum,r) => sum+r.credits,0)
-    assert.equal(creditHistory,3,'five purchased credits less the ordinary and recurring reservations')
+    assert.equal(creditHistory,5,'five original credits plus two intro visits less the ordinary and recurring reservations')
     assert.equal(records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'pack').reduce((sum,r) => sum+r.remaining,0),creditHistory)
     assert.ok(records.some(r => r.text === 'Studio waiver, "current"\nKeep your own limits.'))
     assert.ok(records.some(r => r.waiverId && byId.get(r.waiverId).text.includes('Keep your own limits.')))

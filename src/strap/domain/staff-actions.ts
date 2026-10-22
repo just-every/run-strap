@@ -15,6 +15,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
   if (name === 'plan.recurring.prepare' || name === 'freeze.prepare') { const pack=tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
   if (name === 'plan.change.prepare') { const pack = tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
+  if (name === 'intro.preview' || name === 'intro.purchase') { const personId = input.personId ?? tx.state.records.get(String(input.id))?.data.personId; return {personId,sales:list(tx.state,'introSale').filter(r => r.personId === personId),packs:list(tx.state,'pack').filter(r => r.personId === personId)}; }
   const target = typeof input.id === 'string' ? tx.state.records.get(input.id)?.data : null;
   if (name === 'fee.collect' || name === 'fee.waive') return target ? feeStatus(tx.state,target) : null;
   if (name === 'notice.dismiss.staff') return target ? noticeEffect(target) : null;
@@ -47,7 +48,7 @@ export function retainStaffAction(tx: Transaction, name: string, right: string, 
     .find(({data}) => !priorIds.has(data.id) && data.staffMade && !data.parentActionId && data.actorId === tx.who.id);
   const metadata = {command:name,...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:requestBasis(input),result:after} : {})};
   if (existing) { tx.put(existing.kind,{...existing.data,...metadata}); return; }
-  const event = {id:result.staffActionId ?? id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : null,at:now(),...metadata};
+  const event = {id:result.staffActionId ?? id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : typeof result.exceptionReason === 'string' ? result.exceptionReason : null,at:now(),...metadata};
   tx.put('staffAction',event);
 }
 export function dismissForMember(tx: Transaction, input: Record<string,unknown>) {

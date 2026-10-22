@@ -412,3 +412,119 @@ test('PLAN-010: owner guest charges require live payer caps and guest-seat fees 
   assert.ok(!charges.some(c=>guests.some(g=>g.id===c.personId)),'the guest owes neither fees nor their reversals');
   assert.equal(state.packs.find(p=>p.id===pack.id).remaining,10,'guest funding never spends the host’s own credits');
 }));
+
+test('Intro offers: verified person and household eligibility, exact once-only sales, visits and reasoned staff exceptions',()=>run(async h=>{
+  const coach=await studio(h), ana=await h.person('IntroAna'), alias=await h.person('IntroAlias'), household=await h.person('IntroHousehold'), ben=await h.person('IntroBen'), unknown=await h.person('IntroUnknown');
+  const offerInput={name:'Two-week introduction',days:14,credits:2,amountCents:3900,eligibility:'new',limit:'person',eligibleServices:['Mat']};
+  const offer=await h.cmd('intro.offer.save',offerInput);
+  const verify=(p,extra={})=>h.cmd('intro.identity.verify',{personId:p.id,householdChecked:true,reason:'Identity and household checked with the member',...extra});
+  await verify(ana);await verify(alias,{samePersonAsId:ana.id});await verify(household,{householdWithId:ana.id});await verify(ben);
+  let n=0;
+  const quote=(p,cookie=p.cookie,extra={})=>h.cmd('intro.preview',{offerId:offer.id,requestId:'synthetic-strap-'+(++n),...(cookie===h.owner?{personId:p.id}:{}),...extra},cookie);
+  const buy=(q,cookie)=>h.cmd('intro.purchase',{id:q.id,key:q.key,confirm:true},cookie);
+  const refused=async(name,input,cookie,status,error)=>{const before=(await h.state()).version,r=await h.cmd(name,input,cookie,status);if(error)assert.equal(r.error,error);assert.equal((await h.state()).version,before,'refused requests write nothing');};
+  await refused('intro.preview',{offerId:offer.id,requestId:'synthetic-strap-800'},unknown.cookie,409,'intro_identity_verification_required');
+  for(const cookie of [ana.cookie,coach.cookie]){
+    await refused('intro.offer.save',offerInput,cookie,403,'owner_required');
+    await refused('intro.identity.verify',{personId:ana.id,householdChecked:true,reason:'Cannot self verify'},cookie,403,'owner_required');
+  }
+  await refused('intro.preview',{personId:ben.id,offerId:offer.id,requestId:'synthetic-strap-801'},ana.cookie,404,'intro_not_found');
+  const q=await quote(ana), racing=await quote(alias);
+  assert.deepEqual([q.days,q.credits,q.amountCents,q.renewsAutomatically,q.collection],[14,2,3900,false,'studio-balance-only']);
+  assert.ok(!JSON.stringify(q).includes(alias.id),'the member preview does not reveal linked accounts');
+  await refused('intro.purchase',{id:q.id,key:'changed',confirm:true},ana.cookie,409,'intro_confirmation_required');
+  await refused('intro.purchase',{id:q.id,key:q.key,confirm:true},ben.cookie,404,'intro_not_found');
+  const sale=await buy(q,ana.cookie);assert.deepEqual(await buy(q,ana.cookie),sale);
+  let state=await h.state(), pack=state.packs.find(p=>p.id===sale.packId);
+  assert.equal(Date.parse(sale.expiresAt)-Date.parse(sale.startsAt),14*86400_000);
+  assert.deepEqual([pack.remaining,state.packCreditEvents.filter(e=>e.packId===pack.id).length,state.charges.filter(c=>c.introSaleId===sale.id).map(c=>c.amountCents)],[2,1,[3900]]);
+  assert.ok((await h.state(ana.cookie)).notices.some(n=>n.subject==='Intro offer purchased'));
+  await refused('intro.purchase',{id:racing.id,key:racing.key,confirm:true},alias.cookie,409,'intro_eligibility_changed');
+  for(const cookie of [ana.cookie,alias.cookie,h.owner])await refused('intro.preview',{personId:cookie===h.owner?alias.id:undefined,offerId:offer.id,requestId:'synthetic-strap-'+(++n)},cookie,409,'intro_already_used');
+  const newOffer=await h.cmd('intro.offer.save',{...offerInput,name:'Renamed intro'});
+  await refused('intro.preview',{offerId:newOffer.id,requestId:'synthetic-strap-'+(++n)},alias.cookie,409,'intro_already_used');
+  const householdOffer=await h.cmd('intro.offer.save',{...offerInput,limit:'household'});
+  await refused('intro.preview',{offerId:householdOffer.id,requestId:'synthetic-strap-'+(++n)},household.cookie,409,'intro_already_used');
+  const privateState=await h.state(alias.cookie);
+  assert.deepEqual([privateState.intros.identities,privateState.intros.links,privateState.intros.sales],[[],[],[]]);
+  assert.equal((await h.state(coach.cookie)).intros.offers.length,0);
+  // The exact preview expires and any subsequent identity verification invalidates it.
+  const stale=await quote(ben);await verify(ben);
+  await refused('intro.purchase',{id:stale.id,key:stale.key,confirm:true},ben.cookie,409,'intro_eligibility_changed');
+  const expired=await quote(ben);
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.validUntil',?) WHERE id=?").bind(new Date(Date.now()-1000).toISOString(),expired.id).run();
+  await refused('intro.purchase',{id:expired.id,key:expired.key,confirm:true},ben.cookie,409,'intro_preview_expired');
+  // Only the owner holds the price right. An exception uses one preview, charge, grant and audit identity.
+  await refused('intro.preview',{offerId:offer.id,requestId:'synthetic-strap-'+(++n),exceptionReason:'Self-approved'},alias.cookie,403,'owner_required');
+  const exceptionInput={personId:alias.id,offerId:offer.id,exceptionReason:'Owner approved a second introduction after a studio closure',requestId:'synthetic-strap-810',channel:'phone'};
+  const exception=await h.cmd('intro.preview',exceptionInput);
+  const confirm={id:exception.id,key:exception.key,confirm:true,requestId:'synthetic-strap-811',channel:'phone'};
+  const exceptionSale=await h.cmd('intro.purchase',confirm);
+  assert.deepEqual(await h.cmd('intro.purchase',confirm),exceptionSale);
+  await refused('intro.purchase',{...confirm,requestId:'synthetic-strap-812'},alias.cookie,404,'intro_not_found');
+  state=await h.state();
+  const audit=state.staffActions.filter(a=>a.requestId==='synthetic-strap-811');
+  assert.equal(audit.length,1);assert.deepEqual([audit[0].personId,audit[0].right,audit[0].channel,audit[0].reason,audit[0].after.id],[alias.id,'price','phone',exceptionInput.exceptionReason,exceptionSale.id]);
+  assert.equal(state.charges.filter(c=>c.introSaleId===exceptionSale.id).length,1);
+  assert.ok(!JSON.stringify(await h.state(alias.cookie)).includes(exceptionInput.exceptionReason));
+  const key=await h.cmd('agent.create',{label:'Intro preparation only'});
+  assert.equal((await h.send('/api/strap/agent/command',{name:'intro.preview',input:exceptionInput},'',{authorization:'Bearer '+key.token})).status,403);
+  // Existing waiver/service/capacity and immutable usage doors consume these ordinary credits.
+  const classes=await publish(h,coach,[{key:'one',title:'Intro Mat one',service:'Mat',date:addDays(today(),1),time:'10:00'},{key:'two',title:'Intro Mat two',service:'Mat',date:addDays(today(),2),time:'10:00'},{key:'wrong',title:'Intro Reformer',service:'Reformer',date:addDays(today(),1),time:'11:00'},{key:'late',title:'Expired intro class',service:'Mat',date:addDays(today(),16),time:'10:00'}]);
+  await h.cmd('booking.book',{classId:classes.get('wrong').id},ana.cookie,409);
+  await h.cmd('booking.book',{classId:classes.get('late').id},ana.cookie,409);
+  const b=await h.cmd('booking.book',{classId:classes.get('one').id},ana.cookie);
+  await h.cmd('booking.book',{classId:classes.get('two').id},ana.cookie);
+  assert.equal((await h.state()).packs.find(p=>p.id===pack.id).remaining,0);
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(new Date(Date.now()-60_000).toISOString(),new Date(Date.now()+3600_000).toISOString(),classes.get('one').id).run();
+  await h.cmd('attendance.checkin',{id:b.id},coach.cookie);
+  pack=(await h.state()).packs.find(p=>p.id===pack.id);
+  assert.equal(pack.summary.consumed,1);assert.equal(pack.summary.reserved,1);
+  assert.equal((await h.state()).packCreditEvents.filter(e=>e.packId===pack.id&&e.type==='grant').length,1);
+  // Returning clients require elapsed inactivity; a new client cannot use a returning offer.
+  const returning=await h.cmd('intro.offer.save',{...offerInput,eligibility:'returning',returnAfterDays:30});
+  await refused('intro.preview',{offerId:returning.id,requestId:'synthetic-strap-820'},ben.cookie,409,'intro_returning_clients_only');
+  const former=await h.person('IntroFormer');await verify(former);
+  const old=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:former.id,credits:1,amountCents:100,expiresAt:new Date(Date.now()+60_000).toISOString()})).id});
+  await refused('intro.preview',{offerId:returning.id,requestId:'synthetic-strap-821'},former.cookie,409,'intro_return_gap_not_met');
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.expiresAt',?) WHERE id=?").bind(new Date(Date.now()-31*86400_000).toISOString(),old.id).run();
+  const returnQuote=await h.cmd('intro.preview',{offerId:returning.id,requestId:'synthetic-strap-822'},former.cookie);
+  assert.ok((await buy(returnQuote,former.cookie)).packId);
+  const closed=await quote(ben);await h.cmd('intro.offer.close',{id:offer.id});
+  await refused('intro.purchase',{id:closed.id,key:closed.key,confirm:true},ben.cookie,409,'intro_preview_expired');
+  if(process.env.STRAP_PROOF_DIR)await(await import('./intro-offers-browser.mjs')).introOffersBrowser(h);
+}));
+
+test('Intro conversion: expiry alone never renews; member accepts or declines exact native recurring invoices',()=>run(async h=>{
+  await studio(h);
+  const offer=await h.cmd('intro.offer.save',{name:'Two weeks then a choice',days:14,credits:3,amountCents:4900,eligibility:'new',limit:'person'});
+  const people=[];
+  for(const name of ['IntroAccept','IntroDecline','IntroUnanswered']){
+    const p=await h.person(name);people.push(p);
+    await h.cmd('intro.identity.verify',{personId:p.id,householdChecked:true,reason:'Verified before purchase'});
+    const q=await h.cmd('intro.preview',{offerId:offer.id,requestId:'synthetic-strap-'+p.id},p.cookie);
+    p.sale=await h.cmd('intro.purchase',{id:q.id,key:q.key,confirm:true},p.cookie);
+    p.proposal=await h.cmd('plan.recurring.prepare',{packId:p.sale.packId,intervalMonths:1,requestId:'synthetic-strap-'+p.id});
+  }
+  const [accepted,declined,unanswered]=people;
+  for(const cookie of [h.owner,declined.cookie])await h.cmd('plan.recurring.accept',{id:accepted.proposal.id,key:accepted.proposal.key},cookie,cookie===h.owner?403:404);
+  const a=await h.cmd('plan.recurring.accept',{id:accepted.proposal.id,key:accepted.proposal.key},accepted.cookie);
+  assert.deepEqual(await h.cmd('plan.recurring.accept',{id:a.id,key:a.key},accepted.cookie),a);
+  assert.deepEqual([a.amountCents,a.credits,a.intervalMonths,a.firstDueAt,a.acknowledgement.actorId],[4900,3,1,accepted.sale.expiresAt,(await h.state(accepted.cookie)).actor.id]);
+  await h.cmd('plan.recurring.stop',{id:declined.proposal.id,requestId:'synthetic-strap-830'},declined.cookie);
+  // Move only the stored clock boundary; purchases and decisions still enter via public commands.
+  const due=new Date(Date.now()-1000).toISOString();
+  for(const p of people){
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.expiresAt',?) WHERE id=?").bind(due,p.sale.packId).run();
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.nextRenewalAt',?) WHERE id=?").bind(due,p.proposal.id).run();
+  }
+  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+  const state=await h.state();
+  assert.deepEqual(state.recurring.invoices.map(i=>[i.personId,i.amountCents]),[[accepted.id,4900]]);
+  assert.equal(state.packs.filter(p=>p.personId===accepted.id).length,2);
+  for(const p of [declined,unanswered]){
+    assert.equal(state.packs.filter(pack=>pack.personId===p.id).length,1);
+    assert.equal(state.charges.filter(c=>c.personId===p.id).length,1,'no unaccepted renewal charge');
+  }
+  assert.equal(state.recurring.terms.find(r=>r.id===unanswered.proposal.id).acceptedAt,undefined);
+}));

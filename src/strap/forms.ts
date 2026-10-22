@@ -38,6 +38,10 @@ function classRow(input: Record<string, unknown>, i: number, week: string, timeZ
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'intro.offer.save') for (const key of ['days','returnAfterDays']) if (input[key] !== undefined) input[key] = Number(input[key]);
+  if (name === 'intro.identity.verify') { input.householdChecked = input.householdChecked === 'true'; for (const key of ['samePersonAsId','householdWithId']) if (input[key] === '') delete input[key]; }
+  if (name === 'intro.preview' && input.exceptionReason === '') delete input.exceptionReason;
+  if (name === 'intro.purchase') input.confirm = input.confirm === 'true';
   if (name === 'studio.save' && input.profile === 'true') {
     const keys = ['line1','line2','city','region','postalCode']
     input.address = keys.some(key => String(input[key] ?? '').trim())

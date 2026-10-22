@@ -31,6 +31,11 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.introSaleId', to: 'st_records.id', kind: 'introSale' },
+  { from: 'st_records.data.introOfferId', to: 'st_records.id', kind: 'introOffer' },
+  { from: 'st_records.data.offerId', to: 'st_records.id', kind: 'introOffer', when: 'kind=introPreview or kind=introSale' },
+  { from: 'st_records.data.previewId', to: 'st_records.id', kind: 'introPreview', when: 'kind=introSale' },
+  { from: 'st_records.data.otherPersonId', to: 'st_people.id', when: 'kind=introIdentityLink' },
   { from: 'st_records.data.recurringTermsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'recurringInvoice', when: 'kind=pack or kind=charge' },
   { from: 'st_records.data.cancellationId', to: 'st_records.id', kind: 'contractCancellation' },

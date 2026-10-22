@@ -79,6 +79,12 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
       assert.equal((await h.send('/api/strap/mfa',undefined,'',{authorization:`Bearer ${token}`})).status,401)
       assert.equal((await h.send('/api/strap/command',{name:'mfa.verify',input:{code:'synthetic-strap-1'}},'',{authorization:`Bearer ${token}`})).status,401)
     }
+    const introMember=await h.person('ArchiveIntro'),introAlias=await h.person('ArchiveIntroAlias');
+    await h.cmd('intro.identity.verify',{personId:introMember.id,householdChecked:true,reason:'Archive identity verified'});
+    await h.cmd('intro.identity.verify',{personId:introAlias.id,samePersonAsId:introMember.id,householdChecked:true,reason:'Archive second account verified'});
+    const introOffer=await h.cmd('intro.offer.save',{name:'Archived two-week intro',days:14,credits:2,amountCents:3900,eligibility:'new',limit:'person'});
+    const introPreview=await h.cmd('intro.preview',{offerId:introOffer.id,requestId:'synthetic-strap-840'},introMember.cookie);
+    const introSale=await h.cmd('intro.purchase',{id:introPreview.id,key:introPreview.key,confirm:true},introMember.cookie);
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -114,6 +120,11 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
     const restoredReservations=await h.state(restoredOwner)
+    assert.deepEqual(restoredReservations.intros.sales.find(r=>r.id===introSale.id),{...introSale,exceptionReason:null,eligibilityFailure:null,exceptionApprovedBy:null});
+    const introAliasCookie=await h.signIn(introAlias.email);
+    assert.equal((await h.cmd('intro.preview',{offerId:introOffer.id,requestId:'synthetic-strap-841'},introAliasCookie,409)).error,'intro_already_used','restored aliases retain the lifetime intro fence');
+    assert.equal((await h.state(restoredOwner)).packs.filter(p=>p.introSaleId===introSale.id).length,1);
+
     assert.deepEqual(restoredReservations.reservations.find(r=>r.id===reservation.id),reservation,'SCHED-005 native restore retains occurrence outcomes and booking identities')
     assert.equal(restoredReservations.reservationPreviews.find(r=>r.id===reservationPreview.id).status,'confirmed')
     assert.equal(restoredReservations.reservations.find(r=>r.id===reservation.id).outcomes[1].reason,'class_cancelled','SCHED-005 the member keeps the skipped date and reason after restore')
