@@ -86,8 +86,9 @@ async function recordServiceValues(c){
   await staff.goto(h.origin+'/app/people?person='+fixtures.ga.member.id+'#staff-actions')
   const history=staff.locator('#staff-actions'),valuations=history.locator('[data-staff-command="contract.service-value.record"]')
   assert.equal(await valuations.count(),3)
-  await valuations.first().getByText('Recorded change',{exact:true}).click()
-  assert.match(await valuations.first().innerText(),/\$40\.00/)
+  const change=valuations.first().locator('xpath=following-sibling::tr[1]')
+  await change.getByText('Recorded change',{exact:true}).click()
+  assert.match(await change.innerText(),/\$40\.00/)
   await valuations.first().scrollIntoViewIfNeeded();await shot(staff,'owner-service-valuation-history')
 }
 
