@@ -34,6 +34,6 @@ export function recurringPanel(s: any, choices: [unknown,unknown][], staff: bool
       + (r.stoppedAt ? `<p>Stopped immediately ${when(s,r.stoppedAt)}. Access continues to the existing term end.</p>` : '')
       + (r.failure ? `<p>Studio review required: ${h(r.failure.replace(/_/g,' '))}.</p>` : '') + '</article>'
   }).join('')
-  const invoices = data.invoices.map((i: any) => `<p data-recurring-invoice="${h(i.id)}">Renewal invoice · ${exact(s,i.dueAt)} · ${money(i.amountCents)} added to the studio balance. ${statusPill(i.status)} · No payment collected.</p>`).join('')
+  const invoices = data.invoices.map((i: any) => `<p data-recurring-invoice="${h(i.id)}">Renewal invoice · ${exact(s,i.dueAt)} · ${money(i.amountCents)} ${i.status==='void'?'invoice void; unpaid '+money(i.voidedUnpaidCents)+' reversed':'added to the studio balance'}. ${statusPill(i.status)} · No payment collected.</p>`).join('')
   return reconnect + fresh + prepare + terms + invoices
 }

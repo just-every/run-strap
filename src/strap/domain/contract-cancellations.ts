@@ -27,7 +27,7 @@ export function saveCancellationPolicy(tx:Transaction,input:Record<string,unknow
   insist(deductions&&typeof deductions==='object'&&!Array.isArray(deductions),'invalid_cooling_deductions');
   insist(Object.entries(deductions).every(([region,on])=>['GA','FL','CA'].includes(region)&&typeof on==='boolean'),'invalid_cooling_deductions');
   const studioOpenedOn=input.studioOpenedOn===undefined?old.studioOpenedOn:input.studioOpenedOn;
-  insist(!studioOpenedOn||typeof studioOpenedOn==='string'&&/^\d{4}-\d\d-\d\d$/.test(studioOpenedOn)&&new Date(studioOpenedOn+'T00:00:00Z').toISOString().slice(0,10)===studioOpenedOn,'invalid_studio_opened_on');
+  insist(!studioOpenedOn||typeof studioOpenedOn==='string'&&/^\d{4}-\d\d-\d\d$/.test(studioOpenedOn)&&Number.isFinite(Date.parse(studioOpenedOn+'T00:00:00Z'))&&new Date(studioOpenedOn+'T00:00:00Z').toISOString().slice(0,10)===studioOpenedOn,'invalid_studio_opened_on');
   const studioOpeningEvidenceReference=studioOpenedOn?text(input.studioOpeningEvidenceReference??old.studioOpeningEvidenceReference,'studioOpeningEvidenceReference',200):null;
   const p={id:'cancellation-policy',coolingOffDays:integer(input.coolingOffDays,'coolingOffDays',5,365),relocationMiles:integer(input.relocationMiles??25,'relocationMiles',1,1000),studioOpenedOn:studioOpenedOn||null,studioOpeningEvidenceReference,coolingDeductions:deductions,updatedAt:now(),updatedBy:tx.who.id};tx.put('cancellationPolicy',p);return p;
 }

@@ -4,14 +4,16 @@ import assert from 'node:assert/strict'
 export async function coolingRefundCases(h) {
   let sequence=1400
   const key=()=>`synthetic-strap-${sequence++}`
+  let people=0;const names=['Nora Hayes','Ruby Lane','Sarah Cole','Ella Stone','Mia Ross','Grace Ford','Lila Shaw','Amy Ward','Claire Reed','Julie Ames','Hazel Hill','Eva Snow','Rose Mills','Beth Shaw','Paige Ray','Olive Vale','Vera Park','Faye Lake','Wendy Hall','Lena Dove','Gina Frost','Daisy King'];
+  const person=async(role='member')=>{const p=await h.person(key(),role);await h.cmd('person.save',{id:p.id,name:names[people++],email:p.email,role,active:true});return p;};
   const start='2026-01-05T07:00:00.000Z', day=86_400_000
   const plus=(at,days)=>new Date(Date.parse(at)+days*day).toISOString()
   const save=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
   const policy=async(coolingDeductions={})=>h.cmd('plan.cancellation.policy.save',{coolingOffDays:5,relocationMiles:25,coolingDeductions})
   await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',businessHours:[1,2,3,4,5,6].map(day=>({day,opens:'09:00',closes:'17:00'}))})
   await policy()
-  const agreement=async({region='NY',amountCents=5900,initiationFeeCents=19900,days=30,unlimited=false,serviceVisits=0}={})=>{
-    const member=await h.person(key())
+  const agreement=async({region='NY',amountCents=5900,initiationFeeCents=19900,days=30,unlimited=false,serviceVisits=0,valueServices=true}={})=>{
+    const member=await person()
     const prepared=await h.cmd('pack.prepare',{personId:member.id,amountCents,initiationFeeCents,expiresAt:'2099-01-05T07:00:00.000Z',...(unlimited?{kind:'unlimited'}:{credits:10})})
     const approved=await h.cmd('pack.approve',{id:prepared.id})
     let state=await h.state(),pack=state.packs.find(p=>p.id===approved.id)
@@ -22,8 +24,9 @@ export async function coolingRefundCases(h) {
     const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
     const receipt=await h.cmd('payment.record',{personId:member.id,amountCents:amountCents+initiationFeeCents,reference:key()})
     for(const charge of saleCharges)await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:charge.amountCents,reference:key()})
+    const serviceBookings=[]
     if(serviceVisits){
-      const instructor=await h.person(key(),'instructor')
+      const instructor=await person('instructor')
       for(let i=0;i<serviceVisits;i++){
         const future=plus(new Date().toISOString(),i+2),d=new Date(future)
         const week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
@@ -34,9 +37,12 @@ export async function coolingRefundCases(h) {
         await save('class',{...entry,start:historicalStart,end:new Date(Date.parse(historicalStart)+3_600_000).toISOString(),localDate:historicalStart.slice(0,10)})
         await save('booking',{...attended,checkedInAt:historicalStart})
         const valuation={bookingId:booking.id,amountCents:4000,evidenceReference:key()}
-        const value=await h.cmd('contract.service-value.record',valuation)
-        assert.deepEqual(await h.cmd('contract.service-value.record',valuation),value,'actual service valuation is immutable evidence with exact replay')
-        await h.cmd('contract.service-value.record',{...valuation,amountCents:5000},h.owner,409)
+        serviceBookings.push(valuation)
+        if(valueServices){
+          const value=await h.cmd('contract.service-value.record',valuation)
+          assert.deepEqual(await h.cmd('contract.service-value.record',valuation),value,'actual service valuation is immutable evidence with exact replay')
+          await h.cmd('contract.service-value.record',{...valuation,amountCents:5000},h.owner,409)
+        }
       }
       pack=(await h.state()).packs.find(p=>p.id===pack.id)
     }
@@ -46,21 +52,32 @@ export async function coolingRefundCases(h) {
     await h.cmd('contract.jurisdiction.save',{personId:member.id,region,evidenceReference:key()})
     const contract=(await h.state()).cancellations.contracts.find(t=>t.id===terms.id)
     await h.cmd('contract.copy.delivery.record',{termsId:terms.id,digest:contract.copy.digest,deliveredAt:start,evidenceReference:key(),requestId:key()})
-    return {member,pack,terms,receipt,total:amountCents+initiationFeeCents}
+    return {member,pack,terms,receipt,total:amountCents+initiationFeeCents,serviceBookings}
   }
   const cancel=async(a,at=plus(start,1),reasonCode='cooling-off')=>{
-    const input={packId:a.pack.id,reasonCode,documentedAt:at,evidenceReference:key(),requestId:key()}
+    const proposed={packId:a.pack.id,reasonCode,documentedAt:at,evidenceReference:key(),requestId:key(),previewOnly:true}
+    const preview=await h.cmd('plan.cancellation.statutory',proposed,a.member.cookie)
+    const before=await h.state()
+    assert.ok(!before.cancellations.statutoryPreviews.some(p=>p.id===preview.id),'a member’s private preview is not exposed to another actor')
+    assert.ok((await h.state(a.member.cookie)).cancellations.statutoryPreviews.some(p=>p.id===preview.id),'the member can review the stored statutory refund preview')
+    assert.ok(!before.cancellations.cancellations.some(c=>c.termsId===a.terms.id),'preview does not terminate the agreement')
+    assert.ok(!before.cancellations.refunds.some(r=>r.packId===a.pack.id),'preview records no refund due')
+    assert.equal(before.recurring.terms.find(t=>t.id===a.terms.id).status,'active','preview leaves recurring authority active')
+    const {previewOnly,...facts}=proposed
+    const input={...facts,requestId:key(),previewId:preview.id}
     const applied=await h.cmd('plan.cancellation.statutory',input,a.member.cookie)
     assert.equal(applied.status,'applied')
     const state=await h.state(),refund=state.cancellations.refunds.find(r=>r.cancellationId===applied.id)
     assert.ok(refund,'the actual cancellation retains a refund due')
+    assert.equal(refund.amountCents,preview.value.amountCents,'the reviewed refund equals the final refund due')
+    assert.deepEqual(applied.effects.unusedPrepaid,preview.value,'confirmation retains the exact reviewed valuation')
     assert.equal(refund.status,'refund_due');assert.equal(refund.settledCents,0)
     assert.equal(state.cancellations.settlements.filter(s=>s.refundId===refund.id).length,0,'recording a refund due moves no funds')
     assert.equal(state.payments.filter(p=>p.personId===a.member.id).length,1,'the original external receipt remains the only payment')
     assert.equal(refund.settleBy,applied.refundDeadline.settleBy)
     assert.equal(refund.settleBy,applied.refundDeadline.rules.map(r=>r.deadline).filter(Boolean).sort()[0],'the shortest applicable settlement deadline governs')
     assert.deepEqual(await h.cmd('plan.cancellation.statutory',input,a.member.cookie),applied,'replay keeps the same cancellation and refund identity')
-    return {applied,refund,state}
+    return {applied,refund,state,preview}
   }
 
   const ny=await agreement()
@@ -103,5 +120,15 @@ export async function coolingRefundCases(h) {
   const death=await agreement({region:'NY',amountCents:30000,initiationFeeCents:0,days:30,unlimited:true})
   const deceased=await cancel(death,plus(start,10),'death')
   assert.equal(deceased.refund.amountCents,20000,'death retains the unused-time valuation rather than the cooling-off full-refund default')
-  return {ny,ended,georgia,ga,florida,fl,california,ca,death,deceased}
+  const browserCases={}
+  if(process.env.STRAP_PROOF_DIR){
+    for(const width of [1440,390])browserCases[width]={
+      ny:await agreement(),
+      ga:await agreement({region:'GA',serviceVisits:3,valueServices:false}),
+      fl:await agreement({region:'FL',amountCents:9000,initiationFeeCents:0,unlimited:true}),
+      ca:await agreement({region:'CA',amountCents:250100,initiationFeeCents:19900,days:45,unlimited:true}),
+      saleMember:await person(),
+    }
+  }
+  return {ny,ended,georgia,ga,florida,fl,california,ca,death,deceased,browserCases}
 }

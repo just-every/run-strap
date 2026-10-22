@@ -21,7 +21,8 @@ export function recordCoolingServiceValue(tx: Transaction, input: Record<string,
   humanOwner(tx.who);
   const booking = record(tx.state,input.bookingId,'booking');
   insist(booking.status==='booked' && booking.attendance==='attended' && booking.packId,'attended_pack_booking_required',409);
-  const pack = record(tx.state,booking.packId,'pack');
+  const pack = record(tx.state,booking.packId,'pack'),entry=record(tx.state,booking.classId,'class');
+  insist(entry.start<=now()&&booking.checkedInAt<=now(),'service_not_yet_received',409);
   const amountCents = integer(input.amountCents,'amountCents',0,100_000_000), evidenceReference = text(input.evidenceReference,'evidenceReference',200);
   const key = `cooling-service:${booking.id}`, prior = tx.state.records.get(key)?.data;
   if (prior) {
