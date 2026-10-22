@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 
 // STUDIO-001/002 at 1440 and 390: the owner's Studio, class-week, plan and report screens, the member's receipt,
 // and a manager's report pages, each fitting the width and read through real controls.
-async function session(h, cookie, width, browser) {
+export async function session(h, cookie, width, browser) {
   const context = await browser.newContext({ viewport: { width, height: 1000 } })
   await context.route(h.origin + '/**', async route => {
     const path = new URL(route.request().url()).pathname
@@ -16,9 +16,9 @@ async function session(h, cookie, width, browser) {
   await context.addCookies([{ name: cookie.slice(0, at), value: cookie.slice(at + 1), url: h.origin }])
   return { context, page: await context.newPage() }
 }
-const shot = async (page, width, name, heading) => {
+export const shot = async (page, width, name, heading) => {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name} fits ${width}`)
-  if (process.env.STRAP_PROOF_DIR) await page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).first().screenshot({ path: join(process.env.STRAP_PROOF_DIR, `STUDIO-002-${name}-${width}.png`) })
+  if (process.env.STRAP_PROOF_DIR) await page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).first().screenshot({ path: join(process.env.STRAP_PROOF_DIR, `${process.env.STRAP_PROOF_PREFIX ?? 'STUDIO-002'}-${name}-${width}.png`) })
 }
 
 export async function locationsBrowser(h, { la, ana }) {

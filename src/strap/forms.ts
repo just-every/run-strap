@@ -53,6 +53,11 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     delete input.allLocations
   }
   if (name === 'pack.prepare' || name === 'payment.record') { if (input.locationId === '') delete input.locationId }
+  if (name === 'household.contact.save') {
+    input.permissions = Object.keys(input).filter(key => key.startsWith('perm_') && input[key] === 'true').map(key => key.slice(5))
+    for (const key of Object.keys(input)) if (key.startsWith('perm_')) delete input[key]
+  }
+  if (name === 'household.participant.add' && input.personId === '') delete input.personId
   if (name === 'manager.grant') {
     input.locationIds = Object.keys(input).filter(key => key.startsWith('loc_')).map(key => key.slice(4))
     for (const key of Object.keys(input)) if (key.startsWith('loc_')) delete input[key]

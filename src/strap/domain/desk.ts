@@ -1,3 +1,4 @@
+import { debtorOf } from './households';
 import { humanOwner, id, instant, insist, integer, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
 import { acknowledged, bookingPack, planRefused, seat } from './bookings';
@@ -39,7 +40,7 @@ function sell(tx: Transaction, personId: string, entry: RecordData, dropIn: bool
     credits,remaining:0,amountCents,expiresAt,soldAtDesk:true,soldBy:tx.who.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits});
-  tx.put('charge',{id:id(),personId,packId:pack.id,amountCents,createdAt:now(),createdBy:tx.who.id});
+  tx.put('charge',{id:id(),personId:debtorOf(tx.state,personId),...(debtorOf(tx.state,personId) === personId ? {} : {forPersonId:personId}),packId:pack.id,amountCents,createdAt:now(),createdBy:tx.who.id});
   if (input.reference !== undefined && input.reference !== '') {
     const reference = text(input.reference,'reference',160);
     insist(!list(tx.state,'payment').some(p => p.reference === reference),'payment_reference_used',409);

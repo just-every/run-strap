@@ -1,3 +1,4 @@
+import { debtorOf } from './households';
 import { packFreezeBlocks } from './freezes';
 import { releaseMakeupCredit } from './makeups';
 import { releaseGuest } from './guest-bookings';
@@ -44,7 +45,7 @@ export function markNoShow(tx: Transaction, input: Record<string,unknown>) {
   tx.reached(graceEndsAt);
   bookingCredit(tx,booking,{type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'no_show'});
   const feeCents = booking.cancelTerms?.noShowFeeCents ?? 0;
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? debtorOf(tx.state,booking.personId),forPersonId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'no_show_fee',createdAt:now(),createdBy:tx.who.id});
   const marked = {...booking,attendance:'no_show',noShowAt:now(),noShowBy:tx.who.id,noShowByRole:tx.who.role,noShowFeeCents:feeCents};
   tx.put('booking',marked); return marked;
 }

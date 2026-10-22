@@ -39,7 +39,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
@@ -272,6 +272,26 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         assert.equal(saved.history.at(-1).actorId,(await h.state(ana.cookie)).actor.id)
         await h.cmd(door,input)
         assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1)
+      },
+      'household.payer.accept':async door=>{
+        const guardian=await h.person('PairGuardian'),payer=await h.person('PairPayer'),household=await h.cmd('household.save',{name:'Pair family'})
+        await h.cmd('household.guardian.link',{id:household.id,guardianId:guardian.id,evidenceReference:'synthetic-strap-61'})
+        await h.cmd('household.payer.propose',{id:household.id,payerId:payer.id})
+        const input={id:household.id,requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input)
+        assert.equal(r.result.status,'member_action_required');assert.equal(r.result.personId,payer.id)
+        assert.equal((await h.state(payer.cookie)).households[0].pendingPayer.personId,payer.id,'staff launch never accepts for the payer')
+        await refused(h,'household.payer.accept',{id:household.id},h.owner)
+        await refused(h,'household.payer.accept',{id:household.id},guardian.cookie,404)
+        assert.equal((await h.cmd('household.payer.accept',{id:household.id},payer.cookie)).payerId,payer.id)
+        await h.cmd(door,input)
+      },
+      'household.guardian.leave':async door=>{
+        const first=await h.person('LeaveOne'),second=await h.person('LeaveTwo'),household=await h.cmd('household.save',{name:'Leave family'})
+        for (const g of [first,second]) await h.cmd('household.guardian.link',{id:household.id,guardianId:g.id,evidenceReference:'synthetic-strap-62'})
+        const input={id:household.id,guardianId:second.id,reason:'Asked at the desk',channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input)
+        assert.deepEqual(r.result.guardianIds,[first.id]);assert.equal(r.event.personId,second.id)
+        assert.deepEqual((await h.cmd('household.guardian.leave',{id:household.id},first.cookie)).guardianIds,[],'a guardian ends their own guardianship through their own door')
+        await refused(h,'household.guardian.leave',{id:household.id},second.cookie,404)
       },
       'mail.preference.save':async door=>{
         const current=(await h.state(ana.cookie)).messagePreference

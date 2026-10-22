@@ -6,6 +6,7 @@ import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
 import { appendPackEvent, bookingCredit, packCanSeat, packServiceEligible, packServiceOnly, planBlock } from './pack-credits';
 import { packLocationEligible } from './locations';
+import { debtorOf, guardianOf } from './households';
 import { bookingHistory, staffReason } from './booking-history';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
@@ -46,6 +47,13 @@ function ownMember(tx: Transaction) {
   insist(tx.who.personId,'person_required',403);
   return person(tx.state,tx.who.personId);
 }
+/** MEM-002: a guardian books and signs for a participant of their household; nobody else's. */
+function actingMember(tx: Transaction, participantId?: unknown) {
+  if (participantId === undefined || participantId === '') return ownMember(tx);
+  insist(tx.who.role === 'member' && tx.who.personId,'member_required',403);
+  insist(guardianOf(tx.state,tx.who.personId,participantId),'person_not_found',404);
+  return person(tx.state,participantId);
+}
 /** A seat in a room with spots takes the named spot, or the first free one. */
 export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pack: RecordData, spot = chooseSpot(tx.state,entry,undefined)) {
   tx.future(entry.start); tx.future(pack.expiresAt);
@@ -55,7 +63,7 @@ export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pa
 }
 export function book(tx: Transaction, input: Record<string,unknown>, forMember?: string) {
   if (forMember) humanOwner(tx.who);
-  const member = forMember ? person(tx.state,forMember) : ownMember(tx), entry = record(tx.state,input.classId,'class');
+  const member = forMember ? person(tx.state,forMember) : actingMember(tx,input.participantId), entry = record(tx.state,input.classId,'class');
   insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
@@ -65,7 +73,7 @@ export function book(tx: Transaction, input: Record<string,unknown>, forMember?:
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   promote(tx,entry);
   const full = seatCapacity(tx.state,entry).onlineOpen === 0;
-  const booking = {id:id(),classId:entry.id,personId:member.id,status:'waitlisted',capacityPool:'online',bookingChannel:'online',cancelTerms:cancelTerms(tx.state,entry,pack),createdAt:now(),sequence:tx.state.version+1};
+  const booking = {id:id(),classId:entry.id,personId:member.id,...(!forMember && member.id !== tx.who.personId ? {bookedBy:tx.who.personId} : {}),status:'waitlisted',capacityPool:'online',bookingChannel:'online',cancelTerms:cancelTerms(tx.state,entry,pack),createdAt:now(),sequence:tx.state.version+1};
   if (full) { tx.put('booking',booking); return booking; }
   insist(pack,refused?.code ?? 'eligible_credit_required',409);
   return seat(tx,booking,entry,pack,chooseSpot(tx.state,entry,input.spot));
@@ -74,7 +82,7 @@ export function book(tx: Transaction, input: Record<string,unknown>, forMember?:
  * owner acts for front desk with the fee-waiver right until STAFF-001. */
 export function cancel(tx: Transaction, input: Record<string,unknown>, parentActionId?: string) {
   const booking = record(tx.state,input.id,'booking');
-  insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))),'forbidden',403);
+  insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId || (tx.who.role === 'member' && guardianOf(tx.state,tx.who.personId,booking.personId)) || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');
   insist(entry.start > now(),'cancellation_closed',409);
   tx.future(entry.start);
@@ -104,7 +112,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
     bookingCredit(tx,booking,returned ? {type:'restore',credits:1,bookingId:booking.id,classId:entry.id} : {type:'consume',credits:0,bookingId:booking.id,classId:entry.id,reason:'late_cancel'});
   }
   const cancellationId = id();
-  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
+  if (feeCents > 0) tx.put('charge',{id:id(),personId:booking.sponsorId ?? debtorOf(tx.state,booking.personId),forPersonId:booking.personId,bookingId:booking.id,classId:entry.id,amountCents:feeCents,reason:'late_cancel_fee',cancellationId,createdAt:now(),createdBy:tx.who.id});
   const cancelled = {...booking,cancellationId,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,
     cancellation:booking.status === 'booked' ? choice : 'waitlist',refunded:returned,feeCents,...(waiver ? {waiver} : {})};
   if (staff) staffReason(tx,input);
@@ -118,9 +126,9 @@ export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
 // Adapted latest-version receipt fence from Willow src/willow/documents.ts,
 // acknowledge(), commit 5b116dba308ab2bad264a7662705c87b29304b1e.
 export function acknowledgeWaiver(tx: Transaction, input: Record<string,unknown>) {
-  const member = ownMember(tx), waiver = latestWaiver(tx.state);
+  const member = actingMember(tx,input.participantId), waiver = latestWaiver(tx.state);
   insist(waiver && waiver.id === input.id,'not_latest_version',409);
   insist(!list(tx.state,'acknowledgement').some(a => a.personId === member.id && a.waiverId === waiver.id),'already_acknowledged',409);
-  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),actorId:tx.who.id};
+  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),actorId:tx.who.id,...(member.id !== tx.who.personId ? {signedBy:tx.who.personId} : {})};
   tx.put('acknowledgement',receipt); promoteAll(tx); return receipt;
 }

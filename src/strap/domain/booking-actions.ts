@@ -1,3 +1,4 @@
+import { debtorOf } from './households';
 import { assertMakeupTarget, reserveMakeupCredit, restoreAbsence } from './makeups';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { assertGuestTarget, guestLedger, restoreGuest } from './guest-bookings';
@@ -98,7 +99,7 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
     if (pending.classId !== entry.id) promote(tx,record(tx.state,pending.classId,'class'));
   }
   const action = bookingHistory(tx,'move',booking,moved,input,{type:penalty.mode,waiver:penalty.waiver,acceptedOfferId:input.acceptedOfferId ?? null});
-  if (penalty.feeCents) tx.put('charge',{id:id(),personId:booking.sponsorId ?? booking.personId,bookingId:booking.id,classId:source.id,amountCents:penalty.feeCents,reason:'late_move_fee',bookingActionId:action.id,createdAt:now(),createdBy:tx.who.id});
+  if (penalty.feeCents) tx.put('charge',{id:id(),personId:booking.sponsorId ?? debtorOf(tx.state,booking.personId),forPersonId:booking.personId,bookingId:booking.id,classId:source.id,amountCents:penalty.feeCents,reason:'late_move_fee',bookingActionId:action.id,createdAt:now(),createdBy:tx.who.id});
   promote(tx,source); return moved;
 }
 export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {

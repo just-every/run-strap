@@ -16,6 +16,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'Classes', glyph: 'calendar', count: waiting(['classes']) },
     { href: '/app/people', label: 'People', glyph: 'users' },
+    { href: '/app/households', label: 'Households', glyph: 'users' },
     { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
     { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' },
@@ -39,7 +40,8 @@ export function tabs(s: any): Tab[] {
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
     security,
   ]
-  return [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
+  const member: Tab[] = [{ href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
+  return rows(s, 'households').length ? [...member.slice(0, -1), { href: '/app/household', label: 'My household', glyph: 'users' }, member.at(-1)!] : member
 }
 
 const roleName = (s: any) => ({ owner: 'Owner', instructor: 'Instructor', member: 'Member', finance: 'Finance', manager: 'Manager' } as Record<string, string>)[s.actor.role] ?? s.actor.role

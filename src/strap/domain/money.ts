@@ -7,6 +7,7 @@ import { settleUnpaid } from './desk';
 import { appendPackEvent, packEvents } from './pack-credits';
 import { countsCredits, parsePlan } from './entitlements';
 import { packPlaces, placeId } from './locations';
+import { debtorOf } from './households';
 
 export function balance(state: State, personId: string) {
   return list(state,'charge').filter(r => r.personId === personId).reduce((sum,r) => sum+r.amountCents,0)
@@ -39,8 +40,9 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
-  tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
-  if (pack.initiationFeeCents > 0) tx.put('charge',{id:id(),personId:member.id,packId:pack.id,reason:'initiation_fee',amountCents:pack.initiationFeeCents,createdAt:now()});
+  const debtor = debtorOf(tx.state,member.id), forMember = debtor === member.id ? {} : {forPersonId:member.id};
+  tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
+  if (pack.initiationFeeCents > 0) tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,reason:'initiation_fee',amountCents:pack.initiationFeeCents,createdAt:now()});
   settleUnpaid(tx,record(tx.state,pack.id,'pack'));
   promoteAll(tx);
   return {id:pack.id,draftId:draft.id,status:'approved'};
