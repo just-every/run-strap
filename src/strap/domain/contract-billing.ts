@@ -5,6 +5,7 @@ import { putNotice, reserveMail } from './notices';
 import { localDate, offsetMinutes } from '../zone';
 import { studioSettings } from './studio';
 import { staffChannel } from './staff-actions';
+import { acceptedSaleContext, previewSaleContext, proposalSaleContext, saleContextCurrent } from './contract-sale-context';
 
 /** Native invoice agreement: consent to studio debt, never authority to debit a payment method. */
 export const recurringForPack = (state: State, packId: string) => list(state,'recurringTerms').find(r => r.status === 'active' && r.currentPackId === packId) ?? null;
@@ -20,7 +21,8 @@ const connectionSQL = "SELECT connection_id,origin FROM st_contract_connections 
 const fenceConnection = (tx: Transaction, connection: BillingConnection) => tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_contract_connections WHERE id='billing' AND connection_id=? AND origin=?) THEN 1 ELSE 0 END",connection.connection_id,connection.origin));
 const stopPathFor = (termsId: string) => `/app/packs#recurring-${encodeURIComponent(termsId)}`;
 const debtOnly = 'This authorizes studio-balance debt only. No card or bank payment is authorized or collected.';
-const consentText = (r: RecordData) => `I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`;
+const consentText = (r: RecordData) => `I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`
+  + (r.originalInitiationFeeCents > 0 ? ` The $${(r.originalInitiationFeeCents/100).toFixed(2)} one-time initiation fee was included in the original sale. Each recurring invoice is $${(r.amountCents/100).toFixed(2)}; the initiation fee does not repeat.` : '');
 // The ct ruling supplies this policy; no consent evidence is automatically purged.
 const consentRetention = (acceptedAt: string, endedAt: string | null = null) => ({
   policy:'BILL-005',source:'ct ruling 22 Oct 2026',minimumYearsFromAcceptance:3,minimumYearsAfterEnd:1,
@@ -47,6 +49,7 @@ export async function prepareRecurringTerms(tx: Transaction, input: Record<strin
   insist(!list(tx.state,'planChange').some(c => c.packId === pack.id && c.status === 'accepted'),'plan_change_pending',409);
   insist(!list(tx.state,'freeze').some(f => f.packId === pack.id && ['scheduled','active'].includes(f.status)),'freeze_pending',409);
   const intervalMonths = integer(input.intervalMonths,'intervalMonths',1,120), timeZone = zone(tx.state);
+  const saleContext = proposalSaleContext(tx.state,input);
   const origin = text(tx.notices.origin,'billing_origin',2000);
   const connected = await tx.db.prepare(connectionSQL).first<BillingConnection>();
   insist(!connected || connected.origin === origin,'billing_origin_changed',409);
@@ -56,7 +59,7 @@ export async function prepareRecurringTerms(tx: Transaction, input: Record<strin
   const termsId = id();
   const proposal = {id:termsId,personId:pack.personId,packId:pack.id,status:'preview',intervalMonths,timeZone,connectionId,...packTerms(pack),firstDueAt:pack.expiresAt,nextRenewalAt:pack.expiresAt,proposalOrigin:origin,stopPath:stopPathFor(termsId),
     billingDay:dayIn(pack.expiresAt,timeZone),basis:proposalBasis(tx.state,pack),createdAt:now(),createdBy:tx.who.id,
-    collection:'studio-balance-only',continuesUntilStopped:true};
+    collection:'studio-balance-only',continuesUntilStopped:true,originalInitiationFeeCents:pack.initiationFeeCents ?? 0,...saleContext};
   const shown = {...proposal,consent:consentText(proposal)};
   const terms = {...shown,key:JSON.stringify(shown)};
   tx.put('recurringTerms',terms); return terms;
@@ -75,8 +78,9 @@ export async function acceptRecurringTerms(tx: Transaction, input: Record<string
   const pack = record(tx.state,terms.packId,'pack');
   insist(terms.basis === proposalBasis(tx.state,pack),'plan_changed',409); tx.future(terms.nextRenewalAt);
   const acceptedAt = now(), retention = consentRetention(acceptedAt);
-  const accepted = {...terms,status:'active',currentPackId:pack.id,billingOrigin:tx.notices.origin,acceptedAt,acceptedBy:tx.who.id,acceptedChannel:'member-self-service',retention,
-    acknowledgement:{text:terms.consent,termsKey:terms.key,actorId:tx.who.id,personId:terms.personId,at:acceptedAt,channel:'member-self-service',amountCents:terms.amountCents,intervalMonths:terms.intervalMonths,firstDueAt:terms.firstDueAt,continuesUntilStopped:true,stopPath:terms.stopPath}};
+  const saleContext = acceptedSaleContext(tx.state,terms,input);
+  const accepted = {...terms,...saleContext,status:'active',currentPackId:pack.id,billingOrigin:tx.notices.origin,acceptedAt,acceptedBy:tx.who.id,acceptedChannel:'member-self-service',retention,
+    acknowledgement:{text:terms.consent,termsKey:terms.key,actorId:tx.who.id,personId:terms.personId,at:acceptedAt,channel:'member-self-service',amountCents:terms.amountCents,intervalMonths:terms.intervalMonths,firstDueAt:terms.firstDueAt,continuesUntilStopped:true,stopPath:terms.stopPath,...saleContext}};
   tx.put('recurringTerms',accepted);
   contractNotice(tx,`recurring-consent:${terms.id}`,pack.personId,'Recurring invoices agreed',terms.consent);
   return accepted;
@@ -162,9 +166,9 @@ export async function reconnectRecurringBilling(tx: Transaction, input: Record<s
 }
 export function recurringSnapshot(state: State, who: Actor, connection?: BillingConnection | null, currentOrigin?: string) {
   const visible = (r: RecordData) => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId);
-  const terms = list(state,'recurringTerms').filter(visible).map(r => ({...r,stopPath:r.stopPath ?? stopPathFor(r.id),
+  const terms = list(state,'recurringTerms').filter(visible).map(r => ({...r,...previewSaleContext(state,r),stopPath:r.stopPath ?? stopPathFor(r.id),
     requiresFreshAcceptance:connection !== undefined && (!connection || connection.connection_id !== r.connectionId),
-    stale:r.status === 'preview' && (connection !== undefined && (!connection || connection.connection_id !== r.connectionId) || r.nextRenewalAt <= now() || currentOrigin !== undefined && r.proposalOrigin !== currentOrigin || !state.records.has(r.packId) || r.basis !== proposalBasis(state,record(state,r.packId,'pack')))}));
+    stale:r.status === 'preview' && (!saleContextCurrent(state,r) || connection !== undefined && (!connection || connection.connection_id !== r.connectionId) || r.nextRenewalAt <= now() || currentOrigin !== undefined && r.proposalOrigin !== currentOrigin || !state.records.has(r.packId) || r.basis !== proposalBasis(state,record(state,r.packId,'pack')))}));
   return {terms,invoices:list(state,'recurringInvoice').filter(visible),reminders:list(state,'recurringReminder').filter(visible),
     connection:who.role === 'owner' && connection !== undefined ? {connectionId:connection?.connection_id ?? null,origin:connection?.origin ?? null,currentOrigin:currentOrigin ?? null,
       canReconnect:!!connection && !!currentOrigin && connection.origin !== currentOrigin,requiresFreshAcceptance:!connection} : null};

@@ -22,7 +22,8 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   const entitlement = parsePlan(input), credits = !entitlement || entitlement.kind === 'credits' ? integer(input.credits,'credits',1,10_000) : 0;
   if (entitlement && entitlement.kind !== 'credits') insist(input.credits === undefined || input.credits === null || input.credits === '','plan_has_no_credit_count');
   const guestTerms = parseGuestTerms(input.guestTerms);
-  const draft = {guestTerms,eligibleServices,priorityBooking,...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const initiationFeeCents = integer(input.initiationFeeCents === undefined ? 0 : input.initiationFeeCents,'initiationFeeCents',0,100_000_000);
+  const draft = {guestTerms,eligibleServices,priorityBooking,...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -34,10 +35,11 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   tx.put('charge',{id:id(),personId:member.id,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
+  if (pack.initiationFeeCents > 0) tx.put('charge',{id:id(),personId:member.id,packId:pack.id,reason:'initiation_fee',amountCents:pack.initiationFeeCents,createdAt:now()});
   settleUnpaid(tx,record(tx.state,pack.id,'pack'));
   promoteAll(tx);
   return {id:pack.id,draftId:draft.id,status:'approved'};

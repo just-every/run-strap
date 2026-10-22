@@ -1,3 +1,6 @@
+import { coolingRefund } from './cooling-refunds';
+import { coolingAgreementPackIds, voidUnpaidCoolingInvoices } from './cooling-void';
+import { studioSettings } from './studio';
 import { humanOwner, id, insist, instant, integer, list, now, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { refundSettlementWindow } from './cancellation-calendar';
@@ -42,14 +45,16 @@ export function retainRefundDue(tx: Transaction, cancellation: RecordData) {
   const key = `refund-due:${cancellation.id}`, prior = tx.state.records.get(key)?.data;
   if (prior) return prior;
   const pack=record(tx.state,cancellation.packId,'pack'),valuationAt=cancellation.coolingOff?.renewal?pack.termStartAt??pack.createdAt:cancellation.effectiveAt;
-  const value = unusedPrepaid(tx.state,pack,valuationAt),refundDeadline=cancellation.refundDeadline??refundSettlementWindow(tx.state,now(),[contractRegion(tx.state,cancellation.personId)].filter(Boolean));
-  const due = {valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,valuationAt,settleBy:refundDeadline.settleBy,refundDeadline,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
+  const coolingOptions={packIds:coolingAgreementPackIds(tx.state,cancellation),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,cancellation.personId)].filter(Boolean),policy:cancellation.policy};
+  const value = cancellation.reasonCode==='cooling-off'?coolingRefund(tx.state,pack,cancellation.effectiveAt,coolingOptions):unusedPrepaid(tx.state,pack,valuationAt),refundDeadline=cancellation.refundDeadline??refundSettlementWindow(tx.state,now(),[contractRegion(tx.state,cancellation.personId)].filter(Boolean));
+  if(cancellation.reasonCode==='cooling-off'&&!value.needsAllocation)voidUnpaidCoolingInvoices(tx,cancellation);
+  const due = {coolingOptions:cancellation.reasonCode==='cooling-off'?coolingOptions:null,valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,valuationAt,settleBy:refundDeadline.settleBy,refundDeadline,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
   tx.put('cancellationRefund',due); return due;
 }
 export function reconcileCancellationRefund(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);const due=record(tx.state,input.id,'cancellationRefund'),c=record(tx.state,due.cancellationId,'contractCancellation');
   insist(!due.settledCents,'refund_already_settled',409);
-  const value=unusedPrepaid(tx.state,due.valuationPack,due.valuationAt??c.effectiveAt),updated={...due,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation?'needs_allocation':'refund_due',reconciledAt:now(),reconciledBy:tx.who.id};
+  const value=due.coolingOptions?coolingRefund(tx.state,due.valuationPack,c.effectiveAt,due.coolingOptions):unusedPrepaid(tx.state,due.valuationPack,due.valuationAt??c.effectiveAt);if(due.coolingOptions&&!value.needsAllocation)voidUnpaidCoolingInvoices(tx,c);const updated={...due,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation?'needs_allocation':'refund_due',reconciledAt:now(),reconciledBy:tx.who.id};
   tx.put('cancellationRefund',updated);return updated;
 }
 export function settleCancellationRefund(tx: Transaction, input: Record<string,unknown>) {

@@ -16,6 +16,8 @@ export interface CoolingOptions {
   /** Total contract obligation in cents, including initiation/initial membership fees. */
   amountCents?:number|null;
   days?:number;
+  acceptanceChannel?:string|null;
+  studioOpenedOn?:string|null;
   renewal?:CoolingRenewal;
 }
 export interface CoolingCalendarOptions extends CoolingOptions {
@@ -78,12 +80,8 @@ export function countedDayDeadline(at:string,days:number,kind:CoolingDayKind,zon
   }
   return studioDayInstant(addDays(date,1),zone);
 }
-const later=(a:string|null,b:string|null)=>a===null||b===null?null:a>b?a:b;
 function calculateRule(rule:CoolingRule,at:string,zone:string,hours?:readonly CoolingHours[]):CalculatedCoolingRule {
-  const deadline=countedDayDeadline(at,rule.days+(rule.precedingOpenDays??0),rule.dayKind,zone,hours);
-  if(rule.id!=='CA-1812.85-d')return {...rule,deadline};
-  const calendarDeadline=countedDayDeadline(at,rule.days,'calendar',zone,hours);
-  return {...rule,deadline:later(deadline,calendarDeadline),calendarDeadline};
+  return {...rule,deadline:countedDayDeadline(at,rule.days+(rule.precedingOpenDays??0),rule.dayKind,zone,hours)};
 }
 const sourcesFor=(rules:readonly {source:CoolingSource}[])=>[...new Map([...rules.map(rule=>rule.source),federalHolidaySource].map(source=>[source.citation,source])).values()];
 /** Pure calendar calculation; integrations supply recorded delivery and jurisdiction facts. */
@@ -94,7 +92,8 @@ export function calculateCoolingOffWindow(options:CoolingCalendarOptions):Coolin
   const renewal=options.renewal?{...options.renewal,at:instant(options.renewal.at,'renewal_at')}:null;
   const opensAt=renewal?.at??(deliveredAt&&deliveredAt>acceptedAt?deliveredAt:acceptedAt);
   const regions=[options.studioRegion,options.memberRegion].filter((region):region is string=>!!region);
-  const selected=applicableCoolingRules(regions,options.amountCents,renewal??undefined);
+  const inPersonAtOpenStudio=options.acceptanceChannel==='in-person'&&!!options.studioOpenedOn&&options.studioOpenedOn<=localDate(acceptedAt,options.zone);
+  const selected=applicableCoolingRules(regions,options.amountCents,renewal??undefined,{inPersonAtOpenStudio});
   if(!renewal)selected.unshift(ownerCoolingRule(days));
   const rules=selected.map(rule=>calculateRule(rule,opensAt,options.zone,options.businessHours));
   if(!renewal&&!deliveredAt)rules.push({...ownerCoolingRule(days),id:'contract-copy-delivery',label:'No cutoff until full contract copy delivery is recorded',days:0,dayKind:'calendar',deadline:null});

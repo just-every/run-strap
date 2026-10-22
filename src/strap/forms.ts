@@ -49,7 +49,9 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     for (const key of [...keys,'profile',...Array.from({length:7},(_,i) => [`opens_${i+1}`,`closes_${i+1}`]).flat()]) delete input[key]
   }
   if(name.startsWith('plan.cancellation.')||name==='contract.copy.delivery.record'){for(const prefix of ['effective','documented','settled','delivered']){if(input[prefix+'Date']){if(!date.test(String(input[prefix+'Date']))||!/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(String(input[prefix+'Time'])))fail('Choose a cancellation date and time');input[prefix+'At']=new Date(Date.parse(localInstant(String(input[prefix+'Date']),String(input[prefix+'Time']).slice(0,5),zoneOf(timeZone)))+Number(String(input[prefix+'Time']).split(':')[2]??0)*1000).toISOString();}delete input[prefix+'Date'];delete input[prefix+'Time'];}for(const key of ['coolingOffDays','relocationMiles'])if(input[key]!==undefined&&input[key]!=='')input[key]=Number(input[key]);else delete input[key];for(const key of ['cancellationRequestId','exceptionReason'])if(input[key]==='')delete input[key];}
-  if(name==='contract.prepayment.record'||name==='plan.cancellation.refund.settle'){input.amountCents=cents(input.amount,'the recorded amount');delete input.amount;}
+  if(name==='plan.cancellation.policy.save'&&input.deductionsForm==='yes'){input.coolingDeductions=Object.fromEntries(['GA','FL','CA'].map(region=>[region,input['deduction_'+region]==='yes']));delete input.deductionsForm;for(const region of ['GA','FL','CA'])delete input['deduction_'+region];}
+  if(name==='pack.prepare'&&input.initiationFee!==undefined){input.initiationFeeCents=cents(input.initiationFee||'0','the one-time initiation fee');delete input.initiationFee;}
+  if(name==='contract.service-value.record'||name==='contract.prepayment.record'||name==='plan.cancellation.refund.settle'){input.amountCents=cents(input.amount,'the recorded amount');delete input.amount;}
   if (name === 'freeze.type.save') {
     input.feeCents=cents(input.freezeFee ?? '0','freeze fee');delete input.freezeFee;
     for (const key of ['defaultLengthDays','maxLengthDays']) input[key]=Number(input[key]);

@@ -1,3 +1,4 @@
+import { recordCoolingServiceValue } from './cooling-refunds';
 import { recordContractDelivery, saveContractRegion } from './contract-copies';
 import { requestCancellation, prepareCancellation, confirmCancellation, prepareWithdrawCancellation, confirmWithdrawCancellation, applyDueCancellations, cancellationsSnapshot, stopCancellation, statutoryCancellation, saveCancellationPolicy, cancellationBlocks, launchCancellationWithdrawal } from './contract-cancellations';
 import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
@@ -60,6 +61,7 @@ export const handlers = {
   'plan.cancellation.withdraw.launch':defineCommand(launchCancellationWithdrawal,['owner'],{staffRight:'contract-change'}),
   'contract.authority.accept':defineCommand(acceptContractAuthority,['member'],{member:{staff:'contract.authority.launch',right:'member-record',ownStep:true}}),
   'contract.authority.revoke':defineCommand(revokeContractAuthority,['owner','member'],{member:{staff:'contract.authority.revoke',right:'member-record'},staffRight:'member-record'}),
+  'contract.service-value.record':defineCommand(recordCoolingServiceValue,['owner'],{staffRight:'contract-change'}),
   'contract.prepayment.record':defineCommand(recordContractPrepayment,['owner'],{staffRight:'collection'}),
   'plan.cancellation.stop':defineCommand(stopCancellation,['owner','member'],{member:{staff:'plan.cancellation.stop',right:'contract-change'},staffRight:'contract-change'}),
   'plan.cancellation.statutory':defineCommand(statutoryCancellation,['owner','member'],{member:{staff:'plan.cancellation.statutory',right:'contract-change'},staffRight:'contract-change'}),

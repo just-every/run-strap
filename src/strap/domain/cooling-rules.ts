@@ -28,22 +28,22 @@ const ny = source('NY GBS § 624','https://www.nysenate.gov/legislation/laws/GBS
 const caGuide = 'https://www.dca.ca.gov/publications/legal_guides/w_10.shtml';
 export const coolingRules: readonly CoolingRule[] = [
   {id:'NY-624',region:'NY',label:'NY: 3 business days after contract receipt',days:3,dayKind:'business',source:ny,refund:{days:10,dayKind:'business'}},
-  {id:'CA-1812.85-b',region:'CA',label:'CA (b): 5 studio-open days excluding Sundays and holidays',days:5,dayKind:'studio-open',source:source('CA Civil Code § 1812.85(b)',caGuide,'G','Official DCA guide and chaptered AB2810 (2016), section 3, read; current consolidated statute fetch remains unavailable.'),refund:{days:10,dayKind:'calendar'}},
-  {id:'CA-1812.85-d',region:'CA',label:'CA (d): amount-tier window; longer of business and calendar days',days:45,dayKind:'business',source:source('CA Civil Code § 1812.85(d)',caGuide,'NV','Day kind unverified. Count both business and calendar days and retain the later cutoff. Amount includes initiation and initial membership fees.'),refund:{days:10,dayKind:'calendar'}},
-  {id:'GA-10-1-393.2',region:'GA',label:'GA: 7 business days',days:7,dayKind:'business',source:source('GA O.C.G.A. § 10-1-393.2','https://consumer.georgia.gov/business-services/health-spas-fitness-centers','G','Official AG-hosted February 2024 statutory PDF read (text through the 2023 session). Current statutory currency remains unverified.'),refund:{days:30,dayKind:'calendar'}},
+  {id:'CA-1812.85-b',region:'CA',label:'CA (b): 5 studio-open days excluding Sundays and holidays',days:5,dayKind:'studio-open',source:source('CA Civil Code § 1812.85(b)',caGuide,'V','Official statute Wayback copy 2025-08-23; ct batch-10.'),refund:{days:10,dayKind:'calendar'}},
+  {id:'CA-1812.85-d',region:'CA',label:'CA (d): amount-tier calendar-day window',days:45,dayKind:'calendar',source:source('CA Civil Code § 1812.85(d)',caGuide,'V','Calendar days verified in ct batch-10. Amount includes initiation and initial membership fees.'),refund:{days:10,dayKind:'calendar'}},
+  {id:'GA-10-1-393.2',region:'GA',label:'GA: 7 business days',days:7,dayKind:'business',source:source('GA O.C.G.A. § 10-1-393.2','https://consumer.georgia.gov/business-services/health-spas-fitness-centers','G','Official AG-hosted February 2024 statutory PDF read (text through the 2023 session). Current statutory currency remains unverified.')},
   {id:'NJ-56-8-42',region:'NJ',label:'NJ: 3 operating days of at least 8 hours',days:3,dayKind:'operating-eight',source:source('NJ § 56:8-42','https://pub.njleg.gov/bills/2026/AL26/16_.PDF','NV','Official P.L.2026 c.16 section1 read, effective for contracts entered from 30 June2026. Eight-hour operating days exclude Sundays/holidays. Mail receipt/send wording and holiday set need counsel verification; native documented-send protection is ct product policy.'),refund:{days:30,dayKind:'calendar'}},
   {id:'FL-501.017',region:'FL',label:'FL: 3 days excluding weekends and holidays',days:3,dayKind:'business',source:source('FL § 501.017','https://www.leg.state.fl.us/statutes/index.cfm?App_mode=Display_Statute&URL=0500-0599/0501/Sections/0501.017.html','V'),refund:{days:30,dayKind:'calendar'}},
-  {id:'TX-702.307',region:'TX',label:'TX: 3 business days',days:3,dayKind:'business',source:source('TX Occupations Code §§ 702.304, 702.307','https://statutes.capitol.texas.gov/Docs/OC/htm/OC.702.htm','G'),refund:{days:30,dayKind:'calendar'}},
-  {id:'IL-645-6',region:'IL',label:'IL: 3 open days after the first open day',days:3,precedingOpenDays:1,dayKind:'open',source:source('IL 815 ILCS 645/6','https://ilga.gov/documents/legislation/ilcs/documents/081506450K6.htm','NV','Official section6 read: three facility-open business days after the first such day after signing. Controlling interpretation of that offset remains unverified.'),refund:{days:30,dayKind:'calendar'}},
-  {id:'IL-645-6-off-premises',region:'IL',label:'IL: 7 calendar days for pre-opening or off-premises sale; protective native floor',days:7,dayKind:'calendar',source:source('IL 815 ILCS 645/6','https://www.ilga.gov/documents/legislation/ilcs/documents/081506450K6.htm','NV','The official section provides seven calendar days for pre-opening or off-premises purchases. Until native sale-location facts are recorded, apply this longer floor to every native invoice agreement; ct approval pending.'),refund:{days:30,dayKind:'calendar'}},
-  {id:'MA-93-81',region:'MA',label:'MA: 3 business days after contract receipt',days:3,dayKind:'business',source:source('MA c.93 § 81','https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93/Section81','NV','Official section81 read: receipt of contract copy OR written payment receipt triggers the statutory clock. Native policy waits for full-copy delivery, extending this right. Business-day/holiday definition and current application remain under counsel verification.'),refund:{days:15,dayKind:'business'}},
+  {id:'TX-702.307',region:'TX',label:'TX: 3 business days',days:3,dayKind:'business',source:source('TX Occupations Code §§ 702.304, 702.307','https://statutes.capitol.texas.gov/Docs/OC/htm/OC.702.htm','V','Official statute Wayback copy 2025-02-01; ct batch-10.'),refund:{days:30,dayKind:'calendar'}},
+  {id:'IL-645-6',region:'IL',label:'IL: 3 open days after the first open day',days:3,precedingOpenDays:1,dayKind:'open',source:source('IL 815 ILCS 645/6','https://ilga.gov/documents/legislation/ilcs/documents/081506450K6.htm','V','Official statute Wayback copy 2025-12-22; first-open-day offset verified by ct batch-10.'),refund:{days:30,dayKind:'calendar'}},
+  {id:'IL-645-6-off-premises',region:'IL',label:'IL: 7 calendar days for pre-opening or off-premises sale',days:7,dayKind:'calendar',source:source('IL 815 ILCS 645/6','https://www.ilga.gov/documents/legislation/ilcs/documents/081506450K6.htm','V','Official statute Wayback copy 2025-12-22; online or unknown channel is off-premises.'),refund:{days:30,dayKind:'calendar'}},
+  {id:'MA-93-81',region:'MA',label:'MA: 3 business days after contract receipt',days:3,dayKind:'business',source:source('MA c.93 § 81','https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93/Section81','V','Official statute Wayback copy 2025-09-02; copy OR payment receipt starts clock. Native full-copy delivery extends the right. Business-day definition remains unverified.'),refund:{days:15,dayKind:'business'}},
 ];
 export const federalHolidaySource = source('US federal and observed holidays','https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/','V','State-specific holidays are not yet included.');
 export function ownerCoolingRule(days:number):CoolingRule {
   return {id:'owner-open-weekdays',region:null,label:`Owner policy: ${days} open weekdays (open non-Sundays when no weekday opens)`,days,dayKind:'open-weekday',source:source('Owner policy; ct ruling 22 October 2026','plans/rulings-batch7-20261022-0100.md','V')};
 }
 /** The owner floor applies to the initial contract, not the separate NY renewal right. */
-export function applicableCoolingRules(regions:readonly string[],amountCents:number|null|undefined,renewal?:{intervalMonths:number}):CoolingRule[] {
+export function applicableCoolingRules(regions:readonly string[],amountCents:number|null|undefined,renewal?:{intervalMonths:number},sale?:{inPersonAtOpenStudio:boolean}):CoolingRule[] {
   const states = new Set(regions.map(region=>region.toUpperCase()));
   if(renewal){
     if(!states.has('NY') || ![1,12].includes(renewal.intervalMonths))return [];
@@ -51,10 +51,11 @@ export function applicableCoolingRules(regions:readonly string[],amountCents:num
     return [{id:renewal.intervalMonths===12?'NY-624-annual-renewal':'NY-624-monthly-renewal',region:'NY',label:`NY: ${days} business days after ${renewal.intervalMonths===12?'annual':'monthly'} renewal`,days,dayKind:'business',source:ny,refund:{days:10,dayKind:'business'}}];
   }
   return coolingRules.filter(rule=>states.has(rule.region!)).flatMap(rule=>{
+    if(rule.id==='IL-645-6-off-premises'&&sale?.inPersonAtOpenStudio)return [];
     if(rule.id!=='CA-1812.85-d')return [{...rule}];
     if(amountCents!=null && amountCents<150_000)return [];
     // Dollar gaps between the statutory whole-dollar bands use the longer band.
     const days=amountCents==null||amountCents>250_000?45:amountCents>200_000?30:20;
-    return [{...rule,days,label:`CA (d): ${days} days; longer of business and calendar days${amountCents==null?' (total amount unrecorded: longest tier)':''}`}];
+    return [{...rule,days,label:`CA (d): ${days} calendar days${amountCents==null?' (total amount unrecorded: longest tier)':''}`}];
   });
 }
