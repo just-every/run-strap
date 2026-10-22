@@ -57,5 +57,5 @@ export async function coolingOffCases(h){
   await h.cmd('plan.cancellation.policy.save',{coolingOffDays:5,relocationMiles:25})
   const holiday=await agreement({acceptedAt:'2026-07-02T09:00:00.000Z'});assert.equal(holiday.window.deadline,'2026-07-11T07:00:00.000Z','observed July 4 on Friday July 3 does not count')
   const mailed=await agreement({region:'GA'});assert.equal((await cancel(mailed,'2026-01-14T23:59:00.000Z')).status,'applied','recording a mailed request after cutoff preserves its documented timely send date')
-  return {ga:await agreement({region:'GA'}),gaMobile:await agreement({region:'GA'}),ca:await agreement({region:'CA',amount:260000}),delayed,weekend,nj,holiday}
+  return {ga:await agreement({region:'GA'}),gaMobile:await agreement({region:'GA'}),ca:await agreement({region:'CA',amount:260000}),illinois,delayed,weekend,nj,holiday}
 }
