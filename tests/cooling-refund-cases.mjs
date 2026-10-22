@@ -57,6 +57,7 @@ export async function coolingRefundCases(h) {
   const cancel=async(a,at=plus(start,1),reasonCode='cooling-off')=>{
     const proposed={packId:a.pack.id,reasonCode,documentedAt:at,evidenceReference:key(),requestId:key(),previewOnly:true}
     const preview=await h.cmd('plan.cancellation.statutory',proposed,a.member.cookie)
+    assert.deepEqual(await h.cmd('plan.cancellation.statutory',proposed,a.member.cookie),preview,'retrying the optional preview preserves its identity')
     const before=await h.state()
     assert.ok(!before.cancellations.statutoryPreviews.some(p=>p.id===preview.id),'a member’s private preview is not exposed to another actor')
     assert.ok((await h.state(a.member.cookie)).cancellations.statutoryPreviews.some(p=>p.id===preview.id),'the member can review the stored statutory refund preview')

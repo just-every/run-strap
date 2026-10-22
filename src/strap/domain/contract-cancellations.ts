@@ -82,7 +82,7 @@ export async function stopCancellation(tx:Transaction,input:Record<string,unknow
 /** Metadata reference only; this door does not ingest medical documents. */
 export async function statutoryCancellation(tx:Transaction,input:Record<string,unknown>){
   const {pack,terms}=contract(tx.state,input.packId);authorizeContractCancellation(tx,pack.personId,terms.id);
-  const r=replay(tx,'contractCancellation',input);if(r.prior)return r.prior;
+  const wantsPreview=input.previewOnly===true||input.previewOnly==='yes',r=replay(tx,wantsPreview?'statutoryRefundPreview':'contractCancellation',input);if(r.prior)return r.prior;
   const reasonCode=text(input.reasonCode,'reasonCode',30),documentedAt=instant(input.documentedAt,'documentedAt'),evidenceReference=text(input.evidenceReference,'evidenceReference',200),p=policy(tx.state);
   insist(['death','disability','relocation','cooling-off'].includes(reasonCode),'invalid_statutory_reason');insist(documentedAt<=now(),'documented_request_must_be_past');
   if(reasonCode==='relocation')insist(typeof input.relocationMiles==='number'&&Number.isFinite(input.relocationMiles)&&input.relocationMiles>p.relocationMiles,'statutory_relocation_not_eligible',409);
@@ -91,8 +91,8 @@ export async function statutoryCancellation(tx:Transaction,input:Record<string,u
   const prior=cancellationForTerms(tx.state,terms.id);insist(prior?.status!=='applied','contract_already_ended',409);
   const value=reasonCode==='cooling-off'?coolingRefund(tx.state,pack,documentedAt,{packIds:coolingAgreementPackIds(tx.state,{id:terms.id,packId:pack.id,termsId:terms.id,coolingOff}),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,pack.personId)].filter(Boolean),policy:p}):unusedPrepaid(tx.state,pack,documentedAt);
   const basis=await source(tx.state,pack,terms,documentedAt);
-  if(input.previewOnly===true||input.previewOnly==='yes'){
-    const preview={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,reasonCode,documentedAt,evidenceReference,relocationMiles:input.relocationMiles??null,value,coolingOff,basis,createdBy:tx.who.id,createdAt:now()};tx.put('statutoryRefundPreview',preview);return preview;
+  if(wantsPreview){
+    const preview={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,reasonCode,documentedAt,evidenceReference,relocationMiles:input.relocationMiles??null,value,coolingOff,basis,requestId:r.requestId,requestBasis:r.requestBasis,createdBy:tx.who.id,createdAt:now()};tx.put('statutoryRefundPreview',preview);return preview;
   }
   if(input.previewId){const preview=record(tx.state,input.previewId,'statutoryRefundPreview');insist(preview.createdBy===tx.who.id&&preview.packId===pack.id&&preview.reasonCode===reasonCode&&preview.documentedAt===documentedAt&&preview.basis===basis,'statutory_preview_changed',409);}
   // Supersede any later cancellation without permitting a second refund identity.
