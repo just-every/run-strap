@@ -39,8 +39,9 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase'].includes(name)?'membership-sale':(name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
+    let emptyDeskOffer,nurtureDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
@@ -437,9 +438,25 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       await h.cmd('preferences.save',{revision:0,requestId:randomUUID(),marketingInApp:true,consentStatement:'Member requested studio class offers'},member.cookie);
       const entry=await publish('Empty desk class',64,2),preview=await h.cmd('lead.empty.prepare',{classId:entry.id,personIds:[member.id],leadMinutes:10080,maxPer30Days:1,incentiveCents:0,budgetCents:0,text:'Open class for this member'});
       await h.cmd('lead.empty.approve',{id:preview.id,key:preview.key});
-      const offer=(await h.state(member.cookie)).emptyPlaces.offers[0],input={id:offer.id,requestId:randomUUID(),channel:'phone'};
+      const offer=(await h.state(member.cookie)).emptyPlaces.offers[0];emptyDeskOffer=offer;const input={id:offer.id,requestId:randomUUID(),channel:'phone'};
       const result=await checkAudit(door,input);assert.equal(result.result.status,'booked');assert.equal(result.event.personId,member.id);
       assert.equal((await h.state(member.cookie)).bookings.find(b=>b.id===result.result.id).status,'booked');
+      await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+    };
+    actions['lead.nurture.purchase']=async door=>{
+      const member=await h.person('NurtureDeskMember');await h.cmd('waiver.acknowledge',{id:(await h.state()).waiver.id},member.cookie);
+      const intro=await h.cmd('intro.offer.save',{name:'Desk intro',days:7,credits:2,amountCents:1000,eligibility:'new',limit:'person',eligibleServices:['Desk intro yoga']});
+      await h.cmd('lead.nurture.save',{introOfferId:intro.id,welcome:'Welcome',guidance:'Bring water',offerText:'Exact finite studio membership',planName:'Desk finite month',days:30,amountCents:4000});
+      await h.cmd('preferences.save',{revision:0,requestId:randomUUID(),marketingInApp:true,consentStatement:'Please send intro guidance and offers'},member.cookie);
+      await h.cmd('intro.identity.verify',{personId:member.id,householdChecked:true,reason:'Owner verified new eligibility'});
+      const quote=await h.cmd('intro.preview',{offerId:intro.id,requestId:randomUUID()},member.cookie);await h.cmd('intro.purchase',{id:quote.id,key:quote.key,confirm:true},member.cookie);
+      await h.cmd('lead.nurture.review',{});
+      const start=new Date(Date.now()+6000).toISOString(),entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Desk intro yoga',service:'Desk intro yoga',room:'Desk intro room',start,end:new Date(Date.parse(start)+1000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0];
+      const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie);await h.cmd('attendance.checkin',{id:booking.id},coach.cookie);
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(entry.end)-Date.now()+20)));await h.cmd('lead.nurture.review',{});
+      nurtureDeskOffer=(await h.state(member.cookie)).nurture.offers[0];assert.ok(nurtureDeskOffer);
+      const input={id:nurtureDeskOffer.id,key:nurtureDeskOffer.key,confirm:true,requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+      assert.equal(r.result.entitlement.kind,'unlimited');assert.equal(r.result.amountCents,4000);assert.equal(r.event.personId,member.id);
       await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
     };
     // Work in actual action order so every pair has a real member state to change.
@@ -456,6 +473,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if(entry.name==='lead.empty.accept')input.id=emptyDeskOffer.id;
+      if(entry.name==='lead.nurture.purchase')Object.assign(input,{id:nurtureDeskOffer.id,key:nurtureDeskOffer.key,confirm:true});
       if(entry.name==='intro.preview') Object.assign(input,{personId:introDeskMember.id,offerId:introStaffPreview.offerId});
       if(entry.name==='intro.purchase') Object.assign(input,{id:introStaffPreview.id,key:introStaffPreview.key,confirm:true});
       if(entry.name==='contract.authority.revoke')input.id=contractGrant.id;
@@ -478,9 +497,9 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         const other=(await h.state()).bookings.find(b=>b.personId===ben.id&&b.status==='booked');input.id=other.id
         if (entry.memberDoor.staff==='booking.move') input.classId=near.id
       }
-      const denial=['absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw','contract.authority.revoke','plan.cancellation.stop','plan.cancellation.statutory','intro.preview','intro.purchase'].includes(entry.name)?404:403
+      const denial=['lead.empty.accept','lead.nurture.purchase','absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw','contract.authority.revoke','plan.cancellation.stop','plan.cancellation.statutory','intro.preview','intro.purchase'].includes(entry.name)?404:403
       await refused(h,entry.memberDoor.staff,input,ana.cookie,denial)
-      if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,entry.name.startsWith('intro.')?403:denial)
+      if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,(entry.name.startsWith('intro.')||entry.name.startsWith('lead.'))?403:denial)
       const before=(await h.state()).version
       assert.equal((await h.send('/api/strap/agent/command',{name:entry.memberDoor.staff,input},'',{authorization:`Bearer ${key.token}`})).status,403)
       assert.equal((await h.state()).version,before)

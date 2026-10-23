@@ -13,7 +13,7 @@ function taskFields(s: any,lead?: any) {
     + field('dueAt','Due at (UTC)',localUTC(lead?.dueAt),'datetime-local')
 }
 export function leadsPage(s: any,query: URLSearchParams) {
-  if(s.actor.role === 'member')return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Class offers</h1></div>${emptyPlacesPanel(s)}</div></div>`;
+  if(s.actor.role === 'member')return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Class offers</h1></div>${emptyPlacesPanel(s)}${nurturePanel(s)}</div></div>`;
   const r=s.pipeline,selected=r.leads.find((l: any)=>l.id===query.get('lead'))
   const stage=query.get('stage') ?? '',onlyOverdue=query.get('overdue')==='true'
   const visible=r.leads.filter((l: any)=>(!stage||l.stage===stage)&&(!onlyOverdue||l.overdue))
@@ -37,7 +37,7 @@ export function leadsPage(s: any,query: URLSearchParams) {
   }
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Lead follow-up</h1><p>Assigned next actions and a retained history from inquiry to membership.</p></div>`
     +panel('Staff queue',body(`<form method="get" action="${path}" class="form">${select('stage','Filter stage',[['','All stages'],...stages],stage,'')}${select('overdue','Due filter',[['false','All leads'],['true','Overdue only']],String(onlyOverdue))}<button class="btn-quiet">Filter follow-up</button></form><p><a href="${path}?overdue=true">${h(r.overdue.length)} overdue follow-ups</a></p>`)+`<div class="table-wrap">${table(['Person','Stage','Assigned owner','Next action'],list||'<tr><td colspan="4">No leads in this view.</td></tr>')}</div>`)
-    +recoveryPanel(s)+emptyPlacesPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
+    +recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
     +'</div><aside class="rail">'+panel('Record an inquiry',body(form('lead.create',path,request()+select('personId','Person',[['','Choose a person'],...s.people.filter((p: any)=>p.role==='member').map((p: any)=>[p.id,p.name])])+taskFields(s)+field('source','Inquiry source (optional)','','text','maxlength="100"')+textarea('note','Inquiry note','','maxlength="2000"'),'Add inquiry')))
     +panel('Recorded conversations',body('<p>Record calls, emails or conversations that actually happened. Saving a note does not send a message. The studio owner manages this queue until staff roles ship.</p>'))+'</aside></div>'
 }
@@ -66,4 +66,17 @@ function emptyPlacesPanel(s: any) {
     controls+=rows.campaigns.map((campaign:any)=>`<details data-empty-campaign="${h(campaign.id)}"><summary>${h(campaign.status)} · ${h(campaign.text)}</summary><p>Budget $${(campaign.budgetCents/100).toFixed(2)}. Per attended visit $${(campaign.incentiveCents/100).toFixed(2)}. Lead time ${h(campaign.leadMinutes)} minutes. Cap ${h(campaign.maxPer30Days)} per 30 days. Class preference is the member’s comma-separated service list; blank permits any service.</p><ul>${campaign.audience.map((row:any)=>`<li>${h(person(s,row.personId))}: ${h(row.reason ?? 'Eligible')}</li>`).join('')}</ul>${campaign.status === 'preview' ? form('lead.empty.approve',path,hidden('id',campaign.id)+hidden('key',campaign.key),'Approve in-app offers') : ''}</details>`).join('');
   }
   return panel('Empty-place offers',body('<p>Owner-approved in-app invitations. The waitlist comes first; accepting rechecks eligibility, seats and the shared incentive budget. No email or text campaign is sent.</p>'+controls+(offers || '<p>No class offers.</p>')));
+}
+
+function nurturePanel(s:any) {
+  const owner=s.actor.role === 'owner',r=s.nurture,back=owner?path:'/app/offers';
+  const messages=r.messages.map((m:any)=>`<article data-nurture-message="${h(m.id)}"><h3>${h(m.step.replace(/-/g,' '))}</h3><p>${h(m.text)}</p>${owner?`<p>${h(person(s,m.personId))}</p>`:''}</article>`).join('');
+  const offers=r.offers.map((offer:any)=>`<article data-nurture-offer="${h(offer.id)}"><h3>${h(offer.terms.name)} · ${h(offer.status)}</h3><p>${h(offer.text)}</p><p>$${(offer.terms.amountCents/100).toFixed(2)} on your studio balance for ${h(offer.terms.days)} days of unlimited eligible visits at the studio location. Services: ${h(offer.terms.eligibleServices.join(', ') || 'all services')}. No payment collected or automatic renewal. Offer ends ${when(s,offer.expiresAt)}.</p>${owner?`<p>${h(person(s,offer.personId))}</p>`:''}${offer.status === 'offered' ? form('lead.nurture.purchase',back,hidden('id',offer.id)+hidden('key',offer.key)+hidden('confirm','true')+request()+(owner?select('channel','Membership request channel',[['desk','At the desk'],['phone','By phone'],['inbox','In the inbox']]):''),'Accept exact finite membership') : `<p>${h(offer.suppressionReason ?? offer.status)}</p>`}</article>`).join('');
+  const controls=owner ? form('lead.nurture.save',path,select('introOfferId','Intro offer for this sequence',s.intros.offers.filter((o:any)=>o.active).map((o:any)=>[o.id,o.name]))
+    +textarea('welcome','Welcome wording','','required maxlength="1500"')+textarea('guidance','First-class preparation','','required maxlength="1500"')+textarea('offerText','Membership offer wording','','required maxlength="1000"')
+    +field('planName','Finite membership name','','text','required maxlength="80"')+field('days','Membership days',30,'number','min="1" max="366"')+field('amount','Membership price in dollars','100.00','text','inputmode="decimal"')
+    +'<p>The finite membership covers the intro’s eligible services at the studio location. It creates a studio-balance charge only after the exact offer is accepted. It never renews.</p>','Approve welcome sequence')
+    +form('lead.nurture.review',path,'','Review intro events and deliver in-app steps','quiet')+r.sequences.map((seq:any)=>`<details><summary>${h(seq.terms.name)} · ${seq.enabled?'Approved':'Paused'}</summary><p>${h(seq.welcome)}</p><p>${h(seq.guidance)}</p>${seq.enabled?form('lead.nurture.pause',path,hidden('id',seq.id),'Pause welcome sequence','quiet'):''}</details>`).join('')
+    +r.tasks.map((t:any)=>`<p>${h(person(s,t.personId))}: ${h(t.nextAction)} · ${h(t.status)}${t.stopReason?' · '+h(t.stopReason):''}</p>`).join('') : '';
+  return panel('Intro welcome and next steps',body('<p>Approved in-app guidance follows a real intro purchase. Replies, marketing opt-out and membership purchase stop future sales steps.</p>'+controls+messages+offers+(!owner && !messages && !offers?'<p>No intro welcome or membership offer.</p>':'')));
 }

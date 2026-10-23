@@ -2,7 +2,7 @@ import { humanOwner, instant, insist, integer, list, now, person, record, text, 
 import type { Transaction } from './store';
 import { addDays, localDate } from '../zone';
 import { wallStart } from './series-model';
-import { packServiceEligible, planBlock } from './pack-credits';
+import { packServiceEligible, planBlock, appendPackEvent } from './pack-credits';
 import { bookingPack, acknowledged, book } from './bookings';
 import { windowOpen } from './booking-policy';
 import { seatCapacity } from './spots';
@@ -10,6 +10,7 @@ import { studioSettings } from './studio';
 import { permission as marketingPermission, preferencesOf } from './preferences';
 import { promote } from './waitlist';
 import { confirmBooking } from './notices';
+import { contractNotice } from './contract-billing';
 
 export const leadStages = ['inquiry','intro-booked','first-visit','offer','membership','lost'] as const;
 const open = (stage: string) => stage !== 'membership' && stage !== 'lost';
@@ -342,4 +343,114 @@ export function emptyPlaceSnapshot(state: State, who: Actor) {
     const reason=o.status === 'offered' ? o.expiresAt <= now() || entry?.status !== 'published' ? 'class_closed' : emptyPlaceRefusal(state,o.personId,entry!) : null;
     return {...o,available:!reason && o.status === 'offered',unavailableReason:reason};
   })};
+}
+
+/** Approved native finite-membership terms shared by lifecycle offers. */
+function finiteTerms(input: Record<string,unknown>, services: string[]) {
+  return {name:text(input.planName,'planName',80),days:integer(input.days,'days',1,366),amountCents:integer(input.amountCents,'amountCents',0,100000000),
+    eligibleServices:services,locationId:'studio',eligibleLocations:['studio'],renewsAutomatically:false,collection:'studio-balance-only'};
+}
+function nativeMembership(state: State, personId: string, since: string) {
+  return list(state,'pack').find(p=>p.personId === personId && !p.introSaleId && p.entitlement && p.createdAt >= since);
+}
+export function saveNurtureSequence(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const intro=record(tx.state,input.introOfferId,'introOffer');
+  insist(intro.active,'intro_offer_closed',409);
+  insist(!list(tx.state,'nurtureSequence').some(s=>s.introOfferId === intro.id && s.enabled),'nurture_sequence_already_active',409);
+  const saved={id:crypto.randomUUID(),introOfferId:intro.id,enabled:true,welcome:text(input.welcome,'welcome',1500),guidance:text(input.guidance,'guidance',1500),
+    offerText:text(input.offerText,'offerText',1000),terms:finiteTerms(input,intro.eligibleServices),approvedAt:now(),approvedBy:tx.who.id};
+  tx.put('nurtureSequence',saved);return saved;
+}
+export function pauseNurtureSequence(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);const sequence=record(tx.state,input.id,'nurtureSequence');
+  const saved={...sequence,enabled:false,pausedAt:now(),pausedBy:tx.who.id};tx.put('nurtureSequence',saved);return saved;
+}
+function nurtureStopReason(state: State, enrollment: RecordData) {
+  const sale=state.records.get(enrollment.introSaleId)?.data,sequence=state.records.get(enrollment.sequenceId)?.data;
+  if(!sale || sale.expiresAt <= now())return 'intro_expired';
+  if(!sequence?.enabled)return 'sequence_paused';
+  if(marketingPermission(state,enrollment.personId,'inApp'))return 'marketing_permission_withdrawn';
+  if(nativeMembership(state,enrollment.personId,sale.createdAt))return 'membership_purchased';
+  if(list(state,'memberMessage').some(m=>m.personId === enrollment.personId && m.actorRole === 'member' && m.at >= sale.createdAt))return 'member_replied';
+  return null;
+}
+function introVisit(state: State, enrollment: RecordData) {
+  const sale=state.records.get(enrollment.introSaleId)?.data;
+  return sale && list(state,'booking').filter(b=>b.personId === enrollment.personId && b.packId === sale.packId && b.status === 'booked' && b.attendance === 'attended')
+    .find(b=>{const c=state.records.get(b.classId)?.data;return c?.status === 'published' && c.end <= now();});
+}
+/** Suppression runs after every command and scheduler pass. It never sends or
+ * enrolls anyone; a native owner explicitly reviews every delivery batch. */
+export function suppressNurture(tx: Transaction) {
+  for(const enrollment of list(tx.state,'nurtureEnrollment').filter(e=>e.status === 'active')) {
+    const reason=nurtureStopReason(tx.state,enrollment);if(!reason)continue;
+    tx.put('nurtureEnrollment',{...enrollment,status:'stopped',stopReason:reason,stoppedAt:now()});
+    for(const task of list(tx.state,'nurtureTask').filter(t=>t.enrollmentId === enrollment.id && t.status === 'open'))tx.put('nurtureTask',{...task,status:'stopped',stopReason:reason,stoppedAt:now()});
+  }
+  for(const offer of list(tx.state,'nurtureOffer').filter(o=>o.status === 'offered')) {
+    const enrollment=tx.state.records.get(offer.enrollmentId)?.data;
+    const reason=!enrollment || enrollment.status !== 'active' ? enrollment?.stopReason ?? 'enrollment_stopped' : !introVisit(tx.state,enrollment) ? 'attendance_corrected' : nurtureStopReason(tx.state,enrollment);
+    if(reason)tx.put('nurtureOffer',{...offer,status:'suppressed',suppressionReason:reason,suppressedAt:now()});
+  }
+}
+export function reviewNurture(tx: Transaction) {
+  humanOwner(tx.who);suppressNurture(tx);
+  for(const sale of list(tx.state,'introSale')) {
+    const sequence=list(tx.state,'nurtureSequence').find(s=>s.introOfferId === sale.offerId && s.enabled);
+    if(!sequence)continue;
+    let enrollment=list(tx.state,'nurtureEnrollment').find(e=>e.introSaleId === sale.id);
+    if(!enrollment) {
+      const candidate={id:crypto.randomUUID(),personId:sale.personId,introSaleId:sale.id,sequenceId:sequence.id,status:'active',createdAt:now(),reviewedBy:tx.who.id};
+      const reason=nurtureStopReason(tx.state,candidate);
+      enrollment=reason ? {...candidate,status:'stopped',stopReason:reason,stoppedAt:now()} : candidate;
+      tx.put('nurtureEnrollment',enrollment);
+    }
+    if(enrollment.status !== 'active')continue;
+    for(const [step,message] of [['welcome',sequence.welcome],['first-visit-guidance',sequence.guidance]]) {
+      const key=`nurture-message:${enrollment.id}:${step}`;
+      if(!tx.state.records.has(key))tx.put('memberMessage',{id:key,personId:sale.personId,nurtureEnrollmentId:enrollment.id,step,text:message,
+        introSaleId:sale.id,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
+    }
+    const taskId='nurture-task:'+enrollment.id;
+    if(!tx.state.records.has(taskId))tx.put('nurtureTask',{id:taskId,enrollmentId:enrollment.id,personId:sale.personId,introSaleId:sale.id,status:'open',nextAction:'Review the member’s first-class preparation and questions',createdAt:now(),createdBy:tx.who.id});
+    const visit=introVisit(tx.state,enrollment);
+    if(visit && !list(tx.state,'nurtureOffer').some(o=>o.enrollmentId === enrollment!.id)) {
+      const offer={id:crypto.randomUUID(),personId:sale.personId,enrollmentId:enrollment.id,introSaleId:sale.id,bookingId:visit.id,sequenceId:sequence.id,
+        terms:sequence.terms,text:sequence.offerText,key:crypto.randomUUID(),status:'offered',createdAt:now(),approvedBy:sequence.approvedBy,reviewedBy:tx.who.id,expiresAt:sale.expiresAt};
+      tx.put('nurtureOffer',offer);
+      tx.put('memberMessage',{id:'nurture-offer-message:'+offer.id,personId:sale.personId,nurtureEnrollmentId:enrollment.id,nurtureOfferId:offer.id,step:'membership-offer',text:offer.text,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
+    }
+  }
+  return {enrollments:list(tx.state,'nurtureEnrollment'),tasks:list(tx.state,'nurtureTask'),offers:list(tx.state,'nurtureOffer')};
+}
+function purchaseFiniteMembership(tx: Transaction, offer: RecordData, kind: string) {
+  const at=now(),terms=offer.terms,pack={id:'membership:'+offer.id,personId:offer.personId,amountCents:terms.amountCents,
+    ...{locationId:terms.locationId,eligibleLocations:terms.eligibleLocations,eligibleServices:terms.eligibleServices},
+    entitlement:{kind:'unlimited',name:terms.name,visits:null,period:null,rollover:0,days:null,from:null,to:null,maxUpcoming:null},
+    credits:0,remaining:0,creditLedgerVersion:1,creditRevision:0,termStartAt:at,expiresAt:new Date(Date.parse(at)+terms.days*86400000).toISOString(),
+    lifecycleOfferId:offer.id,lifecycleKind:kind,createdAt:at};
+  tx.put('pack',pack);appendPackEvent(tx,pack,{type:'grant',credits:0});
+  tx.put('charge',{id:'membership-charge:'+offer.id,personId:offer.personId,packId:pack.id,amountCents:terms.amountCents,reason:kind+'_membership',createdAt:at,createdBy:tx.who.id});
+  tx.put(kind+'Offer',{...offer,status:'purchased',packId:pack.id,purchasedAt:at,purchasedBy:tx.who.id});
+  contractNotice(tx,'membership-notice:'+offer.id,offer.personId,'Finite membership purchased',`${terms.name}: unlimited eligible visits for ${terms.days} days, $${(terms.amountCents/100).toFixed(2)} added to your studio balance. Valid at the studio location for ${terms.eligibleServices.join(', ') || 'all services'}. No payment collected, stored method, automatic renewal or future invoice agreement. Ends ${pack.expiresAt}.`);
+  return record(tx.state,pack.id,'pack');
+}
+export function purchaseNurture(tx: Transaction, input: Record<string,unknown>) {
+  if(tx.who.role !== 'member')humanOwner(tx.who);
+  const offer=record(tx.state,input.id,'nurtureOffer');
+  if(tx.who.role === 'member')insist(offer.personId === tx.who.personId,'nurtureOffer_not_found',404);
+  person(tx.state,offer.personId);
+  insist(input.confirm === true && input.key === offer.key,'exact_membership_confirmation_required',409);
+  text(input.requestId,'requestId',100);
+  if(offer.status === 'purchased')return record(tx.state,offer.packId,'pack');
+  const enrollment=record(tx.state,offer.enrollmentId,'nurtureEnrollment');
+  insist(offer.status === 'offered' && enrollment.status === 'active' && !nurtureStopReason(tx.state,enrollment) && introVisit(tx.state,enrollment),'nurture_offer_no_longer_eligible',409);
+  tx.future(offer.expiresAt);
+  return purchaseFiniteMembership(tx,offer,'nurture');
+}
+export function nurtureSnapshot(state: State, who: Actor) {
+  const owner=who.role === 'owner',visible=(r:RecordData)=>owner || who.role === 'member' && r.personId === who.personId;
+  return {sequences:owner ? list(state,'nurtureSequence') : [],enrollments:list(state,'nurtureEnrollment').filter(visible),offers:list(state,'nurtureOffer').filter(visible),tasks:owner ? list(state,'nurtureTask') : [],
+    messages:list(state,'memberMessage').filter(m=>m.nurtureEnrollmentId && visible(m))};
 }
