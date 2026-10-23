@@ -181,6 +181,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   for(let i=0;i<2;i++)for(const p of [ana,frozen,unavailable,cancelled])visits.get(p.id).push(await h.cmd('booking.book',{classId:(p===unavailable?pilates:yoga)[i].id},p.cookie))
   const holiday=await h.cmd('closure.prepare',{scope:'class',seriesScope:'this',classId:yoga[2].id,reason:'Studio holiday'})
   await h.cmd('closure.confirm',{id:holiday.id,impact:holiday.impact.key})
+  const missedSeat=await h.cmd('booking.book',{classId:yoga[3].id},ana.cookie)
   const cancelledSeat=await h.cmd('booking.book',{classId:yoga[3].id},cancelled.cookie)
   await h.cmd('booking.cancel',{id:cancelledSeat.id},cancelled.cookie)
   const freezeType=await h.cmd('freeze.type.save',{name:'Planned leave',reason:'Member request',feeCents:0,defaultLengthDays:21,maxLengthDays:30})
@@ -194,12 +195,13 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   }
   await jump(new Date(Date.parse(yoga[3].end)+60000).toISOString())
   const mailCount=()=>h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n')
+  await h.cmd('attendance.noshow',{id:missedSeat.id},coach.cookie)
   const beforeMail=await mailCount(),moneyBefore=await h.state()
   let tasks=(await h.cmd('lead.recovery.process',{})).tasks
   assert.equal(tasks.length,1);let task=tasks[0]
   assert.equal(task.personId,ana.id);assert.equal(task.status,'open')
   assert.deepEqual(new Set(task.sourceBookingIds),new Set(visits.get(ana.id).map(b=>b.id)))
-  assert.equal(task.opportunities.length,1);assert.deepEqual(task.opportunities[0].classIds,[yoga[3].id])
+  assert.equal(task.opportunities.length,1);assert.deepEqual(task.opportunities[0].classIds,[yoga[3].id]);assert.deepEqual(task.opportunities[0].bookingIds,[missedSeat.id])
   assert.ok(task.excluded.some(e=>e.reason==='class_cancelled_or_holiday'))
   assert.ok(task.alternatives.some(c=>c.classId===yoga[4].id))
   await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
@@ -214,9 +216,8 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   assert.deepEqual(await h.cmd('lead.recovery.complete',completion),await h.cmd('lead.recovery.complete',completion))
   await h.cmd('lead.recovery.complete',{...completion,note:'Changed replay'},owner,409)
   await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
-  // Correcting a source visit removes the established pattern. A new source
-  // does not revive the permanent completed identity.
-  await h.cmd('attendance.correct',{id:visits.get(ana.id)[0].id,outcome:'no_show',reason:'Corrected duplicate paper check-in'})
+  // Corrected attendance ends the lapse; it never revives a completed task.
+  await h.cmd('attendance.correct',{id:missedSeat.id,outcome:'attended',reason:'Instructor confirmed the missing paper check-in'})
   await h.cmd('lead.recovery.process',{})
   assert.equal((await h.state()).pipeline.recoveryTasks[0].status,'completed')
 }))
