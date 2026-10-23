@@ -9,7 +9,7 @@ export const tabletCookie='strap_intake_tablet';
 const tokenOf=(request: Request) => (request.headers.get('cookie') ?? '').split(/;\s*/).find(part => part.startsWith(tabletCookie+'='))?.slice(tabletCookie.length+1) ?? '';
 const hash=async(token: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(b => b.toString(16).padStart(2,'0')).join('');
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
-const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
+const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'strict-origin','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
 const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private intake · Strap</title><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"></head><body><main class="page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
 export const lockedTablet=()=>page('<h1>Tablet locked</h1><p>This device has no access to member records. Ask studio staff to open the next intake form.</p>',403);
 /** A dedicated, signed-out tablet cannot reach native sign-in or private product doors. */
@@ -60,7 +60,7 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
       if(request.method === 'GET')return page(`<h1>Private intake</h1><p>Use this dedicated, signed-out tablet for ${h(member.name)} only. It exposes no earlier answers or member records and locks after submission.</p><form method="post" action="/intake/tablet/start">${hidden('token',secret)}<button type="submit">Open this intake form</button></form>`);
       tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN paired_at IS NULL AND consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));
       tx.sql.push(tx.statement('UPDATE st_intake_tablets SET paired_at=? WHERE id=?',now(),row.id));await tx.commit();
-      return new Response(null,{status:303,headers:{location:'/intake/tablet','cache-control':'no-store','referrer-policy':'no-referrer','set-cookie':`${tabletCookie}=${secret}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900${url.protocol==='https:'?'; Secure':''}`}});
+      return new Response(null,{status:303,headers:{location:'/intake/tablet','cache-control':'no-store','referrer-policy':'strict-origin','set-cookie':`${tabletCookie}=${secret}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900${url.protocol==='https:'?'; Secure':''}`}});
     }
     insist(row.paired_at,'tablet_unavailable',410);
     if(request.method === 'GET')return page(`<h1>${h(form.title)}</h1><p>For ${h(member.name)} · Version ${form.version}. No previous answers are shown. Only complete this form for yourself. Nothing here signs a waiver or grants payment authority.</p><form method="post" action="/intake/tablet">${form.questions.map((q: RecordData)=>textarea('answer_'+q.key,q.label+(q.sensitive?' (restricted)':''),'',`${q.required?'required':''} maxlength="2000"`)).join('')}<label><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and these are my answers.</label><button type="submit">Submit my intake and lock tablet</button></form>`);
@@ -70,5 +70,5 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
     tx.sql.push(tx.statement('UPDATE st_intake_tablets SET consumed_at=? WHERE id=?',now(),row.id));
     tx.put('intakeTabletLaunch',{...launch,status:'completed',completedAt:now()});await tx.commit();
     return page('<h1>Intake saved · tablet locked</h1><p>Your answers were saved. No member records are available here. Hand the tablet back to studio staff.</p>');
-  }catch(error){return page('<h1>Tablet locked</h1><p>This form is unavailable or could not be saved. Ask studio staff for a new handoff. No member records are available here.</p>',Number((error as any).status)||500);}
+  }catch(error){const response=page('<h1>Tablet locked</h1><p>This form is unavailable or could not be saved. Ask studio staff for a new handoff. No member records are available here.</p>',Number((error as any).status)||500);response.headers.set('x-strap-refusal',(error as any).code ?? 'tablet_unavailable');return response;}
 }

@@ -49,7 +49,7 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       const tablet=await browser.newContext({viewport:{width,height:1000}})
       try{
         await tablet.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
-        const tabletPage=await tablet.newPage();await tabletPage.goto(h.origin+link);await tabletPage.getByRole('button',{name:'Open this intake form',exact:true}).click()
+        const tabletPage=await tablet.newPage(),responses=[];tabletPage.on('response',r=>{if(new URL(r.url()).pathname.startsWith('/intake/'))responses.push({path:new URL(r.url()).pathname,status:r.status(),refusal:r.headers()['x-strap-refusal']})});await tabletPage.goto(h.origin+link);await tabletPage.getByRole('button',{name:'Open this intake form',exact:true}).click();assert.equal(await tabletPage.locator('h1').innerText(),title,JSON.stringify(responses))
         await tabletPage.getByLabel(goal+' updated',{exact:true}).fill('Member entered on private tablet')
         await tabletPage.getByLabel(care+' (restricted)',{exact:true}).fill('Synthetic private tablet answer '+width)
         await tabletPage.getByRole('checkbox').check()
