@@ -31,7 +31,7 @@ int clock_gettime(clockid_t clock,struct timespec *out) {
 }
 int gettimeofday(struct timeval *out,void *zone) {
   int result=syscall(SYS_gettimeofday,out,zone);
-  if(!result)out->tv_sec+=offset();
+  if(!result && out)out->tv_sec+=offset();
   return result;
 }
 time_t time(time_t *out) {

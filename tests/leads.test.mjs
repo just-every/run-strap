@@ -308,7 +308,7 @@ test('LEAD-007: approved in-app offers preserve waitlist priority, consent, capa
 
 test('LEAD-003: real intro purchases receive approved welcome and preparation, attended offers stop on reply opt-out or native membership conversion',{timeout:process.env.STRAP_PROOF_DIR?240000:120000},()=>run(async h=>{
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
-  const coach=await h.person('NurtureCoach','instructor'),ana=await h.person('NurtureAna'),ben=await h.person('NurtureBen'),cy=await h.person('NurtureCy'),desk=await h.person('NurtureDesk')
+  const coach=await h.person('NurtureCoach','instructor'),ana=await h.person('NurtureAna'),ben=await h.person('NurtureBen'),cy=await h.person('NurtureCy'),desk=await h.person('NurtureDesk'),payer=await h.person('NurturePayer')
   const intro=await h.cmd('intro.offer.save',{name:'First week yoga',days:7,credits:2,amountCents:2000,eligibility:'new',limit:'person',eligibleServices:['Nurture Yoga']})
   const sequence=await h.cmd('lead.nurture.save',{introOfferId:intro.id,welcome:'Welcome to your first week.',guidance:'Bring water and arrive ten minutes early. Your first class and current waiver are in Classes.',offerText:'Continue your practice with the exact finite membership below.',planName:'30-day Yoga',days:30,amountCents:9000})
   await h.cmd('lead.nurture.review',{},ana.cookie,403)
@@ -318,6 +318,7 @@ test('LEAD-003: real intro purchases receive approved welcome and preparation, a
     const preview=await h.cmd('intro.preview',{offerId:intro.id,requestId:'synthetic-strap-intro'},p.cookie)
     await h.cmd('intro.purchase',{id:preview.id,key:preview.key,confirm:true},p.cookie)
   }
+  const home=await h.cmd('household.save',{name:'Nurture household'});await h.cmd('household.participant.add',{id:home.id,personId:ana.id});await h.cmd('household.payer.propose',{id:home.id,payerId:payer.id});await h.cmd('household.payer.accept',{id:home.id},payer.cookie)
   const mailCount=()=>h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n'),beforeMail=await mailCount()
   let reviewed=await h.cmd('lead.nurture.review',{})
   assert.equal(reviewed.enrollments.length,4);assert.equal(reviewed.tasks.length,4);assert.equal(reviewed.offers.length,0)
@@ -354,7 +355,7 @@ test('LEAD-003: real intro purchases receive approved welcome and preparation, a
   assert.equal((await h.cmd('lead.nurture.purchase',purchase,ana.cookie)).id,membership.id)
   const after=await h.state(),anaEnrollment=after.nurture.enrollments.find(e=>e.personId===ana.id)
   assert.equal(anaEnrollment.status,'stopped');assert.equal(anaEnrollment.stopReason,'membership_purchased')
-  assert.equal(after.charges.filter(c=>c.reason==='nurture_membership'&&c.personId===ana.id).length,1)
+  const renewalCharge=after.charges.filter(c=>c.reason==='nurture_membership'&&c.forPersonId===ana.id);assert.equal(renewalCharge.length,1);assert.equal(renewalCharge[0].personId,payer.id,'finite lifecycle sales retain the payer’s own accepted household responsibility')
   const beforeReview=after.nurture.messages.length
   await h.cmd('lead.nurture.review',{});assert.equal((await h.state()).nurture.messages.length,beforeReview)
   const nextStart=new Date(Date.now()+8*86400000).toISOString(),nd=new Date(nextStart),nextWeek=new Date(Date.UTC(nd.getUTCFullYear(),nd.getUTCMonth(),nd.getUTCDate()-(nd.getUTCDay()+6)%7)).toISOString().slice(0,10)

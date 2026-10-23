@@ -13,6 +13,7 @@ import { confirmBooking } from './notices';
 import { contractNotice } from './contract-billing';
 import { requireMemberRecord, memberRecordGrant } from './member-records';
 import { staffChannel } from './staff-actions';
+import { debtorOf } from './households';
 
 export const leadStages = ['inquiry','intro-booked','first-visit','offer','membership','lost'] as const;
 const open = (stage: string) => stage !== 'membership' && stage !== 'lost';
@@ -433,9 +434,10 @@ function purchaseFiniteMembership(tx: Transaction, offer: RecordData, kind: stri
     credits:0,remaining:0,creditLedgerVersion:1,creditRevision:0,termStartAt:at,expiresAt:new Date(Date.parse(at)+terms.days*86400000).toISOString(),
     lifecycleOfferId:offer.id,lifecycleKind:kind,createdAt:at};
   tx.put('pack',pack);appendPackEvent(tx,pack,{type:'grant',credits:0});
-  tx.put('charge',{id:'membership-charge:'+offer.id,personId:offer.personId,packId:pack.id,amountCents:terms.amountCents,reason:kind+'_membership',createdAt:at,createdBy:tx.who.id});
+  const debtor=debtorOf(tx.state,offer.personId);
+  tx.put('charge',{id:'membership-charge:'+offer.id,personId:debtor,...(debtor !== offer.personId ? {forPersonId:offer.personId} : {}),packId:pack.id,amountCents:terms.amountCents,reason:kind+'_membership',createdAt:at,createdBy:tx.who.id});
   tx.put(kind+'Offer',{...offer,status:'purchased',packId:pack.id,purchasedAt:at,purchasedBy:tx.who.id});
-  contractNotice(tx,'membership-notice:'+offer.id,offer.personId,'Finite membership purchased',`${terms.name}: unlimited eligible visits for ${terms.days} days, $${(terms.amountCents/100).toFixed(2)} added to your studio balance. Valid at the studio location for ${terms.eligibleServices.join(', ') || 'all services'}. No payment collected, stored method, automatic renewal or future invoice agreement. Ends ${pack.expiresAt}.`);
+  contractNotice(tx,'membership-notice:'+offer.id,offer.personId,'Finite membership purchased',`${terms.name}: unlimited eligible visits for ${terms.days} days, $${(terms.amountCents/100).toFixed(2)} added to ${debtor === offer.personId ? 'your studio balance' : 'the studio balance of your previously accepted household payer'}. Valid at the studio location for ${terms.eligibleServices.join(', ') || 'all services'}. No payment collected, stored method, automatic renewal or future invoice agreement. Ends ${pack.expiresAt}.`);
   return record(tx.state,pack.id,'pack');
 }
 export function purchaseNurture(tx: Transaction, input: Record<string,unknown>) {
