@@ -36,7 +36,7 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       await capture('owner-new-version');await page.getByRole('button',{name:'Publish intake version',exact:true}).click()
       const updated=(await h.state()).intake.forms.find(v=>v.seriesId===f.seriesId);assert.equal(updated.version,2)
       await sign(desk.cookie);await page.goto(h.origin+'/app/intake?person='+member.id)
-      const staff=page.locator('#form-'+updated.id)
+      const staff=page.locator('#form-'+updated.id).locator('form').filter({has:page.getByRole('button',{name:'Save staff-entered answers',exact:true})})
       await staff.getByLabel('Request channel',{exact:true}).selectOption('phone')
       await staff.getByLabel(goal+' updated',{exact:true}).fill('Phone request: quiet group')
       await staff.getByLabel(care+' (restricted)',{exact:true}).fill('Synthetic private phone answer '+width)
