@@ -13,7 +13,7 @@ export async function familyTuitionBrowser(h,{plan,payer,a,b,household,initial,n
         if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
         return route.continue()
       })
-      const sign=async cookie=>{await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
+      const sign=async cookie=>{await page.goto('about:blank');await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
       const page=await context.newPage()
       const capture=async name=>{await page.evaluate(()=>document.fonts.ready);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}`);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-003-${name}-${width}.png`),fullPage:true})}}
       await sign(h.owner)
@@ -48,7 +48,7 @@ export async function familyTuitionBrowser(h,{plan,payer,a,b,household,initial,n
       const changed=page.locator('section.panel').filter({has:page.getByRole('heading',{name:saved.name,exact:true})})
       await changed.getByLabel('Billing month',{exact:true}).fill('2098-02');await changed.getByRole('button',{name:'Preview monthly tuition',exact:true}).click()
       const next=(await h.state()).familyTuition.previews.find(p=>p.planId===saved.id&&p.month==='2098-02')
-      await page.locator('#bill-'+next.id).getByText('Total $100.00',{exact:true}).waitFor();await capture('recalculated-next-bill')
+      await page.locator('#bill-'+next.id).getByText('Total $100.00',{exact:true}).waitFor();await capture('recalculated-next-bill');await page.goto(h.origin+'/app/people?person='+payer.id);await page.getByRole('heading',{name:'Staff action history',exact:true}).waitFor();await capture('staff-audit')
       await sign(payer.cookie);await page.goto(h.origin+'/app/packs');await page.getByText('synthetic-strap-tuition-receipt',{exact:false}).first().waitFor();await capture('external-receipt')
     }finally{await context.close()}
   }}finally{await browser.close()}
