@@ -31,6 +31,11 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.planId', to: 'st_records.id', kind: 'familyTuition', when: 'kind=familyBillPreview or kind=familyInvoice or kind=familyTuitionWithdrawal' },
+  { from: 'st_records.data.familyInvoiceId', to: 'st_records.id', kind: 'familyInvoice' },
+  { from: 'st_records.data.rows[].personId', to: 'st_people.id', when: 'kind=familyTuition or kind=familyBillPreview or kind=familyInvoice' },
+  { from: 'st_records.data.rows[].packId', to: 'st_records.id', kind: 'pack', when: 'kind=familyInvoice' },
+  { from: 'st_records.data.rows[].chargeId', to: 'st_records.id', kind: 'charge', when: 'kind=familyInvoice' },
   { from: 'st_records.data.sourceId', to: 'st_people.id', when: 'kind=memberMerge or kind=memberMergePreview' },
   { from: 'st_records.data.targetId', to: 'st_people.id', when: 'kind=memberMerge or kind=memberMergePreview' },
   { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=memberRecordGrant' },

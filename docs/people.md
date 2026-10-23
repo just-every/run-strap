@@ -87,3 +87,11 @@ Front desk changes assigned channel preferences with the member's stated permiss
 Members may remove their rows from existing roster and attendance integration keys. Re-enabling sharing requires a new recorded consent statement. The owner or authorized staff may export the preference record with its dated source history; other members, instructors and agents cannot. Exports and notes stay private.
 
 Marketing texts are held during quiet hours, which always include 8 pm–10 am in the member's chosen time zone, or the studio's when none is chosen, and can be stricter. Quiet hours never hold in-app marketing or operational messages. These defaults, shared-phone confirmation and restricted-access rules await contract approval. No provider delivery or complete MSG-008 acceptance is claimed.
+
+## Family tuition
+
+Open **Family tuition**, choose a household whose payer has accepted responsibility for its studio balance, and enter each participant’s monthly rate and credits. Set the class service and first and end months (the end month is excluded). With two or more enrolled participants, the sibling percentage applies to each participant; each discount rounds half up to cents and discounts never stack.
+
+Preview a month before billing it. The payer signs in, reviews each participant’s amount and credits, and accepts the exact total. Staff can launch that review but cannot accept it. Acceptance creates one bill, separate credits for each participant and charges only the payer’s studio balance. No card or bank payment is authorized or collected. Record money already received in **Packs and payments**, using a unique external receipt reference.
+
+Withdraw a participant from a future unbilled month with the member’s request and a reason. The next preview recalculates the discount. Billed months, their charges and paid access stay unchanged. Every month needs its own exact payer acceptance; automatic collection is unavailable.

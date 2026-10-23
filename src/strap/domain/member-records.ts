@@ -91,7 +91,7 @@ export function memberHistory(state: State,who: Actor,personId: string) {
   requireMemberRecord(state,who,personId);
   const member = person(state,personId,false); insist(member.role === 'member','member_required');
   const ids = who.role === 'owner' ? linkedMemberIds(state,personId) : [personId], own = (kind: string) => list(state,kind).filter(r => ids.includes(r.personId));
-  const kinds = ['pack','packCreditEvent','booking','charge','payment','acknowledgement','profileChange','staffAction','memberMessage','memberInvitation','memberMerge','memberPreferenceEvent','notice','waiverLaunch','messagePreferenceEvent'];
+  const kinds = ['pack','packCreditEvent','booking','charge','payment','acknowledgement','profileChange','staffAction','memberMessage','memberInvitation','memberMerge','memberPreferenceEvent','notice','waiverLaunch','messagePreferenceEvent','familyInvoice','familyTuitionWithdrawal'];
   const timeline = kinds.flatMap(kind => own(kind).map(r => ({kind,id:r.id,personId:r.personId,at:r.at ?? r.createdAt ?? r.acknowledgedAt ?? r.confirmedAt ?? '',
       // Canonical audits retain before/after in staff history. A timeline links their
       // identity/provenance instead of nesting earlier merge previews inside later ones.

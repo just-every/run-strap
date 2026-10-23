@@ -39,13 +39,30 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
     const actions={
+      'family.bill.accept':async door=>{
+        const payer=await h.person('PairTuitionPayer'),child=await h.person('PairTuitionChild');
+        const home=await h.cmd('household.save',{name:'Tuition staff pair'});
+        await h.cmd('household.participant.add',{id:home.id,personId:child.id});
+        await h.cmd('household.payer.propose',{id:home.id,payerId:payer.id});
+        await h.cmd('household.payer.accept',{id:home.id},payer.cookie);
+        const plan=await h.cmd('family.tuition.save',{householdId:home.id,name:'Paired tuition',service:'Mat',startsMonth:'2098-01',endsMonth:'2098-03',discountBps:1000,rows:[{personId:child.id,amountCents:10000,credits:4}],requestId:randomUUID()});
+        const preview=await h.cmd('family.bill.preview',{id:plan.id,month:'2098-01',requestId:randomUUID()});
+        const input={id:preview.id,requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+        assert.equal(r.result.status,'member_action_required');assert.equal(r.event.personId,payer.id);
+        assert.equal((await h.state()).familyTuition.invoices.length,0,'staff launch creates no invoice');
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+        await refused(h,'family.bill.accept',{id:preview.id,key:preview.key,confirm:true},h.owner,403);
+        const bill=await h.cmd('family.bill.accept',{id:preview.id,key:preview.key,confirm:true},payer.cookie);
+        assert.equal(bill.acceptedBy,(await h.state(payer.cookie)).actor.id);
+        assert.equal((await h.state(child.cookie)).packs.find(p=>p.familyInvoiceId===bill.id).remaining,4);
+      },
       'preferences.save':async door=>{
         const own=await h.cmd('preferences.save',{revision:0,marketingEmail:false,preferredTimes:'Mornings',requestId:randomUUID()},ana.cookie);
         const input={personId:ben.id,revision:0,marketingEmail:false,preferredTimes:'Mornings',requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);

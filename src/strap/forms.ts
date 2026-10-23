@@ -38,6 +38,14 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name === 'family.tuition.save') {
+    const percent = String(input.discountPercent ?? '');
+    if(!/^\d{1,3}(?:\.\d{1,2})?$/.test(percent)) fail('Enter a sibling discount from 0 to 100 percent');
+    input.discountBps = Math.round(Number(percent)*100); delete input.discountPercent;
+    input.rows = Object.keys(input).filter(key => key.startsWith('participant_') && input[key] === 'true').map(key => {const personId = key.slice(12);return {personId,amountCents:cents(input['rate_'+personId],'monthly tuition'),credits:Number(input['visits_'+personId])}});
+    for(const key of Object.keys(input))if(/^(participant_|rate_|visits_)/.test(key)) delete input[key];
+  }
+  if(name === 'family.bill.accept') input.confirm = input.confirm === 'true';
   if(name === 'renewal.sequence.prepare') input.maxMessages=Number(input.maxMessages);
   if(name === 'renewal.sequence.set') input.enabled=input.enabled === 'true';
   if (name.startsWith('preferences.save')) {

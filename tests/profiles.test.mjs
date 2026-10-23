@@ -238,3 +238,57 @@ test('MEM-006: transactional choices stay independent of channel marketing conse
   assert.ok((await attendance()).data.every(c=>c.attendance.length===0),'sharing opt-out removes the member rows from an existing key immediately')
   if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./preferences-browser.mjs')).preferencesBrowser(h,{member,desk})
 }))
+
+test('MEM-003: exact payer-approved monthly family tuition preserves participant entitlements, sibling discounts, external receipts and future-only withdrawals',()=>run(async h=>{
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
+  const payer=await h.person('TuitionPayer'),a=await h.person('TuitionOne'),b=await h.person('TuitionTwo'),other=await h.person('TuitionOther'),coach=await h.person('TuitionCoach','instructor')
+  const household=await h.cmd('household.save',{name:'Tuition family'})
+  for(const m of [a,b])await h.cmd('household.participant.add',{id:household.id,personId:m.id})
+  await h.cmd('household.payer.propose',{id:household.id,payerId:payer.id})
+  await h.cmd('household.payer.accept',{id:household.id},payer.cookie)
+  const initial=new Date().toISOString().slice(0,7),next=offset=>{const [y,m]=initial.split('-').map(Number);return new Date(Date.UTC(y,m-1+offset,1)).toISOString().slice(0,7)}
+  const input={householdId:household.id,name:'Sibling monthly mat',service:'Mat tuition',startsMonth:initial,endsMonth:next(4),discountBps:1000,rows:[{personId:a.id,amountCents:10000,credits:4},{personId:b.id,amountCents:10000,credits:4}],requestId:'synthetic-strap-tuition-1'}
+  const plan=await h.cmd('family.tuition.save',input)
+  assert.deepEqual(await h.cmd('family.tuition.save',input),plan,'schedule replay is once-only')
+  const preview=await h.cmd('family.bill.preview',{id:plan.id,month:initial,requestId:'synthetic-strap-tuition-2'})
+  assert.deepEqual(preview.rows.map(r=>[r.amountCents,r.discountCents,r.netCents]),[[10000,1000,9000],[10000,1000,9000]])
+  assert.equal(preview.amountCents,18000);assert.equal((await h.state()).charges.length,0)
+  const accept={id:preview.id,key:preview.key,confirm:true}
+  await refused(h,'family.bill.accept',accept,other.cookie,404)
+  await refused(h,'family.bill.accept',accept,h.owner,403)
+  await refused(h,'family.bill.accept',{...accept,key:'changed'},payer.cookie,409)
+  await refused(h,'family.bill.accept',{...accept,confirm:false},payer.cookie,409)
+  const launched=await h.cmd('family.bill.launch',{id:preview.id,requestId:'synthetic-strap-tuition-3',channel:'phone'})
+  assert.equal(launched.status,'member_action_required');assert.equal((await h.state()).charges.length,0)
+  const bill=await h.cmd('family.bill.accept',accept,payer.cookie)
+  assert.deepEqual(await h.cmd('family.bill.accept',accept,payer.cookie),bill,'accepted bill replays without another invoice, charge or entitlement')
+  const full=await h.state();assert.equal(full.familyTuition.invoices.length,1);assert.equal(full.charges.length,2)
+  assert.deepEqual(full.charges.map(c=>[c.personId,c.amountCents]),[[payer.id,9000],[payer.id,9000]])
+  for(const m of [a,b]){const state=await h.state(m.cookie);assert.equal(state.packs.length,1);assert.equal(state.packs[0].remaining,4);assert.equal(state.packs[0].expiresAt,bill.termEndAt);assert.equal(state.balances[0].balanceCents,0);assert.equal(state.familyTuition.invoices.length,0)}
+  const payment=await h.cmd('payment.record',{personId:payer.id,amountCents:18000,reference:'synthetic-strap-tuition-receipt'})
+  assert.equal((await h.state(payer.cookie)).balances[0].balanceCents,0)
+  await refused(h,'payment.record',{personId:payer.id,amountCents:18000,reference:payment.reference},h.owner,409)
+  const old=structuredClone((await h.state()).charges)
+  await refused(h,'family.participant.withdraw',{id:plan.id,personId:b.id,revision:1,effectiveMonth:initial,reason:'Phone withdrawal',requestId:'synthetic-strap-tuition-4'},h.owner,409)
+  const stale=await h.cmd('family.bill.preview',{id:plan.id,month:next(1),requestId:'synthetic-strap-tuition-5'})
+  const withdrawal=await h.cmd('family.participant.withdraw',{id:plan.id,personId:b.id,revision:1,effectiveMonth:next(1),reason:'Member phoned to withdraw after this month',requestId:'synthetic-strap-tuition-6',channel:'phone'})
+  assert.equal(withdrawal.effectiveMonth,next(1));assert.deepEqual((await h.state()).charges,old)
+  await refused(h,'family.bill.accept',{id:stale.id,key:stale.key,confirm:true},payer.cookie,409)
+  const future=await h.cmd('family.bill.preview',{id:plan.id,month:next(1),requestId:'synthetic-strap-tuition-7'})
+  assert.equal(future.rows.length,1);assert.equal(future.rows[0].personId,a.id);assert.equal(future.amountCents,10000);assert.equal(future.discountBps,0)
+  const nextBill=await h.cmd('family.bill.accept',{id:future.id,key:future.key,confirm:true},payer.cookie)
+  assert.equal(nextBill.rows.length,1);assert.equal((await h.state(b.cookie)).packs.length,1);assert.equal((await h.state(a.cookie)).packs.length,2)
+  assert.deepEqual((await h.state()).charges.filter(c=>c.familyInvoiceId===bill.id),old)
+  const classStart=next(1)+'-02T15:00:00Z';
+  const session=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(classStart),classes:[{title:'Tuition mat',service:'Mat tuition',start:classStart,end:next(1)+'-02T16:00:00Z',capacity:3,instructorId:coach.id}]})).id})).classes[0];
+  const booking=await h.cmd('booking.book',{classId:session.id},a.cookie);
+  assert.equal(booking.packId,nextBill.rows[0].packId,'the continuing participant books with next month’s paid entitlement');
+  await refused(h,'booking.book',{classId:session.id},b.cookie,409);
+  const payerState=JSON.stringify(await h.state(payer.cookie));assert.ok(!payerState.includes('guardianEvidence'),'preview fingerprints do not disclose private household facts');
+  const v=(await h.state()).version;await h.cmd('family.bill.preview',{id:plan.id,month:initial,requestId:'synthetic-strap-tuition-8'},h.owner,409);assert.equal((await h.state()).version,v)
+  for(const cookie of [other.cookie,coach.cookie]){const text=JSON.stringify(await h.state(cookie));assert.ok(!text.includes('Sibling monthly mat'));assert.equal((await h.send('/app/tuition',undefined,cookie)).status,cookie===coach.cookie?403:200)}
+  const exit=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
+  assert.equal(exit.manifest.recordKinds.familyInvoice,2)
+  assert.ok(exit.tables.st_records.some(r=>r.kind==='familyTuitionWithdrawal'&&JSON.parse(r.data).personId===b.id))
+  if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./tuition-browser.mjs')).familyTuitionBrowser(h,{plan,payer,a,b,household,initial,nextMonth:next(2)})
+}))
