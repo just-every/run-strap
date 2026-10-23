@@ -136,6 +136,8 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     }
     delete input.effectiveDate; delete input.effectiveTime
   }
+  if (name === 'lead.winback.prepare') {for(const key of ['days','cadenceDays','offerDays'])input[key]=Number(input[key]);for(const key of ['amount','reward','budget']){input[key==='amount'?'amountCents':key+'Cents']=cents(input[key],key);delete input[key];}input.eligibleServices=String(input.services ?? '').split(',').map(s=>s.trim()).filter(Boolean);delete input.services;input.personIds=Object.keys(input).filter(key=>key.startsWith('wb_')&&input[key]==='true').map(key=>key.slice(3));for(const key of Object.keys(input))if(key.startsWith('wb_'))delete input[key];}
+  if (name === 'lead.winback.purchase')input.confirm=input.confirm === 'true';
   if (name === 'lead.nurture.save') {input.days=Number(input.days);input.amountCents=cents(input.amount,'membership price');delete input.amount;}
   if (name === 'lead.nurture.purchase')input.confirm=input.confirm === 'true';
   if (name === 'lead.empty.prepare') { for(const key of ['leadMinutes','maxPer30Days'])input[key]=Number(input[key]);for(const key of ['incentive','budget']){input[key+'Cents']=cents(input[key],key);delete input[key];} input.personIds=Object.keys(input).filter(key=>key.startsWith('aud_') && input[key] === 'true').map(key=>key.slice(4));for(const key of Object.keys(input))if(key.startsWith('aud_'))delete input[key]; }

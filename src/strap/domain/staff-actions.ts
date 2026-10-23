@@ -11,6 +11,7 @@ export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Ob
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
 export function staffBefore(tx: Transaction, name: string, input: Record<string,unknown>) {
+  if (name === 'lead.referral.record')return list(tx.state,'referral').find(r=>r.personId === input.personId && r.friendEmail === String(input.friendEmail ?? '').trim().toLowerCase()) ?? null;
   if (name === 'intake.submit.staff') return list(tx.state,'intakeResponse').filter(r => r.personId === input.personId && r.formId === input.formId).at(-1) ?? null;
   if (name === 'preferences.save.staff') return tx.state.records.get('member-preference:'+String(input.personId))?.data ?? null;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));

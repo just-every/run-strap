@@ -39,9 +39,9 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase'].includes(name)?'membership-sale':(name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
-    let emptyDeskOffer,nurtureDeskOffer;
+    let emptyDeskOffer,nurtureDeskOffer,winbackDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
@@ -459,6 +459,23 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.equal(r.result.entitlement.kind,'unlimited');assert.equal(r.result.amountCents,4000);assert.equal(r.event.personId,member.id);
       await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
     };
+    actions['lead.referral.record']=async door=>{
+      const submission=await h.cmd('lead.referral.record',{friendEmail:ana.email,requestId:randomUUID()},ben.cookie);assert.equal(submission.referredPersonId,undefined);
+      const input={personId:ben.id,friendEmail:ana.email,sourceReference:'Member named this friend by phone',channel:'phone',requestId:randomUUID()},r=await checkAudit(door,input);
+      assert.equal(r.result.personId,ben.id);assert.equal(r.result.referredPersonId,ana.id);assert.ok(r.result.verifiedAt);assert.equal(r.event.before.id,submission.id);
+      await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+    };
+    actions['lead.winback.purchase']=async door=>{
+      const member=await h.person('WinbackDeskMember');await h.cmd('waiver.acknowledge',{id:(await h.state()).waiver.id},member.cookie);
+      const expiresAt=new Date(Date.now()+4000).toISOString();await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:1,amountCents:1000,planName:'Ended finite plan',expiresAt})).id});
+      await h.cmd('preferences.save',{revision:0,requestId:randomUUID(),marketingInApp:true,consentStatement:'Please send me return offers'},member.cookie);
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(expiresAt)-Date.now()+20)));
+      const preview=await h.cmd('lead.winback.prepare',{personIds:[member.id],planName:'Finite return month',days:30,amountCents:4000,eligibleServices:[],rewardCents:0,budgetCents:0,cadenceDays:30,offerDays:7,text:'Exact finite return membership'});
+      await h.cmd('lead.winback.approve',{id:preview.id,key:preview.key});winbackDeskOffer=(await h.state(member.cookie)).winback.offers[0];assert.ok(winbackDeskOffer);
+      const input={id:winbackDeskOffer.id,key:winbackDeskOffer.key,confirm:true,requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+      assert.equal(r.result.entitlement.kind,'unlimited');assert.equal(r.result.amountCents,4000);assert.equal(r.event.personId,member.id);
+      await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+    };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {
       const entry=memberCommands.find(c=>c.name===name)
@@ -473,6 +490,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if(entry.name==='lead.referral.record')Object.assign(input,{personId:ben.id,friendEmail:ana.email});
+      if(entry.name==='lead.winback.purchase')Object.assign(input,{id:winbackDeskOffer.id,key:winbackDeskOffer.key,confirm:true});
       if(entry.name==='lead.empty.accept')input.id=emptyDeskOffer.id;
       if(entry.name==='lead.nurture.purchase')Object.assign(input,{id:nurtureDeskOffer.id,key:nurtureDeskOffer.key,confirm:true});
       if(entry.name==='intro.preview') Object.assign(input,{personId:introDeskMember.id,offerId:introStaffPreview.offerId});
@@ -497,7 +516,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         const other=(await h.state()).bookings.find(b=>b.personId===ben.id&&b.status==='booked');input.id=other.id
         if (entry.memberDoor.staff==='booking.move') input.classId=near.id
       }
-      const denial=['lead.empty.accept','lead.nurture.purchase','absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw','contract.authority.revoke','plan.cancellation.stop','plan.cancellation.statutory','intro.preview','intro.purchase'].includes(entry.name)?404:403
+      const denial=['lead.winback.purchase','lead.empty.accept','lead.nurture.purchase','absence.preview','absence.report','makeup.book','makeup.guardian.revoke','plan.recurring.stop','freeze.request.withdraw','freeze.withdraw','contract.authority.revoke','plan.cancellation.stop','plan.cancellation.statutory','intro.preview','intro.purchase'].includes(entry.name)?404:403
       await refused(h,entry.memberDoor.staff,input,ana.cookie,denial)
       if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,(entry.name.startsWith('intro.')||entry.name.startsWith('lead.'))?403:denial)
       const before=(await h.state()).version

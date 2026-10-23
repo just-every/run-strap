@@ -11,6 +11,8 @@ import { permission as marketingPermission, preferencesOf } from './preferences'
 import { promote } from './waitlist';
 import { confirmBooking } from './notices';
 import { contractNotice } from './contract-billing';
+import { requireMemberRecord, memberRecordGrant } from './member-records';
+import { staffChannel } from './staff-actions';
 
 export const leadStages = ['inquiry','intro-booked','first-visit','offer','membership','lost'] as const;
 const open = (stage: string) => stage !== 'membership' && stage !== 'lost';
@@ -301,7 +303,7 @@ export function approveEmptyPlaces(tx: Transaction, input: Record<string,unknown
     const offer={id:crypto.randomUUID(),campaignId:campaign.id,classId:entry.id,personId:row.personId,incentiveCents:campaign.incentiveCents,
       status:'offered',createdAt:at,expiresAt:entry.start,approvedBy:tx.who.id,text:campaign.text};
     tx.put('emptyPlaceOffer',offer);
-    tx.put('memberMessage',{id:'empty-place-message:'+offer.id,personId:row.personId,text:`${campaign.text} ${entry.title}: ${entry.start}. Use an eligible plan credit. $${(offer.incentiveCents/100).toFixed(2)} studio-balance incentive only after attended class and owner review. Seats and budget are checked when accepted. Open Class offers in Strap.`,at,actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing',emptyPlaceOfferId:offer.id});
+    tx.put('memberMessage',{id:'empty-place-message:'+offer.id,personId:row.personId,text:`${campaign.text} ${entry.title}: ${entry.start}. Use an eligible plan credit. $${(offer.incentiveCents/100).toFixed(2)} studio-balance incentive only after attended class and owner review. Seats and budget are checked when accepted. Open Studio offers in Strap.`,at,actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing',emptyPlaceOfferId:offer.id});
   }
   const saved={...campaign,status:'approved',approvedAt:at,approvedBy:tx.who.id};tx.put('emptyPlaceCampaign',saved);return saved;
 }
@@ -453,4 +455,113 @@ export function nurtureSnapshot(state: State, who: Actor) {
   const owner=who.role === 'owner',visible=(r:RecordData)=>owner || who.role === 'member' && r.personId === who.personId;
   return {sequences:owner ? list(state,'nurtureSequence') : [],enrollments:list(state,'nurtureEnrollment').filter(visible),offers:list(state,'nurtureOffer').filter(visible),tasks:owner ? list(state,'nurtureTask') : [],
     messages:list(state,'memberMessage').filter(m=>m.nurtureEnrollmentId && visible(m))};
+}
+
+function safeReferral(referral: RecordData) {
+  // The submitted address is already known to the referrer; matching, purchase
+  // and reward records never disclose another member's identity or activity.
+  return {id:referral.id,personId:referral.personId,friendEmail:referral.friendEmail,createdAt:referral.createdAt,source:referral.source,attribution:'received_for_owner_review'};
+}
+export function recordReferral(tx: Transaction, input: Record<string,unknown>) {
+  const self=tx.who.role === 'member';
+  if(self)insist(input.personId === undefined || input.personId === tx.who.personId,'own_referral_required',403);
+  else requireMemberRecord(tx.state,tx.who,input.personId);
+  const referrer=person(tx.state,self ? tx.who.personId : input.personId);insist(referrer.role === 'member','member_required');
+  const friendEmail=text(input.friendEmail,'friendEmail',254).toLowerCase();insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(friendEmail),'invalid_friendEmail');
+  insist(friendEmail !== referrer.email?.toLowerCase(),'cannot_refer_self');
+  const requestId=text(input.requestId,'requestId',100),source=self ? 'signed-in-member' : 'staff-'+staffChannel(input);
+  const basis=JSON.stringify({personId:referrer.id,friendEmail,source,sourceReference:input.sourceReference ?? null});
+  const event=list(tx.state,'referralEvent').find(e=>e.actorId === tx.who.id && e.requestId === requestId);
+  if(event) {insist(event.requestBasis === basis,'referral_request_changed',409);return tx.who.role === 'owner' ? event.after : safeReferral(event.after);}
+  const prior=list(tx.state,'referral').find(r=>r.personId === referrer.id && r.friendEmail === friendEmail);
+  const friend=tx.state.people.find(p=>p.role === 'member' && !p.erasedAt && p.email?.toLowerCase() === friendEmail);
+  const verified=!self && !!friend,reference=self ? null : text(input.sourceReference,'sourceReference',500);
+  if(verified)insist(!list(tx.state,'referral').some(r=>r.id !== prior?.id && r.referredPersonId === friend!.id && r.verifiedAt),'referral_already_attributed',409);
+  const saved={...(prior ?? {}),id:prior?.id ?? crypto.randomUUID(),personId:referrer.id,friendEmail,referredPersonId:verified ? friend!.id : prior?.referredPersonId ?? null,
+    status:verified || prior?.verifiedAt ? 'verified' : 'pending',verifiedAt:prior?.verifiedAt ?? (verified ? now() : null),verifiedBy:prior?.verifiedBy ?? (verified ? tx.who.id : null),
+    source:prior?.source ?? source,createdAt:prior?.createdAt ?? now(),createdBy:prior?.createdBy ?? tx.who.id,sourceReference:reference ?? prior?.sourceReference ?? null};
+  tx.put('referral',saved);tx.put('referralEvent',{id:crypto.randomUUID(),personId:referrer.id,referralId:saved.id,before:prior ?? null,after:structuredClone(saved),actorId:tx.who.id,actorRole:tx.who.role,source,at:now(),requestId,requestBasis:basis});
+  return tx.who.role === 'owner' ? saved : safeReferral(saved);
+}
+function winbackEvidence(state: State, personId: string, cadenceDays: number) {
+  const at=now(),member=state.people.find(p=>p.id === personId && p.role === 'member' && p.active && !p.erasedAt);
+  const packs=list(state,'pack').filter(p=>p.personId === personId),cancellations=list(state,'contractCancellation').filter(c=>c.personId === personId && ['scheduled','applied'].includes(c.status) && c.effectiveAt <= at);
+  const ended=packs.filter(p=>p.expiresAt <= at || cancellations.some(c=>c.packId === p.id));
+  const active=packs.some(p=>p.expiresAt > at && !cancellations.some(c=>c.packId === p.id));
+  const since=new Date(Date.parse(at)-cadenceDays*86400000).toISOString();
+  const recent=list(state,'winbackOffer').some(o=>o.personId === personId && o.createdAt > since);
+  const reason=!member ? 'member_inactive' : marketingPermission(state,personId,'inApp') ? 'marketing_permission_withdrawn' : active ? 'active_membership' : !ended.length ? 'no_former_membership' : frozenAt(state,personId,at) ? 'membership_frozen' : recent ? 'cadence_cap' : null;
+  return {personId,packIds:ended.map(p=>p.id),cancellationIds:cancellations.map(c=>c.id),reason};
+}
+export function prepareWinback(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  insist(Array.isArray(input.personIds) && input.personIds.length > 0 && input.personIds.length <= 100,'invalid_audience');
+  const personIds=[...new Set(input.personIds.map(value=>person(tx.state,value,false).id))],cadenceDays=integer(input.cadenceDays,'cadenceDays',1,3650);
+  const services=input.eligibleServices ?? [];insist(Array.isArray(services) && services.length <= 100,'invalid_eligibleServices');
+  const rewardCents=integer(input.rewardCents,'rewardCents',0,100000),budgetCents=integer(input.budgetCents,'budgetCents',0,10000000);insist(rewardCents <= budgetCents,'reward_exceeds_budget');
+  const saved={id:crypto.randomUUID(),terms:finiteTerms(input,services.map(s=>text(s,'service',160))),cadenceDays,rewardCents,budgetCents,
+    offerDays:integer(input.offerDays,'offerDays',1,30),text:text(input.text,'offer_text',1000),audience:personIds.map(id=>winbackEvidence(tx.state,id,cadenceDays)),
+    status:'preview',key:crypto.randomUUID(),version:tx.state.version+1,createdAt:now(),createdBy:tx.who.id};
+  tx.put('winbackCampaign',saved);return saved;
+}
+export function approveWinback(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);const campaign=record(tx.state,input.id,'winbackCampaign');
+  insist(input.key === campaign.key,'winback_preview_changed',409);if(campaign.status === 'approved')return campaign;
+  insist(campaign.version === tx.state.version && campaign.status === 'preview','winback_audience_changed',409);
+  const at=now();
+  for(const row of campaign.audience.filter((r:{reason:string|null})=>!r.reason)) {
+    insist(!winbackEvidence(tx.state,row.personId,campaign.cadenceDays).reason,'winback_eligibility_changed',409);
+    const offer={id:crypto.randomUUID(),campaignId:campaign.id,personId:row.personId,terms:campaign.terms,text:campaign.text,sourcePackIds:row.packIds,sourceCancellationIds:row.cancellationIds,
+      status:'offered',key:crypto.randomUUID(),createdAt:at,approvedBy:tx.who.id,expiresAt:new Date(Date.parse(at)+campaign.offerDays*86400000).toISOString()};
+    tx.put('winbackOffer',offer);
+    tx.put('memberMessage',{id:'winback-message:'+offer.id,personId:row.personId,winbackOfferId:offer.id,text:campaign.text,at,actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
+  }
+  const saved={...campaign,status:'approved',approvedAt:at,approvedBy:tx.who.id};tx.put('winbackCampaign',saved);return saved;
+}
+function winbackStopReason(state: State, offer: RecordData) {
+  if(offer.expiresAt <= now())return 'offer_expired';
+  if(marketingPermission(state,offer.personId,'inApp'))return 'marketing_permission_withdrawn';
+  const cancellations=list(state,'contractCancellation').filter(c=>c.personId === offer.personId && ['scheduled','applied'].includes(c.status) && c.effectiveAt <= now());
+  if(list(state,'pack').some(p=>p.personId === offer.personId && p.expiresAt > now() && !cancellations.some(c=>c.packId === p.id)))return 'membership_renewed';
+  return frozenAt(state,offer.personId,now()) ? 'membership_frozen' : null;
+}
+export function suppressWinback(tx: Transaction) {
+  for(const offer of list(tx.state,'winbackOffer').filter(o=>o.status === 'offered')) {
+    const reason=winbackStopReason(tx.state,offer);if(reason)tx.put('winbackOffer',{...offer,status:'suppressed',suppressionReason:reason,suppressedAt:now()});
+  }
+}
+export function purchaseWinback(tx: Transaction, input: Record<string,unknown>) {
+  if(tx.who.role !== 'member')humanOwner(tx.who);
+  const offer=record(tx.state,input.id,'winbackOffer');if(tx.who.role === 'member')insist(offer.personId === tx.who.personId,'winbackOffer_not_found',404);
+  person(tx.state,offer.personId);insist(input.confirm === true && input.key === offer.key,'exact_membership_confirmation_required',409);text(input.requestId,'requestId',100);
+  if(offer.status === 'purchased')return record(tx.state,offer.packId,'pack');
+  insist(offer.status === 'offered' && !winbackStopReason(tx.state,offer),'winback_offer_no_longer_eligible',409);tx.future(offer.expiresAt);
+  const campaign=record(tx.state,offer.campaignId,'winbackCampaign'),referral=list(tx.state,'referral').find(r=>r.referredPersonId === offer.personId && r.verifiedAt && !r.rewardReservedByOfferId);
+  const rewardCents=referral ? campaign.rewardCents : 0,reserved=list(tx.state,'winbackOffer').filter(o=>o.campaignId === campaign.id && o.status === 'purchased').reduce((sum,o)=>sum+(o.reservedRewardCents ?? 0),0);
+  insist(reserved+rewardCents <= campaign.budgetCents,'referral_reward_budget_exhausted',409);
+  const pack=purchaseFiniteMembership(tx,offer,'winback');
+  const purchased=record(tx.state,offer.id,'winbackOffer');tx.put('winbackOffer',{...purchased,referralId:referral?.id ?? null,referrerId:referral?.personId ?? null,reservedRewardCents:rewardCents});
+  if(referral)tx.put('referral',{...referral,rewardReservedByOfferId:offer.id,rewardReservedAt:now()});
+  return pack;
+}
+function laterVisits(state: State, offer: RecordData) {
+  return list(state,'booking').filter(b=>b.personId === offer.personId && b.packId === offer.packId && b.status === 'booked' && b.attendance === 'attended')
+    .filter(b=>{const c=state.records.get(b.classId)?.data;return c?.status === 'published' && c.end <= now();});
+}
+export function reviewReferralReward(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);const offer=record(tx.state,input.id,'winbackOffer');
+  if(offer.rewardedAt)return offer;
+  const visits=laterVisits(tx.state,offer);insist(offer.status === 'purchased' && offer.referralId && offer.referrerId && visits.length,'renewed_attendance_required',409);
+  const referral=record(tx.state,offer.referralId,'referral');insist(referral.rewardReservedByOfferId === offer.id,'referral_reward_changed',409);person(tx.state,offer.referrerId);
+  if(offer.reservedRewardCents)tx.put('charge',{id:'referral-reward:'+offer.id,personId:offer.referrerId,amountCents:-offer.reservedRewardCents,reason:'referral_reward',createdAt:now(),createdBy:tx.who.id});
+  const saved={...offer,rewardedAt:now(),rewardedBy:tx.who.id,rewardCostCents:offer.reservedRewardCents,rewardBookingIds:visits.map(b=>b.id)};tx.put('winbackOffer',saved);return saved;
+}
+export function winbackSnapshot(state: State, who: Actor) {
+  const owner=who.role === 'owner';
+  const all=list(state,'winbackOffer');
+  return {campaigns:owner ? list(state,'winbackCampaign') : [],offers:all.filter(o=>owner || who.role === 'member' && o.personId === who.personId).map(o=>{
+    if(owner)return {...o,laterAttendedBookingIds:o.status === 'purchased' ? laterVisits(state,o).map(b=>b.id) : []};
+    const {referralId,referrerId,reservedRewardCents,rewardedAt,rewardedBy,rewardCostCents,rewardBookingIds,...safe}=o;return safe;
+  }),referrals:list(state,'referral').filter(r=>owner || who.role === 'member' && r.personId === who.personId || who.role === 'front-desk' && memberRecordGrant(state,who)?.memberIds.includes(r.personId)).map(r=>owner ? r : safeReferral(r)),
+    totals:owner ? {redemptions:all.filter(o=>o.status === 'purchased').length,reservedCents:all.reduce((sum,o)=>sum+(o.reservedRewardCents ?? 0),0),rewardCostCents:all.reduce((sum,o)=>sum+(o.rewardCostCents ?? 0),0),laterVisits:all.filter(o=>o.status === 'purchased').reduce((sum,o)=>sum+laterVisits(state,o).length,0)} : null};
 }

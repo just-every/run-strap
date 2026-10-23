@@ -125,3 +125,59 @@ export async function nurtureBrowser(h,{member,offer,staffOffer}) {
     await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-003-${who}-${width}.png`),fullPage:true});await context.close()
   }}finally{await browser.close()}
 }
+
+async function offerContext(browser,h,cookie,width) {
+  const context=await browser.newContext({viewport:{width,height:1000}})
+  await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
+  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:h.origin}]);return context
+}
+export async function referralBrowser(h,{desk,referrer,friend,phone}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']});let submitted=phone
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try{for(const width of [1440,390]) {
+    const context=await offerContext(browser,h,desk.cookie,width),page=await context.newPage();await page.goto(h.origin+'/app/referrals')
+    await page.getByRole('heading',{name:'Member referrals',exact:true}).waitFor()
+    const form=page.locator('form[action*="name=lead.referral.record"]');await form.getByLabel('Referring member',{exact:true}).selectOption(referrer.id);await form.getByLabel('Friend’s email',{exact:true}).fill(friend.email);await form.getByLabel('Referral request channel').selectOption('phone');await form.getByLabel('Member’s referral request reference').fill(phone.sourceReference)
+    if(width===390) {submitted={...phone,requestId:await form.locator('[name=requestId]').inputValue()};await form.getByRole('button',{name:'Record member referral',exact:true}).click();assert.equal((await h.state()).winback.referrals.filter(r=>r.friendEmail===friend.email).length,1)}
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-005-phone-referral-${width}.png`),fullPage:true});await context.close()
+  }}finally{await browser.close()}return submitted
+}
+export async function winbackBrowser(h,{member,offer,preview,staffOffer,result=false}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try{for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
+    const context=await offerContext(browser,h,cookie,width),page=await context.newPage();await page.goto(h.origin+url)
+    await page.getByRole('heading',{name:'Win-back memberships',exact:true}).waitFor()
+    if(who==='owner')await page.locator(`[data-winback-campaign="${preview.id}"] summary`).click()
+    const card=page.locator(`[data-winback-offer="${offer.id}"]`);await card.scrollIntoViewIfNeeded()
+    if(!result)assert.ok(await card.getByRole('button',{name:'Accept exact win-back membership',exact:true}).isVisible())
+    if(who==='member')assert.equal(await page.locator('[data-winback-offer]').count(),1)
+    if(who==='owner'&&width===390&&staffOffer) {
+      const accept=page.locator(`[data-winback-offer="${staffOffer.id}"] form`);await accept.getByLabel('Win-back request channel').selectOption('phone');await accept.getByRole('button',{name:'Accept exact win-back membership',exact:true}).click()
+      const state=await h.state(),audits=state.staffActions.filter(a=>a.command==='lead.winback.purchase'&&a.personId===staffOffer.personId);assert.equal(audits.length,1);assert.equal(audits[0].right,'membership-sale');assert.equal(audits[0].channel,'phone')
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-005-${result?'results':'offers'}-${who}-${width}.png`),fullPage:true});await context.close()
+  }}finally{await browser.close()}
+}
+
+export async function leadAuditBrowser(h,{personId}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  try{for(const width of [1440,390]) {
+    const context=await offerContext(browser,h,h.owner,width),page=await context.newPage();await page.goto(h.origin+'/app/people?person='+encodeURIComponent(personId))
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    for(const control of await page.locator('.has-tooltip').all()) {
+      if(!await control.isVisible())continue
+      const tooltip=control.locator('[role=tooltip]');assert.ok((await tooltip.textContent()).trim().split(/\s+/).length>=2)
+      const delay=await tooltip.evaluate(n=>parseFloat(getComputedStyle(n).transitionDelay));assert.ok(delay>=0.2 && delay<=0.5)
+      await control.hover();await tooltip.waitFor({state:'visible'});await page.mouse.move(0,0);await tooltip.waitFor({state:'hidden'})
+      await control.focus();await page.keyboard.press('Tab');await page.keyboard.press('Shift+Tab');assert.ok(await tooltip.isVisible(),'keyboard focus shows the tooltip without hover delay')
+      await page.getByRole('heading',{level:1}).click();await tooltip.waitFor({state:'hidden'})
+    }
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim() && !n.classList.contains('has-tooltip')).map(n=>n.outerHTML)),[])
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-audit-history-${width}.png`),fullPage:true});await context.close()
+  }}finally{await browser.close()}
+}

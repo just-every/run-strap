@@ -13,7 +13,7 @@ function taskFields(s: any,lead?: any) {
     + field('dueAt','Due at (UTC)',localUTC(lead?.dueAt),'datetime-local')
 }
 export function leadsPage(s: any,query: URLSearchParams) {
-  if(s.actor.role === 'member')return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Class offers</h1></div>${emptyPlacesPanel(s)}${nurturePanel(s)}</div></div>`;
+  if(s.actor.role === 'member')return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio offers</h1></div>${emptyPlacesPanel(s)}${nurturePanel(s)}${winbackPanel(s)}${referralPanel(s)}</div></div>`;
   const r=s.pipeline,selected=r.leads.find((l: any)=>l.id===query.get('lead'))
   const stage=query.get('stage') ?? '',onlyOverdue=query.get('overdue')==='true'
   const visible=r.leads.filter((l: any)=>(!stage||l.stage===stage)&&(!onlyOverdue||l.overdue))
@@ -37,7 +37,7 @@ export function leadsPage(s: any,query: URLSearchParams) {
   }
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Lead follow-up</h1><p>Assigned next actions and a retained history from inquiry to membership.</p></div>`
     +panel('Staff queue',body(`<form method="get" action="${path}" class="form">${select('stage','Filter stage',[['','All stages'],...stages],stage,'')}${select('overdue','Due filter',[['false','All leads'],['true','Overdue only']],String(onlyOverdue))}<button class="btn-quiet">Filter follow-up</button></form><p><a href="${path}?overdue=true">${h(r.overdue.length)} overdue follow-ups</a></p>`)+`<div class="table-wrap">${table(['Person','Stage','Assigned owner','Next action'],list||'<tr><td colspan="4">No leads in this view.</td></tr>')}</div>`)
-    +recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
+    +recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+winbackPanel(s)+referralPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
     +'</div><aside class="rail">'+panel('Record an inquiry',body(form('lead.create',path,request()+select('personId','Person',[['','Choose a person'],...s.people.filter((p: any)=>p.role==='member').map((p: any)=>[p.id,p.name])])+taskFields(s)+field('source','Inquiry source (optional)','','text','maxlength="100"')+textarea('note','Inquiry note','','maxlength="2000"'),'Add inquiry')))
     +panel('Recorded conversations',body('<p>Record calls, emails or conversations that actually happened. Saving a note does not send a message. The studio owner manages this queue until staff roles ship.</p>'))+'</aside></div>'
 }
@@ -79,4 +79,31 @@ function nurturePanel(s:any) {
     +form('lead.nurture.review',path,'','Review intro events and deliver in-app steps','quiet')+r.sequences.map((seq:any)=>`<details><summary>${h(seq.terms.name)} · ${seq.enabled?'Approved':'Paused'}</summary><p>${h(seq.welcome)}</p><p>${h(seq.guidance)}</p>${seq.enabled?form('lead.nurture.pause',path,hidden('id',seq.id),'Pause welcome sequence','quiet'):''}</details>`).join('')
     +r.tasks.map((t:any)=>`<p>${h(person(s,t.personId))}: ${h(t.nextAction)} · ${h(t.status)}${t.stopReason?' · '+h(t.stopReason):''}</p>`).join('') : '';
   return panel('Intro welcome and next steps',body('<p>Approved in-app guidance follows a real intro purchase. Replies, marketing opt-out and membership purchase stop future sales steps.</p>'+controls+messages+offers+(!owner && !messages && !offers?'<p>No intro welcome or membership offer.</p>':'')));
+}
+
+export function referralsPage(s:any) {
+  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Member referrals</h1></div>${referralPanel(s)}</div></div>`;
+}
+function referralPanel(s:any) {
+  const owner=s.actor.role === 'owner',staff=owner || s.actor.role === 'front-desk',back=owner?path:staff?'/app/referrals':'/app/offers';
+  const fields=(staff?select('personId','Referring member',s.people.filter((p:any)=>p.role === 'member' && p.active).map((p:any)=>[p.id,p.name])):hidden('personId',s.actor.personId))
+    +field('friendEmail','Friend’s email','','email','required maxlength="254"')+request()
+    +(staff?select('channel','Referral request channel',[['desk','At the desk'],['phone','By phone'],['inbox','In the inbox']])+textarea('sourceReference','Member’s referral request reference','','required maxlength="500"'):'');
+  const referrals=s.winback.referrals.map((r:any)=>`<article data-referral="${h(r.id)}"><p>${staff?h(person(s,r.personId))+' · ':''}${h(r.friendEmail)} · ${h(owner ? r.status : r.attribution.replace(/_/g,' '))}</p><p>${when(s,r.createdAt)} · ${h(r.source)}</p>${owner && r.verifiedAt?`<p>Verified member attribution retained once. Reference: ${h(r.sourceReference)}</p>`:''}</article>`).join('');
+  return panel('Refer a friend',body('<p>Record a referral the member actually requested. Nothing is sent to the friend. Only the owner reviews matches and eligibility; this page does not confirm whether the friend has a studio account.</p>'+form('lead.referral.record',back,fields,staff?'Record member referral':'Submit referral','quiet')+referrals));
+}
+function winbackPanel(s:any) {
+  const owner=s.actor.role === 'owner',r=s.winback,back=owner?path:'/app/offers';
+  const offers=r.offers.map((offer:any)=>`<article data-winback-offer="${h(offer.id)}"><h3>${h(offer.terms.name)} · ${h(offer.status)}</h3><p>${h(offer.text)}</p><p>$${(offer.terms.amountCents/100).toFixed(2)} on your studio balance for ${h(offer.terms.days)} days of unlimited eligible visits at the studio location. Services: ${h(offer.terms.eligibleServices.join(', ') || 'all services')}. No payment collected or automatic renewal. Offer expires ${when(s,offer.expiresAt)}.</p>${owner?`<p>${h(person(s,offer.personId))} · Original ended plan IDs: ${h(offer.sourcePackIds.join(', '))}</p>`:''}${offer.status === 'offered'?form('lead.winback.purchase',back,hidden('id',offer.id)+hidden('key',offer.key)+hidden('confirm','true')+request()+(owner?select('channel','Win-back request channel',[['desk','At the desk'],['phone','By phone'],['inbox','In the inbox']]):''),'Accept exact win-back membership'): `<p>${h(offer.suppressionReason ?? offer.status)}</p>`}${owner && offer.status === 'purchased'?`<p>Redemption: ${h(offer.packId)}. Visits using this renewed plan: ${h(offer.laterAttendedBookingIds.length)}. Reserved referral reward $${((offer.reservedRewardCents ?? 0)/100).toFixed(2)}; recorded cost $${((offer.rewardCostCents ?? 0)/100).toFixed(2)}.</p>${offer.referralId && !offer.rewardedAt?form('lead.winback.reward',path,hidden('id',offer.id)+request(),'Review attended referral reward','quiet'):''}`:''}</article>`).join('');
+  let controls='';
+  if(owner) {
+    controls=form('lead.winback.prepare',path,field('planName','Win-back finite membership name','','text','required maxlength="80"')+field('days','Win-back membership days',30,'number','min="1" max="366"')
+      +field('amount','Win-back price in dollars','90.00','text','inputmode="decimal"')+field('services','Eligible services, separated by commas','','text','maxlength="1000"')
+      +field('reward','Verified referral reward in dollars','0.00','text','inputmode="decimal"')+field('budget','Referral reward budget in dollars','0.00','text','inputmode="decimal"')
+      +field('cadenceDays','Minimum days between offers',30,'number','min="1" max="3650"')+field('offerDays','Offer valid for days',7,'number','min="1" max="30"')+textarea('text','Win-back wording','','required maxlength="1000"')
+      +s.people.filter((p:any)=>p.role === 'member').map((p:any)=>select('wb_'+p.id,'Win-back audience: '+p.name,[['false','Exclude'],['true','Include']],'false')).join(''),'Preview win-back audience','quiet')
+      +r.campaigns.map((campaign:any)=>`<details data-winback-campaign="${h(campaign.id)}"><summary>${h(campaign.terms.name)} · ${h(campaign.status)}</summary><p>${h(campaign.text)}</p><p>Reward budget $${(campaign.budgetCents/100).toFixed(2)}; per verified referral $${(campaign.rewardCents/100).toFixed(2)}. Cadence ${h(campaign.cadenceDays)} days. No automatic email, text, reward or payment.</p><ul>${campaign.audience.map((row:any)=>`<li>${h(person(s,row.personId))}: ${h(row.reason ?? 'Eligible')} · Ended plan IDs: ${h(row.packIds.join(', '))}</li>`).join('')}</ul>${campaign.status==='preview'?form('lead.winback.approve',path,hidden('id',campaign.id)+hidden('key',campaign.key),'Approve win-back invitations'):''}</details>`).join('')
+      +`<p>Observed redemptions: ${h(r.totals.redemptions)}. Later visits using renewed plans: ${h(r.totals.laterVisits)}. Reward reservations $${(r.totals.reservedCents/100).toFixed(2)}; recorded reward cost $${(r.totals.rewardCostCents/100).toFixed(2)}. Visits are observed outcomes, not a claim of causal recovery or collected payments.</p>`;
+  }
+  return panel('Win-back memberships',body('<p>Explicitly approved in-app invitations for eligible former members. Opt-out suppresses an existing offer permanently; fresh enrollment requires a new human-approved audience and the cadence cap. Referral rewards require verified attribution, an actual renewal, completed attendance and owner review.</p>'+controls+offers+(!owner && !offers?'<p>No win-back membership offer.</p>':'')));
 }
