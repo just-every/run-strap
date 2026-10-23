@@ -12,6 +12,13 @@ import {
   table,
 } from "./shared";
 import { localDate } from "../zone";
+const breakable = (value: unknown) => {
+  const chars = [...String(value ?? "")];
+  let output = "";
+  for (let i = 0; i < chars.length; i += 12)
+    output += (i ? "<wbr>" : "") + h(chars.slice(i, i + 12).join(""));
+  return output;
+};
 const path = "/app/retail",
   money = (n: number) => "$" + (n / 100).toFixed(2),
   whole = 'required min="0" step="1"',
@@ -19,7 +26,7 @@ const path = "/app/retail",
     field("reason", "Reason", "", "text", 'required maxlength="500"');
 const req = () => hidden("requestId", crypto.randomUUID());
 const detail = (title: string, html: string) =>
-  `<details class="more"><summary>${h(title)}</summary><div class="panel-body">${html}</div></details>`;
+  `<details class="more"><summary>${breakable(title)}</summary><div class="panel-body">${html}</div></details>`;
 export function retailPage(s: any, query: URLSearchParams) {
   const r = s.retail ?? {
       skus: [],
@@ -67,7 +74,7 @@ export function retailPage(s: any, query: URLSearchParams) {
   const stocks = visibleStock
     .map((v: any) => {
       const item = r.skus.find((x: any) => x.id === v.skuId);
-      return `<tr>${cell("SKU", h(item.sku))}${cell("Product", h(item.name + " · " + item.variant))}${cell("Barcode", h(item.barcode))}${cell("Location", h(s.locations.find((l: any) => l.id === v.locationId)?.name))}${cell("On hand", h(v.onHand) + (v.low ? " <strong>Low stock</strong>" : ""))}${cell("Unit price", h(money(item.priceCents)))}</tr>`;
+      return `<tr>${cell("SKU", breakable(item.sku))}${cell("Product", breakable(item.name + " · " + item.variant))}${cell("Barcode", breakable(item.barcode))}${cell("Location", breakable(s.locations.find((l: any) => l.id === v.locationId)?.name))}${cell("On hand", breakable(v.onHand) + (v.low ? " <strong>Low stock</strong>" : ""))}${cell("Unit price", breakable(money(item.priceCents)))}</tr>`;
     })
     .join("");
   const catalog = panel(
@@ -169,7 +176,7 @@ export function retailPage(s: any, query: URLSearchParams) {
   const sales = panel(
     "Desk sales and returns",
     body(
-      "<p>Cash or externally recorded payment only. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>" +
+      "<p>Cash, gift cards or externally recorded payment. Gift redemption is noncash. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>" +
         detail(
           "Sell retail",
           form(
@@ -238,7 +245,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               r.sales
                 .map(
                   (v: any) =>
-                    `<tr>${cell("Sale", h(v.name + " · " + v.variant) + "<small>" + h(v.reference) + "</small>")}${cell("Tender", h(v.tender))}${cell("Total", h(money(v.amountCents)))}${cell("Returns", h(r.returns.filter((x: any) => x.saleId === v.id).reduce((n: number, x: any) => n + x.quantity, 0)))}</tr>`,
+                    `<tr>${cell("Sale", breakable(v.name + " · " + v.variant) + "<small>" + breakable(v.reference) + "</small>")}${cell("Tender", breakable(v.tender))}${cell("Total", breakable(money(v.amountCents)))}${cell("Returns", breakable(r.returns.filter((x: any) => x.saleId === v.id).reduce((n: number, x: any) => n + x.quantity, 0)))}</tr>`,
                 )
                 .join(""),
             )
@@ -248,7 +255,7 @@ export function retailPage(s: any, query: URLSearchParams) {
   const drawerRows = d.sessions
     .map(
       (v: any) =>
-        `<tr>${cell("Register", h(v.register) + "<small>" + h(v.status) + "</small>")}${cell("Float", h(money(v.floatCents)))}${cell("Expected", h(money(v.expectedCents)))}${cell("Counted", v.countedCents === null ? "Not counted" : h(money(v.countedCents)))}${cell("Over or short", v.varianceCents === null ? "Open" : h(money(v.varianceCents)) + "<small>" + h(v.closeReason) + "</small>")}${cell("Controls", v.status === "open" ? detail("Count and close", form("drawer.close", path, req() + hidden("sessionId", v.id) + [10000, 5000, 2000, 1000, 500, 100, 25, 10, 5, 1].map((c) => field("denom_" + c, money(c) + " count", 0, "number", whole)).join("") + reason(), "Close drawer")) : detail("Manager correction", form("drawer.adjust", path, req() + hidden("sessionId", v.id) + field("counted", "Corrected counted cash in USD", "", "number", 'required min="0" step="0.01"') + reason(), "Adjust count")) + detail("Manager reopen", form("drawer.reopen", path, req() + hidden("sessionId", v.id) + reason(), "Reopen drawer")))}</tr>`,
+        `<tr>${cell("Register", breakable(v.register) + "<small>" + breakable(v.status) + "</small>")}${cell("Float", breakable(money(v.floatCents)))}${cell("Expected", breakable(money(v.expectedCents)))}${cell("Counted", v.countedCents === null ? "Not counted" : breakable(money(v.countedCents)))}${cell("Over or short", v.varianceCents === null ? "Open" : breakable(money(v.varianceCents)) + "<small>" + breakable(v.closeReason) + "</small>")}${cell("Controls", v.status === "open" ? detail("Count and close", form("drawer.close", path, req() + hidden("sessionId", v.id) + [10000, 5000, 2000, 1000, 500, 100, 25, 10, 5, 1].map((c) => field("denom_" + c, money(c) + " count", 0, "number", whole)).join("") + reason(), "Close drawer")) : detail("Manager correction", form("drawer.adjust", path, req() + hidden("sessionId", v.id) + field("counted", "Corrected counted cash in USD", "", "number", 'required min="0" step="0.01"') + reason(), "Adjust count")) + detail("Manager reopen", form("drawer.reopen", path, req() + hidden("sessionId", v.id) + reason(), "Reopen drawer")))}</tr>`,
     )
     .join("");
   const date = localDate(new Date().toISOString(), s.studio?.timeZone ?? "UTC");
@@ -322,7 +329,7 @@ export function retailPage(s: any, query: URLSearchParams) {
     "Gift cards and promotions",
     body(
       "<p>Outstanding gift liability: <strong>" +
-        h(money(gift.liabilityCents)) +
+        breakable(money(gift.liabilityCents)) +
         "</strong>. Cards have no expiration or fees. Only the owner can issue, look up, redeem or adjust them. Returns restore the original gift value; no automatic cash payout occurs.</p>" +
         detail(
           "Issue gift card",
@@ -441,7 +448,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               gift.cards
                 .map(
                   (c: any) =>
-                    `<tr>${cell("Card", h(c.id))}${cell("Remaining liability", h(money(c.balanceCents)))}${cell("Controls", detail("Refund-right adjustment", form("retail.gift.adjust", path, req() + hidden("giftCardId", c.id) + field("adjustment", "Signed adjustment in USD", "", "text", "required") + reason(), "Adjust gift value")))}</tr>`,
+                    `<tr>${cell("Card", breakable(c.id))}${cell("Remaining liability", breakable(money(c.balanceCents)))}${cell("Controls", detail("Refund-right adjustment", form("retail.gift.adjust", path, req() + hidden("giftCardId", c.id) + field("adjustment", "Signed adjustment in USD", "", "text", "required") + reason(), "Adjust gift value")))}</tr>`,
                 )
                 .join(""),
             )
@@ -451,7 +458,7 @@ export function retailPage(s: any, query: URLSearchParams) {
           gift.promotions
             .map(
               (p: any) =>
-                `<tr>${cell("Code", h(p.code))}${cell("Discount", h(money(p.amountCents)))}${cell("Dates", h(p.startsAt + " to " + p.endsAt))}${cell("Uses", h((gift.uses ?? []).filter((u: any) => u.promotionId === p.id).length + " of " + p.maxUses))}${cell("Stacking", p.stackable ? "May combine" : "Cannot combine")}</tr>`,
+                `<tr>${cell("Code", breakable(p.code))}${cell("Discount", breakable(money(p.amountCents)))}${cell("Dates", breakable(p.startsAt + " to " + p.endsAt))}${cell("Uses", breakable((gift.uses ?? []).filter((u: any) => u.promotionId === p.id).length + " of " + p.maxUses))}${cell("Stacking", p.stackable ? "May combine" : "Cannot combine")}</tr>`,
             )
             .join(""),
         ),
@@ -466,7 +473,7 @@ export function retailPage(s: any, query: URLSearchParams) {
           .flatMap((v: any) =>
             v.entries.map(
               (e: any) =>
-                `<tr>${cell("Register", h(v.register))}${cell("Tender", h(e.tender))}${cell("Kind", h(e.kind))}${cell("Amount", h(money(e.amountCents)))}${cell("Source", h(e.sourceId) + "<small>" + h(e.reason) + "</small>")}${cell("Actor", h(e.actorId))}</tr>`,
+                `<tr>${cell("Register", breakable(v.register))}${cell("Tender", breakable(e.tender))}${cell("Kind", breakable(e.kind))}${cell("Amount", breakable(money(e.amountCents)))}${cell("Source", breakable(e.sourceId) + "<small>" + breakable(e.reason) + "</small>")}${cell("Actor", breakable(e.actorId))}</tr>`,
             ),
           )
           .join(""),
@@ -476,7 +483,7 @@ export function retailPage(s: any, query: URLSearchParams) {
           d.adjustments
             .map(
               (a: any) =>
-                `<tr>${cell("Before", h(typeof a.before === "number" ? money(a.before) : a.action))}${cell("After", h(a.after === undefined ? "Open" : money(a.after)))}${cell("Reason", h(a.reason))}${cell("Actor", h(a.actorId))}</tr>`,
+                `<tr>${cell("Before", breakable(typeof a.before === "number" ? money(a.before) : a.action))}${cell("After", breakable(a.after === undefined ? "Open" : money(a.after)))}${cell("Reason", breakable(a.reason))}${cell("Actor", breakable(a.actorId))}</tr>`,
             )
             .join(""),
         ),
@@ -490,7 +497,7 @@ export function retailPage(s: any, query: URLSearchParams) {
           r.movements
             .map(
               (v: any) =>
-                `<tr>${cell("Type", h(v.kind))}${cell("SKU", h(r.skus.find((x: any) => x.id === v.skuId)?.sku))}${cell("Change", h(v.quantity))}${cell("Before", h(v.before))}${cell("After", h(v.after))}${cell("Reason", h(v.reason))}</tr>`,
+                `<tr>${cell("Type", breakable(v.kind))}${cell("SKU", breakable(r.skus.find((x: any) => x.id === v.skuId)?.sku))}${cell("Change", breakable(v.quantity))}${cell("Before", breakable(v.before))}${cell("After", breakable(v.after))}${cell("Reason", breakable(v.reason))}</tr>`,
             )
             .join(""),
         )
