@@ -135,9 +135,8 @@ test('RPT-005: first-source inquiries reconcile to retained stages and corrected
   if(process.env.STRAP_PROOF_DIR) await (await import('./lead-report-browser.mjs')).leadReportBrowser(h,{ana,unknown,ownerId})
 }))
 
-// For the elapsed-week acceptance journey, start this same test with libfaketime
-// (FAKETIME_TIMESTAMP_FILE, FAKETIME_NO_CACHE=1 and
-// FAKETIME_DONT_FAKE_MONOTONIC=1) and STRAP_RECOVERY_CLOCK naming that file.
+// For elapsed weeks, build tests/recovery-clock.c as a shared library, set
+// LD_PRELOAD to it and STRAP_RECOVERY_CLOCK to a file initially containing +0.
 // This moves process time, never application records, policy or production code.
 test('LEAD-004: completed weekly routines produce private justified recovery tasks, with exclusions and retained evidence',{timeout:240000},()=>run(async h=>{
   await h.confirmSetup(h.owner)
@@ -153,7 +152,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
     assert.equal((await h.state(p.cookie)).pipeline,null)
   }
   if(!process.env.STRAP_RECOVERY_CLOCK) return
-  const {writeFile}=await import('node:fs/promises'),{totp}=await import('./mfa-helpers.mjs')
+  const {writeFile,rename}=await import('node:fs/promises'),{totp}=await import('./mfa-helpers.mjs')
   const originalCmd=h.cmd,originalState=h.state
   let owner=h.owner,offset=0
   h.cmd=(name,input,cookie=owner,...rest)=>originalCmd(name,input,cookie,...rest)
@@ -161,7 +160,8 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   const jump=async target=>{
     const realNow=Date.now()-offset*1000
     offset=Math.ceil((Date.parse(target)-realNow)/1000)
-    await writeFile(process.env.STRAP_RECOVERY_CLOCK,'+'+offset+'\n')
+    await writeFile(process.env.STRAP_RECOVERY_CLOCK+'.new','+'+offset+'\n')
+    await rename(process.env.STRAP_RECOVERY_CLOCK+'.new',process.env.STRAP_RECOVERY_CLOCK)
     await new Promise(resolve=>setTimeout(resolve,50))
     owner=await h.signIn('owner@studio.example');h.owner=owner
     await h.cmd('mfa.verify',{code:totp(h.mfaOwner.secret)})
