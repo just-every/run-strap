@@ -227,6 +227,7 @@ export function approveHours(tx: Transaction, input: Record<string, unknown>) {
   insist(tx.who.role === "owner" && tx.who.isOwner, "owner_required", 403);
   return request(tx, "approve", input, () => {
     const shift = record(tx.state, input.shiftId, "clockShift");
+    insist(shift.actorId !== tx.who.id, "another_owner_approval_required", 403);
     insist(input.revision === shift.revision, "clock_shift_changed", 409);
     insist(
       shift.status !== "approved" || shift.pendingCorrectionId,

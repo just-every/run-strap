@@ -176,6 +176,30 @@ test(
         "clockRequest",
       ])
         assert.ok(portable.tables.st_records.some((r) => r.kind === kind));
+      const ownShift = await h.cmd("clock.in", {
+        locationId: "studio",
+        job: "Owner desk",
+        requestId: "owner-in",
+      });
+      const beforeSelf = (await h.state()).version;
+      assert.equal(
+        (
+          await h.send(
+            "/api/strap/command",
+            {
+              name: "clock.approve",
+              input: {
+                shiftId: ownShift.id,
+                revision: 0,
+                requestId: "owner-self-approval",
+              },
+            },
+            h.owner,
+          )
+        ).status,
+        403,
+      );
+      assert.equal((await h.state()).version, beforeSelf);
       if (process.env.STRAP_PROOF_DIR)
         await (
           await import("./staff-time-browser.mjs")
