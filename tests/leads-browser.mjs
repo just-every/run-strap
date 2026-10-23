@@ -103,7 +103,7 @@ export async function emptyPlacesBrowser(h,{member,preview,offer,acceptAt390=fal
   }}finally{await browser.close()}
 }
 
-export async function nurtureBrowser(h,{member,offer}) {
+export async function nurtureBrowser(h,{member,offer,staffOffer}) {
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
@@ -117,6 +117,11 @@ export async function nurtureBrowser(h,{member,offer}) {
     if(who==='member')assert.equal(await page.locator('[data-nurture-offer]').count(),1)
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
     assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    if(who==='owner' && width===390 && staffOffer) {
+      const accept=page.locator(`[data-nurture-offer="${staffOffer.id}"] form`);await accept.getByLabel('Membership request channel').selectOption('phone');await accept.getByRole('button',{name:'Accept exact finite membership',exact:true}).click();
+      const state=await h.state();assert.equal(state.nurture.offers.find(o=>o.id===staffOffer.id).status,'purchased');
+      const audits=state.staffActions.filter(a=>a.command==='lead.nurture.purchase'&&a.personId===staffOffer.personId);assert.equal(audits.length,1);assert.equal(audits[0].right,'membership-sale');assert.equal(audits[0].channel,'phone');
+    }
     await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-003-${who}-${width}.png`),fullPage:true});await context.close()
   }}finally{await browser.close()}
 }

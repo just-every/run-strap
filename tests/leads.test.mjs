@@ -308,11 +308,11 @@ test('LEAD-007: approved in-app offers preserve waitlist priority, consent, capa
 
 test('LEAD-003: real intro purchases receive approved welcome and preparation, attended offers stop on reply opt-out or native membership conversion',{timeout:process.env.STRAP_PROOF_DIR?240000:120000},()=>run(async h=>{
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
-  const coach=await h.person('NurtureCoach','instructor'),ana=await h.person('NurtureAna'),ben=await h.person('NurtureBen'),cy=await h.person('NurtureCy')
+  const coach=await h.person('NurtureCoach','instructor'),ana=await h.person('NurtureAna'),ben=await h.person('NurtureBen'),cy=await h.person('NurtureCy'),desk=await h.person('NurtureDesk')
   const intro=await h.cmd('intro.offer.save',{name:'First week yoga',days:7,credits:2,amountCents:2000,eligibility:'new',limit:'person',eligibleServices:['Nurture Yoga']})
   const sequence=await h.cmd('lead.nurture.save',{introOfferId:intro.id,welcome:'Welcome to your first week.',guidance:'Bring water and arrive ten minutes early. Your first class and current waiver are in Classes.',offerText:'Continue your practice with the exact finite membership below.',planName:'30-day Yoga',days:30,amountCents:9000})
   await h.cmd('lead.nurture.review',{},ana.cookie,403)
-  for(const p of [ana,ben,cy]) {
+  for(const p of [ana,ben,cy,desk]) {
     await h.cmd('preferences.save',{revision:0,requestId:'synthetic-strap-nurture-consent',marketingInApp:true,consentStatement:'Send me intro welcome and membership offers in my account'},p.cookie)
     await h.cmd('intro.identity.verify',{personId:p.id,householdChecked:true,reason:'Owner verified new client and household eligibility'})
     const preview=await h.cmd('intro.preview',{offerId:intro.id,requestId:'synthetic-strap-intro'},p.cookie)
@@ -320,8 +320,8 @@ test('LEAD-003: real intro purchases receive approved welcome and preparation, a
   }
   const mailCount=()=>h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n'),beforeMail=await mailCount()
   let reviewed=await h.cmd('lead.nurture.review',{})
-  assert.equal(reviewed.enrollments.length,3);assert.equal(reviewed.tasks.length,3);assert.equal(reviewed.offers.length,0)
-  for(const p of [ana,ben,cy]) {
+  assert.equal(reviewed.enrollments.length,4);assert.equal(reviewed.tasks.length,4);assert.equal(reviewed.offers.length,0)
+  for(const p of [ana,ben,cy,desk]) {
     const own=(await h.state(p.cookie)).nurture
     assert.equal(own.messages.length,2);assert.deepEqual(new Set(own.messages.map(m=>m.step)),new Set(['welcome','first-visit-guidance']))
     assert.equal(own.tasks.length,0);assert.equal(own.sequences.length,0);assert.ok(own.enrollments.every(e=>e.personId===p.id))
@@ -330,18 +330,18 @@ test('LEAD-003: real intro purchases receive approved welcome and preparation, a
   await h.cmd('lead.nurture.review',{});assert.equal((await h.state(ana.cookie)).nurture.messages.length,2)
   const start=new Date(Date.now()+8000).toISOString(),d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
   const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Nurture Yoga',service:'Nurture Yoga',room:'Nurture room',start,end:new Date(Date.parse(start)+1000).toISOString(),capacity:4,instructorId:coach.id}]})).id})).classes[0]
-  for(const p of [ana,ben,cy]){const b=await h.cmd('booking.book',{classId:entry.id},p.cookie);await h.cmd('attendance.checkin',{id:b.id},coach.cookie)}
+  for(const p of [ana,ben,cy,desk]){const b=await h.cmd('booking.book',{classId:entry.id},p.cookie);await h.cmd('attendance.checkin',{id:b.id},coach.cookie)}
   assert.equal((await h.cmd('lead.nurture.review',{})).offers.length,0,'future check-ins cannot trigger a completed-visit offer')
   const cp=(await h.state(cy.cookie)).memberPreferences.preference
   await h.cmd('preferences.save',{revision:cp.revision,requestId:'synthetic-strap-nurture-off',marketingInApp:false},cy.cookie)
   assert.equal((await h.state(cy.cookie)).nurture.enrollments[0].status,'stopped')
   await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(entry.end)-Date.now()+20)))
-  reviewed=await h.cmd('lead.nurture.review',{});assert.equal(reviewed.offers.length,2)
+  reviewed=await h.cmd('lead.nurture.review',{});assert.equal(reviewed.offers.length,3)
   const offer=reviewed.offers.find(o=>o.personId===ana.id),other=reviewed.offers.find(o=>o.personId===ben.id)
   assert.equal(offer.terms.amountCents,9000);assert.equal(offer.terms.renewsAutomatically,false)
   assert.equal(offer.bookingId,(await h.state(ana.cookie)).bookings[0].id)
   assert.equal(await mailCount(),beforeMail,'nurture review never uses the authentication mail outbox; welcome and guidance are actual in-app records')
-  if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).nurtureBrowser(h,{member:ana,offer})
+  if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).nurtureBrowser(h,{member:ana,offer,staffOffer:reviewed.offers.find(o=>o.personId===desk.id)})
   await h.cmd('member.message.send',{requestId:'synthetic-strap-intro-reply',text:'Please pause sales follow-up while I discuss the schedule.'},ben.cookie)
   assert.equal((await h.state(ben.cookie)).nurture.offers[0].status,'suppressed')
   await h.cmd('lead.nurture.purchase',{id:other.id,key:other.key,confirm:true,requestId:'synthetic-strap-obsolete'},ben.cookie,409)
@@ -354,14 +354,14 @@ test('LEAD-003: real intro purchases receive approved welcome and preparation, a
   assert.equal((await h.cmd('lead.nurture.purchase',purchase,ana.cookie)).id,membership.id)
   const after=await h.state(),anaEnrollment=after.nurture.enrollments.find(e=>e.personId===ana.id)
   assert.equal(anaEnrollment.status,'stopped');assert.equal(anaEnrollment.stopReason,'membership_purchased')
-  assert.equal(after.charges.filter(c=>c.reason==='nurture_membership').length,1)
+  assert.equal(after.charges.filter(c=>c.reason==='nurture_membership'&&c.personId===ana.id).length,1)
   const beforeReview=after.nurture.messages.length
   await h.cmd('lead.nurture.review',{});assert.equal((await h.state()).nurture.messages.length,beforeReview)
   const nextStart=new Date(Date.now()+8*86400000).toISOString(),nd=new Date(nextStart),nextWeek=new Date(Date.UTC(nd.getUTCFullYear(),nd.getUTCMonth(),nd.getUTCDate()-(nd.getUTCDay()+6)%7)).toISOString().slice(0,10)
   const next=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:nextWeek,classes:[{title:'After intro Yoga',service:'Nurture Yoga',room:'Nurture room',start:nextStart,end:new Date(Date.parse(nextStart)+3600000).toISOString(),capacity:4,instructorId:coach.id}]})).id})).classes[0]
   assert.equal((await h.cmd('booking.book',{classId:next.id},ana.cookie)).packId,membership.id,'the renewed plan grants real bookable membership access')
   const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
-  assert.equal(exit.value.tables.st_records.filter(r=>r.kind==='nurtureEnrollment').length,3)
+  assert.equal(exit.value.tables.st_records.filter(r=>r.kind==='nurtureEnrollment').length,4)
   assert.equal((await h.state(coach.cookie)).nurture.messages.length,0)
   await h.cmd('lead.nurture.pause',{id:sequence.id})
 }))
