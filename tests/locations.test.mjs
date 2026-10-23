@@ -58,7 +58,8 @@ test('STUDIO-001/002: a New York studio and a Los Angeles location keep their ow
   // A room name belongs to its location: the same room and hour at two locations is not a conflict; one instructor in two places is.
   await publish('Same Hour', new Date(Date.parse(nyClass.start) + 120 * minute).toISOString(), second, la.id)
   await publish('Same Hour NY', new Date(Date.parse(nyClass.start) + 120 * minute).toISOString(), coach, undefined)
-  const double = await h.send('/api/strap/command', { name: 'classes.prepare', input: { week: monday(nyClass.start), classes: [{ title: 'Double booked', start: new Date(Date.parse(laClass.start) + 10 * minute).toISOString(), end: new Date(Date.parse(laClass.start) + 40 * minute).toISOString(), capacity: 3, instructorId: second.id, locationId: 'studio', room: 'Elsewhere' }] } }, h.owner)
+  const overlap = new Date(Date.parse(laClass.start) + 10 * minute).toISOString()
+  const double = await h.send('/api/strap/command', { name: 'classes.prepare', input: { week: monday(overlap), classes: [{ title: 'Double booked', start: overlap, end: new Date(Date.parse(laClass.start) + 40 * minute).toISOString(), capacity: 3, instructorId: second.id, locationId: 'studio', room: 'Elsewhere' }] } }, h.owner)
   assert.equal(double.status, 409); assert.match(double.value.error, /Scheduling conflict.*instructor/)
 
   // Changing where one plan is valid keeps its credits and ledger; nothing is granted or copied.
