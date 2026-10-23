@@ -35,3 +35,10 @@ export async function drawerBrowser(h,sessionId) {
     const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download tender CSV',exact:true}).click();const file=await download;assert.equal(file.suggestedFilename(),'tenders.csv');
   });
 }
+export async function giftBrowser(h,giftCardId) {
+  await screens(h,'SALE-001',async(page,width)=>{
+    await page.getByRole('heading',{name:'Gift cards and promotions',exact:true}).waitFor();
+    const details=page.locator('details').filter({has:page.getByText('Refund-right adjustment',{exact:true})});await details.locator('summary').click();await details.getByLabel('Signed adjustment in USD',{exact:true}).fill('1.00');await details.getByLabel('Reason',{exact:true}).fill('Approved gift correction '+width);await details.getByRole('button',{name:'Adjust gift value',exact:true}).click();await page.getByRole('heading',{name:'Inventory and drawers',exact:true}).waitFor();
+    const r=(await h.send('/api/strap/retail',undefined,h.owner)).value;assert.ok(r.gifts.entries.some(e=>e.reason==='Approved gift correction '+width));assert.ok(r.gifts.cards.some(c=>c.id===giftCardId));
+  });
+}

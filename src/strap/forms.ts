@@ -38,9 +38,13 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('clock.')) {for(const key of ['revision','breakMinutes'])if(key in input)input[key]=Number(input[key]);for(const key of ['startAt','endAt'])if(input[key])input[key]=String(input[key])+'Z';}
   if(name.startsWith('retail.') || name.startsWith('drawer.')) {
-    for(const key of ['quantity','count','lowStock']) if(key in input) input[key]=Number(input[key]);
+    for(const key of ['quantity','count','lowStock','maxUses','perMember']) if(key in input) input[key]=Number(input[key]);
     for(const [key,target] of [['price','priceCents'],['expected','expectedCents'],['float','floatCents'],['counted','countedCents']]) if(key in input) {input[target]=cents(input[key],key);delete input[key];}
+    if(name==='retail.gift.adjust') {const amount=String(input.adjustment ?? '').trim(),negative=amount.startsWith('-');input.amountCents=cents(negative?amount.slice(1):amount,'gift adjustment')*(negative?-1:1);delete input.adjustment;}
+    if(name==='retail.promotion.add') {input.stackable=input.stackable==='true';input.startsAt=String(input.startsAt)+'Z';input.endsAt=String(input.endsAt)+'Z';if(input.skuId==='')delete input.skuId;}
+    if(name==='retail.sell') {input.promoCodes=String(input.promoCodes ?? '').split(',').map(c=>c.trim()).filter(Boolean);if(input.giftCardId==='')delete input.giftCardId;}
     if(name==='retail.return') input.restock=input.restock==='true';
     if(name==='drawer.close') {input.denominations=Object.keys(input).filter(k=>k.startsWith('denom_')).map(k=>({cents:Number(k.slice(6)),count:Number(input[k])}));for(const k of Object.keys(input))if(k.startsWith('denom_'))delete input[k];}
     if(input.sessionId==='') delete input.sessionId;

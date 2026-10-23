@@ -1,4 +1,4 @@
-import { humanOwner, id, insist, list, now, text, type RecordData } from './types';
+import { humanOwner, id, insist, list, now, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 
 /** Durable actor-scoped requests survive portable exit and native restore. */
@@ -13,3 +13,5 @@ export function retailRequest(tx: Transaction, action: string, input: Record<str
   tx.put('retailAction',{id:id(),actorId:tx.who.id,role:tx.who.role,action,requestId,basis,result,createdAt:now()});
   return result;
 }
+
+export const ordered=(s: State,kind: string)=>list(s,kind).sort((a,b)=>(a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id));
