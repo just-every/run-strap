@@ -69,7 +69,7 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       await sign(coach.cookie);await page.goto(h.origin+'/app?day='+day+'&class='+roster.id)
       assert.ok(!(await page.locator('body').innerText()).includes('Synthetic private'));await capture('instructor-denial')
       const previous=page.getByRole('link',{name:'Previous day',exact:true}),tip=previous.getByRole('tooltip');
-      await previous.hover();assert.equal(await tip.isVisible(),false,'hover tooltip waits before appearing');await tip.waitFor({state:'visible'});await capture('instructor-tooltip-hover');
+      const hoverStarted=performance.now();await previous.hover();assert.equal(await tip.isVisible(),false,'hover tooltip waits before appearing');await page.waitForTimeout(150);assert.equal(await tip.isVisible(),false,'hover tooltip remains hidden during the delay');await tip.waitFor({state:'visible'});assert.ok(performance.now()-hoverStarted>=250,'hover tooltip waits about 300 ms');await capture('instructor-tooltip-hover');
       await page.mouse.move(0,0);await page.keyboard.press('Tab');const next=page.getByRole('link',{name:'Next day',exact:true});await next.focus();assert.equal(await next.getByRole('tooltip').isVisible(),true,'keyboard focus shows the tooltip at once');await capture('instructor-tooltip-keyboard');const rosterToggle=page.getByRole('link',{name:/Close the roster for Intake privacy roster/});await rosterToggle.focus();assert.equal(await rosterToggle.getByRole('tooltip').isVisible(),true);await capture('instructor-roster-tooltip')
     }finally{await context.close()}
   }}finally{await browser.close()}
