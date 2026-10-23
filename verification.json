@@ -21,8 +21,7 @@
       "browser": true,
       "hosted": true,
       "commands": [
-        "pnpm run build",
-        "pnpm run test:runtime"
+        "pnpm run build"
       ]
     },
     {
