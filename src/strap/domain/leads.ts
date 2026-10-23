@@ -174,7 +174,8 @@ function historicalEligibility(state: State, personId: string, c: RecordData) {
     if(p.personId !== personId || p.createdAt > c.start || p.expiresAt <= c.start || !packServiceEligible(p,c) || planBlock(state,p,c)) return false;
     if(p.entitlement && p.entitlement.kind !== 'credits') return true;
     const events = list(state,'packCreditEvent').filter(e => e.packId === p.id && e.createdAt <= c.start).sort((a,b)=>a.revision-b.revision);
-    return (events.at(-1)?.remainingAfter ?? (p.creditLedgerVersion === 1 ? 0 : p.remaining)) > 0;
+    return (events.at(-1)?.remainingAfter ?? (p.creditLedgerVersion === 1 ? 0 : p.remaining)) > 0
+      || list(state,'booking').some(b=>b.personId === personId && b.classId === c.id && b.packId === p.id && b.status === 'booked');
   });
 }
 /** A read-only explanation, shared by the refresh and task completion fences. */
