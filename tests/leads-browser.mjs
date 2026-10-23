@@ -68,7 +68,7 @@ export async function recoveryBrowser(h,{ana,task}) {
     assert.ok(await article.getByText('class_cancelled_or_holiday',{exact:false}).isVisible())
     // Audit the touched screen: every visible interactive control has visible
     // words. There are no icon-only controls requiring a delayed tooltip.
-    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
     await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-004-evidence-${width}.png`),fullPage:true})
     const refresh=page.locator('form[action*="name=lead.recovery.process"]')
     await refresh.getByRole('button',{name:'Refresh recovery tasks',exact:true}).click()
