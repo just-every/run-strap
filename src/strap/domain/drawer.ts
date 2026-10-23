@@ -3,10 +3,10 @@ import type { Transaction } from './store';
 import { placeId } from './locations';
 import { localDate } from '../zone';
 import { locations } from './locations';
-import { retailRequest } from './retail-records';
+import { retailRequest, ordered } from './retail-records';
 
 export function drawerReport(s: State,session: any) {
-  const entries=list(s,'drawerEntry').filter(e=>e.sessionId===session.id),expectedCents=session.floatCents+entries.filter(e=>e.tender==='cash').reduce((n,e)=>n+e.amountCents,0);
+  const entries=ordered(s,'drawerEntry').filter(e=>e.sessionId===session.id),expectedCents=session.floatCents+entries.filter(e=>e.tender==='cash').reduce((n,e)=>n+e.amountCents,0);
   return {...session,entries,expectedCents,countedCents:session.countedCents ?? null,varianceCents:session.countedCents==null?null:session.countedCents-expectedCents};
 }
 export function postDrawerTender(tx: Transaction,key: unknown,locationId: string,tender: string,amountCents: number,sourceId: string,kind: string,reason = '') {
@@ -58,8 +58,8 @@ export function reopenDrawer(tx: Transaction,input: Record<string,unknown>) {
 }
 export function tenderDay(s: State,date: string) {
   insist(/^\d{4}-\d\d-\d\d$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0,10)===date,'invalid_tender_date');
-  const places=locations(s),all: RecordData[]=[...list(s,'retailSale').map(r=>({...r,kind:'sale'})),...list(s,'retailReturn').map(r=>({...r,amountCents:-r.amountCents,kind:'refund'}))];
+  const places=locations(s),all: RecordData[]=[...list(s,'retailSale').map(r=>({...r,kind:'sale'})),...list(s,'giftFundingRefund').map(r=>({...r,amountCents:-r.amountCents,kind:'gift_refund'})),...list(s,'giftCard').map(r=>({...r,kind:'gift_issue'})),...list(s,'retailReturn').map(r=>({...r,amountCents:-r.amountCents,kind:'refund'}))];
   const sources=all.filter(r=>localDate(r.createdAt,places.find(l=>l.id===r.locationId)?.timeZone ?? 'UTC')===date);
-  return {date,sources,totals:['cash','external'].map(tender=>({tender,amountCents:sources.filter(r=>r.tender===tender).reduce((n,r)=>n+r.amountCents,0)}))};
+  return {date,sources,totals:['cash','external','gift'].map(tender=>({tender,amountCents:sources.filter(r=>r.tender===tender).reduce((n,r)=>n+r.amountCents,0)}))};
 }
-export function drawerSnapshot(s: State) {return {sessions:list(s,'drawerSession').map(r=>drawerReport(s,r)),adjustments:list(s,'drawerAdjustment')};}
+export function drawerSnapshot(s: State) {return {sessions:ordered(s,'drawerSession').map(r=>drawerReport(s,r)),adjustments:ordered(s,'drawerAdjustment')};}

@@ -1,10 +1,11 @@
+import { promotionPrice, spendGift, restoreGift } from './gift-cards';
 import { id, integer, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { placeId, locations } from './locations';
-import { retailRequest } from './retail-records';
+import { retailRequest, ordered } from './retail-records';
 import { postDrawerTender } from './drawer';
 
-export const onHand=(s: State,skuId: string,locationId: string): number => list(s,'stockMovement').filter(m=>m.skuId===skuId && m.locationId===locationId).reduce((n,m)=>n+m.quantity,0);
+export const onHand=(s: State,skuId: string,locationId: string): number => ordered(s,'stockMovement').filter(m=>m.skuId===skuId && m.locationId===locationId).reduce((n,m)=>n+m.quantity,0);
 function movement(tx: Transaction,skuId: string,locationId: string,quantity: number,kind: string,sourceId: string,reason: string) {
   const before=onHand(tx.state,skuId,locationId),after=before+quantity;
   insist(Number.isSafeInteger(after) && after>=0,'insufficient_stock',409);
@@ -45,16 +46,18 @@ export function sellRetail(tx: Transaction,input: Record<string,unknown>) {
   return retailRequest(tx,'sale',input,()=>{
     const sku=input.skuId ? record(tx.state,input.skuId,'sku') : list(tx.state,'sku').find(s=>s.barcode===text(input.barcode,'barcode',100));
     insist(sku,'sku_not_found',404);
-    const member=person(tx.state,input.personId),locationId=placeId(tx.state,input.locationId),quantity=integer(input.quantity,'quantity',1,10000),amountCents=integer(sku.priceCents*quantity,'sale_total',1,100_000_000),tender=text(input.tender,'tender',20),reference=text(input.reference,'tender_reference',160);
-    insist(['cash','external'].includes(tender),'external_or_cash_only');
+    const member=person(tx.state,input.personId),locationId=placeId(tx.state,input.locationId),quantity=integer(input.quantity,'quantity',1,10000),grossCents=integer(sku.priceCents*quantity,'sale_total',1,100_000_000),pricing=promotionPrice(tx,input,sku,member.id,grossCents),amountCents=pricing.amountCents,tender=text(input.tender,'tender',20),reference=text(input.reference,'tender_reference',160);
+    insist(['cash','external','gift'].includes(tender),'external_or_cash_only');
     insist(input.expectedCents===amountCents,'sale_price_changed',409);
     insist(!list(tx.state,'payment').some(p=>p.reference===reference),'payment_reference_used',409);
-    const saved={id:id(),skuId:sku.id,sku:sku.sku,name:sku.name,variant:sku.variant,personId:member.id,locationId,quantity,unitCents:sku.priceCents,amountCents,tender,reference,chargeId:id(),paymentId:id(),createdAt:now(),actorId:tx.who.id};
+    const saved={id:id(),skuId:sku.id,sku:sku.sku,name:sku.name,variant:sku.variant,personId:member.id,locationId,quantity,unitCents:sku.priceCents,grossCents,discountCents:pricing.discountCents,promotionIds:pricing.promotions.map(p=>p.id),amountCents,tender,reference,chargeId:id(),paymentId:id(),createdAt:now(),actorId:tx.who.id};
     movement(tx,sku.id,locationId,-quantity,'sale',saved.id,reference);
     const drawer=postDrawerTender(tx,input.sessionId,locationId,tender,amountCents,saved.id,'sale');
-    const result={...saved,sessionId:drawer?.sessionId ?? null};tx.put('retailSale',result);
+    const giftCardId=tender==='gift'?spendGift(tx,input.giftCardId,member.id,amountCents,saved.id):null;
+    for(const p of pricing.promotions)tx.put('promotionUse',{id:id(),promotionId:p.id,personId:member.id,saleId:saved.id,createdAt:saved.createdAt});
+    const result={...saved,giftCardId,sessionId:drawer?.sessionId ?? null};tx.put('retailSale',result);
     tx.put('charge',{id:saved.chargeId,personId:member.id,locationId,retailSaleId:saved.id,amountCents,reason:'retail_sale',createdAt:saved.createdAt});
-    tx.put('payment',{id:saved.paymentId,personId:member.id,locationId,retailSaleId:saved.id,chargeId:saved.chargeId,amountCents,reference,tender,recordedBy:tx.who.id,createdAt:saved.createdAt});return result;
+    tx.put('payment',{id:saved.paymentId,personId:member.id,locationId,retailSaleId:saved.id,chargeId:saved.chargeId,amountCents,reference,tender,...(tender==='gift'?{reason:'gift_card_redemption'}:{}),recordedBy:tx.who.id,createdAt:saved.createdAt});return result;
   });
 }
 export function returnRetail(tx: Transaction,input: Record<string,unknown>) {
@@ -62,15 +65,16 @@ export function returnRetail(tx: Transaction,input: Record<string,unknown>) {
     const sale=record(tx.state,input.saleId,'retailSale'),quantity=integer(input.quantity,'quantity',1,sale.quantity),reason=text(input.reason,'return_reason',500);
     insist(typeof input.restock==='boolean','choose_restock_treatment');
     insist(quantity+list(tx.state,'retailReturn').filter(r=>r.saleId===sale.id).reduce((n,r)=>n+r.quantity,0)<=sale.quantity,'quantity_already_returned',409);
-    const amountCents=quantity*sale.unitCents,saved={id:id(),saleId:sale.id,skuId:sale.skuId,locationId:sale.locationId,personId:sale.personId,quantity,restock:input.restock,reason,amountCents,tender:sale.tender,chargeId:id(),paymentId:id(),createdAt:now(),actorId:tx.who.id};
+    const priorQuantity=list(tx.state,'retailReturn').filter(r=>r.saleId===sale.id).reduce((n,r)=>n+r.quantity,0),amountCents=Math.round(sale.amountCents*(priorQuantity+quantity)/sale.quantity)-Math.round(sale.amountCents*priorQuantity/sale.quantity),saved={id:id(),saleId:sale.id,skuId:sale.skuId,locationId:sale.locationId,personId:sale.personId,quantity,restock:input.restock,reason,amountCents,tender:sale.tender,chargeId:id(),paymentId:id(),createdAt:now(),actorId:tx.who.id};
     movement(tx,sale.skuId,sale.locationId,input.restock?quantity:0,input.restock?'return':'damaged_return',saved.id,reason);
     const drawer=postDrawerTender(tx,input.sessionId,sale.locationId,sale.tender,-amountCents,saved.id,'refund');
-    const result={...saved,sessionId:drawer?.sessionId ?? null};tx.put('retailReturn',result);
+    if(sale.tender==='gift')restoreGift(tx,sale.giftCardId,amountCents,saved.id);
+    const result={...saved,giftCardId:sale.giftCardId ?? null,sessionId:drawer?.sessionId ?? null};tx.put('retailReturn',result);
     tx.put('charge',{id:saved.chargeId,personId:sale.personId,locationId:sale.locationId,retailReturnId:saved.id,reversesChargeId:sale.chargeId,amountCents:-amountCents,reason:'retail_return',createdAt:saved.createdAt});
-    tx.put('payment',{id:saved.paymentId,personId:sale.personId,locationId:sale.locationId,retailReturnId:saved.id,chargeId:saved.chargeId,amountCents:-amountCents,reference:'retail-return-'+saved.id,tender:sale.tender,recordedBy:tx.who.id,createdAt:saved.createdAt});return result;
+    tx.put('payment',{id:saved.paymentId,personId:sale.personId,locationId:sale.locationId,retailReturnId:saved.id,chargeId:saved.chargeId,amountCents:-amountCents,reference:'retail-return-'+saved.id,tender:sale.tender,...(sale.tender==='gift'?{reason:'gift_card_redemption'}:{}),recordedBy:tx.who.id,createdAt:saved.createdAt});return result;
   });
 }
 export function inventorySnapshot(s: State) {
-  const skus=list(s,'sku'),places=locations(s);
-  return {skus,suppliers:list(s,'supplier'),receipts:list(s,'stockReceipt'),movements:list(s,'stockMovement'),sales:list(s,'retailSale'),returns:list(s,'retailReturn'),actions:list(s,'retailAction'),stock:skus.flatMap(sku=>places.map(l=>({skuId:sku.id,locationId:l.id,onHand:onHand(s,sku.id,l.id),low:onHand(s,sku.id,l.id)<=sku.lowStock})))};
+  const skus=ordered(s,'sku'),places=locations(s);
+  return {skus,suppliers:ordered(s,'supplier'),receipts:ordered(s,'stockReceipt'),movements:ordered(s,'stockMovement'),sales:ordered(s,'retailSale'),returns:ordered(s,'retailReturn'),actions:ordered(s,'retailAction'),stock:skus.flatMap(sku=>places.map(l=>({skuId:sku.id,locationId:l.id,onHand:onHand(s,sku.id,l.id),low:onHand(s,sku.id,l.id)<=sku.lowStock})))};
 }

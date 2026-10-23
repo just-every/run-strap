@@ -29,6 +29,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/renewals', label: 'Renewal worklist', glyph: 'report' },
     { href: '/app/retention', label: 'Retention cohorts', glyph: 'report' },
     { href: '/app/reports', label: 'Attendance reports', glyph: 'report' },
+    { href: '/app/time-clock', label: 'Time clock', glyph: 'today' },
     { href: '/app/teaching-pay', label: 'Teaching pay', glyph: 'report' },
     { href: '/app/substitutions', label: 'Instructor substitutions', glyph: 'users' },
     { href: '/app/import', label: 'Import', glyph: 'upload' },
@@ -39,6 +40,7 @@ export function tabs(s: any): Tab[] {
   if (s.actor.role === 'instructor') return [
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'My classes', glyph: 'calendar' },
+    { href: '/app/time-clock', label: 'Time clock', glyph: 'today' },
     { href: '/app/teaching-pay', label: 'My teaching pay', glyph: 'report' },
     { href: '/app/substitutions', label: 'Instructor substitutions', glyph: 'users' },
     { href: '/app/packs', label: 'My packs', glyph: 'card' },

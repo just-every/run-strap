@@ -8,6 +8,7 @@ export const reportPlan = (pack: Row) => `${pack.entitlement?.kind ?? 'credits'}
 const feeReasons = new Set(['late_cancel_fee','no_show_fee','late_move_fee','fee_reversal'])
 const sum = (rows: Row[]) => rows.reduce((total,row) => total + row.amountCents,0)
 export const revenueDefinitions = [
+  'Gift card funding is a liability charge and an actual cash or external receipt. Gift redemption is a noncash payment against the retail sale; restoring a redemption returns value to that card, never a cash refund. Both retain distinct source kinds and do not inflate cash collections or gross sales.',
   'Amounts are exact USD cents. Event dates use the studio time zone with inclusive date bounds. Gross sales sum positive non-fee charges; sales credits are negative non-fee charges; net sales is their signed sum. Fees are signed attendance and late-move assessments including reversals, not processor costs. Total assessed is net sales plus fees.',
   'Collections are positive external receipts; refunds are the magnitude of negative external payments; net collections is their signed sum. A charge credit is not a cash refund. No processor collection, ACH return or provider verification is claimed. Unallocated receipts stay Unallocated when filtering by plan; they are never apportioned across packs.',
   'New plans counts packs created in the period, including explicitly accepted renewals, not people or drafts. Active members is a current snapshot of active member identities with an unexpired pack and available credits or period/unlimited entitlement; it is independent of the event date window. Booking cancellations count retained cancel action identities even after restoration, not membership churn.',
@@ -44,8 +45,8 @@ export function revenueReport(s: any, query: URLSearchParams) {
     if (matchesLocation(row) && matchesPlan(pack) && inPeriod(at,zone)) sources.push({id:row.id,kind,at,date:localDate(at,zone),locationId,personId:row.personId,packId:pack?.id ?? null,plan:pack ? reportPlan(pack) : 'Unallocated',amountCents,
       record:row,sourceUrl:`/app/revenue?sourceId=${encodeURIComponent(row.id)}#source-record`,memberUrl:`/app/people?person=${encodeURIComponent(row.personId)}#person`})
   }
-  for (const row of s.charges) append(row,feeReasons.has(row.reason) ? 'fee' : 'sale',row.createdAt,row.amountCents,packFor(row))
-  for (const row of s.payments) append(row,row.amountCents < 0 ? 'refund' : 'receipt',row.createdAt,row.amountCents,packFor(row))
+  for (const row of s.charges) append(row,row.reason==='gift_card_issue' ? 'gift-liability' : feeReasons.has(row.reason) ? 'fee' : 'sale',row.createdAt,row.amountCents,packFor(row))
+  for (const row of s.payments) append(row,row.reason==='gift_card_redemption' ? 'gift-redemption' : row.amountCents < 0 ? 'refund' : 'receipt',row.createdAt,row.amountCents,packFor(row))
   for (const row of s.packs) append(row,'new-plan',row.createdAt,null,row)
   for (const row of s.bookingActions.filter((row: Row) => row.action === 'cancel')) append(row,'booking-cancellation',row.at,null,packFor(row))
   sources.sort((a,b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id))
