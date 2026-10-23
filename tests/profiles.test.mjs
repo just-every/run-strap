@@ -364,6 +364,7 @@ test('MEM-004: versioned signup and service intake gates enrollment, preserves e
   await h.cmd('intake.sensitive.grant',{personId:desk.id,enabled:false,memberIds:[],requestId:'synthetic-strap-intake-revoke'})
   desk.cookie=await h.signIn(desk.email);await h.cmd('mfa.verify',{code:factor.recoveryCodes[1]},desk.cookie)
   await refused(h,'intake.submit.staff',completeInput,desk.cookie,403,'sensitive_notes_right_required')
+  assert.equal((await h.state()).intake.sensitiveGrantEvents.length,2,'grant and revocation each retain a durable before/after event');
   const redacted=(await h.send('/api/strap/state',undefined,desk.cookie)).text;assert.ok(!redacted.includes('Private phone answer'));assert.ok(!redacted.includes('Private synthetic request'))
   await h.cmd('member.record.grant',{personId:desk.id,enabled:false,canCreate:false,memberIds:[]});desk.cookie=await h.signIn(desk.email);await h.cmd('mfa.verify',{code:factor.recoveryCodes[2]},desk.cookie)
   await refused(h,'intake.submit.staff',phone,desk.cookie,403)

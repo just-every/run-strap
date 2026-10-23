@@ -40,8 +40,8 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   const input = { ...raw }
   if(name === 'intake.form.publish') {
     input.required=input.required === 'true';
-    input.questions=Array.from({length:8},(_,i) => ({label:String(input['question'+i] ?? '').trim(),required:input['required'+i] === 'true',sensitive:input['sensitive'+i] === 'true'})).filter(q => q.label);
-    for(let i=0;i<8;i++)for(const prefix of ['question','required','sensitive'])delete input[prefix+i];
+    input.questions=Array.from({length:20},(_,i) => ({label:String(input['question'+i] ?? '').trim(),required:input['required'+i] === 'true',sensitive:input['sensitive'+i] === 'true'})).filter(q => q.label);
+    for(let i=0;i<20;i++)for(const prefix of ['question','required','sensitive'])delete input[prefix+i];
   }
   if(name.startsWith('intake.submit')) {
     input.answers=Object.fromEntries(Object.keys(input).filter(k => k.startsWith('answer_')).map(k => [k.slice(7),input[k]]));

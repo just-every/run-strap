@@ -5,6 +5,9 @@ import { chromium } from '@playwright/test'
 
 export async function intakeBrowser(h,{member,desk,coach}) {
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const start=new Date(Date.now()+45*60000).toISOString(),d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);
+  const roster=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Intake privacy roster',service:'Browser roster',start,end:new Date(Date.parse(start)+30*60000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0];
+  const zone=(await h.state()).studio.timeZone,parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(start)).map(p=>[p.type,p.value])),day=[parts.year,parts.month,parts.day].join('-');
   try{for(const width of [1440,390]){
     const context=await browser.newContext({viewport:{width,height:1000}})
     try{
@@ -63,11 +66,11 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       await sign(member.cookie);await page.goto(h.origin+'/app/profile')
       await page.getByText('Intake answers and provenance',{exact:true}).click()
       await page.getByText('Synthetic private phone answer '+width,{exact:true}).waitFor();await capture('profile-provenance')
-      await sign(coach.cookie);await page.goto(h.origin+'/app')
+      await sign(coach.cookie);await page.goto(h.origin+'/app?day='+day+'&class='+roster.id)
       assert.ok(!(await page.locator('body').innerText()).includes('Synthetic private'));await capture('instructor-denial')
       const previous=page.getByRole('link',{name:'Previous day',exact:true}),tip=previous.getByRole('tooltip');
       await previous.hover();assert.equal(await tip.isVisible(),false,'hover tooltip waits before appearing');await tip.waitFor({state:'visible'});await capture('instructor-tooltip-hover');
-      await page.mouse.move(0,0);await page.keyboard.press('Tab');const next=page.getByRole('link',{name:'Next day',exact:true});await next.focus();assert.equal(await next.getByRole('tooltip').isVisible(),true,'keyboard focus shows the tooltip at once');await capture('instructor-tooltip-keyboard')
+      await page.mouse.move(0,0);await page.keyboard.press('Tab');const next=page.getByRole('link',{name:'Next day',exact:true});await next.focus();assert.equal(await next.getByRole('tooltip').isVisible(),true,'keyboard focus shows the tooltip at once');await capture('instructor-tooltip-keyboard');const rosterToggle=page.getByRole('link',{name:/Close the roster for Intake privacy roster/});await rosterToggle.focus();assert.equal(await rosterToggle.getByRole('tooltip').isVisible(),true);await capture('instructor-roster-tooltip')
     }finally{await context.close()}
   }}finally{await browser.close()}
 }

@@ -106,3 +106,4 @@ a.location:hover .edit { background: var(--strap-wash); color: var(--strap-plum-
 .has-tooltip:hover > .control-tooltip, .has-tooltip:focus-visible > .control-tooltip { opacity: 1; visibility: visible; }
 .has-tooltip:focus-visible > .control-tooltip { transition-delay: 0s; }
 .toggle .control-tooltip { top: 50%; right: calc(100% + 8px); transform: translateY(-50%); }
+.day-step:first-child > .control-tooltip { left: 0; right: auto; }

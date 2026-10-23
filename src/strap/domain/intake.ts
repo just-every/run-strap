@@ -21,6 +21,7 @@ export function grantSensitiveIntake(tx: Transaction,input: Record<string,unknow
   const prior = tx.state.records.get('intake-sensitive:'+staff.id)?.data ?? null;
   const saved = {id:'intake-sensitive:'+staff.id,personId:staff.id,memberIds,recordGrantVersion:grant.version,enabled:input.enabled,at:now(),actorId:tx.who.id,before:prior ? {enabled:prior.enabled,memberIds:prior.memberIds}:null};
   tx.put('intakeSensitiveGrant',saved);
+  tx.put('intakeSensitiveGrantEvent',{id:id(),personId:staff.id,actorId:tx.who.id,at:saved.at,before:prior?{enabled:prior.enabled,memberIds:prior.memberIds,recordGrantVersion:prior.recordGrantVersion}:null,after:{enabled:saved.enabled,memberIds:saved.memberIds,recordGrantVersion:saved.recordGrantVersion}});
   tx.sql.push(tx.statement('UPDATE oa_operators SET version=version+1 WHERE lower(email)=lower(?)',staff.email));
   return saved;
 }
@@ -95,7 +96,7 @@ export function intakeSnapshot(state: State,who: Actor) {
   const forms=currentIntakeForms(state);
   const versions=list(state,'intakeForm').filter(f => owner || ids.length && list(state,'intakeResponse').some(r => ids.includes(r.personId) && r.formId === f.id));
   return {forms:owner || ids.length ? forms : [],versions,responses:list(state,'intakeResponse').filter(r => ids.includes(r.personId)).map(r => redactIntakeResponse(state,who,r)),
-    sensitiveGrants:owner ? list(state,'intakeSensitiveGrant') : [],sensitiveMemberIds:ids.filter(personId => sensitiveIntakeAllowed(state,who,personId)),
+    sensitiveGrants:owner ? list(state,'intakeSensitiveGrant') : [],sensitiveGrantEvents:owner ? list(state,'intakeSensitiveGrantEvent') : [],sensitiveMemberIds:ids.filter(personId => sensitiveIntakeAllowed(state,who,personId)),
     missing:ids.flatMap(personId => intakeMissing(state,personId,[]).map(f => ({personId,formId:f.id,title:f.title,scope:f.scope,service:f.service})))};
 }
 /** Every existing enrollment door shares this fence, including future commands that create packs or seats. */
