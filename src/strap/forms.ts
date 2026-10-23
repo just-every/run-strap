@@ -136,6 +136,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     }
     delete input.effectiveDate; delete input.effectiveTime
   }
+  if (name === 'lead.recovery.rule.save') { for(const key of ['minVisits','missedWeeks','lookbackWeeks'])input[key]=Number(input[key]);input.enabled=input.enabled === 'true'; }
   if (name.startsWith('lead.')) {
     if ('version' in input) input.version=Number(input.version)
     if (input.dueAt) input.dueAt=String(input.dueAt)+'Z'

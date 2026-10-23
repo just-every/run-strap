@@ -47,3 +47,32 @@ export async function leadsBrowser(h,{ana,ownerId,lead}) {
     await context.close()
   }} finally {await browser.close()}
 }
+
+export async function recoveryBrowser(h,{ana,task}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try {for(const width of [1440,390]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    await context.route(h.origin+'/**',async route=>{
+      const path=new URL(route.request().url()).pathname
+      if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+      return route.continue()
+    })
+    const split=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,split),value:h.owner.slice(split+1),url:h.origin}])
+    const page=await context.newPage();await page.goto(h.origin+'/app/leads')
+    await page.getByRole('heading',{name:'Missed routine recovery',exact:true}).waitFor()
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    const article=page.locator(`[data-recovery-task="${task.id}"]`)
+    await article.getByText('Booking evidence and alternatives',{exact:true}).click()
+    assert.ok(await article.getByText(ana.name+' · open',{exact:true}).isVisible())
+    assert.ok(await article.getByText('class_cancelled_or_holiday',{exact:false}).isVisible())
+    // Audit the touched screen: every visible interactive control has visible
+    // words. There are no icon-only controls requiring a delayed tooltip.
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-004-evidence-${width}.png`),fullPage:true})
+    const refresh=page.locator('form[action*="name=lead.recovery.process"]')
+    await refresh.getByRole('button',{name:'Refresh recovery tasks',exact:true}).click()
+    assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
+    await context.close()
+  }}finally{await browser.close()}
+}

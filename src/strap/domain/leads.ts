@@ -1,5 +1,12 @@
 import { humanOwner, instant, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
+import { addDays, localDate } from '../zone';
+import { wallStart } from './series-model';
+import { packServiceEligible, planBlock } from './pack-credits';
+import { bookingPack, acknowledged } from './bookings';
+import { windowOpen } from './booking-policy';
+import { seatCapacity } from './spots';
+import { studioSettings } from './studio';
 
 export const leadStages = ['inquiry','intro-booked','first-visit','offer','membership','lost'] as const;
 const open = (stage: string) => stage !== 'membership' && stage !== 'lost';
@@ -133,5 +140,111 @@ export function leadSnapshot(state: State, who: Actor) {
   const queue = leads.filter(lead => open(lead.stage)).sort((a,b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id));
   const events = list(state,'leadEvent').sort((a,b) => a.at.localeCompare(b.at) || a.after.version-b.after.version || a.id.localeCompare(b.id));
   const stages = leadStages.map(stage => ({stage,count:leads.filter(lead => lead.stage === stage).length,overdue:leads.filter(lead => lead.stage === stage && lead.overdue).length}));
-  return {asOf,leads,events,queue,overdue:queue.filter(lead => lead.overdue),stages};
+  return {asOf,leads,events,queue,overdue:queue.filter(lead => lead.overdue),stages,recoveryRule:state.records.get('recovery-rule')?.data ?? null,recoveryTasks:list(state,'recoveryTask')};
+}
+
+// Recovery uses studio-local weekly slots, not a duration since an arbitrary
+// check-in. A future check-in cannot establish an elapsed routine.
+export function saveRecoveryRule(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const previous = tx.state.records.get('recovery-rule')?.data;
+  insist(integer(input.version ?? 0,'version',0) === (previous?.version ?? 0),'recovery_rule_changed',409);
+  insist(typeof input.enabled === 'boolean','invalid_enabled');
+  const saved = {id:'recovery-rule',enabled:input.enabled,minVisits:integer(input.minVisits,'minVisits',2,12),
+    missedWeeks:integer(input.missedWeeks,'missedWeeks',1,12),lookbackWeeks:integer(input.lookbackWeeks,'lookbackWeeks',2,52),
+    version:(previous?.version ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id};
+  insist(saved.lookbackWeeks >= saved.minVisits+saved.missedWeeks,'recovery_window_too_short');
+  tx.put('recoveryRule',saved); tx.put('recoveryRuleRevision',{...saved,id:`recovery-rule:${saved.version}`}); return saved;
+}
+
+const serviceOf = (c: RecordData) => String(c.service ?? c.title).trim().toLowerCase();
+const placeOf = (c: RecordData) => c.locationId ?? 'studio';
+function weeklySlot(state: State, c: RecordData) {
+  const zone = c.timeZone ?? studioSettings(state)?.timeZone ?? 'UTC';
+  const date = localDate(c.start,zone);
+  const time = new Intl.DateTimeFormat('en-GB',{timeZone:zone,hourCycle:'h23',hour:'2-digit',minute:'2-digit'}).format(new Date(c.start));
+  const weekday = new Date(date+'T12:00:00Z').getUTCDay();
+  return {zone,date,time,key:JSON.stringify([serviceOf(c),placeOf(c),weekday,time,zone])};
+}
+function frozenAt(state: State, personId: string, at: string) {
+  return list(state,'freeze').some(f => f.personId === personId && f.confirmedAt && !['withdrawn','declined'].includes(f.status) && f.startAt <= at && (!f.endAt || f.endAt > at));
+}
+function historicalEligibility(state: State, personId: string, c: RecordData) {
+  return list(state,'pack').some(p => {
+    if(p.personId !== personId || p.createdAt > c.start || p.expiresAt <= c.start || !packServiceEligible(p,c) || planBlock(state,p,c)) return false;
+    if(p.entitlement && p.entitlement.kind !== 'credits') return true;
+    const events = list(state,'packCreditEvent').filter(e => e.packId === p.id && e.createdAt <= c.start).sort((a,b)=>a.revision-b.revision);
+    return (events.at(-1)?.remainingAfter ?? (p.creditLedgerVersion === 1 ? 0 : p.remaining)) > 0;
+  });
+}
+/** A read-only explanation, shared by the refresh and task completion fences. */
+export function recoveryEvidence(state: State) {
+  const rule = state.records.get('recovery-rule')?.data, at = now();
+  if(!rule?.enabled) return [];
+  const classes = list(state,'class'), bookings = list(state,'booking'), results: RecordData[] = [];
+  const since = new Date(Date.parse(at)-rule.lookbackWeeks*7*86400000).toISOString();
+  for(const member of state.people.filter(p=>p.role === 'member' && p.active && !p.erasedAt)) {
+    if(frozenAt(state,member.id,at)) continue;
+    const attended = bookings.filter(b=>b.personId === member.id && b.status === 'booked' && b.attendance === 'attended')
+      .map(b=>({b,c:classes.find(c=>c.id === b.classId)})).filter(({c})=>c && c.status === 'published' && c.end <= at && c.start >= since) as {b:RecordData;c:RecordData}[];
+    const groups = new Map<string,{b:RecordData;c:RecordData}[]>();
+    for(const visit of attended) {const key=weeklySlot(state,visit.c).key;groups.set(key,[...(groups.get(key) ?? []),visit]);}
+    for(const [patternKey,visits] of groups) {
+      visits.sort((a,b)=>a.c.start.localeCompare(b.c.start));
+      const last = visits.at(-1)!, slot = weeklySlot(state,last.c);
+      const pattern = Array.from({length:rule.minVisits},(_,i)=>visits.find(v=>weeklySlot(state,v.c).date === addDays(slot.date,-7*i)));
+      if(pattern.some(v=>!v)) continue;
+      const opportunities: {at:string;classIds:string[];bookingIds:string[]}[] = [], excluded: {at:string;reason:string}[] = [];
+      // Inspect every elapsed expected slot after the last real visit. An absent
+      // timetable is unavailable, never evidence that a member missed a class.
+      for(let date=addDays(slot.date,7),n=0;n<rule.lookbackWeeks;date=addDays(date,7),n++) {
+        const expected = new Date(wallStart(date,slot.time,slot.zone)).toISOString();
+        if(expected >= at) break;
+        const matches = classes.filter(c=>weeklySlot(state,c).key === patternKey && weeklySlot(state,c).date === date);
+        if(frozenAt(state,member.id,expected)) {excluded.push({at:expected,reason:'membership_frozen'});continue;}
+        const available = matches.filter(c=>c.status === 'published' && c.end <= at && historicalEligibility(state,member.id,c));
+        if(!available.length) {excluded.push({at:expected,reason:matches.some(c=>c.status === 'cancelled') ? 'class_cancelled_or_holiday' : 'no_eligible_class'});continue;}
+        const cancelled = bookings.some(b=>b.personId === member.id && available.some(c=>c.id === b.classId) && (b.status === 'cancelled' || b.attendance === 'excused'));
+        if(cancelled) {excluded.push({at:expected,reason:'member_cancelled_or_excused'});continue;}
+        // An unsettled booked visit is not an established absence until staff
+        // marks no-show; an unbooked opportunity is an actual routine lapse.
+        const own = bookings.filter(b=>b.personId === member.id && available.some(c=>c.id === b.classId));
+        if(own.some(b=>b.attendance === 'attended' || (b.status === 'booked' && b.attendance !== 'no_show'))) continue;
+        if(available.every(c=>!own.some(b=>b.classId === c.id && b.attendance === 'no_show') && seatCapacity(state,c).onlineOpen === 0)) {excluded.push({at:expected,reason:'class_full'});continue;}
+        opportunities.push({at:expected,classIds:available.map(c=>c.id),bookingIds:own.filter(b=>b.attendance === 'no_show').map(b=>b.id)});
+      }
+      if(opportunities.length < rule.missedWeeks) continue;
+      const alternatives = classes.filter(c=>c.status === 'published' && c.start > at && c.start < new Date(Date.parse(at)+14*86400000).toISOString()
+        && serviceOf(c) === serviceOf(last.c) && !frozenAt(state,member.id,c.start) && acknowledged(state,member.id)
+        && seatCapacity(state,c).onlineOpen > 0 && !bookings.some(b=>b.personId === member.id && b.classId === c.id && b.status !== 'cancelled'))
+        .filter(c=>{const pack=bookingPack(state,member.id,c);return pack && windowOpen(state,c,pack);})
+        .sort((a,b)=>a.start.localeCompare(b.start)).slice(0,5).map(c=>({classId:c.id,start:c.start,title:c.title}));
+      results.push({id:member.id,personId:member.id,patternKey,lastBookingId:last.b.id,sourceBookingIds:pattern.map(v=>v!.b.id),
+        opportunities,excluded,alternatives,ruleVersion:rule.version,asOf:at});
+    }
+  }
+  return results;
+}
+export function processRecovery(tx: Transaction) {
+  humanOwner(tx.who);
+  const evidence = recoveryEvidence(tx.state), at = now();
+  for(const task of list(tx.state,'recoveryTask').filter(t=>t.status === 'open')) {
+    if(!evidence.some(e=>e.personId === task.personId && e.patternKey === task.patternKey && e.lastBookingId === task.lastBookingId))
+      tx.put('recoveryTask',{...task,status:'suppressed',suppressedAt:at,suppressionReason:'routine_no_longer_justified'});
+  }
+  for(const e of evidence) {
+    if(list(tx.state,'recoveryTask').some(t=>t.personId === e.personId && t.patternKey === e.patternKey && t.lastBookingId === e.lastBookingId)) continue;
+    tx.put('recoveryTask',{...e,id:crypto.randomUUID(),status:'open',createdAt:at,createdBy:tx.who.id,
+      nextAction:e.alternatives.length ? 'Review missed routine and offer one of the eligible alternatives' : 'Ask about availability; no eligible alternative is currently bookable'});
+  }
+  return {tasks:list(tx.state,'recoveryTask')};
+}
+export function completeRecovery(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const task = record(tx.state,input.id,'recoveryTask');
+  const requestId = text(input.requestId,'requestId',100), note = text(input.note,'note',2000);
+  if(task.status === 'completed') {insist(task.completionRequestId === requestId && task.note === note,'recovery_request_changed',409);return task;}
+  insist(task.status === 'open' && recoveryEvidence(tx.state).some(e=>e.personId === task.personId && e.patternKey === task.patternKey && e.lastBookingId === task.lastBookingId),'recovery_no_longer_justified',409);
+  const saved = {...task,status:'completed',completedAt:now(),completedBy:tx.who.id,completionRequestId:requestId,note};
+  tx.put('recoveryTask',saved);return saved;
 }

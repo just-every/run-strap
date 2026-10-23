@@ -134,3 +134,89 @@ test('RPT-005: first-source inquiries reconcile to retained stages and corrected
   assert.equal(JSON.parse(exit.value.tables.st_records.find(r=>r.id===lead.id).data).source,'Community event')
   if(process.env.STRAP_PROOF_DIR) await (await import('./lead-report-browser.mjs')).leadReportBrowser(h,{ana,unknown,ownerId})
 }))
+
+// For the elapsed-week acceptance journey, start this same test with libfaketime
+// (FAKETIME_TIMESTAMP_FILE, FAKETIME_NO_CACHE=1 and
+// FAKETIME_DONT_FAKE_MONOTONIC=1) and STRAP_RECOVERY_CLOCK naming that file.
+// This moves process time, never application records, policy or production code.
+test('LEAD-004: completed weekly routines produce private justified recovery tasks, with exclusions and retained evidence',{timeout:240000},()=>run(async h=>{
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const rule=await h.cmd('lead.recovery.rule.save',{enabled:true,version:0,minVisits:2,missedWeeks:1,lookbackWeeks:12})
+  assert.equal(rule.version,1)
+  assert.deepEqual((await h.cmd('lead.recovery.process',{})).tasks,[],'no invented routine')
+  const coach=await h.person('RecoveryCoach','instructor'),ana=await h.person('RecoveryAna'),frozen=await h.person('RecoveryFrozen'),unavailable=await h.person('RecoveryUnavailable'),cancelled=await h.person('RecoveryCancelled')
+  for(const p of [ana,coach]) {
+    const version=(await h.state()).version
+    await h.cmd('lead.recovery.process',{},p.cookie,403)
+    assert.equal((await h.state()).version,version)
+    assert.equal((await h.state(p.cookie)).pipeline,null)
+  }
+  if(!process.env.STRAP_RECOVERY_CLOCK) return
+  const {writeFile}=await import('node:fs/promises'),{totp}=await import('./mfa-helpers.mjs')
+  const originalCmd=h.cmd,originalState=h.state
+  let owner=h.owner,offset=0
+  h.cmd=(name,input,cookie=owner,...rest)=>originalCmd(name,input,cookie,...rest)
+  h.state=(cookie=owner,...rest)=>originalState(cookie,...rest)
+  const jump=async target=>{
+    const realNow=Date.now()-offset*1000
+    offset=Math.ceil((Date.parse(target)-realNow)/1000)
+    await writeFile(process.env.STRAP_RECOVERY_CLOCK,'+'+offset+'\n')
+    await new Promise(resolve=>setTimeout(resolve,50))
+    owner=await h.signIn('owner@studio.example');h.owner=owner
+    await h.cmd('mfa.verify',{code:totp(h.mfaOwner.secret)})
+    for(const p of [coach,ana,frozen,unavailable,cancelled]) p.cookie=await h.signIn(p.email)
+  }
+  const day=86400000,date=new Date(Date.now()+day).toISOString().slice(0,10)
+  const until=new Date(Date.parse(date+'T12:00:00Z')+5*7*day).toISOString().slice(0,10)
+  const publish=async(title,endDate,time)=>h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:date,endDate,intervalWeeks:1,time,minutes:45,title,service:title,room:title,instructorId:coach.id,capacity:12})).id})
+  const yoga=(await publish('Recovery Yoga',until,'10:00')).classes
+  const pilates=(await publish('Recovery Pilates',new Date(Date.parse(date+'T12:00:00Z')+7*day).toISOString().slice(0,10),'12:00')).classes
+  const packs=new Map()
+  for(const p of [ana,frozen,unavailable,cancelled]) {
+    const result=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:12,amountCents:10000,eligibleServices:[p===unavailable?'Recovery Pilates':'Recovery Yoga'],expiresAt:'2099-12-31T00:00:00Z'})).id})
+    packs.set(p.id,result.id)
+  }
+  const visits=new Map([ana,frozen,unavailable,cancelled].map(p=>[p.id,[]]))
+  for(let i=0;i<2;i++)for(const p of [ana,frozen,unavailable,cancelled])visits.get(p.id).push(await h.cmd('booking.book',{classId:(p===unavailable?pilates:yoga)[i].id},p.cookie))
+  const holiday=await h.cmd('closure.prepare',{scope:'class',classId:yoga[2].id,reason:'Studio holiday'})
+  await h.cmd('closure.confirm',{id:holiday.id,impact:holiday.impact.key})
+  const cancelledSeat=await h.cmd('booking.book',{classId:yoga[3].id},cancelled.cookie)
+  await h.cmd('booking.cancel',{id:cancelledSeat.id},cancelled.cookie)
+  const freezeType=await h.cmd('freeze.type.save',{name:'Planned leave',reason:'Member request',feeCents:0,defaultLengthDays:21,maxLengthDays:30})
+  const freeze=await h.cmd('freeze.prepare',{personId:frozen.id,packId:packs.get(frozen.id),freezeTypeId:freezeType.id,startAt:yoga[2].start.slice(0,10),endAt:yoga[5].start.slice(0,10),requestId:'synthetic-strap-1',channel:'phone'})
+  if(freeze.requiresAcceptance) await h.cmd('freeze.accept',{id:freeze.id,key:freeze.key},frozen.cookie)
+  await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,requestId:'synthetic-strap-2',channel:'phone'})
+  for(let i=0;i<2;i++) {
+    await jump(new Date(Date.parse(pilates[i].end)+60000).toISOString())
+    for(const p of [ana,frozen,unavailable,cancelled])await h.cmd('attendance.checkin',{id:visits.get(p.id)[i].id},coach.cookie)
+    assert.deepEqual((await h.cmd('lead.recovery.process',{})).tasks,[])
+  }
+  await jump(new Date(Date.parse(yoga[3].end)+60000).toISOString())
+  const mailCount=()=>h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n')
+  const beforeMail=await mailCount(),moneyBefore=await h.state()
+  let tasks=(await h.cmd('lead.recovery.process',{})).tasks
+  assert.equal(tasks.length,1);let task=tasks[0]
+  assert.equal(task.personId,ana.id);assert.equal(task.status,'open')
+  assert.deepEqual(new Set(task.sourceBookingIds),new Set(visits.get(ana.id).map(b=>b.id)))
+  assert.equal(task.opportunities.length,1);assert.deepEqual(task.opportunities[0].classIds,[yoga[3].id])
+  assert.ok(task.excluded.some(e=>e.reason==='class_cancelled_or_holiday'))
+  assert.ok(task.alternatives.some(c=>c.classId===yoga[4].id))
+  await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
+  assert.equal(await mailCount(),beforeMail,'recovery never sends mail')
+  const moneyAfter=await h.state();assert.deepEqual(moneyAfter.charges,moneyBefore.charges);assert.deepEqual(moneyAfter.packs,moneyBefore.packs)
+  for(const p of [ana,frozen,unavailable,cancelled,coach])assert.equal((await h.state(p.cookie)).pipeline,null)
+  const exit=await h.send('/api/strap/exit.json',undefined,owner)
+  assert.ok(exit.value.tables.st_records.some(r=>r.kind==='recoveryTask'&&r.id===task.id))
+  if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).recoveryBrowser(h,{ana,task})
+  const completion={id:task.id,requestId:'synthetic-strap-3',note:'Reviewed the missed routine and the available morning class.'}
+  assert.equal((await h.cmd('lead.recovery.complete',completion)).status,'completed')
+  assert.deepEqual(await h.cmd('lead.recovery.complete',completion),await h.cmd('lead.recovery.complete',completion))
+  await h.cmd('lead.recovery.complete',{...completion,note:'Changed replay'},owner,409)
+  await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
+  // Correcting a source visit removes the established pattern. A new source
+  // does not revive the permanent completed identity.
+  await h.cmd('attendance.correct',{id:visits.get(ana.id)[0].id,outcome:'no_show',reason:'Corrected duplicate paper check-in'})
+  await h.cmd('lead.recovery.process',{})
+  assert.equal((await h.state()).pipeline.recoveryTasks[0].status,'completed')
+}))

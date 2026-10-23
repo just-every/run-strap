@@ -36,7 +36,19 @@ export function leadsPage(s: any,query: URLSearchParams) {
   }
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Lead follow-up</h1><p>Assigned next actions and a retained history from inquiry to membership.</p></div>`
     +panel('Staff queue',body(`<form method="get" action="${path}" class="form">${select('stage','Filter stage',[['','All stages'],...stages],stage,'')}${select('overdue','Due filter',[['false','All leads'],['true','Overdue only']],String(onlyOverdue))}<button class="btn-quiet">Filter follow-up</button></form><p><a href="${path}?overdue=true">${h(r.overdue.length)} overdue follow-ups</a></p>`)+`<div class="table-wrap">${table(['Person','Stage','Assigned owner','Next action'],list||'<tr><td colspan="4">No leads in this view.</td></tr>')}</div>`)
-    +detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
+    +recoveryPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
     +'</div><aside class="rail">'+panel('Record an inquiry',body(form('lead.create',path,request()+select('personId','Person',[['','Choose a person'],...s.people.filter((p: any)=>p.role==='member').map((p: any)=>[p.id,p.name])])+taskFields(s)+field('source','Inquiry source (optional)','','text','maxlength="100"')+textarea('note','Inquiry note','','maxlength="2000"'),'Add inquiry')))
     +panel('Recorded conversations',body('<p>Record calls, emails or conversations that actually happened. Saving a note does not send a message. The studio owner manages this queue until staff roles ship.</p>'))+'</aside></div>'
+}
+
+function recoveryPanel(s: any) {
+  const rule=s.pipeline.recoveryRule;
+  const controls=form('lead.recovery.rule.save',path,hidden('version',rule?.version ?? 0)
+    +select('enabled','Recovery rule',[['false','Paused'],['true','Enabled']],String(rule?.enabled ?? false))
+    +field('minVisits','Consecutive weekly visits',rule?.minVisits ?? 3,'number','min="2" max="12"')
+    +field('missedWeeks','Missed available weeks',rule?.missedWeeks ?? 1,'number','min="1" max="12"')
+    +field('lookbackWeeks','Look back in weeks',rule?.lookbackWeeks ?? 12,'number','min="2" max="52"'),'Save recovery rule','quiet')
+    +form('lead.recovery.process',path,'','Refresh recovery tasks');
+  const tasks=s.pipeline.recoveryTasks.map((task:any)=>`<article data-recovery-task="${h(task.id)}"><h3>${h(person(s,task.personId))} · ${h(task.status)}</h3><p>${h(task.nextAction)}</p><p>Rule revision ${h(task.ruleVersion)} · ${when(s,task.createdAt)}</p><details><summary>Booking evidence and alternatives</summary><p>Established visits:</p><ul>${task.sourceBookingIds.map((id:string)=>`<li><a href="/app?booking=${encodeURIComponent(id)}">${h(id)}</a></li>`).join('')}</ul><p>Missed opportunities:</p><ul>${task.opportunities.map((o:any)=>`<li>${when(s,o.at)} · ${h(o.classIds.join(', '))}${o.bookingIds.length ? ' · No-show bookings: '+h(o.bookingIds.join(', ')) : ' · No booking'}</li>`).join('')}</ul><p>Excluded weeks:</p><ul>${task.excluded.map((e:any)=>`<li>${when(s,e.at)} · ${h(e.reason)}</li>`).join('')}</ul><p>Alternatives (eligibility is checked again when booked):</p><ul>${task.alternatives.map((c:any)=>`<li><a href="/app/classes?class=${encodeURIComponent(c.classId)}">${h(c.title)} · ${when(s,c.start)}</a></li>`).join('') || '<li>No eligible alternative available.</li>'}</ul></details>${task.status === 'open' ? form('lead.recovery.complete',path,hidden('id',task.id)+request()+textarea('note','Recovery follow-up note','','required maxlength="2000"'),'Complete recovery task','quiet') : ''}</article>`).join('');
+  return panel('Missed routine recovery',body('<p>Private owner tasks only. Nothing is sent. A routine needs completed visits at the same weekly class time and location. Frozen, canceled, excused, full and unavailable weeks do not count as missed visits. Refresh before acting on current evidence.</p>'+controls+(tasks || '<p>No justified recovery tasks.</p>')));
 }

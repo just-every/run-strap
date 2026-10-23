@@ -25,7 +25,7 @@ import { demandEvidence, demandAvailability, prepareRecommendation, approveRecom
 import { collectFee, waiveFee, fees } from './fees';
 import { saveQualification, requestSubstitution, prepareSubstitution, approveSubstitution, substitutionSnapshot } from './substitutions';
 import { requestPlanChange, preparePlanChange, acceptPlanChange, applyDuePlanChanges, planChangeSnapshot } from './plan-changes';
-import { createLead, updateLead, appendLeadNote, leadSnapshot } from './leads';
+import { createLead, updateLead, appendLeadNote, leadSnapshot, saveRecoveryRule, processRecovery, completeRecovery } from './leads';
 import { saveMilestone, saveRecognitionPreference, processRecognition, completeRecognition, recognitionSnapshot } from './recognition';
 import { launchRecognition } from './recognition-launch';
 import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
@@ -162,6 +162,9 @@ export const handlers = {
   'plan.change.request':defineCommand(requestPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change'}}),
   'plan.change.accept':defineCommand(acceptPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change',ownStep:true}}),
   'plan.change.prepare':defineCommand(preparePlanChange,['owner'],{staffRight:'contract-change'}),
+  'lead.recovery.rule.save':defineCommand(saveRecoveryRule,['owner']),
+  'lead.recovery.process':defineCommand(processRecovery,['owner']),
+  'lead.recovery.complete':defineCommand(completeRecovery,['owner']),
   'lead.create':defineCommand(createLead,['owner']),
   'lead.update':defineCommand(updateLead,['owner']),
   'lead.note':defineCommand(appendLeadNote,['owner']),
