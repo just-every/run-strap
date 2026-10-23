@@ -9,7 +9,7 @@ export interface Tab { href: string; label: string; glyph: string; count?: numbe
 
 export function tabs(s: any): Tab[] {
   const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
-  if (s.actor.role === 'front-desk') return [{href:'/app/people',label:'Member records',glyph:'users'},security]
+  if (s.actor.role === 'front-desk') return [{href:'/app/intake',label:'Intake forms',glyph:'report'},{href:'/app/people',label:'Member records',glyph:'users'},security]
   if (s.actor.role === 'manager') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
   if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length
@@ -18,6 +18,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/classes', label: 'Classes', glyph: 'calendar', count: waiting(['classes']) },
     { href: '/app/people', label: 'People', glyph: 'users' },
     { href: '/app/households', label: 'Households', glyph: 'users' },
+    { href: '/app/intake', label: 'Intake forms', glyph: 'report' },
     { href: '/app/tuition', label: 'Family tuition', glyph: 'card' },
     { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
@@ -42,7 +43,8 @@ export function tabs(s: any): Tab[] {
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
     security,
   ]
-  const member: Tab[] = [{ href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, { href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
+  const member: Tab[] = [{ href: '/app/intake', label: 'Intake forms', glyph: 'report' },
+    { href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, { href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
   return rows(s, 'households').length ? [...member.slice(0, -1), { href: '/app/household', label: 'My household', glyph: 'users' }, member.at(-1)!] : member
 }
 

@@ -1,3 +1,4 @@
+import { intakeMissing } from './intake';
 import { assertMakeupTarget } from './makeups';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { assertGuestTarget } from './guest-bookings';
@@ -60,6 +61,7 @@ export function promote(tx: Transaction, entry: RecordData) {
   for (const candidate of all.filter(b => b.status === 'waitlisted').sort(fifo)) {
     if (vacancies <= 0) break;
     if (!tx.state.people.some(p => p.id === candidate.personId && p.active && !p.erasedAt) || !acknowledged(tx.state,candidate.personId)) continue;
+    if(intakeMissing(tx.state,candidate.personId,[String(entry.service ?? entry.title).split(' · ')[0]]).length) continue;
     const source = candidate.moveFromBookingId ? tx.state.records.get(candidate.moveFromBookingId)?.data : null;
     const sourceEntry = source ? tx.state.records.get(source.classId)?.data : null;
     const sourcePack = source?.packId ? tx.state.records.get(source.packId)?.data : null;

@@ -38,6 +38,19 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name === 'intake.form.publish') {
+    input.required=input.required === 'true';
+    input.questions=Array.from({length:8},(_,i) => ({label:String(input['question'+i] ?? '').trim(),required:input['required'+i] === 'true',sensitive:input['sensitive'+i] === 'true'})).filter(q => q.label);
+    for(let i=0;i<8;i++)for(const prefix of ['question','required','sensitive'])delete input[prefix+i];
+  }
+  if(name.startsWith('intake.submit')) {
+    input.answers=Object.fromEntries(Object.keys(input).filter(k => k.startsWith('answer_')).map(k => [k.slice(7),input[k]]));
+    for(const key of Object.keys(input))if(key.startsWith('answer_'))delete input[key];
+  }
+  if(name === 'intake.sensitive.grant') {
+    input.enabled=input.enabled === 'true';input.memberIds=Object.keys(input).filter(k => k.startsWith('member_') && input[k] === 'true').map(k => k.slice(7));
+    for(const key of Object.keys(input))if(key.startsWith('member_'))delete input[key];
+  }
   if(name === 'family.tuition.save') {
     const percent = String(input.discountPercent ?? '');
     if(!/^\d{1,3}(?:\.\d{1,2})?$/.test(percent)) fail('Enter a sibling discount from 0 to 100 percent');

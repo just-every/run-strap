@@ -1,3 +1,4 @@
+import { intakeTabletResponse } from './intake-tablet'
 import { smsConsentWebhook } from './consent-webhook'
 import { preferenceExport } from './domain/preferences'
 import { memberHistory, requireMemberRecord } from './domain/member-records'
@@ -32,7 +33,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -99,8 +100,8 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if (who.role === 'front-desk' && !['/app','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
-  if (who.role === 'front-desk' && name && !['member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.')) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && !['/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && name && !['intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.')) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !managerRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
   const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
@@ -129,6 +130,7 @@ export async function strapScheduled(original: Bindings) {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if (path === '/intake/tablet' || path === '/intake/tablet/start') return intakeTabletResponse(request,runtimeBindings(original))
   if (path === '/api/strap/consent/twilio') return smsConsentWebhook(request,runtimeBindings(original))
   if (path === '/kiosk' || path.startsWith('/kiosk/')) return kioskResponse(request, runtimeBindings(original))
   if (path.startsWith('/api/strap/integration/')) return integrationResponse(request, runtimeBindings(original))
@@ -232,7 +234,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).
-        if (!['import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        if (!['intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
         return renderApp(await appState(env, who, back), back, { message: 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {

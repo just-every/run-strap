@@ -1,3 +1,4 @@
+import { intakeMissing } from './intake';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent } from './pack-credits';
@@ -130,6 +131,7 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
     if (!member?.active || member.erasedAt || pack.expiresAt !== due || JSON.stringify(packTerms(pack)) !== JSON.stringify({credits:terms.credits,amountCents:terms.amountCents,entitlement:terms.entitlement,eligibleServices:terms.eligibleServices,priorityBooking:terms.priorityBooking,guestTerms:terms.guestTerms})) {
       tx.put('recurringTerms',{...terms,status:'needs_review',failure:'source_terms_changed',failedAt:at}); continue;
     }
+    if(intakeMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'intake_completion_required',failedAt:at});continue;}
     const invoiceId = `invoice:${terms.id}:${due}`;
     insist(!tx.state.records.has(invoiceId),'recurring_invoice_already_exists',409);
     tx.reached(due); tx.future(expiresAt);

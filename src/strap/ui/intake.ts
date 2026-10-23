@@ -1,0 +1,32 @@
+import { body, field, form, h, hidden, panel, select, textarea } from './shared';
+import { when } from './format';
+import { actionChannel } from './booking-rules';
+const back='/app/intake';
+export function intakeAnswersPanel(s: any,personId: string) {
+  const intake=s.intake;if(!intake)return '';
+  const responses=intake.responses.filter((r: any) => r.personId === personId);
+  if(!responses.length)return '';
+  return `<details class="more"><summary>Intake answers and provenance</summary><div class="panel-body">${responses.map((r: any) => {
+    const f=[...intake.forms,...intake.versions].find((f: any) => f.id === r.formId);
+    return `<article><h3>${h(f?.title)} · version ${h(r.version)}</h3><p>${r.staffMade?'Staff-entered':'Member-entered'} · ${h(r.channel)} · ${when(s,r.at)} · ${r.complete?'Complete':'Required answers pending'}</p><dl>${f?.questions.filter((q: any) => Object.hasOwn(r.answers,q.key)).map((q: any) => `<dt>${h(q.label)}${q.sensitive?' · Restricted':''}</dt><dd>${h(r.answers[q.key] || 'No answer')}</dd>`).join('') ?? ''}</dl></article>`;
+  }).join('')}</div></details>`;
+}
+export function intakePage(s: any,query: URLSearchParams,notice: any={}) {
+  const result=notice.result?.result ?? notice.result;
+  const handoff=result?.url?.startsWith('/intake/tablet/start?')?panel('Tablet handoff ready',body('<p>Open this private handoff on a dedicated, signed-out tablet within 15 minutes. It shows only this form, never previous answers, and locks after completion.</p><a href="'+h(result.url)+'">Open private intake handoff</a>')):'';
+  const intake=s.intake ?? {forms:[],responses:[],versions:[],sensitiveMemberIds:[],sensitiveGrants:[]},owner=s.actor.role === 'owner',staff=owner || s.actor.role === 'front-desk';
+  const members=s.people.filter((p: any) => p.role === 'member'),member=staff?members.find((p: any) => p.id === query.get('person')):members.find((p: any) => p.id === s.actor.personId);
+  const chosen=member?.id,sensitive=chosen && intake.sensitiveMemberIds.includes(chosen);
+  const choose=staff?`<form class="form" method="get" action="${back}">${select('person','Member',[['','Choose a member'],...members.map((p: any) => [p.id,p.name])],chosen)}<button class="btn-quiet" type="submit">Open member intake</button></form>`:'';
+  const forms=member?intake.forms.map((f: any) => {
+    const previous=intake.responses.filter((r: any) => r.personId === chosen && r.formId === f.id).at(-1);
+    const fields=f.questions.map((q: any) => q.sensitive && !sensitive?`<p>${h(q.label)} · Restricted. A sensitive-notes grant is required to enter or read this answer.</p>`:textarea('answer_'+q.key,q.label+(q.sensitive?' (restricted)':''),previous?.answers[q.key] ?? '',`${q.required?'required':''} maxlength="2000"`)).join('');
+    return panel(f.title,body(`<p>Version ${f.version} · ${f.required?'Required':'Optional'} · ${f.scope==='signup'?'Signup and all enrollments':'Service: '+h(f.service)}. ${previous?.complete?'This version is complete.':'Complete the required answers before the relevant enrollment.'}</p>`+form(staff?'intake.submit.staff':'intake.submit',back+(staff?'?person='+chosen:''),hidden('formId',f.id)+hidden('requestId',crypto.randomUUID())+(staff?hidden('personId',chosen)+actionChannel():'')+fields,staff?'Save staff-entered answers':'Save my intake answers')+(staff?form('intake.tablet.launch',back+'?person='+chosen,hidden('personId',chosen)+hidden('formId',f.id)+hidden('requestId',crypto.randomUUID())+actionChannel(),'Launch locked tablet intake'):'')),{id:'form-'+f.id});
+  }).join(''):'';
+  const editing=intake.forms.find((f: any) => f.seriesId === query.get('series'));
+  const questions=Array.from({length:8},(_,i) => {const q=editing?.questions[i];return `<fieldset><legend>Question ${i+1}</legend>${field('question'+i,'Question text '+(i+1),q?.label ?? '','text','maxlength="300"')}${select('required'+i,'Answer required '+(i+1),[['false','Optional'],['true','Required']],String(q?.required ?? false))}${select('sensitive'+i,'Answer visibility '+(i+1),[['false','Member-record staff'],['true','Sensitive-notes right']],String(q?.sensitive ?? false))}</fieldset>`;}).join('');
+  const publish=owner?panel(editing?'Publish a new version':'Build an intake form',body('<p>Published versions and their original answers stay unchanged. A new required version must be completed before the next relevant enrollment. Restricted answers never appear to instructors, agents, household payers or other members.</p>'+form('intake.form.publish',back,hidden('requestId',crypto.randomUUID())+(editing?hidden('seriesId',editing.seriesId)+hidden('revision',editing.version):'')+field('title','Form title',editing?.title ?? '','text','required maxlength="120"')+select('scope','Applies to',[['signup','Signup and all enrollments'],['service','One class service']],editing?.scope ?? 'signup')+field('service','Class service (for one service)',editing?.service ?? '')+select('required','Form completion',[['true','Required before enrollment'],['false','Optional']],String(editing?.required ?? true))+questions,'Publish intake version'))):'';
+  const versions=owner?panel('Published forms',body(intake.forms.map((f: any) => `<p>${h(f.title)} · version ${f.version} · <a href="/app/intake?series=${encodeURIComponent(f.seriesId)}">Edit next version</a></p>`).join('') || '<p>No forms published.</p>')):'';
+  const grants=owner?panel('Sensitive-notes access',body('<p>A separate, explicit grant is required in addition to named member-record access. Grant changes end previous staff sessions. Only the named members are included.</p>'+form('intake.sensitive.grant',back,hidden('requestId',crypto.randomUUID())+select('personId','Staff identity',(s.memberRecordGrants ?? []).filter((g: any) => g.enabled).map((g: any) => [g.personId,members.find((p: any) => p.id === g.personId)?.name ?? 'Staff']))+select('enabled','Sensitive-notes right',[['true','Grant'],['false','Revoke']])+members.map((m: any) => `<label><input type="checkbox" name="member_${h(m.id)}" value="true"> ${h(m.name)}</label>`).join(''),'Save sensitive-notes access'))):'';
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Intake forms</h1><p>Current questions, restricted answers and the source of every completion.</p></div>${handoff}${panel(staff?'Choose a member':member?.name ?? 'My intake',body(choose))}${forms}${chosen?panel('Answer history',body(intakeAnswersPanel(s,chosen))):''}${versions}</div><aside class="rail">${publish}${grants}</aside></div>`;
+}

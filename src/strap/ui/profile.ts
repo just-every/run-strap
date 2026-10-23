@@ -1,3 +1,4 @@
+import { intakeAnswersPanel } from './intake'
 import { preferencesPanel } from './preferences'
 // APP-003: the member's own profile page, the owner's member-record door on the
 // person card and the change history both read. Neither door edits the sign-in email.
@@ -37,7 +38,7 @@ export function memberProfilePage(s: any) {
   const editor = form('profile.save', '/app/profile#profile', hidden('requestId', crypto.randomUUID()) + hidden('revision', me.profileRevision ?? 0) + profileFields(me), 'Save my profile')
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>My profile</h1><p>Your name, mobile phone and emergency contact. The studio sees the same details.</p></div>`
     + panel('Contact details', body(`<p class="meta">Sign-in email: <strong>${h(me.email)}</strong>. Only the studio owner changes the email you sign in with.</p><p class="meta">Emergency contact: ${h(contactText(me.emergencyContact))}</p>${editor}`), { id: 'profile', icon: 'users' })
-    + preferencesPanel(s,me.id,'/app/profile#preferences')
+    + intakeAnswersPanel(s,me.id)+preferencesPanel(s,me.id,'/app/profile#preferences')
     + panel('Studio conversation',body((s.memberMessages ?? []).map((m:any) => `<p>${h(m.staffMade ? 'Studio staff' : 'You')} · ${when(s,m.at)}<br>${h(m.text)}</p>`).join('')+form('member.message.send','/app/profile',hidden('requestId',crypto.randomUUID())+textarea('text','Reply to studio','','required maxlength="2000"'),'Send reply')))
     + `</div><aside class="rail">${panel('Profile changes', body(profileHistory(s, me.id)), { id: 'profile-history', icon: 'report' })}</aside></div>`
 }

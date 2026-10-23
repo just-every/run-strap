@@ -11,6 +11,7 @@ export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Ob
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
 export function staffBefore(tx: Transaction, name: string, input: Record<string,unknown>) {
+  if (name === 'intake.submit.staff') return list(tx.state,'intakeResponse').filter(r => r.personId === input.personId && r.formId === input.formId).at(-1) ?? null;
   if (name === 'preferences.save.staff') return tx.state.records.get('member-preference:'+String(input.personId))?.data ?? null;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));
   if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
@@ -23,6 +24,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   return target ? structuredClone(target) : null;
 }
 export function staffAfter(name: string, result: RecordData) {
+  if(name === 'intake.tablet.launch') return Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'url')) as RecordData;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(result);
   if (name === 'notice.dismiss.staff') return noticeEffect(result);
   return structuredClone(result);
