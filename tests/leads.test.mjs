@@ -221,3 +221,72 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   await h.cmd('lead.recovery.process',{})
   assert.equal((await h.state()).pipeline.recoveryTasks[0].status,'completed')
 }))
+
+test('LEAD-007: approved in-app offers preserve waitlist priority, consent, capacity, frequency, incentive budget and audited staff acceptance',{timeout:process.env.STRAP_PROOF_DIR?240000:120000},()=>run(async h=>{
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const coach=await h.person('OfferCoach','instructor'),initial=await h.person('OfferInitial'),second=await h.person('OfferSecond'),third=await h.person('OfferThird'),waiter=await h.person('OfferWaiter')
+  const audience=[];for(const name of ['OfferAna','OfferBen','OfferCy','OfferSuppressed','OfferOtherClass'])audience.push(await h.person(name))
+  for(const p of [initial,second,third,waiter,...audience])await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:5,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  for(const p of audience)if(p!==audience[3])await h.cmd('preferences.save',{revision:0,requestId:'synthetic-strap-1',marketingInApp:true,consentStatement:'I want studio class offers in my account',...(p===audience[4]?{preferredClasses:'Pilates'}:{preferredClasses:'Offer Yoga'})},p.cookie)
+  await h.cmd('waitlist.save',{mode:'offer',claimMinutes:30,lateWindow:'promote'})
+  const start=new Date(Date.now()+60*60000).toISOString(),d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
+  const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Offer Yoga',service:'Offer Yoga',room:'Offer room',start,end:new Date(Date.parse(start)+45*60000).toISOString(),capacity:3,instructorId:coach.id}]})).id})).classes[0]
+  const booked=[];for(const p of [initial,second,third])booked.push(await h.cmd('booking.book',{classId:entry.id},p.cookie))
+  const waiting=await h.cmd('booking.book',{classId:entry.id},waiter.cookie);assert.equal(waiting.status,'waitlisted')
+  for(let i=0;i<2;i++)await h.cmd('booking.cancel',{id:booked[i].id},[initial,second][i].cookie)
+  assert.equal((await h.state(waiter.cookie)).bookings.find(b=>b.id===waiting.id).status,'offered','the first opened seat is held for the waiter')
+  const prepare={classId:entry.id,personIds:audience.map(p=>p.id),leadMinutes:1440,maxPer30Days:1,incentiveCents:200,budgetCents:200,text:'A place opened in your preferred yoga class.'}
+  const preview=await h.cmd('lead.empty.prepare',prepare)
+  assert.equal(preview.audience.filter(r=>!r.reason).length,3)
+  assert.equal(preview.audience.find(r=>r.personId===audience[3].id).reason,'permission_denied')
+  assert.equal(preview.audience.find(r=>r.personId===audience[4].id).reason,'class_preference_mismatch')
+  for(const p of [audience[0],coach])await h.cmd('lead.empty.approve',{id:preview.id,key:preview.key},p.cookie,403)
+  const version=(await h.state()).version
+  await h.cmd('lead.empty.approve',{id:preview.id,key:'changed'},h.owner,409);assert.equal((await h.state()).version,version)
+  await h.cmd('lead.empty.approve',{id:preview.id,key:preview.key})
+  assert.equal((await h.state()).emptyPlaces.offers.length,3)
+  const ownOffers=await Promise.all(audience.slice(0,3).map(async p=>(await h.state(p.cookie)).emptyPlaces.offers[0]))
+  for(let i=0;i<3;i++){assert.equal(ownOffers[i].personId,audience[i].id);assert.equal((await h.state(audience[i].cookie)).emptyPlaces.campaigns.length,0)}
+  await h.cmd('lead.empty.accept',{id:ownOffers[0].id,requestId:'foreign'},audience[1].cookie,404)
+  if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).emptyPlacesBrowser(h,{member:audience[0],preview,offer:ownOffers[0]})
+  const results=await Promise.all(ownOffers.map((offer,i)=>h.send('/api/strap/command',{name:'lead.empty.accept',input:{id:offer.id,requestId:'synthetic-strap-race-'+i}},audience[i].cookie)))
+  assert.equal(results.filter(r=>r.status===200).length,1)
+  assert.ok(results.every(r=>[200,409].includes(r.status)))
+  let state=await h.state();const accepted=state.emptyPlaces.offers.find(o=>o.status==='accepted')
+  assert.equal(state.bookings.filter(b=>b.classId===entry.id&&b.status==='booked').length,2)
+  assert.equal(state.bookings.find(b=>b.id===waiting.id).status,'offered','the invitation cannot spend the waiter’s held seat')
+  assert.equal(state.emptyPlaces.offers.filter(o=>o.status==='accepted').reduce((sum,o)=>sum+o.reservedCents,0),200)
+  const loser=ownOffers.find(o=>o.id!==accepted.id),loserMember=audience.find(p=>p.id===loser.personId)
+  await h.cmd('lead.empty.accept',{id:loser.id,requestId:'retry-with-capacity-full'},loserMember.cookie,409)
+  await h.cmd('booking.offer.accept',{id:waiting.id},waiter.cookie)
+  assert.equal((await h.state()).bookings.filter(b=>b.classId===entry.id&&b.status==='booked').length,3)
+  const acceptedMember=audience.find(p=>p.id===accepted.personId)
+  assert.equal((await h.cmd('lead.empty.accept',{id:accepted.id,requestId:accepted.requestId},acceptedMember.cookie)).id,accepted.bookingId)
+  const lostOffer=ownOffers.find(o=>o.id!==accepted.id && o.id!==loser.id),lostMember=audience.find(p=>p.id===lostOffer.personId)
+  const prefs=(await h.state(lostMember.cookie)).memberPreferences.preference
+  await h.cmd('preferences.save',{revision:prefs.revision,requestId:'synthetic-strap-optout',marketingInApp:false},lostMember.cookie)
+  assert.equal((await h.state(lostMember.cookie)).emptyPlaces.offers[0].unavailableReason,'permission_denied')
+  await h.cmd('lead.empty.accept',{id:lostOffer.id,requestId:'suppressed'},lostMember.cookie,409)
+  const capped=await h.cmd('lead.empty.prepare',prepare)
+  assert.ok(capped.audience.filter(r=>r.personId!==audience[3].id&&r.personId!==audience[4].id).every(r=>r.reason))
+  // Free a seat but retain the spent reservation. A new audience member cannot
+  // spend this campaign budget a second time, even after a class cancellation.
+  await h.cmd('booking.cancel',{id:booked[2].id},third.cookie)
+  await h.cmd('lead.empty.accept',{id:loser.id,requestId:'retry-with-seat'},loserMember.cookie,409)
+  await h.cmd('lead.empty.settle',{id:accepted.id,requestId:'too-soon'},h.owner,409)
+  const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
+  assert.equal(exit.value.tables.st_records.filter(r=>r.kind==='emptyPlaceOffer').length,3)
+  assert.equal((await h.state(coach.cookie)).emptyPlaces.offers.length,0)
+  assert.equal((await h.send('/app/leads',undefined,acceptedMember.cookie)).status,403)
+  const deskMember=await h.person('OfferDeskMember');await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:deskMember.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+  await h.cmd('preferences.save',{revision:0,requestId:'synthetic-strap-desk',marketingInApp:true,consentStatement:'Please offer me available studio classes'},deskMember.cookie);
+  const deskPreview=await h.cmd('lead.empty.prepare',{...prepare,personIds:[deskMember.id],incentiveCents:0,budgetCents:0});await h.cmd('lead.empty.approve',{id:deskPreview.id,key:deskPreview.key});
+  const deskOffer=(await h.state(deskMember.cookie)).emptyPlaces.offers[0];
+  if(process.env.STRAP_PROOF_DIR) await(await import('./leads-browser.mjs')).emptyPlacesBrowser(h,{member:deskMember,preview:deskPreview,offer:deskOffer,acceptAt390:true});
+  else await h.cmd('lead.empty.accept',{id:deskOffer.id,requestId:'synthetic-strap-desk-accept',channel:'phone'});
+  const deskState=await h.state(),deskAccepted=deskState.emptyPlaces.offers.find(o=>o.id===deskOffer.id);
+  const audits=deskState.staffActions.filter(a=>a.command==='lead.empty.accept'&&a.personId===deskMember.id);
+  assert.equal(audits.length,1);assert.equal(audits[0].right,'booking');assert.equal(audits[0].channel,'phone');assert.equal(audits[0].after.id,deskAccepted.bookingId);
+
+}))

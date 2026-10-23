@@ -39,7 +39,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':name==='plan.recurring.prepare'?'membership-sale':(name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
@@ -430,6 +430,17 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         await refused(h,door,{packId:preview.packId,mode:'renewal',credits:7,amountCents:13000,expiresAt:'2100-07-30T00:00:00.000Z',requestId:randomUUID()},h.owner,409)
       },
     }
+    actions['lead.empty.accept']=async door=>{
+      const member=await h.person('EmptyDeskMember');
+      await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+      await h.cmd('preferences.save',{revision:0,requestId:randomUUID(),marketingInApp:true,consentStatement:'Member requested studio class offers'},member.cookie);
+      const entry=await publish('Empty desk class',64,2),preview=await h.cmd('lead.empty.prepare',{classId:entry.id,personIds:[member.id],leadMinutes:10080,maxPer30Days:1,incentiveCents:0,budgetCents:0,text:'Open class for this member'});
+      await h.cmd('lead.empty.approve',{id:preview.id,key:preview.key});
+      const offer=(await h.state(member.cookie)).emptyPlaces.offers[0],input={id:offer.id,requestId:randomUUID(),channel:'phone'};
+      const result=await checkAudit(door,input);assert.equal(result.result.status,'booked');assert.equal(result.event.personId,member.id);
+      assert.equal((await h.state(member.cookie)).bookings.find(b=>b.id===result.result.id).status,'booked');
+      await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+    };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {
       const entry=memberCommands.find(c=>c.name===name)

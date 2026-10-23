@@ -3,10 +3,13 @@ import type { Transaction } from './store';
 import { addDays, localDate } from '../zone';
 import { wallStart } from './series-model';
 import { packServiceEligible, planBlock } from './pack-credits';
-import { bookingPack, acknowledged } from './bookings';
+import { bookingPack, acknowledged, book } from './bookings';
 import { windowOpen } from './booking-policy';
 import { seatCapacity } from './spots';
 import { studioSettings } from './studio';
+import { permission as marketingPermission, preferencesOf } from './preferences';
+import { promote } from './waitlist';
+import { confirmBooking } from './notices';
 
 export const leadStages = ['inquiry','intro-booked','first-visit','offer','membership','lost'] as const;
 const open = (stage: string) => stage !== 'membership' && stage !== 'lost';
@@ -248,4 +251,94 @@ export function completeRecovery(tx: Transaction, input: Record<string,unknown>)
   insist(task.status === 'open' && recoveryEvidence(tx.state).some(e=>e.personId === task.personId && e.patternKey === task.patternKey && e.lastBookingId === task.lastBookingId),'recovery_no_longer_justified',409);
   const saved = {...task,status:'completed',completedAt:now(),completedBy:tx.who.id,completionRequestId:requestId,note};
   tx.put('recoveryTask',saved);return saved;
+}
+
+/** An offer is an invitation, never a reservation ahead of the waitlist. */
+export function emptyPlaceRefusal(state: State, personId: string, entry: RecordData) {
+  const denied = marketingPermission(state,personId,'inApp');
+  if(denied) return denied;
+  if(!acknowledged(state,personId)) return 'waiver_acknowledgement_required';
+  if(list(state,'booking').some(b=>b.personId === personId && b.classId === entry.id && b.status !== 'cancelled')) return 'already_booked_or_waiting';
+  const preferences = preferencesOf(state,personId);
+  if(preferences.preferredClasses && !String(preferences.preferredClasses).toLowerCase().split(/[,\n]/).map(s=>s.trim()).includes(serviceOf(entry))) return 'class_preference_mismatch';
+  const pack = bookingPack(state,personId,entry);
+  return !pack ? 'eligible_credit_required' : !windowOpen(state,entry,pack) ? 'booking_window_closed' : null;
+}
+export function prepareEmptyPlaces(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const entry=record(tx.state,input.classId,'class'),at=now();
+  const leadMinutes=integer(input.leadMinutes,'leadMinutes',1,10080),maxPer30Days=integer(input.maxPer30Days,'maxPer30Days',1,30);
+  insist(entry.status === 'published' && entry.start > at && Date.parse(entry.start)-Date.parse(at) <= leadMinutes*60000,'outside_outreach_window',409);
+  insist(Array.isArray(input.personIds) && input.personIds.length > 0 && input.personIds.length <= 100,'invalid_audience');
+  const personIds=[...new Set(input.personIds.map(value=>person(tx.state,value).id))];
+  insist(personIds.every(id=>person(tx.state,id).role === 'member'),'member_required');
+  const incentiveCents=integer(input.incentiveCents,'incentiveCents',0,100000),budgetCents=integer(input.budgetCents,'budgetCents',0,10000000);
+  insist(incentiveCents <= budgetCents,'incentive_exceeds_budget');
+  const since=new Date(Date.parse(at)-30*86400000).toISOString();
+  const audience=personIds.map(personId=>({personId,reason:emptyPlaceRefusal(tx.state,personId,entry)
+    ?? (list(tx.state,'emptyPlaceOffer').filter(o=>o.personId === personId && o.createdAt > since).length >= maxPer30Days ? 'frequency_cap' : null)}));
+  const preview={id:crypto.randomUUID(),classId:entry.id,service:entry.service ?? entry.title,leadMinutes,maxPer30Days,incentiveCents,budgetCents,
+    text:text(input.text,'offer_text',1000),audience,status:'preview',key:crypto.randomUUID(),version:tx.state.version+1,createdAt:at,createdBy:tx.who.id};
+  tx.put('emptyPlaceCampaign',preview);return preview;
+}
+export function approveEmptyPlaces(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const campaign=record(tx.state,input.id,'emptyPlaceCampaign');
+  insist(input.key === campaign.key,'outreach_preview_changed',409);
+  if(campaign.status === 'approved') return campaign;
+  insist(campaign.status === 'preview' && campaign.version === tx.state.version,'outreach_audience_changed',409);
+  const entry=record(tx.state,campaign.classId,'class'),at=now();
+  insist(entry.status === 'published' && entry.start > at,'class_already_started',409);tx.future(entry.start);
+  // This is the normal waitlist policy, under the same serial revision fence.
+  // Offers already held for waiters count against online capacity.
+  promote(tx,entry);
+  insist(seatCapacity(tx.state,entry).onlineOpen > 0,'waitlist_has_priority',409);
+  const since=new Date(Date.parse(at)-30*86400000).toISOString();
+  for(const row of campaign.audience.filter((r: {reason:string|null})=>!r.reason)) {
+    insist(!emptyPlaceRefusal(tx.state,row.personId,entry),'outreach_eligibility_changed',409);
+    insist(list(tx.state,'emptyPlaceOffer').filter(o=>o.personId === row.personId && o.createdAt > since).length < campaign.maxPer30Days,'outreach_frequency_changed',409);
+    const offer={id:crypto.randomUUID(),campaignId:campaign.id,classId:entry.id,personId:row.personId,incentiveCents:campaign.incentiveCents,
+      status:'offered',createdAt:at,expiresAt:entry.start,approvedBy:tx.who.id,text:campaign.text};
+    tx.put('emptyPlaceOffer',offer);
+    tx.put('memberMessage',{id:'empty-place-message:'+offer.id,personId:row.personId,text:`${campaign.text} ${entry.title}: ${entry.start}. Use an eligible plan credit. $${(offer.incentiveCents/100).toFixed(2)} studio-balance incentive only after attended class and owner review. Seats and budget are checked when accepted. Open Class offers in Strap.`,at,actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing',emptyPlaceOfferId:offer.id});
+  }
+  const saved={...campaign,status:'approved',approvedAt:at,approvedBy:tx.who.id};tx.put('emptyPlaceCampaign',saved);return saved;
+}
+export function acceptEmptyPlace(tx: Transaction, input: Record<string,unknown>) {
+  const offer=record(tx.state,input.id,'emptyPlaceOffer');
+  if(tx.who.role === 'member') insist(tx.who.personId === offer.personId,'emptyPlaceOffer_not_found',404);
+  else humanOwner(tx.who);
+  const requestId=text(input.requestId,'requestId',100);
+  if(offer.status === 'accepted') {insist(offer.acceptedBy === tx.who.id && offer.requestId === requestId,'offer_already_accepted',409);return record(tx.state,offer.bookingId,'booking');}
+  insist(offer.status === 'offered' && offer.expiresAt > now(),'empty_place_offer_closed',409);tx.future(offer.expiresAt);
+  const campaign=record(tx.state,offer.campaignId,'emptyPlaceCampaign'),entry=record(tx.state,offer.classId,'class');
+  const denied=emptyPlaceRefusal(tx.state,offer.personId,entry);insist(!denied,denied ?? 'outreach_ineligible',409);
+  promote(tx,entry);
+  // A waiter with a presently eligible pack cannot be bypassed even when the
+  // studio's late-window policy deliberately stops automatic promotion.
+  insist(!list(tx.state,'booking').some(b=>b.classId === entry.id && b.status === 'waitlisted' && acknowledged(tx.state,b.personId) && bookingPack(tx.state,b.personId,entry)),'waitlist_has_priority',409);
+  insist(seatCapacity(tx.state,entry).onlineOpen > 0,'no_empty_seat',409);
+  const reserved=list(tx.state,'emptyPlaceOffer').filter(o=>o.campaignId === campaign.id && o.status === 'accepted').reduce((sum,o)=>sum+o.incentiveCents,0);
+  insist(reserved+offer.incentiveCents <= campaign.budgetCents,'outreach_budget_exhausted',409);
+  const booking=book(tx,{classId:entry.id,...(input.spot ? {spot:input.spot} : {})},tx.who.role === 'owner' ? offer.personId : undefined);
+  insist(booking.status === 'booked','no_empty_seat',409);
+  confirmBooking(tx,booking);
+  tx.put('emptyPlaceOffer',{...offer,status:'accepted',bookingId:booking.id,acceptedAt:now(),acceptedBy:tx.who.id,requestId,reservedCents:offer.incentiveCents});
+  return booking;
+}
+export function settleEmptyPlace(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const offer=record(tx.state,input.id,'emptyPlaceOffer'),booking=record(tx.state,offer.bookingId,'booking'),entry=record(tx.state,offer.classId,'class');
+  if(offer.rewardedAt)return offer;
+  insist(offer.status === 'accepted' && booking.attendance === 'attended' && entry.end <= now(),'attended_class_required',409);tx.reached(entry.end);
+  if(offer.incentiveCents)tx.put('charge',{id:'empty-place-incentive:'+offer.id,personId:offer.personId,bookingId:booking.id,amountCents:-offer.incentiveCents,reason:'empty_place_incentive',createdAt:now(),createdBy:tx.who.id});
+  const saved={...offer,rewardedAt:now(),rewardedBy:tx.who.id,rewardCostCents:offer.incentiveCents};tx.put('emptyPlaceOffer',saved);return saved;
+}
+export function emptyPlaceSnapshot(state: State, who: Actor) {
+  const owner=who.role === 'owner';
+  return {campaigns:owner ? list(state,'emptyPlaceCampaign') : [],offers:list(state,'emptyPlaceOffer').filter(o=>owner || who.role === 'member' && o.personId === who.personId).map(o=>{
+    const entry=state.records.get(o.classId)?.data;
+    const reason=o.status === 'offered' ? o.expiresAt <= now() || entry?.status !== 'published' ? 'class_closed' : emptyPlaceRefusal(state,o.personId,entry!) : null;
+    return {...o,available:!reason && o.status === 'offered',unavailableReason:reason};
+  })};
 }

@@ -76,3 +76,29 @@ export async function recoveryBrowser(h,{ana,task}) {
     await context.close()
   }}finally{await browser.close()}
 }
+
+export async function emptyPlacesBrowser(h,{member,preview,offer,acceptAt390=false}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try {for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    await context.route(h.origin+'/**',async route=>{
+      const path=new URL(route.request().url()).pathname
+      if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+      return route.continue()
+    })
+    const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:h.origin}])
+    const page=await context.newPage();await page.goto(h.origin+url)
+    await page.getByRole('heading',{name:'Empty-place offers',exact:true}).waitFor()
+    if(who==='owner')await page.locator(`[data-empty-campaign="${preview.id}"] summary`).click()
+    else assert.equal(await page.locator('[data-empty-offer]').count(),1)
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility() && n.getBoundingClientRect().width && n.getBoundingClientRect().height && !n.innerText.trim()).map(n=>n.outerHTML)),[])
+    if(acceptAt390 && who==='owner' && width===390) {
+      const accept=page.locator(`[data-empty-offer="${offer.id}"] form[action*="name=lead.empty.accept"]`);await accept.getByLabel('Member request channel').selectOption('phone');await accept.getByRole('button',{name:'Accept class offer',exact:true}).click();
+      assert.equal((await h.state()).emptyPlaces.offers.find(o=>o.id===offer.id).status,'accepted');
+    }
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-007-${acceptAt390?'staff-action-':''}${who}-${width}.png`),fullPage:true})
+    await context.close()
+  }}finally{await browser.close()}
+}
