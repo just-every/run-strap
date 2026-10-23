@@ -84,13 +84,11 @@ export async function retailBrowser(h, { large }) {
     assert.ok(
       await page.getByRole("cell", { name: large.sku, exact: true }).count(),
     );
-    const receive = page
-      .locator("details")
-      .filter({
-        has: page
-          .locator("summary")
-          .getByText("Receive purchase", { exact: true }),
-      });
+    const receive = page.locator("details").filter({
+      has: page
+        .locator("summary")
+        .getByText("Receive purchase", { exact: true }),
+    });
     await receive.locator("summary").click();
     await receive
       .getByLabel("SKU variant", { exact: true })
@@ -101,7 +99,7 @@ export async function retailBrowser(h, { large }) {
     await receive.getByLabel("Quantity", { exact: true }).fill("1");
     await receive
       .getByLabel("Purchase reference", { exact: true })
-      .fill("synthetic-strap-browser-" + width);
+      .fill("synthetic-strap-102" + width);
     await receive
       .getByRole("button", { name: "Receive stock", exact: true })
       .click();
@@ -112,7 +110,7 @@ export async function retailBrowser(h, { large }) {
       (
         await h.send("/api/strap/retail", undefined, h.owner)
       ).value.receipts.some(
-        (r) => r.reference === "synthetic-strap-browser-" + width,
+        (r) => r.reference === "synthetic-strap-102" + width,
       ),
     );
   });
@@ -161,11 +159,9 @@ export async function giftBrowser(h, giftCardId) {
     await page
       .getByRole("heading", { name: "Gift cards and promotions", exact: true })
       .waitFor();
-    const details = page
-      .locator("details")
-      .filter({
-        has: page.getByText("Refund-right adjustment", { exact: true }),
-      });
+    const details = page.locator("details").filter({
+      has: page.getByText("Refund-right adjustment", { exact: true }),
+    });
     await details.locator("summary").click();
     await details
       .getByLabel("Signed adjustment in USD", { exact: true })

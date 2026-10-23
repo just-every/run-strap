@@ -19,7 +19,7 @@ const init = async (h) => {
 const variant = (supplier, size, priceCents = 2000) => ({
   supplierId: supplier.id,
   sku: "SHIRT-" + size,
-  barcode: "synthetic-strap-" + size,
+  barcode: "synthetic-strap-" + [...size].map((c) => c.charCodeAt(0)).join(""),
   name: "Studio shirt",
   variant: size,
   priceCents,
@@ -29,7 +29,8 @@ const variant = (supplier, size, priceCents = 2000) => ({
 const receive = (sku, quantity, requestId, locationId = "studio") => ({
   skuId: sku.id,
   quantity,
-  reference: "synthetic-strap-" + requestId,
+  reference:
+    "synthetic-strap-" + [...requestId].map((c) => c.charCodeAt(0)).join(""),
   requestId,
   locationId,
 });
@@ -40,7 +41,8 @@ const sell = (member, sku, requestId, extra = {}) => ({
   quantity: 1,
   expectedCents: sku.priceCents,
   tender: "external",
-  reference: "synthetic-strap-" + requestId,
+  reference:
+    "synthetic-strap-" + [...requestId].map((c) => c.charCodeAt(0)).join(""),
   requestId,
   ...extra,
 });
@@ -474,7 +476,7 @@ test(
         recipientId: member.id,
         amountCents: 10000,
         tender: "external",
-        reference: "synthetic-strap-gift",
+        reference: "synthetic-strap-104",
         requestId: "gift",
       });
       const promo = {
@@ -516,7 +518,7 @@ test(
               input: {
                 ...firstInput,
                 requestId: "second-code-use",
-                reference: "synthetic-strap-reuse",
+                reference: "synthetic-strap-108",
               },
             },
             h.owner,
@@ -624,7 +626,7 @@ test(
         giftCardId: gift.id,
         amountCents: 1000,
         reason: "Refund part of remaining original funding",
-        reference: "synthetic-strap-gift-refund",
+        reference: "synthetic-strap-105",
         requestId: "funding-refund",
       });
       assert.equal(refund.tender, "external");
@@ -676,7 +678,7 @@ test(
           const before = (await h.state()).version;
           const r = await h.send(
             "/api/strap/agent/command",
-            { name, input: { requestId: "synthetic-strap-agent" } },
+            { name, input: { requestId: "synthetic-strap-100" } },
             "",
             { authorization: "Bearer " + key.token },
           );

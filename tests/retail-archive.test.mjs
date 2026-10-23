@@ -79,13 +79,13 @@ test(
       const member = await h.person("Shopper"),
         supplier = await h.cmd("retail.supplier.add", {
           name: "Apparel",
-          reference: "synthetic-strap-archive",
+          reference: "synthetic-strap-101",
           requestId: "supplier",
         }),
         sku = await h.cmd("retail.sku.add", {
           name: "Shirt",
           sku: "S",
-          barcode: "synthetic-strap-archive",
+          barcode: "synthetic-strap-101",
           variant: "Small",
           supplierId: supplier.id,
           priceCents: 2000,
@@ -95,7 +95,7 @@ test(
       await h.cmd("retail.receive", {
         skuId: sku.id,
         quantity: 2,
-        reference: "synthetic-strap-receive",
+        reference: "synthetic-strap-107",
         requestId: "receive",
       });
       const drawer = await h.cmd("drawer.open", {
@@ -110,7 +110,7 @@ test(
           expectedCents: 2000,
           tender: "cash",
           sessionId: drawer.id,
-          reference: "synthetic-strap-cash",
+          reference: "synthetic-strap-103",
           requestId: "sale",
         };
       const sale = await h.cmd("retail.sell", input);
@@ -124,7 +124,7 @@ test(
         recipientId: member.id,
         amountCents: 10000,
         tender: "external",
-        reference: "synthetic-strap-gift",
+        reference: "synthetic-strap-104",
         requestId: "gift",
       });
       await h.cmd("retail.promotion.add", {
@@ -145,24 +145,33 @@ test(
           tender: "gift",
           giftCardId: gift.id,
           promoCodes: ["ARCHIVE"],
-          reference: "synthetic-strap-gift-sale",
+          reference: "synthetic-strap-106",
           requestId: "gift-sale",
         },
         giftSale = await h.cmd("retail.sell", giftInput);
-      const shift = await h.cmd("clock.in", {
-          job: "Archive desk",
-          requestId: "clock-in",
-        }),
+      const coach = await h.person("ClockStaff", "instructor");
+      const shift = await h.cmd(
+          "clock.in",
+          {
+            job: "Archive desk",
+            requestId: "clock-in",
+          },
+          coach.cookie,
+        ),
         endAt = new Date(Date.now() - 60000).toISOString();
-      await h.cmd("clock.correction.request", {
-        shiftId: shift.id,
-        revision: 0,
-        startAt: new Date(Date.parse(endAt) - 3600000).toISOString(),
-        endAt,
-        breakMinutes: 0,
-        reason: "Missed clock-out",
-        requestId: "clock-correction",
-      });
+      await h.cmd(
+        "clock.correction.request",
+        {
+          shiftId: shift.id,
+          revision: 0,
+          startAt: new Date(Date.parse(endAt) - 3600000).toISOString(),
+          endAt,
+          breakMinutes: 0,
+          reason: "Missed clock-out",
+          requestId: "clock-correction",
+        },
+        coach.cookie,
+      );
       const approvalInput = {
           shiftId: shift.id,
           revision: 1,
