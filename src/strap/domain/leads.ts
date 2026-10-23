@@ -305,6 +305,7 @@ export function approveEmptyPlaces(tx: Transaction, input: Record<string,unknown
   const saved={...campaign,status:'approved',approvedAt:at,approvedBy:tx.who.id};tx.put('emptyPlaceCampaign',saved);return saved;
 }
 export function acceptEmptyPlace(tx: Transaction, input: Record<string,unknown>) {
+  if(tx.who.role !== 'member')humanOwner(tx.who);
   const offer=record(tx.state,input.id,'emptyPlaceOffer');
   if(tx.who.role === 'member') insist(tx.who.personId === offer.personId,'emptyPlaceOffer_not_found',404);
   else humanOwner(tx.who);
