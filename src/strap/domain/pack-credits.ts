@@ -22,7 +22,7 @@ const startOf = (state: State) => (classId: string) => state.records.get(classId
 export const packHeld = (state: State, pack: RecordData) => heldVisits(pack,list(state,'booking'),startOf(state));
 /** PLAN-002: why the pack's plan cannot hold one more visit in this class now. */
 export const planBlock = (state: State, pack: RecordData, entry: RecordData, except?: string) =>
-  cancellationBlocks(state,pack.id,entry.start) ? 'membership_cancelled' : packFreezeBlocks(state,pack.id,entry.start) ? 'membership_frozen' : pack.entitlement ? planRefusal(pack,entry.start,packHeld(state,pack),studioZone(state),now(),except,classZone(state,entry)) : null;
+  pack.termStartAt && entry.start < pack.termStartAt ? 'plan_not_started' : cancellationBlocks(state,pack.id,entry.start) ? 'membership_cancelled' : packFreezeBlocks(state,pack.id,entry.start) ? 'membership_frozen' : pack.entitlement ? planRefusal(pack,entry.start,packHeld(state,pack),studioZone(state),now(),except,classZone(state,entry)) : null;
 /** A pack can take one more booking in this class: a credit or a plan visit. */
 export const packCanSeat = (state: State, pack: RecordData, entry: RecordData, except?: string) =>
   (!countsCredits(pack) || pack.remaining > 0) && !planBlock(state,pack,entry,except);

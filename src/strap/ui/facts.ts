@@ -32,7 +32,7 @@ export const locationChoices = (s: any): [string, string][] => rows(s, 'location
 export const classPlace = (s: any, c: any) => manyLocations(s) ? String(c.location ?? '') : ''
 
 /** Why a PLAN-002 plan cannot hold one more visit in this class now (pack-credits.ts planBlock). */
-export const planBlock = (s: any, p: any, c: any) => p.entitlement ? planRefusal(p, c.start, heldVisits(p, rows(s, 'bookings'), id => rows(s, 'classes').find(x => x.id === id)?.start), s.studio?.timeZone ?? 'UTC', new Date().toISOString(), undefined, c.timeZone ?? s.studio?.timeZone ?? 'UTC') : null
+export const planBlock = (s: any, p: any, c: any) => p.termStartAt && c.start < p.termStartAt ? 'plan_not_started' : p.entitlement ? planRefusal(p, c.start, heldVisits(p, rows(s, 'bookings'), id => rows(s, 'classes').find(x => x.id === id)?.start), s.studio?.timeZone ?? 'UTC', new Date().toISOString(), undefined, c.timeZone ?? s.studio?.timeZone ?? 'UTC') : null
 /** A pack can take one more booking in this class: a credit or a plan visit. */
 export const packCanSeat = (s: any, p: any, c: any) => (!countsCredits(p) || p.remaining > 0) && !planBlock(s, p, c)
 /** The credit or plan Strap would use to seat this member in this class (bookings.ts eligiblePack). */
@@ -40,7 +40,7 @@ export const eligiblePack = (s: any, personId: string, c: any) => rows(s, 'packs
   .filter(p => p.personId === personId && packServiceEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now() && packCanSeat(s, p, c))
   .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))[0]
 export const livePacks = (s: any, personId: string) => rows(s, 'packs').filter(p => p.personId === personId && (!countsCredits(p) || p.remaining > 0) && time(p.expiresAt) > now())
-const planReasons: Record<string, string> = { outside_plan_hours: 'Outside your plan’s days and hours', plan_visits_used: 'Your plan’s visits for that period are used', plan_upcoming_limit_reached: 'Your plan’s upcoming-booking limit is reached' }
+const planReasons: Record<string, string> = { plan_not_started: 'Your plan has not started for this class', outside_plan_hours: 'Outside your plan’s days and hours', plan_visits_used: 'Your plan’s visits for that period are used', plan_upcoming_limit_reached: 'Your plan’s upcoming-booking limit is reached' }
 /** The plan refusal a member sees when no credit or plan covers this class. */
 export const planReason = (s: any, personId: string, c: any) => {
   const codes = rows(s, 'packs').filter(p => p.personId === personId && p.entitlement && packServiceEligible(p, c) && p.expiresAt > c.start && time(p.expiresAt) > now()).map(p => planBlock(s, p, c)).filter(Boolean)

@@ -290,6 +290,12 @@ test('MEM-003: exact payer-approved monthly family tuition preserves participant
   const exit=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
   assert.equal(exit.manifest.recordKinds.familyInvoice,2)
   assert.ok(exit.tables.st_records.some(r=>r.kind==='familyTuitionWithdrawal'&&JSON.parse(r.data).personId===b.id))
+  const rounding=await h.cmd('family.tuition.save',{...input,startsMonth:next(5),endsMonth:next(6),rows:input.rows.map(r=>({...r,amountCents:10005})),requestId:'synthetic-strap-tuition-rounding'});
+  const rounded=await h.cmd('family.bill.preview',{id:rounding.id,month:next(5),requestId:'synthetic-strap-tuition-rounding-preview'});
+  assert.deepEqual(rounded.rows.map(r=>r.discountCents),[1001,1001],'each half-cent discount rounds up before the net tuition is summed');assert.equal(rounded.amountCents,18008);
+  await h.cmd('family.bill.accept',{id:rounded.id,key:rounded.key,confirm:true},payer.cookie);
+  const beforeTerm=next(2)+'-02T15:00:00Z',earlyClass=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(beforeTerm),classes:[{title:'Before paid tuition term',service:'Mat tuition',start:beforeTerm,end:next(2)+'-02T16:00:00Z',capacity:3,instructorId:coach.id}]})).id})).classes[0];
+  await refused(h,'booking.book',{classId:earlyClass.id},a.cookie,409);
   if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./tuition-browser.mjs')).familyTuitionBrowser(h,{plan,payer,a,b,household,initial,nextMonth:next(2)})
 }))
 

@@ -160,6 +160,11 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
     assert.ok(portable.tables.st_records.some(r=>r.kind==='memberPreferenceEvent'))
     assert.ok(portable.manifest.relationships.some(r=>r.from==='st_records.data.sourceId'&&r.to==='st_people.id'))
+    const child=await h.person('ArchiveTuitionChild'),household=await h.cmd('household.save',{name:'Archived tuition family'});
+    await h.cmd('household.participant.add',{id:household.id,personId:child.id});await h.cmd('household.payer.propose',{id:household.id,payerId:member.id});await h.cmd('household.payer.accept',{id:household.id},member.cookie);
+    const tuition=await h.cmd('family.tuition.save',{householdId:household.id,name:'Archived tuition',service:'Mat',startsMonth:'2098-01',endsMonth:'2098-03',discountBps:1000,rows:[{personId:child.id,amountCents:10000,credits:4}],requestId:'synthetic-strap-archive-tuition'});
+    const tuitionPreview=await h.cmd('family.bill.preview',{id:tuition.id,month:'2098-01',requestId:'synthetic-strap-archive-bill'});
+    const tuitionBill=await h.cmd('family.bill.accept',{id:tuitionPreview.id,key:tuitionPreview.key,confirm:true},member.cookie);
     const intakeForm=await h.cmd('intake.form.publish',{title:'Archived intake',scope:'signup',required:false,questions:[{label:'Private request',required:true,sensitive:true}],requestId:'synthetic-strap-archive-intake'})
     const intakeAnswer=await h.cmd('intake.submit',{formId:intakeForm.id,answers:{q0:'Restricted original intake source'},requestId:'synthetic-strap-archive-answer'},member.cookie)
     const tabletLaunch=await h.cmd('intake.tablet.launch',{personId:member.id,formId:intakeForm.id,requestId:'synthetic-strap-archive-tablet'})
@@ -173,6 +178,8 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     assert.ok(history.merges.some(m=>m.id===merged.id));assert.ok(history.timeline.some(e=>e.record.text==='Original duplicate source message'))
     for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
     const state=await h.state(owner)
+    assert.deepEqual(state.familyTuition.invoices.find(r=>r.id===tuitionBill.id),tuitionBill,'native restore preserves exact payer consent and participant allocations without another bill');
+    assert.equal(state.charges.filter(c=>c.familyInvoiceId===tuitionBill.id).length,1);
     assert.deepEqual(state.intake.responses.find(r=>r.id===intakeAnswer.id),intakeAnswer,'native restore preserves exact form version, restricted answer and original provenance')
     assert.equal((await h.send(tabletLaunch.url)).status,410,'archive carries launch history without any tablet credential authority')
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM st_intake_tablets').first()).n,0)
