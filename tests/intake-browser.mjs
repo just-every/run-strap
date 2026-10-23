@@ -15,7 +15,7 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       })
       const page=await context.newPage()
       const sign=async cookie=>{await page.goto('about:blank');await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
-      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);const iconOnly=await page.locator('button,a,summary,[role=button]').evaluateAll(controls=>controls.filter(c=>c.getBoundingClientRect().width>0&&c.getBoundingClientRect().height>0&&!c.innerText.trim()&&c.querySelector('svg,img')).map(c=>c.getAttribute('aria-label')||c.tagName));assert.deepEqual(iconOnly,[],name+': every visible control has a text label; no icon-only controls need a tooltip');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}`);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-004-${name}-${width}.png`),fullPage:true})}}
+      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);const iconOnly=await page.locator('button,a,summary,[role=button]').evaluateAll(controls=>controls.filter(c=>c.checkVisibility()&&c.getBoundingClientRect().width>0&&c.getBoundingClientRect().height>0&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.getAttribute('aria-label')||c.tagName));assert.deepEqual(iconOnly,[],name+': every visible control has a text label or a tooltip');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}`);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-004-${name}-${width}.png`),fullPage:true})}}
       const title='Service intake '+width,goal='Class goals '+width,care='Private care '+width
       await sign(h.owner);await page.goto(h.origin+'/app/intake')
       const builder=page.locator('form').filter({has:page.getByRole('button',{name:'Publish intake version',exact:true})})
@@ -65,6 +65,9 @@ export async function intakeBrowser(h,{member,desk,coach}) {
       await page.getByText('Synthetic private phone answer '+width,{exact:true}).waitFor();await capture('profile-provenance')
       await sign(coach.cookie);await page.goto(h.origin+'/app')
       assert.ok(!(await page.locator('body').innerText()).includes('Synthetic private'));await capture('instructor-denial')
+      const previous=page.getByRole('link',{name:'Previous day',exact:true}),tip=previous.getByRole('tooltip');
+      await previous.hover();assert.equal(await tip.isVisible(),false,'hover tooltip waits before appearing');await tip.waitFor({state:'visible'});await capture('instructor-tooltip-hover');
+      await page.mouse.move(0,0);await page.keyboard.press('Tab');const next=page.getByRole('link',{name:'Next day',exact:true});await next.focus();assert.equal(await next.getByRole('tooltip').isVisible(),true,'keyboard focus shows the tooltip at once');await capture('instructor-tooltip-keyboard')
     }finally{await context.close()}
   }}finally{await browser.close()}
 }

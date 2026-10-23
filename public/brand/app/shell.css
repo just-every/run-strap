@@ -99,3 +99,10 @@ a.location:hover .edit { background: var(--strap-wash); color: var(--strap-plum-
   .today-date { font-size: 16px; }
   .page-title h1 { font-size: 46px; }
 }
+
+/* Shared icon controls: hover waits about 300 ms; keyboard focus is immediate. */
+.has-tooltip { position: relative; }
+.control-tooltip { position: absolute; z-index: 20; right: 0; top: calc(100% + 8px); padding: 6px 9px; border-radius: var(--strap-radius-sm); background: var(--strap-ink); color: white; font: 500 13px/1.4 var(--rer-font-body); white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0s .3s, visibility 0s .3s; }
+.has-tooltip:hover > .control-tooltip, .has-tooltip:focus-visible > .control-tooltip { opacity: 1; visibility: visible; }
+.has-tooltip:focus-visible > .control-tooltip { transition-delay: 0s; }
+.toggle .control-tooltip { top: 50%; right: calc(100% + 8px); transform: translateY(-50%); }

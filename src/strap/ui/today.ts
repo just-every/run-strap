@@ -4,7 +4,7 @@ import { attendance, classPlace, classRoom, classTitle, classesOn, currentClass,
 import { clock, dayLong, dayShort, length, studioToday } from './format'
 import { icon } from './icons'
 import { roster } from './roster'
-import { avatar, emptyState, h, owner, person } from './shared'
+import { avatar, emptyState, h, iconLink, owner, person } from './shared'
 import { studioSetup } from './studio'
 import { deskScan } from './checkin'
 import { addDays } from '../zone'
@@ -32,7 +32,7 @@ function classCard(s: any, c: any, open: boolean, link: (id: string) => string, 
   const head = `<div class="class-head"><div class="class-time"><strong>${h(clock(s, c.start, c.timeZone))}</strong><span>${h(length(c.start, c.end))}</span></div>`
     + `<div class="class-name"><strong>${h(classTitle(c))}</strong>${room ? `<span>${h(room)}</span>` : ''}${classPlace(s, c) ? `<span>${h(classPlace(s, c))}</span>` : ''}${stuck ? `<span class="flag">${icon('alert')}Waitlist stuck</span>` : ''}${c.status === 'cancelled' ? `<span class="flag">${icon('alert')}Cancelled: ${h(c.cancelReason)}</span>` : ''}</div>`
     + `<div class="teacher">${avatar(c.instructorName ?? person(s, c.instructorId), 'plum')}<span>${h(c.instructorName ?? person(s, c.instructorId))}</span></div>`
-    + `<div class="spots">${spots}</div><a class="toggle" href="${h(open ? link('') : link(c.id))}" aria-label="${open ? 'Close' : 'Open'} the roster for ${h(classTitle(c))} at ${h(clock(s, c.start, c.timeZone))}"${open ? ' aria-expanded="true"' : ''}>${icon(open ? 'up' : 'chevron')}</a></div>`
+    + `<div class="spots">${spots}</div>${iconLink(open ? link('') : link(c.id),open ? 'up' : 'chevron',open ? 'Close roster' : 'Open roster','toggle',`${open ? 'Close' : 'Open'} the roster for ${classTitle(c)} at ${clock(s,c.start,c.timeZone)}`,open ? 'aria-expanded="true"' : '')}</div>`
   const body = (stuck ? exception(s, c, stuck) : '') + (open ? roster(s, c, back) : '') + (!open && !stuck && full && c.occupancy.total <= 16 ? strip(s, booked) : '')
   return `<article class="class-card${open ? ' open' : ''}${stuck ? ' exception' : ''}${past ? ' past' : ''}" id="class-${h(c.id)}">${head}${body}</article>`
 }
@@ -58,5 +58,5 @@ export function today(s: any, query: URLSearchParams, rail: string) {
 export function dayNav(s: any, query: URLSearchParams) {
   const date = /^\d{4}-\d\d-\d\d$/.test(query.get('day') ?? '') ? query.get('day')! : studioToday(s)
   const to = (d: string) => d === studioToday(s) ? '/app' : `/app?day=${d}`
-  return `<p class="today-date"><a class="day-step" href="${to(addDays(date, -1))}" aria-label="Previous day">${icon('back')}</a><span>${h(dayLong(date))}</span><a class="day-step" href="${to(addDays(date, 1))}" aria-label="Next day">${icon('chevron')}</a></p>`
+  return `<p class="today-date">${iconLink(to(addDays(date,-1)),'back','Previous day','day-step')}<span>${h(dayLong(date))}</span>${iconLink(to(addDays(date,1)),'chevron','Next day','day-step')}</p>`
 }

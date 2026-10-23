@@ -45,3 +45,9 @@ export const result = (notice: any) => notice.result?.result ?? notice.result
 export const table = (heads: string[], body: string, stack = true) =>
   `<table class="data${stack ? ' stack' : ''}"><thead><tr>${heads.map(head => `<th${head.startsWith('>') ? ' class="right"' : ''}>${h(head.replace(/^>/, ''))}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`
 export const cell = (label: string, html: string, className = '') => `<td data-label="${h(label)}"${className ? ` class="${className}"` : ''}>${html}</td>`
+
+/** An icon link has a named tooltip after a short hover, immediately on keyboard focus. */
+export const iconLink = (href: string, glyph: string, label: string, className: string, accessibleLabel=label, attrs='') => {
+  const tooltipId='tip-'+crypto.randomUUID();
+  return `<a class="${h(className)} has-tooltip" href="${h(href)}" aria-label="${h(accessibleLabel)}" aria-describedby="${tooltipId}" ${attrs}>${icon(glyph)}<span class="control-tooltip" role="tooltip" id="${tooltipId}">${h(label)}</span></a>`;
+};
