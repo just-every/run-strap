@@ -23,6 +23,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
     { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' },
+    { href: '/app/retail', label: 'Inventory and drawers', glyph: 'card' },
     { href: '/app/packs', label: 'Packs and payments', glyph: 'card', count: waiting(['pack', 'reminder']) },
     { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' },
     { href: '/app/renewals', label: 'Renewal worklist', glyph: 'report' },

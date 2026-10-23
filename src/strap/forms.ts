@@ -38,6 +38,13 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('retail.') || name.startsWith('drawer.')) {
+    for(const key of ['quantity','count','lowStock']) if(key in input) input[key]=Number(input[key]);
+    for(const [key,target] of [['price','priceCents'],['expected','expectedCents'],['float','floatCents'],['counted','countedCents']]) if(key in input) {input[target]=cents(input[key],key);delete input[key];}
+    if(name==='retail.return') input.restock=input.restock==='true';
+    if(name==='drawer.close') {input.denominations=Object.keys(input).filter(k=>k.startsWith('denom_')).map(k=>({cents:Number(k.slice(6)),count:Number(input[k])}));for(const k of Object.keys(input))if(k.startsWith('denom_'))delete input[k];}
+    if(input.sessionId==='') delete input.sessionId;
+  }
   if(name === 'intake.form.publish') {
     input.required=input.required === 'true';
     input.questions=Array.from({length:20},(_,i) => ({label:String(input['question'+i] ?? '').trim(),required:input['required'+i] === 'true',sensitive:input['sensitive'+i] === 'true'})).filter(q => q.label);
