@@ -288,5 +288,20 @@ test('LEAD-007: approved in-app offers preserve waitlist priority, consent, capa
   const deskState=await h.state(),deskAccepted=deskState.emptyPlaces.offers.find(o=>o.id===deskOffer.id);
   const audits=deskState.staffActions.filter(a=>a.command==='lead.empty.accept'&&a.personId===deskMember.id);
   assert.equal(audits.length,1);assert.equal(audits[0].right,'booking');assert.equal(audits[0].channel,'phone');assert.equal(audits[0].after.id,deskAccepted.bookingId);
+  assert.equal((await h.send('/app/people?person='+deskMember.id,undefined,h.owner)).status,200,'the canonical new action renders in shared history');
+  const rewardMember=await h.person('OfferRewardMember');await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:rewardMember.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+  await h.cmd('preferences.save',{revision:0,requestId:'synthetic-strap-reward',marketingInApp:true,consentStatement:'Please offer me studio classes'},rewardMember.cookie);
+  const rewardStart=new Date(Date.now()+5000).toISOString(),rd=new Date(rewardStart),rewardWeek=new Date(Date.UTC(rd.getUTCFullYear(),rd.getUTCMonth(),rd.getUTCDate()-(rd.getUTCDay()+6)%7)).toISOString().slice(0,10);
+  const rewardClass=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:rewardWeek,classes:[{title:'Reward class',room:'Reward room',start:rewardStart,end:new Date(Date.parse(rewardStart)+1000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0];
+  const rewardPreview=await h.cmd('lead.empty.prepare',{...prepare,classId:rewardClass.id,personIds:[rewardMember.id]});await h.cmd('lead.empty.approve',{id:rewardPreview.id,key:rewardPreview.key});
+  const rewardOffer=(await h.state(rewardMember.cookie)).emptyPlaces.offers[0],rewardBooking=await h.cmd('lead.empty.accept',{id:rewardOffer.id,requestId:'synthetic-strap-reward-accept'},rewardMember.cookie);
+  await h.cmd('attendance.checkin',{id:rewardBooking.id},coach.cookie);
+  await h.cmd('lead.empty.settle',{id:rewardOffer.id,requestId:'synthetic-strap-member-reward'},rewardMember.cookie,403);
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(rewardClass.end)-Date.now()+20)));
+  const rewarded=await h.cmd('lead.empty.settle',{id:rewardOffer.id,requestId:'synthetic-strap-owner-reward'});
+  assert.equal(rewarded.rewardCostCents,200);await h.cmd('lead.empty.settle',{id:rewardOffer.id,requestId:'synthetic-strap-owner-reward'});
+  assert.deepEqual((await h.state()).charges.filter(c=>c.reason==='empty_place_incentive').map(c=>c.amountCents),[-200]);
+  assert.equal((await h.send('/app/people?person='+rewardMember.id,undefined,h.owner)).status,200);
+
 
 }))
