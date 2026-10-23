@@ -476,8 +476,8 @@ export function recordReferral(tx: Transaction, input: Record<string,unknown>) {
   const event=list(tx.state,'referralEvent').find(e=>e.actorId === tx.who.id && e.requestId === requestId);
   if(event) {insist(event.requestBasis === basis,'referral_request_changed',409);return tx.who.role === 'owner' ? event.after : safeReferral(event.after);}
   const prior=list(tx.state,'referral').find(r=>r.personId === referrer.id && r.friendEmail === friendEmail);
-  const friend=tx.state.people.find(p=>p.role === 'member' && !p.erasedAt && p.email?.toLowerCase() === friendEmail);
-  const verified=!self && !!friend,reference=self ? null : text(input.sourceReference,'sourceReference',500);
+  const friend=tx.who.role === 'owner' ? tx.state.people.find(p=>p.role === 'member' && !p.erasedAt && p.email?.toLowerCase() === friendEmail) : undefined;
+  const verified=tx.who.role === 'owner' && !!friend,reference=self ? null : text(input.sourceReference,'sourceReference',500);
   if(verified)insist(!list(tx.state,'referral').some(r=>r.id !== prior?.id && r.referredPersonId === friend!.id && r.verifiedAt),'referral_already_attributed',409);
   const saved={...(prior ?? {}),id:prior?.id ?? crypto.randomUUID(),personId:referrer.id,friendEmail,referredPersonId:verified ? friend!.id : prior?.referredPersonId ?? null,
     status:verified || prior?.verifiedAt ? 'verified' : 'pending',verifiedAt:prior?.verifiedAt ?? (verified ? now() : null),verifiedBy:prior?.verifiedBy ?? (verified ? tx.who.id : null),

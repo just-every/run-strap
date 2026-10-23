@@ -377,15 +377,23 @@ test('LEAD-005: approved former-member audiences renew native plans, phone refer
   }
   let phone={personId:referrer.id,friendEmail:ana.email,sourceReference:'Referrer named this friend during a phone call',channel:'phone',requestId:'synthetic-strap-phone-referral'}
   await h.cmd('lead.referral.record',phone,desk.cookie,403)
-  await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:false,memberIds:[referrer.id]});desk.cookie=await h.signIn(desk.email);await h.enroll(desk.cookie)
+  await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:false,memberIds:[referrer.id,active.id]});desk.cookie=await h.signIn(desk.email);await h.enroll(desk.cookie)
   if(process.env.STRAP_PROOF_DIR)phone=await(await import('./leads-browser.mjs')).referralBrowser(h,{desk,referrer,friend:ana,phone})
   const receipt=await h.cmd('lead.referral.record',phone,desk.cookie)
   assert.equal(receipt.referredPersonId,undefined,'front desk never receives an unrelated member identity')
   assert.deepEqual(await h.cmd('lead.referral.record',phone,desk.cookie),receipt)
   let state=await h.state(),phoneReferral=state.winback.referrals.find(r=>r.friendEmail===ana.email)
-  assert.equal(phoneReferral.personId,referrer.id);assert.equal(phoneReferral.referredPersonId,ana.id);assert.ok(phoneReferral.verifiedAt)
+  assert.equal(phoneReferral.personId,referrer.id);assert.equal(phoneReferral.referredPersonId,null);assert.equal(phoneReferral.status,'pending','front desk records provenance without matching another member');
+  const deskState=await h.state(desk.cookie);assert.equal(JSON.stringify(deskState).includes(ana.id),false,'the scoped state and member timeline disclose no matching friend identity');
+  let ownerVerification={personId:referrer.id,friendEmail:ana.email,sourceReference:'Owner verified the recorded phone request',channel:'desk',requestId:'synthetic-strap-owner-phone-verification'};
+  if(process.env.STRAP_PROOF_DIR)ownerVerification=await(await import('./leads-browser.mjs')).verifyReferralBrowser(h,{referral:phoneReferral,friend:ana,input:ownerVerification});
+  await h.cmd('lead.referral.record',ownerVerification);
+  phoneReferral=(await h.state()).winback.referrals.find(r=>r.friendEmail===ana.email);assert.equal(phoneReferral.referredPersonId,ana.id);assert.ok(phoneReferral.verifiedAt);
+  const duplicateReceipt=await h.cmd('lead.referral.record',{personId:active.id,friendEmail:ana.email,sourceReference:'Different referrer phone submission for owner review',channel:'phone',requestId:'synthetic-strap-private-duplicate'},desk.cookie);
+  const unknownReceipt=await h.cmd('lead.referral.record',{personId:active.id,friendEmail:'synthetic-strap-friend@studio.example',sourceReference:'Unmatched friend phone submission for owner review',channel:'phone',requestId:'synthetic-strap-private-unmatched'},desk.cookie);
+  assert.deepEqual(Object.keys(duplicateReceipt).sort(),Object.keys(unknownReceipt).sort());assert.equal(duplicateReceipt.attribution,unknownReceipt.attribution);assert.equal(duplicateReceipt.referredPersonId,undefined)
   const audit=state.staffActions.filter(a=>a.command==='lead.referral.record'&&a.actorRole==='front-desk')
-  assert.equal(audit.length,1);assert.equal(audit[0].channel,'phone');assert.equal(audit[0].right,'member-record')
+  assert.equal(audit.filter(a=>a.requestId===phone.requestId).length,1);assert.equal(audit[0].channel,'phone');assert.equal(audit[0].right,'member-record')
   await h.cmd('lead.referral.record',{...phone,personId:ben.id,requestId:'synthetic-strap-scope-denied'},desk.cookie,403)
   await h.cmd('lead.referral.record',{personId:referrer.id,friendEmail:ben.email,requestId:'synthetic-strap-own-referral'},referrer.cookie)
   const own=(await h.state(referrer.cookie)).winback.referrals

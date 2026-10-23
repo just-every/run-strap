@@ -181,3 +181,14 @@ export async function leadAuditBrowser(h,{personId}) {
     await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-audit-history-${width}.png`),fullPage:true});await context.close()
   }}finally{await browser.close()}
 }
+
+export async function verifyReferralBrowser(h,{referral,friend,input}) {
+  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']});let submitted=input
+  try{for(const width of [1440,390]) {
+    const context=await offerContext(browser,h,h.owner,width),page=await context.newPage();await page.goto(h.origin+'/app/leads')
+    const card=page.locator(`[data-referral="${referral.id}"]`),form=card.locator('form');await form.getByLabel('Verification of member referral request').fill(input.sourceReference)
+    if(width===390) {submitted={...input,requestId:await form.locator('[name=requestId]').inputValue()};await form.getByRole('button',{name:'Verify recorded referral',exact:true}).click();const recorded=(await h.state()).winback.referrals.find(r=>r.id===referral.id);assert.equal(recorded.referredPersonId,friend.id);assert.ok(recorded.verifiedAt)}
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-005-owner-verify-${width}.png`),fullPage:true});await context.close()
+  }}finally{await browser.close()}return submitted
+}
