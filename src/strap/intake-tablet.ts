@@ -1,3 +1,4 @@
+import { fontHead } from '../base/font-head';
 import { operatorAuth, type Bindings } from '../auth.server';
 import { loadSystem, Transaction } from './domain/store';
 import { id, insist, now, person, record, text, type RecordData } from './domain/types';
@@ -10,7 +11,7 @@ const tokenOf=(request: Request) => (request.headers.get('cookie') ?? '').split(
 const hash=async(token: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(b => b.toString(16).padStart(2,'0')).join('');
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
 const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'strict-origin','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
-const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private intake · Strap</title><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"></head><body><main class="page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
+const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private intake · Strap</title><link rel="stylesheet" href="/rer-theme.css">${fontHead}<link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"><link rel="stylesheet" href="/brand/app/intake-tablet.css"></head><body><main class="intake-tablet page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
 export const lockedTablet=()=>page('<h1>Tablet locked</h1><p>This device has no access to member records. Ask studio staff to open the next intake form.</p>',403);
 /** A dedicated, signed-out tablet cannot reach native sign-in or private product doors. */
 export function intakeTabletGuard(request: Request) {
@@ -57,13 +58,13 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
     await nativeCreatorActive(tx,launch);
     if(path === '/intake/tablet/start') {
       insist(!row.paired_at,'tablet_unavailable',410);
-      if(request.method === 'GET')return page(`<h1>Private intake</h1><p>Use this dedicated, signed-out tablet for ${h(member.name)} only. It exposes no earlier answers or member records and locks after submission.</p><form method="post" action="/intake/tablet/start">${hidden('token',secret)}<button type="submit">Open this intake form</button></form>`);
+      if(request.method === 'GET')return page(`<h1>Private intake</h1><p>Use this dedicated, signed-out tablet for ${h(member.name)} only. It exposes no earlier answers or member records and locks after submission.</p><form class="form" method="post" action="/intake/tablet/start">${hidden('token',secret)}<button class="btn" type="submit">Open this intake form</button></form>`);
       tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN paired_at IS NULL AND consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));
       tx.sql.push(tx.statement('UPDATE st_intake_tablets SET paired_at=? WHERE id=?',now(),row.id));await tx.commit();
       return new Response(null,{status:303,headers:{location:'/intake/tablet','cache-control':'no-store','referrer-policy':'strict-origin','set-cookie':`${tabletCookie}=${secret}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900${url.protocol==='https:'?'; Secure':''}`}});
     }
     insist(row.paired_at,'tablet_unavailable',410);
-    if(request.method === 'GET')return page(`<h1>${h(form.title)}</h1><p>For ${h(member.name)} · Version ${form.version}. No previous answers are shown. Only complete this form for yourself. Nothing here signs a waiver or grants payment authority.</p><form method="post" action="/intake/tablet">${form.questions.map((q: RecordData)=>textarea('answer_'+q.key,q.label+(q.sensitive?' (restricted)':''),'',`${q.required?'required':''} maxlength="2000"`)).join('')}<label><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and these are my answers.</label><button type="submit">Submit my intake and lock tablet</button></form>`);
+    if(request.method === 'GET')return page(`<h1>${h(form.title)}</h1><p>For ${h(member.name)} · Version ${form.version}. No previous answers are shown. Only complete this form for yourself. Nothing here signs a waiver or grants payment authority.</p><form class="form" method="post" action="/intake/tablet">${form.questions.map((q: RecordData)=>textarea('answer_'+q.key,q.label+(q.sensitive?' (restricted)':''),'',`${q.required?'required':''} maxlength="2000"`)).join('')}<label class="check"><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and these are my answers.</label><button class="btn" type="submit">Submit my intake and lock tablet</button></form>`);
     insist(input.confirm === 'yes','member_confirmation_required',400);
     submitIntake(tx,{formId:form.id,answers:Object.fromEntries(Object.entries(input).filter(([k])=>k.startsWith('answer_')).map(([k,v])=>[k.slice(7),v])),requestId:'tablet:'+launch.id},false,{id:launch.id,personId:member.id,launchedBy:launch.actorId});
     tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));

@@ -1,0 +1,6 @@
+/* The write-only handoff uses the app's existing form and panel components. */
+.intake-tablet { width: min(100%, 720px); margin: 40px auto; padding: 0 20px; }
+.intake-tablet h1 { margin: 8px 0 20px; color: var(--strap-plum); font: 700 36px/1.2 var(--rer-font-heading); }
+.intake-tablet .check { display: flex; gap: 10px; align-items: flex-start; }
+.intake-tablet button { max-width: 100%; white-space: normal; }
+@media (max-width: 600px) { .intake-tablet { margin: 24px auto; padding: 0 16px; } }

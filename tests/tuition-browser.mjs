@@ -16,7 +16,7 @@ export async function familyTuitionBrowser(h,{plan,payer,a,b,household,initial,n
       })
       const sign=async cookie=>{await page.goto('about:blank');await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
       const page=await context.newPage()
-      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}`);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-003-${name}-${width}.png`),fullPage:true})}}
+      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);const iconOnly=await page.locator('button,a,summary,[role=button]').evaluateAll(controls=>controls.filter(c=>c.getBoundingClientRect().width>0&&c.getBoundingClientRect().height>0&&!c.innerText.trim()&&c.querySelector('svg,img')).map(c=>c.getAttribute('aria-label')||c.tagName));assert.deepEqual(iconOnly,[],name+': every visible control has a text label; no icon-only controls need a tooltip');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}`);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-003-${name}-${width}.png`),fullPage:true})}}
       await sign(h.owner)
       await page.goto(h.origin+'/app/tuition?household='+household.id)
       await page.getByRole('heading',{name:'Family tuition',exact:true}).waitFor()
