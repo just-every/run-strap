@@ -179,7 +179,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   }
   const visits=new Map([ana,frozen,unavailable,cancelled].map(p=>[p.id,[]]))
   for(let i=0;i<2;i++)for(const p of [ana,frozen,unavailable,cancelled])visits.get(p.id).push(await h.cmd('booking.book',{classId:(p===unavailable?pilates:yoga)[i].id},p.cookie))
-  const holiday=await h.cmd('closure.prepare',{scope:'class',classId:yoga[2].id,reason:'Studio holiday'})
+  const holiday=await h.cmd('closure.prepare',{scope:'class',seriesScope:'occurrence',classId:yoga[2].id,reason:'Studio holiday'})
   await h.cmd('closure.confirm',{id:holiday.id,impact:holiday.impact.key})
   const cancelledSeat=await h.cmd('booking.book',{classId:yoga[3].id},cancelled.cookie)
   await h.cmd('booking.cancel',{id:cancelledSeat.id},cancelled.cookie)
