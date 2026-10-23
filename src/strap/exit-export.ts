@@ -31,6 +31,14 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.skuId', to: 'st_records.id', kind: 'sku', when: 'kind=stockReceipt or kind=stockMovement or kind=retailSale or kind=retailReturn' },
+  { from: 'st_records.data.supplierId', to: 'st_records.id', kind: 'supplier', when: 'kind=sku or kind=stockReceipt' },
+  { from: 'st_records.data.saleId', to: 'st_records.id', kind: 'retailSale', when: 'kind=retailReturn' },
+  { from: 'st_records.data.sessionId', to: 'st_records.id', kind: 'drawerSession', when: 'kind=drawerEntry or kind=drawerAdjustment or kind=retailSale or kind=retailReturn' },
+  { from: 'st_records.data.retailSaleId', to: 'st_records.id', kind: 'retailSale' },
+  { from: 'st_records.data.retailReturnId', to: 'st_records.id', kind: 'retailReturn' },
+  { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=retailSale or kind=retailReturn' },
+  { from: 'st_records.data.chargeId', to: 'st_records.id', kind: 'charge', when: 'kind=retailSale or kind=retailReturn' },
   { from: 'st_records.data.formId', to: 'st_records.id', kind: 'intakeForm', when: 'kind=intakeResponse' },
   { from: 'st_records.data.seriesId', to: 'st_records.id', kind: 'intakeSeries', when: 'kind=intakeForm or kind=intakeResponse' },
   { from: 'st_records.data.currentFormId', to: 'st_records.id', kind: 'intakeForm', when: 'kind=intakeSeries' },
