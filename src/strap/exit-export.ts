@@ -31,6 +31,12 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.giftCardId', to: 'st_records.id', kind: 'giftCard' },
+  { from: 'st_records.data.promotionId', to: 'st_records.id', kind: 'promotion', when: 'kind=promotionUse' },
+  { from: 'st_records.data.shiftId', to: 'st_records.id', kind: 'clockShift', when: 'kind=clockEvent or kind=clockCorrection or kind=clockApproval' },
+  { from: 'st_records.data.approvalId', to: 'st_records.id', kind: 'clockApproval', when: 'kind=clockShift' },
+  { from: 'st_records.data.approvedCorrectionId', to: 'st_records.id', kind: 'clockCorrection', when: 'kind=clockShift' },
+  { from: 'st_records.data.pendingCorrectionId', to: 'st_records.id', kind: 'clockCorrection', when: 'kind=clockShift' },
   { from: 'st_records.data.skuId', to: 'st_records.id', kind: 'sku', when: 'kind=stockReceipt or kind=stockMovement or kind=retailSale or kind=retailReturn' },
   { from: 'st_records.data.supplierId', to: 'st_records.id', kind: 'supplier', when: 'kind=sku or kind=stockReceipt' },
   { from: 'st_records.data.saleId', to: 'st_records.id', kind: 'retailSale', when: 'kind=retailReturn' },
