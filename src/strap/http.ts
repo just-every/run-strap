@@ -1,3 +1,5 @@
+import { inventorySnapshot } from './domain/inventory'
+import { drawerSnapshot, tenderDay } from './domain/drawer'
 import { intakeTabletResponse } from './intake-tablet'
 import { smsConsentWebhook } from './consent-webhook'
 import { preferenceExport } from './domain/preferences'
@@ -33,7 +35,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -61,7 +63,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
   const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
-  const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries(privilegedState.map(key => [key, key === 'teachingPay' || key === 'memberMail' ? null : []])) : {}
+  const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers'].map(key => [key, key === 'teachingPay' || key === 'memberMail' ? null : []])) : {}
   return { ...current, mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
@@ -104,7 +106,7 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (who.role === 'front-desk' && name && !['lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.')) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !managerRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
-  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
+  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || path==='/app/retail' || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 
@@ -147,6 +149,17 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(path==='/app/retail' && who.role!=='owner') fail('owner_required',403)
+      if(path.startsWith('/api/strap/retail')) {
+        if(who.role!=='owner') fail('owner_required',403)
+        const loaded=await load(env.DB,who)
+        if(path==='/api/strap/retail') {const inventory=inventorySnapshot(loaded.state),barcode=url.searchParams.get('barcode');return json({...inventory,...drawerSnapshot(loaded.state),lookup:barcode ? inventory.skus.find(s=>s.barcode===barcode) ?? null : null})}
+        if(path==='/api/strap/retail/day' || path==='/api/strap/retail/day.csv') {
+          const report=tenderDay(loaded.state,url.searchParams.get('date') ?? '')
+          if(path.endsWith('.csv')) return new Response('id,kind,tender,amountCents,locationId\n'+report.sources.map(r=>[r.id,r.kind,r.tender,r.amountCents,r.locationId].join(',')).join('\n')+'\n',{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="tenders.csv"'}})
+          return json(report)
+        }
+      }
       if (reportStaff(who) && path === '/app') return new Response(null, { status: 303, headers: { ...headers, location: '/app/revenue' } })
       if (path === '/api/strap/preferences.json') {const loaded=await load(env.DB,who);return Response.json(preferenceExport(loaded.state,loaded.who,url.searchParams.get('personId') ?? who.personId ?? ''),{headers:{...headers,'content-disposition':'attachment; filename=strap-preferences.json'}});}
       if (path === '/api/strap/member-history') {
