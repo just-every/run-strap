@@ -432,6 +432,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     }
     actions['lead.empty.accept']=async door=>{
       const member=await h.person('EmptyDeskMember');
+      await h.cmd('waiver.acknowledge',{id:(await h.state()).waiver.id},member.cookie);
       await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:'2099-12-31T00:00:00Z'})).id});
       await h.cmd('preferences.save',{revision:0,requestId:randomUUID(),marketingInApp:true,consentStatement:'Member requested studio class offers'},member.cookie);
       const entry=await publish('Empty desk class',64,2),preview=await h.cmd('lead.empty.prepare',{classId:entry.id,personIds:[member.id],leadMinutes:10080,maxPer30Days:1,incentiveCents:0,budgetCents:0,text:'Open class for this member'});

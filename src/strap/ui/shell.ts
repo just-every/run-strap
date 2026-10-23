@@ -43,7 +43,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/packs', label: 'My packs', glyph: 'card' },
     security,
   ]
-  const member: Tab[] = [{ href: '/app/intake', label: 'Intake forms', glyph: 'report' },
+  const member: Tab[] = [{href:'/app/offers',label:'Class offers',glyph:'calendar'},{ href: '/app/intake', label: 'Intake forms', glyph: 'report' },
     { href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, { href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
   return rows(s, 'households').length ? [...member.slice(0, -1), { href: '/app/household', label: 'My household', glyph: 'users' }, member.at(-1)!] : member
 }
