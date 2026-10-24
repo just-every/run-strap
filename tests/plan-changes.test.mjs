@@ -363,3 +363,49 @@ test('PLAN-007: delivered contract copies and state-specific cooling clocks pres
 });await run(async h=>{await h.confirmSetup(h.owner);const cases=await(await import('./cooling-refund-cases.mjs')).coolingRefundCases(h);if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,cases);});
   // Keep the extra real sign-ins within the same per-installation auth limits.
   if(process.env.STRAP_PROOF_DIR)await run(async h=>{await h.confirmSetup(h.owner);await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,null,{fixOnly:true});});})
+
+test('PLAN-008: scheduled annual and price disclosures retain accepted terms, deliver once through Base mail and cancel without renewal invoices',async()=>{
+  const sent=[]
+  await run(async h=>{
+    await h.confirmSetup(h.owner)
+    const member=await h.person('DisclosureMember'),other=await h.person('DisclosureOther'),day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
+    const buy=async()=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:at(60)})).id})
+    const pack=await buy(),p=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:12,requestId:'synthetic-strap-annual'})
+    const terms=await h.cmd('plan.recurring.accept',{id:p.id,key:p.key},member.cookie)
+    const input={termsId:terms.id,leadDays:30,proposedAmountCents:12000,requestId:'synthetic-strap-disclosure',channel:'desk'}
+    const d=await h.cmd('plan.disclosure.schedule',input)
+    assert.deepEqual(await h.cmd('plan.disclosure.schedule',input),d)
+    await h.cmd('plan.disclosure.schedule',{...input,requestId:'synthetic-strap-denied'},member.cookie,403)
+    await h.cmd('plan.disclosure.schedule',{...input,proposedAmountCents:13000},h.owner,409)
+    assert.equal(d.sendAt,new Date(Date.parse(d.dueAt)-30*day).toISOString())
+    assert.equal((await h.state(other.cookie)).renewalDisclosures.length,0)
+    assert.equal((await h.state(member.cookie)).renewalDisclosures[0].acceptedTermsKey,terms.key)
+    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,0,'not before configured lead time')
+    // A retained scheduled record crosses its agreed notice clock; no production clock override.
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),d.id).run()
+    await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()
+    const delivered=(await h.state(member.cookie)).renewalDisclosures.find(r=>r.id===d.id)
+    assert.equal(delivered.status,'delivered');assert.equal(delivered.delivery.status,'accepted')
+    assert.equal(sent.length,1);assert.match(sent[0].text,/120.00/);assert.ok(sent[0].text.includes(terms.stopPath))
+    assert.ok((await h.state(member.cookie)).notices.some(n=>n.id===delivered.noticeId))
+    assert.equal((await h.state()).recurring.terms.find(t=>t.id===terms.id).amountCents,10000,'proposed price never rewrites agreement')
+    if(process.env.STRAP_PROOF_DIR)await(await import('./renewal-disclosures-browser.mjs')).disclosuresBrowser(h,{member,disclosure:delivered,terms})
+    await h.cmd('plan.recurring.stop',{id:terms.id,requestId:'synthetic-strap-stop'},member.cookie)
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.nextRenewalAt',?) WHERE id=?").bind(at(-1),terms.id).run()
+    await(await h.mf.getWorker()).scheduled()
+    assert.equal((await h.state()).recurring.invoices.filter(i=>i.recurringTermsId===terms.id).length,0)
+    assert.equal((await h.state()).charges.filter(c=>c.recurringTermsId===terms.id).length,0)
+    // A restore cannot recover authority to dispatch pending disclosures, even at the same origin.
+    const second=await buy(),q=await h.cmd('plan.recurring.prepare',{packId:second.id,intervalMonths:12,requestId:'synthetic-strap-restore'})
+    const accepted=await h.cmd('plan.recurring.accept',{id:q.id,key:q.key},member.cookie)
+    const pending=await h.cmd('plan.disclosure.schedule',{termsId:accepted.id,leadDays:30,requestId:'synthetic-strap-pending'})
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),pending.id).run()
+    await h.db.prepare("DELETE FROM st_contract_connections WHERE id='billing'").run()
+    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,1)
+    assert.equal((await h.state()).renewalDisclosures.find(r=>r.id===pending.id).status,'stale')
+  },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-1',MAIL_FROM:'studio@studio.example'},outbound:async request=>{
+    assert.equal(request.url,'https://api.resend.com/emails');const message=await request.json()
+    if(message.subject==='Proposed price change disclosure')sent.push(message)
+    return Response.json({id:'synthetic-strap-mail-'+sent.length})
+  }})
+})

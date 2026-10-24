@@ -445,3 +445,53 @@ test('RPT-003: tenure and attendance frequency count only corrected attended vis
   assert.equal((await h.send(path,undefined,tia.cookie)).status,403)
   assert.equal((await h.state()).version,version,'tenure and frequency reads have no domain side effects')
 }))
+
+test('RPT-003: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',()=>run(async h=>{
+  await h.confirmSetup(h.owner)
+  const members=[await h.person('MovedMember'),await h.person('PriceMember'),await h.person('RenewedMember')]
+  const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
+  const buy=async(member,expiry=at(90))=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:expiry,planName:'Lifecycle offer'})).id})
+  const edit=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  const packs=[]
+  for(const [index,member] of members.entries()){
+    const pack=await buy(member);packs.push(pack)
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-terms-'+index})
+    await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+  }
+  const type=await h.cmd('freeze.type.save',{name:'Travel leave',reason:'Member travel',feeCents:0,defaultLengthDays:2,maxLengthDays:30})
+  const f=await h.cmd('freeze.prepare',{packId:packs[2].id,freezeTypeId:type.id,startAt:at(2).slice(0,10),endAt:at(4).slice(0,10),requestId:'synthetic-strap-freeze'})
+  const confirmed=await h.cmd('freeze.confirm',{id:f.id,key:f.key,requestId:'synthetic-strap-freeze-confirm'})
+  await edit('freeze',{...confirmed,startAt:at(-4),endAt:at(-2)})
+  const cancelled=[]
+  for(const [index,reasonCode] of ['Moved away','Price'].entries()){
+    const p=await h.cmd('plan.cancellation.prepare',{packId:packs[index].id,effectiveAt:at(5),reasonCode,reason:'Member requested stop',requestId:'synthetic-strap-end-'+index})
+    const c=await h.cmd('plan.cancellation.confirm',{id:p.id,key:p.key,requestId:'synthetic-strap-confirm-'+index})
+    cancelled.push(c)
+    await edit('contractCancellation',{...c,effectiveAt:at(-1)})
+  }
+  const terms=(await h.state()).recurring.terms.find(t=>t.personId===members[2].id)
+  const pack=(await h.state()).packs.find(p=>p.id===packs[2].id)
+  await edit('recurringTerms',{...terms,nextRenewalAt:at(-1)})
+  await edit('pack',{...pack,expiresAt:at(-1)})
+  await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()
+  const state=await h.state(),invoice=state.recurring.invoices.find(i=>i.recurringTermsId===terms.id)
+  assert.ok(invoice,'real recurring invoice links a successor')
+  const payment=await h.cmd('payment.record',{personId:members[2].id,amountCents:10000,reference:'synthetic-strap-renewal-receipt'})
+  const input={packId:invoice.packId,paymentId:payment.id,chargeId:invoice.chargeId,amountCents:7000,reference:'synthetic-strap-renewal-allocation'}
+  const allocation=await h.cmd('contract.prepayment.record',input);await h.cmd('contract.prepayment.record',input)
+  const version=(await h.state()).version,path='/api/strap/reports/retention'
+  const report=(await h.send(path,undefined,h.owner)).value,cohort=report.cohorts.find(c=>c.initialOffer==='Lifecycle offer')
+  assert.deepEqual(cohort.churnByReason,[{label:'Moved away',count:1},{label:'Price',count:1}])
+  assert.equal(cohort.terminatedAgreements,2);assert.equal(cohort.scheduledTerminations,0)
+  assert.deepEqual(cohort.freezeByType,[{label:'Travel leave',count:1}]);assert.equal(cohort.reactivations,1)
+  const row=report.rows.find(r=>r.packId===pack.id)
+  assert.equal(row.renewalStatus,'applied');assert.equal(row.renewalInvoiceId,invoice.id)
+  assert.equal(row.collectedRenewalCents,7000);assert.deepEqual(row.paymentIds,[payment.id]);assert.deepEqual(row.allocationIds,[allocation.id])
+  assert.equal(cohort.collectedRenewalCents,7000,'unallocated remainder is not counted')
+  for(const url of row.paymentUrls)assert.equal((await h.send(url,undefined,h.owner)).status,200)
+  const {parseCsv}=await import('./report-downloads.mjs'),[keys,...values]=parseCsv((await h.send(path+'.csv',undefined,h.owner)).text)
+  assert.deepEqual(values.map(v=>Object.fromEntries(keys.map((k,i)=>[k,v[i]]))),report.rows)
+  assert.equal((await h.send(path,undefined,members[0].cookie)).status,403)
+  assert.equal((await h.state()).version,version,'report and evidence reads remain read-only')
+  if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionLifecycleBrowser(h,report)
+}))

@@ -123,6 +123,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     input.allowedStartDays=String(input.allowedStartDaysText ?? '').split(',').map(v=>Number(v.trim()));delete input.allowedStartDaysText;
     input.allowOpenEnded=input.allowOpenEnded==='yes';for(const key of ['maxFreezes','maxDays']){if(input[key]!==undefined&&input[key]!=='')input[key]=Number(input[key]);else delete input[key];}
   }
+  if (name==='plan.disclosure.schedule') {input.leadDays=Number(input.leadDays);if(String(input.proposedAmount ?? '').trim()) input.proposedAmountCents=cents(input.proposedAmount,'proposed price');delete input.proposedAmount;}
   if (name==='plan.recurring.prepare') input.intervalMonths=Number(input.intervalMonths);
   if (['freeze.request','freeze.prepare','freeze.end.prepare'].includes(name)) {
     for(const prefix of ['start','end']) { const day=String(input[prefix+'Date']??'');if(day){if(!date.test(day))fail('Choose a freeze date');input[prefix+'At']=day;}delete input[prefix+'Date'];delete input[prefix+'Time'];}

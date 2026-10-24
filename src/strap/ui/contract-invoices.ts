@@ -29,11 +29,13 @@ export function recurringPanel(s: any, choices: [unknown,unknown][], staff: bool
       + saleContext(r)
       + (staff && r.status === 'preview' && r.contractAcceptanceChannel === 'in-person' ? `<p>The member’s required checkbox says: “${h(acceptancePresenceText)}”</p>` : '')
       + (!staff && r.status === 'preview' && !r.stale ? form('plan.recurring.accept',r.stopPath,hidden('id',r.id)+hidden('key',r.key)+(r.contractAcceptanceChannel === 'in-person' ? acceptancePresence() : ''),'I agree to these recurring invoices') : '')
+      + (staff && r.status==='active' ? `<details><summary>Schedule renewal disclosure</summary><p>Choose the notice lead time. A proposed price is informational; the existing accepted price continues until the member stops or accepts a separate plan change.</p>${form('plan.disclosure.schedule',path,hidden('termsId',r.id)+field('leadDays','Days before renewal','30','number','required min="15" max="365"')+field('proposedAmount','Proposed future price (optional)','','text','inputmode="decimal"')+identity()+channel(),'Schedule disclosure','quiet')}</details>` : '')
       + stop
       + (r.acceptedAt ? `<p>Member agreed ${when(s,r.acceptedAt)} through ${h(r.acceptedChannel)}.${r.acceptancePresent ? ` Confirmed: ${h(r.acceptancePresenceText)} Physical presence confirmed ${when(s,r.acceptedAt)}.` : ''}</p><p data-recurring-acknowledgement="${h(r.id)}">Acknowledgment: ${h(r.acknowledgement?.text)}</p>` : '')
       + (r.stoppedAt ? `<p>Stopped immediately ${when(s,r.stoppedAt)}. Access continues to the existing term end.</p>` : '')
       + (r.failure ? `<p>Studio review required: ${h(r.failure.replace(/_/g,' '))}.</p>` : '') + '</article>'
   }).join('')
   const invoices = data.invoices.map((i: any) => `<p data-recurring-invoice="${h(i.id)}">Renewal invoice · ${exact(s,i.dueAt)} · ${money(i.amountCents)} ${i.status==='void'?'invoice void; unpaid '+money(i.voidedUnpaidCents)+' reversed':'added to the studio balance'}. ${statusPill(i.status)} · No payment collected.</p>`).join('')
-  return reconnect + fresh + prepare + terms + invoices
+  const disclosures=(s.renewalDisclosures ?? []).filter((d:any)=>data.terms.some((r:any)=>r.id===d.termsId)).map((d:any)=>`<article data-renewal-disclosure="${h(d.id)}"><h3>Renewal disclosure · ${statusPill(d.status)}</h3><p>Notice ${exact(s,d.sendAt)} · invoice ${exact(s,d.dueAt)} · accepted price ${money(d.currentAmountCents)}.${d.proposedAmountCents===null?'':' Proposed future price '+money(d.proposedAmountCents)+'.'}</p><p>${h(d.body ?? d.policy)}</p>${d.delivery?'<p>Email: '+h(d.delivery.status.replace(/_/g,' '))+'. The in-app notice is retained.</p>':''}<a href="${h(d.stopPath)}">Review terms and stop future invoices</a>${staff&&d.status==='scheduled'?form('plan.disclosure.cancel',path,hidden('id',d.id)+identity()+channel(),'Cancel scheduled disclosure','quiet'):''}</article>`).join('')
+  return reconnect + fresh + prepare + terms + invoices + disclosures
 }

@@ -1,3 +1,4 @@
+import { scheduleRenewalDisclosure, cancelRenewalDisclosure, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
 import { clockIn, clockStep, requestHoursCorrection, approveHours, timeSnapshot } from './time-clock';
 import { issueGift, adjustGift, savePromotion, giftSnapshot, refundGiftFunding } from './gift-cards';
 import { saveSupplier, saveSku, receiveStock, countStock, transferStock, sellRetail, returnRetail, inventorySnapshot } from './inventory';
@@ -152,6 +153,8 @@ export const handlers = {
   'freeze.confirm':defineCommand(confirmFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.prepare':defineCommand(prepareEndFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.confirm':defineCommand(confirmEndFreeze,['owner'],{staffRight:'contract-change'}),
+  'plan.disclosure.schedule':defineCommand(scheduleRenewalDisclosure,['owner'],{staffRight:'contract-change'}),
+  'plan.disclosure.cancel':defineCommand(cancelRenewalDisclosure,['owner'],{staffRight:'contract-change'}),
   'plan.recurring.reconnect':defineCommand(reconnectRecurringBilling,['owner'],{staffRight:'contract-change'}),
   'plan.recurring.prepare':defineCommand(prepareRecurringTerms,['owner'],{staffRight:'membership-sale'}),
   'plan.recurring.accept':defineCommand(acceptRecurringTerms,['member'],{member:{staff:'plan.recurring.prepare',right:'membership-sale',ownStep:true}}),
@@ -309,7 +312,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  applyDueCancellations(tx); applyDueFreezes(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
+  applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
   const result = await spec.run(tx,input,context);
   assertIntakeEnrollments(tx.state,enrollmentBasis);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);
@@ -323,7 +326,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
 export async function sweep(db: D1Database, context: NoticeContext) {
   const loaded = await loadSystem(db), tx = new Transaction(db,loaded.state,loaded.who);
-  tx.notices = context; applyDueCancellations(tx); applyDueFreezes(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); suppressNurture(tx); suppressWinback(tx); processClassReminders(tx);
+  tx.notices = context; applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); suppressNurture(tx); suppressWinback(tx); processClassReminders(tx);
   if (tx.sql.length) await tx.commit();
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -369,7 +372,7 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
 export async function snapshot(db: D1Database, who: Actor, origin?: string) {
   const loaded = await load(db,who);
   const connection=await db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
-  return snapshotFor(loaded.state,loaded.who,connection,origin);
+  return {...await snapshotFor(loaded.state,loaded.who,connection,origin),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
 }
 async function snapshotFor(state: State, who: Actor, connection?: {connection_id:string;origin:string}|null, origin?: string) {
   if (who.role === 'front-desk') {
