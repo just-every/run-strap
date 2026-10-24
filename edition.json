@@ -32,7 +32,9 @@
           "src/modules/import-kit/src/door/refusals.ts",
           "src/modules/import-kit/src/provenance/credentials.ts",
           "src/modules/operator-auth/README.md",
-          "src/modules/operator-auth/SCHEDULED-POLICY.md"
+          "src/modules/operator-auth/SCHEDULED-POLICY.md",
+          "scripts/delivery/base/artifact.mjs",
+          "scripts/delivery/base/generators/integration.mjs"
         ],
         "origin": {
           "repository": "https://github.com/runeditrun/base",
@@ -58,7 +60,9 @@
             "modules/import-kit/src/door/refusals.ts",
             "modules/import-kit/src/provenance/credentials.ts",
             "modules/operator-auth/README.md",
-            "modules/operator-auth/SCHEDULED-POLICY.md"
+            "modules/operator-auth/SCHEDULED-POLICY.md",
+            "modules/delivery-producer/artifact.mjs",
+            "modules/delivery-producer/generators/integration.mjs"
           ]
         },
         "mappings": [
@@ -141,6 +145,14 @@
           {
             "path": "src/modules/operator-auth/SCHEDULED-POLICY.md",
             "originPath": "modules/operator-auth/SCHEDULED-POLICY.md"
+          },
+          {
+            "path": "scripts/delivery/base/artifact.mjs",
+            "originPath": "modules/delivery-producer/artifact.mjs"
+          },
+          {
+            "path": "scripts/delivery/base/generators/integration.mjs",
+            "originPath": "modules/delivery-producer/generators/integration.mjs"
           }
         ]
       }

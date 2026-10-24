@@ -233,17 +233,6 @@
       }
     },
     {
-      "path": "scripts/delivery/base/artifact.mjs",
-      "originPath": "modules/delivery-producer/artifact.mjs",
-      "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
-      "files": {
-        "scripts/delivery/base/artifact.mjs": "129f210f1556e816ba94ffe74359ac553cd26466aaf8c6c299765e9cea29aa07"
-      },
-      "modes": {
-        "scripts/delivery/base/artifact.mjs": "100644"
-      }
-    },
-    {
       "path": "scripts/delivery/base/bindings.mjs",
       "originPath": "modules/delivery-producer/bindings.mjs",
       "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
@@ -285,17 +274,6 @@
       },
       "modes": {
         "scripts/delivery/base/export.mjs": "100644"
-      }
-    },
-    {
-      "path": "scripts/delivery/base/generators/integration.mjs",
-      "originPath": "modules/delivery-producer/generators/integration.mjs",
-      "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
-      "files": {
-        "scripts/delivery/base/generators/integration.mjs": "ec9689f03b339466ee20c4a77da5227ba39789cc3de52d33687127148d4889f3"
-      },
-      "modes": {
-        "scripts/delivery/base/generators/integration.mjs": "100644"
       }
     },
     {

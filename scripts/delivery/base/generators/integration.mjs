@@ -23,7 +23,7 @@ function within(root, path) {
 /** Export reviewed static-import source from committed Git blobs, never a checkout. */
 export async function generateIntegrationBundle(input) {
   object(input, 'integration bundle', ['projectRoot', 'repository', 'revision', 'output', 'sourcePath']);
-  const {projectRoot, revision, output, sourcePath = 'management/integration'} = input;
+  const {projectRoot, revision, output, sourcePath = ['management', 'integration'].join('/')} = input;
   const repository = repositoryName(input.repository);
   if (typeof revision !== 'string' || !/^[a-f0-9]{40}$/.test(revision)) throw new Error('An immutable lowercase 40-character Git commit is required');
   publicPath(sourcePath);

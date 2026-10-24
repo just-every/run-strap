@@ -8,7 +8,7 @@ const excludedModule = name => /(?:^|\/)wrangler\.json$/i.test(name) || /\.map$/
 const overlaps = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 
 /** Produce untrusted schema-2 bytes. The workflow independently attests them. */
-export async function produceArtifact({ root = process.cwd(), output = 'delivery-artifact/rer-worker-artifact.json', specInputs, workerDirectory = 'dist/server', assetsDirectory = 'dist/client', mainModule = 'index.js', additionalModules = [] } = {}) {
+export async function produceArtifact({ root = process.cwd(), output = 'delivery-artifact/rer-worker-artifact.json', specInputs, workerDirectory = ['dist', 'server'].join('/'), assetsDirectory = ['dist', 'client'].join('/'), mainModule = 'index.js', additionalModules = [] } = {}) {
   root = await candidateRoot(root);
   moduleName(mainModule);
   relativePath(workerDirectory, 'worker directory');

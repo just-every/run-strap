@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "parent": null,
   "edition": "just-every/run-strap",
-  "manifest": "1c41b69946dd11b58fa0b1992169a3730321f2cb4b4e941fe09a504e0fc922e5",
+  "manifest": "a931b83be51fc72954f29e6067c6fdd7fe921a4a781704e28c997892328c3297",
   "toolchain": {
     "id": "runeditrun/edition-authoring",
     "version": "1.1.0",
@@ -33,7 +33,9 @@
           "src/modules/import-kit/src/door/refusals.ts",
           "src/modules/import-kit/src/provenance/credentials.ts",
           "src/modules/operator-auth/README.md",
-          "src/modules/operator-auth/SCHEDULED-POLICY.md"
+          "src/modules/operator-auth/SCHEDULED-POLICY.md",
+          "scripts/delivery/base/artifact.mjs",
+          "scripts/delivery/base/generators/integration.mjs"
         ],
         "origin": {
           "repository": "https://github.com/runeditrun/base",
@@ -59,7 +61,9 @@
             "modules/import-kit/src/door/refusals.ts",
             "modules/import-kit/src/provenance/credentials.ts",
             "modules/operator-auth/README.md",
-            "modules/operator-auth/SCHEDULED-POLICY.md"
+            "modules/operator-auth/SCHEDULED-POLICY.md",
+            "modules/delivery-producer/artifact.mjs",
+            "modules/delivery-producer/generators/integration.mjs"
           ]
         },
         "mappings": [
@@ -142,13 +146,21 @@
           {
             "path": "src/modules/operator-auth/SCHEDULED-POLICY.md",
             "originPath": "modules/operator-auth/SCHEDULED-POLICY.md"
+          },
+          {
+            "path": "scripts/delivery/base/artifact.mjs",
+            "originPath": "modules/delivery-producer/artifact.mjs"
+          },
+          {
+            "path": "scripts/delivery/base/generators/integration.mjs",
+            "originPath": "modules/delivery-producer/generators/integration.mjs"
           }
         ]
       },
       "baseline": {
-        "key": "2097651181dba7d1d3c78ddb349d25e9545c780b1c65406c509a85e9230b73d1",
-        "digest": "fe439eea9301a2f5dfce0e8250c25394e7777fc3105bf466309ee572af77a1cc",
-        "sha256": "325218fd745da4a33f916353d177025733da13bd21f10c52357c9fcb1a80c714"
+        "key": "661e0ba8e926cbcc506e6435c4ccf503676dff30e7fe050aa180980b3968b854",
+        "digest": "eaf0fc0accebb18c2b47a70fd58577cbb7e47b91dcd0f6475637d5d1ad18ad31",
+        "sha256": "99f48a9499a93447f7ab154170d253676c606a4a3297982412813a1f16f54733"
       }
     },
     {
@@ -202,7 +214,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "6bad656de0c371d47c4dc246442cc3ce559801039c9124cc6f6f2c0509896c81",
+      "sha256": "518dfc1c9c20fb092d98e96a51eb72fdc3475bb5b0d1caf09f1b5b2e5d3a0ab3",
       "executable": false
     },
     "composition.lock.json": {
@@ -290,7 +302,7 @@
       "executable": false
     },
     "edition.json": {
-      "sha256": "1c41b69946dd11b58fa0b1992169a3730321f2cb4b4e941fe09a504e0fc922e5",
+      "sha256": "a931b83be51fc72954f29e6067c6fdd7fe921a4a781704e28c997892328c3297",
       "executable": false
     },
     "HOMEPAGE-VARIANTS.md": {
@@ -726,7 +738,7 @@
       "executable": false
     },
     "scripts/delivery/base/artifact.mjs": {
-      "sha256": "129f210f1556e816ba94ffe74359ac553cd26466aaf8c6c299765e9cea29aa07",
+      "sha256": "68745faaca18582fe5dcc64c6d65df885ffd172cea1482ed6b5b90d92bccf4e4",
       "executable": false
     },
     "scripts/delivery/base/bindings.mjs": {
@@ -750,7 +762,7 @@
       "executable": false
     },
     "scripts/delivery/base/generators/integration.mjs": {
-      "sha256": "ec9689f03b339466ee20c4a77da5227ba39789cc3de52d33687127148d4889f3",
+      "sha256": "c69df73c2430aed1b2ed00d22967b14219f956e7aff00b64db9097ae2032b653",
       "executable": false
     },
     "scripts/delivery/base/generators/managed.mjs": {
