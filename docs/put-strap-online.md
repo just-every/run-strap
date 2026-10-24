@@ -6,9 +6,9 @@ Cloudflare account. Strap runs as a Worker with a D1 database there; the records
 ## Before you deploy
 
 - A Cloudflare account, and an email sender verified with Resend, which Strap uses for sign-in and invitation emails.
-- Set `MAIL_FROM` in `deploy.json` to your verified sender address.
-- Provide `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OWNER_EMAIL`, `SESSION_SECRET`, `SETUP_TOKEN` and
-  `MAIL_API_KEY` as private environment variables from your secret manager. Never put secrets in commands or files you
+- Provide `MAIL_FROM` as your verified sender address through your deployment environment. It is a declared deployment input; you do not need to edit source to change it.
+- Required private inputs: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OWNER_EMAIL`, `SESSION_SECRET`,
+  `SETUP_TOKEN`, `MFA_KEY` and `MAIL_API_KEY`. Provide them as private environment variables from your secret manager. Never put secrets in commands or files you
   commit.
 - Commit any configuration changes you mean to deploy.
 

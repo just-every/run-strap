@@ -13,8 +13,7 @@
   "originVar": "AUTH_ORIGIN",
   "vars": {
     "AUTH_LOCAL": "false",
-    "MAIL_PROVIDER": "resend",
-    "MAIL_FROM": "auth@example.invalid"
+    "MAIL_PROVIDER": "resend"
   },
   "secrets": [
     {
@@ -36,6 +35,10 @@
     {
       "binding": "MAIL_API_KEY",
       "environment": "MAIL_API_KEY"
+    },
+    {
+      "binding": "MAIL_FROM",
+      "environment": "MAIL_FROM"
     }
   ]
 }
