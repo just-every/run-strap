@@ -133,7 +133,7 @@ Optional OIDC remains server-side: configure `config.providers` and an
 independent `OIDC_TRANSACTION_SECRET` on `createOperatorAuth`;
 `createAuthHandler` serves the provider routes. Preserve every `Set-Cookie`
 header individually. See the [OIDC guide](../identity/oidc/README.md) for provider
-configuration and trusted `subjectEmails` mappings. An existing issuer/subject binding may sign in again, while a
+configuration and trusted `subjectEmails` mappings. An existing issuer and subject binding may sign in again, while a
 different principal cannot join an already-bound operator by presenting the same
 verified email. Configure any subject-to-existing-email association from trusted
 server configuration, never callback or browser input. Do not expose its

@@ -81,7 +81,7 @@ export async function lookupMainVerification({ env = process.env, fetch = global
    && job.status === 'completed' && job.conclusion === 'skipped').map(job => job.name));
   return skipped.every(job => skippedOnMain.has(job.name));
  } catch {
-  // Authentication, rate limits, network/JSON failures and timeouts all run CI.
+  // Authentication, rate limits, network or JSON failures and timeouts all run CI.
  }
  return false;
 }

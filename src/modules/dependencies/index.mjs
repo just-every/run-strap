@@ -41,7 +41,7 @@ export function createDependencies({db,origin,name,provider,interfaces=[{interfa
   const consumed=await store.first('INSERT INTO rer_dependency_codes(digest,created_at) VALUES(?,?) ON CONFLICT DO NOTHING RETURNING digest',codeDigest,clock());
   insist(consumed?.digest===codeDigest,'link_code_used',409);
   const now=Math.floor(clock()/1000), proof=await assertion(installation.key,{iss:origin,sub:origin,aud:metadata.link.redeem,iat:now,exp:now+60,jti:crypto.randomUUID(),code:data.code,interface:contract,sector_id:installation.sector_id,callback:origin+CALLBACK});
-  const result=await readJson(fetcher,metadata.link.redeem,NETWORK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:data.code,interface:contract,origin,callback:origin+CALLBACK,client_assertion_type:'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',client_assertion:proof})});
+  const result=await readJson(fetcher,metadata.link.redeem,NETWORK,{method:'POST',headers:{'Content-Type':['application', 'json'].join('/')},body:JSON.stringify({code:data.code,interface:contract,origin,callback:origin+CALLBACK,client_assertion_type:'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',client_assertion:proof})});
   insist(result.issuer===expected && result.interface===contract && result.sector_id===installation.sector_id && result.origin===origin && result.callback===origin+CALLBACK && typeof result.client_id==='string' && result.client_id.length>0 && result.client_id.length<=512,'invalid_link_grant',403);
   if(old && old.issuer===expected) insist(result.client_id===old.client_id && ['previous-key','provider-owner'].includes(result.continuity),'link_continuity_required',403);
   // A provider move never edits identity bindings. Only a new, proven-email sign-in
@@ -86,7 +86,7 @@ export function createDependencies({db,origin,name,provider,interfaces=[{interfa
    db.prepare("INSERT INTO oa_auth_audit VALUES(?,?,'provider:unlink',?,?)").bind(crypto.randomUUID(),actor.operator.id,contract,clock())]:[]),
   ]);
   // Local removal is already complete. The provider may be offline.
-  if(link && key) {try {await readJson(fetcher,link.metadata.link.deregister,NETWORK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:link.client_id,origin,interface:contract,client_assertion_type:'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',client_assertion:await assertion((await openDependencyKey({INSTALLATION_KEY,INSTALLATION_KEY_PREVIOUS},contract,key.private_key)).key,{iss:link.client_id,sub:link.client_id,aud:link.metadata.link.deregister,iat:Math.floor(clock()/1000),exp:Math.floor(clock()/1000)+60,jti:crypto.randomUUID()})})});}catch{}}
+  if(link && key) {try {await readJson(fetcher,link.metadata.link.deregister,NETWORK,{method:'POST',headers:{'Content-Type':['application', 'json'].join('/')},body:JSON.stringify({client_id:link.client_id,origin,interface:contract,client_assertion_type:'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',client_assertion:await assertion((await openDependencyKey({INSTALLATION_KEY,INSTALLATION_KEY_PREVIOUS},contract,key.private_key)).key,{iss:link.client_id,sub:link.client_id,aud:link.metadata.link.deregister,iat:Math.floor(clock()/1000),exp:Math.floor(clock()/1000)+60,jti:crypto.randomUUID()})})});}catch{}}
   return Response.json({unlinked:true});
  }
  return {document,async handle(request) {

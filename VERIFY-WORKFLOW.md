@@ -190,7 +190,7 @@ conditional cancellation alone would not protect a pending run in a shared
 group. The event name keeps push, pull request and dispatch runs of one ref in
 separate groups. No other workflow in any seed uses these keys.
 
-The census of all 57 `just-every/run-*` seeds on 23 Oct found ten existing
+The census of all 57 `run-*` seeds in the `just-every` organization on 23 Oct found ten existing
 variants:
 
 | Existing Verify block | Seeds | Replacement |
@@ -290,7 +290,7 @@ permissions, and add `actions: read` only here.
 +        env:
 +          GITHUB_TOKEN: ${{ github.token }}
 +        run: node scripts/verify-ci.mjs --main-skip
-       # Existing matrix/planning steps stay here.
+       # Existing matrix and planning steps stay here.
    shards:
      needs: plan
 +    if: ${{ needs.plan.outputs.skip != 'true' }}

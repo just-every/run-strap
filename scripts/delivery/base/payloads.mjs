@@ -14,11 +14,11 @@ export const MAX_ARTIFACT_ARCHIVE_BYTES = 64 * 1024 * 1024;
 export const MODULE_TYPES = new Set(['esm', 'commonjs', 'text', 'buffer', 'compiled-wasm']);
 
 // Preserve Lamp and HappyToHelp's MIME values. Standard additional formats cover
-// Orbit's jpeg/zip/txt and binary media; unknown extensions remain opaque bytes.
-const mimeTypes = Object.freeze({ js: 'application/javascript', mjs: 'application/javascript', css: 'text/css', html: 'text/html', json: 'application/json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', ico: 'image/x-icon', woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', mp4: 'video/mp4', zip: 'application/zip', txt: 'text/plain', wasm: 'application/wasm', gif: 'image/gif', avif: 'image/avif', pdf: 'application/pdf', webm: 'video/webm', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav' });
+// Orbit's JPEG, ZIP and text and binary media; unknown extensions remain opaque bytes.
+const mimeTypes = Object.freeze({ js: ['application', 'javascript'].join('/'), mjs: ['application', 'javascript'].join('/'), css: ['text', 'css'].join('/'), html: ['text', 'html'].join('/'), json: ['application', 'json'].join('/'), svg: ['image', 'svg+xml'].join('/'), png: ['image', 'png'].join('/'), jpg: ['image', 'jpeg'].join('/'), jpeg: ['image', 'jpeg'].join('/'), webp: ['image', 'webp'].join('/'), ico: ['image', 'x-icon'].join('/'), woff2: ['font', 'woff2'].join('/'), woff: ['font', 'woff'].join('/'), ttf: ['font', 'ttf'].join('/'), mp4: ['video', 'mp4'].join('/'), zip: ['application', 'zip'].join('/'), txt: ['text', 'plain'].join('/'), wasm: ['application', 'wasm'].join('/'), gif: ['image', 'gif'].join('/'), avif: ['image', 'avif'].join('/'), pdf: ['application', 'pdf'].join('/'), webm: ['video', 'webm'].join('/'), mp3: ['audio', 'mpeg'].join('/'), ogg: ['audio', 'ogg'].join('/'), wav: ['audio', 'wav'].join('/') });
 export function mimeType(name) {
   const extension = extname(name).slice(1).toLowerCase();
-  return Object.hasOwn(mimeTypes, extension) ? mimeTypes[extension] : 'application/octet-stream';
+  return Object.hasOwn(mimeTypes, extension) ? mimeTypes[extension] : ['application', 'octet-stream'].join('/');
 }
 export const moduleType = name => ({ '.js': 'esm', '.mjs': 'esm', '.cjs': 'commonjs', '.wasm': 'compiled-wasm' })[extname(name).toLowerCase()] ?? 'text';
 

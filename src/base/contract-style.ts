@@ -1,5 +1,5 @@
 // The /contract page's style, after run-site.ts's BASE (rer-consolidation
-// evidence/br-contract SPEC.md sections 3 to 6), whose header it keeps as every
+// ./evidence/br-contract SPEC.md sections 3 to 6), whose header it keeps as every
 // page does. The status tokens are Base's defaults at zero specificity, so a
 // seed's rer-theme.css :root wins over them.
 // This file is copied unchanged to src/base by both maintained exporters.

@@ -34,11 +34,28 @@
           "src/modules/operator-auth/README.md",
           "src/modules/operator-auth/SCHEDULED-POLICY.md",
           "scripts/delivery/base/artifact.mjs",
-          "scripts/delivery/base/generators/integration.mjs"
+          "scripts/delivery/base/generators/integration.mjs",
+          "VERIFY-WORKFLOW.md",
+          "scripts/edition-authoring/adopt.mjs",
+          "scripts/edition-authoring/lock.mjs",
+          "scripts/install-chromium-deps.py",
+          "scripts/verify-ci.mjs",
+          "src/base/contract-style.ts",
+          "src/modules/import-kit/src/d1/compressed-plan.ts",
+          "src/modules/mail/README.md",
+          "src/modules/operator-auth/conformance/README.md",
+          "src/modules/operator-auth/docs/vite-spa.md",
+          "src/modules/operator-auth/index.d.mts",
+          "src/modules/operator-auth/representation.mjs",
+          "src/base/lobby.ts",
+          "src/modules/dependencies/index.mjs",
+          "src/modules/operator-auth/dev/refusal.mjs",
+          "src/modules/operator-auth/routes.mjs",
+          "scripts/delivery/base/export.mjs"
         ],
         "origin": {
           "repository": "https://github.com/runeditrun/base",
-          "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
+          "revision": "11f94fec479228d71ba6d7dd6ea7796c0d42c544",
           "path": ".",
           "paths": [
             "foundation/template/src/mail.server.mjs",
@@ -62,7 +79,24 @@
             "modules/operator-auth/README.md",
             "modules/operator-auth/SCHEDULED-POLICY.md",
             "modules/delivery-producer/artifact.mjs",
-            "modules/delivery-producer/generators/integration.mjs"
+            "modules/delivery-producer/generators/integration.mjs",
+            "export/VERIFY-WORKFLOW.md",
+            "edition-authoring/adopt.mjs",
+            "edition-authoring/lock.mjs",
+            "export/install-chromium-deps.py",
+            "export/verify-ci.mjs",
+            "foundation/runtime/contract-style.ts",
+            "modules/import-kit/src/d1/compressed-plan.ts",
+            "modules/mail/README.md",
+            "modules/operator-auth/conformance/README.md",
+            "modules/operator-auth/docs/vite-spa.md",
+            "modules/operator-auth/index.d.mts",
+            "modules/operator-auth/representation.mjs",
+            "foundation/runtime/lobby.ts",
+            "modules/dependencies/index.mjs",
+            "modules/operator-auth/dev/refusal.mjs",
+            "modules/operator-auth/routes.mjs",
+            "modules/delivery-producer/export.mjs"
           ]
         },
         "mappings": [
@@ -153,6 +187,74 @@
           {
             "path": "scripts/delivery/base/generators/integration.mjs",
             "originPath": "modules/delivery-producer/generators/integration.mjs"
+          },
+          {
+            "path": "VERIFY-WORKFLOW.md",
+            "originPath": "export/VERIFY-WORKFLOW.md"
+          },
+          {
+            "path": "scripts/edition-authoring/adopt.mjs",
+            "originPath": "edition-authoring/adopt.mjs"
+          },
+          {
+            "path": "scripts/edition-authoring/lock.mjs",
+            "originPath": "edition-authoring/lock.mjs"
+          },
+          {
+            "path": "scripts/install-chromium-deps.py",
+            "originPath": "export/install-chromium-deps.py"
+          },
+          {
+            "path": "scripts/verify-ci.mjs",
+            "originPath": "export/verify-ci.mjs"
+          },
+          {
+            "path": "src/base/contract-style.ts",
+            "originPath": "foundation/runtime/contract-style.ts"
+          },
+          {
+            "path": "src/modules/import-kit/src/d1/compressed-plan.ts",
+            "originPath": "modules/import-kit/src/d1/compressed-plan.ts"
+          },
+          {
+            "path": "src/modules/mail/README.md",
+            "originPath": "modules/mail/README.md"
+          },
+          {
+            "path": "src/modules/operator-auth/conformance/README.md",
+            "originPath": "modules/operator-auth/conformance/README.md"
+          },
+          {
+            "path": "src/modules/operator-auth/docs/vite-spa.md",
+            "originPath": "modules/operator-auth/docs/vite-spa.md"
+          },
+          {
+            "path": "src/modules/operator-auth/index.d.mts",
+            "originPath": "modules/operator-auth/index.d.mts"
+          },
+          {
+            "path": "src/modules/operator-auth/representation.mjs",
+            "originPath": "modules/operator-auth/representation.mjs"
+          },
+          {
+            "path": "src/base/lobby.ts",
+            "originPath": "foundation/runtime/lobby.ts"
+          },
+          {
+            "path": "src/modules/dependencies/index.mjs",
+            "originPath": "modules/dependencies/index.mjs"
+          },
+          {
+            "path": "src/modules/operator-auth/dev/refusal.mjs",
+            "originPath": "modules/operator-auth/dev/refusal.mjs"
+          },
+          {
+            "path": "src/modules/operator-auth/routes.mjs",
+            "originPath": "modules/operator-auth/routes.mjs"
+          },
+          {
+            "path": "scripts/delivery/base/export.mjs",
+            "originPath": "modules/delivery-producer/export.mjs"
           }
         ]
       }

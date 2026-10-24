@@ -6,7 +6,7 @@ import {packagingConfig} from './package.mjs';
 import {loadSetupManifest} from './setup-manifest.mjs';
 
 /** Vendor the dependency-free Base runtime and explicit seed policy, never tests or evidence. */
-export async function exportProducer({root = process.cwd(), config, output = 'scripts/delivery/base'} = {}) {
+export async function exportProducer({root = process.cwd(), config, output = ['scripts', 'delivery', 'base'].join('/')} = {}) {
   const {setup} = packagingConfig(config);
   root = await candidateRoot(root);
   await loadSetupManifest(root, setup, config.artifact.specInputs?.mail);

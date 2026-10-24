@@ -92,7 +92,7 @@ export interface AuthHooks<R extends string = Role> {
 }
 export type { ScheduledPolicy, ScheduledPolicyDoor, PolicyApproval, PolicyRun } from './scheduled/index.mjs';
 export interface AuthOptions<R extends string = Role> {
-  /** OA store only: trusted source, re-read at approval/run/action time. */
+  /** OA store only: trusted source, re-read at approval, run and action time. */
   scheduledPolicies?: () => import('./scheduled/index.mjs').ScheduledPolicy[];
   db: Database; config: AuthConfig; mailSender?: MailSender; clientIp: (request: Request) => string | Promise<string>; rolePolicy?: RolePolicy; clock?: () => number;
   hooks?: AuthHooks<R>;

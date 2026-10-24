@@ -37,7 +37,7 @@ export function expandCompressedEnvelope(body: string, value: any, codec?: D1Pla
   if (value.d1Plan === 3 && (!Number.isSafeInteger(value.expandedSize) || value.expandedSize < 0)) throw new Error('STORED_PLAN_CHANGED');
   if (value.d1Plan === 3 && value.dictionary === 2 && (!Number.isSafeInteger(value.payloadSize) || value.payloadSize < 0)) throw new Error('STORED_PLAN_CHANGED');
   // loadPlans has freshly checked the complete manifest and chunk bytes. Only
-  // this exact request/body/codec can reuse its already verified expansion.
+  // this exact request, body and codec can reuse its already verified expansion.
   const prior = scope && reusedExpansion(scope, body, codec);
   if (prior) return prior;
   const payload = decodePayload(value, codec);

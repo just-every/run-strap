@@ -22,7 +22,7 @@ export function resolveSources(root, retain = false, diagnostics = false, additi
   const components = [];
   for (const component of recipe.components) {
     const selected = component.source;
-    if (selected.workspace) throw Error('Retain workspace edits by promotion or commit and exact revision selection before locking/release');
+    if (selected.workspace) throw Error('Retain workspace edits by promotion or commit and exact revision selection before locking or release');
     const reference = selected.kind === 'git' ? selected : selected.origin;
     const baseline = reference ? snapshot(root, reference, retain) : null;
     if (selected.kind === 'git') merge(files, selected.destination, baseline.files);

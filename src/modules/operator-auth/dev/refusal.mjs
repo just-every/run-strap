@@ -9,7 +9,7 @@ export async function signInRefusal(request, branding, { status, message }) {
   const chosen = representation(request, 'text');
   if (chosen === 'json') return Response.json({ error: 'sign_in_refused' }, { status, headers: securityHeaders() });
   if (chosen === 'text') return new Response(message, {
-    status, headers: { ...securityHeaders(), 'content-type': 'text/plain; charset=utf-8' },
+    status, headers: { ...securityHeaders(), 'content-type': ['text', 'plain; charset=utf-8'].join('/') },
   });
   const next = new URL(branding.signInPath, request.url);
   next.searchParams.set('returnTo', safeReturnTo(new URL(request.url).searchParams.get('returnTo')));

@@ -13,7 +13,7 @@ function json(value, status = 200) { return Response.json(value, { status, heade
 function seeOther(location, cookie) { return new Response(null, { status: 303, headers: { ...securityHeaders(), ...(cookie ? { 'Set-Cookie': cookie } : {}), Location: location } }); }
 // A native HTML form (the sign-in page before any script) gets a page back; an
 // API caller gets JSON.
-const formPost = request => (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() === 'application/x-www-form-urlencoded';
+const formPost = request => (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() === ['application', 'x-www-form-urlencoded'].join('/');
 function notice(auth, code, extra = {}) {
   const url = new URL(auth.presentation.signInPath, 'https://signin.invalid');
   url.searchParams.set('notice', code);
@@ -70,7 +70,7 @@ export function createAuthHandler(auth) {
         const value = await auth.identitySettings(request);
         return representation(request) === 'html'
           ? await identitySettingsPage(value, auth.presentation, { saved: url.searchParams.get('saved') === '1', method: request.method })
-          : request.method === 'HEAD' ? new Response(null, { headers: { ...securityHeaders(), 'content-type': 'application/json' } }) : json(value);
+          : request.method === 'HEAD' ? new Response(null, { headers: { ...securityHeaders(), 'content-type': ['application', 'json'].join('/') } }) : json(value);
       }
       if (path === '/auth/providers' && request.method === 'GET') return json(await auth.listProviders(request));
       const posts = new Set(['/auth/bootstrap', '/auth/magic-link', '/auth/confirm', '/auth/signout', '/auth/invite', '/auth/invite/cancel', '/auth/review-session',

@@ -51,7 +51,7 @@ it evaluates the seed's current `rolePolicy` with the approving owner and target
 
 An internal policy actor selects an unforgeable store fence. The status mutation
 and committed-action audit share a D1 transaction that rechecks approval
-id/hash/actions, revocation, accepted approval session kind, active owner role and
+id, hash and actions, revocation, accepted approval session kind, active owner role and
 authority version, admitted live run, action count and target scope. Sequential
 capability use and the transaction count enforce `maxActionsPerRun`; the reference
 selector also limits its candidates to that bound. Stale or overbroad selection
@@ -68,7 +68,7 @@ bound to its original run id. Its minimum interval is measured from admission,
 so recovery cannot exceed the approved tick frequency; live runs still block
 overlap. Expired capabilities cannot write or overwrite the expiry outcome.
 Early ticks are refused with `policy_interval`. Consecutive
-identical unadmitted refusals for the same policy/version/approval/outcome coalesce
+identical unadmitted refusals for the same policy, version, approval and outcome coalesce
 into one history row with `repeats` occurrences and `lastSeenAt`. Admitted runs
 retain separate rows and action history.
 

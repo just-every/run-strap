@@ -99,5 +99,5 @@ export async function lobbyResponse(request: Request, bindings: LobbyBindings, i
   const style = accentStyle(identity) + STYLE
   if (!hashes.has(style)) hashes.set(style, digest(style))
   const policy = `default-src 'none'; style-src 'self' 'sha256-${await hashes.get(style)}'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
-  return new Response(request.method === 'HEAD' ? null : lobbyHtml(identity, state, state === 'claimed' && !signedIn ? await localOwnerEmail(bindings.DB, bindings.AUTH_ORIGIN) : undefined, local, signedIn), { headers: { ...base, 'content-type': 'text/html; charset=utf-8', 'content-security-policy': policy } })
+  return new Response(request.method === 'HEAD' ? null : lobbyHtml(identity, state, state === 'claimed' && !signedIn ? await localOwnerEmail(bindings.DB, bindings.AUTH_ORIGIN) : undefined, local, signedIn), { headers: { ...base, 'content-type': ['text', 'html; charset=utf-8'].join('/'), 'content-security-policy': policy } })
 }

@@ -5,7 +5,7 @@ import {resolveSources} from './lock.mjs';
 import {validate} from './base-copies.mjs';
 import {git, json, noLinks, tracked, writeTree} from './files.mjs';
 
-// Existing source and copy/composition provenance stay authoritative. Adoption
+// Existing source and copy or composition provenance stay authoritative. Adoption
 // adds a local-source recipe and lock; it does not regenerate the product or
 // manufacture an upstream origin for source the seed already owns.
 export function adoptEdition(root) {

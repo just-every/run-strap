@@ -41,7 +41,7 @@ def stop_group(leader):
 def attempt(env):
     child = subprocess.Popen(
         ['bash', '-ec', 'dpkg --configure -a; pnpm exec playwright install-deps chromium'],
-        env=env, start_new_session=True)  # setsid: every launcher/apt child is owned.
+        env=env, start_new_session=True)  # setsid: every launcher and apt child is owned.
     try:
         deadline = time.monotonic() + 120
         # WNOWAIT keeps the leader reserved even when it exits before its children.
