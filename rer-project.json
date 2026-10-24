@@ -3,5 +3,32 @@
   "projectId": "just-every/run-strap",
   "name": "Strap",
   "sourceRepository": "https://github.com/just-every/run-strap",
-  "license": "MIT"
+  "license": "MIT",
+  "deployment": {
+    "target": "cloudflare-workers",
+    "artifactFile": "rer-worker-artifact.json"
+  },
+  "operations": {
+    "setup": "pnpm install --frozen-lockfile && pnpm run deps",
+    "build": "pnpm run build",
+    "verify": "pnpm run typecheck && pnpm check:deployment-spec && node scripts/edition-authoring/cli.mjs check && node scripts/edition-authoring/cli.mjs verify-base --offline && pnpm exec rer check --profile first-party && pnpm run verify",
+    "artifact": "node scripts/delivery/base/cli.mjs artifact --config packaging.json",
+    "recovery": "Follow README.md and RUN-LOCALLY.md: stop the owned runtime, export with rer export, restore into a fresh installation of the same revision with rer import, configure private settings and sign in again. Damaged archives and populated destinations are refused."
+  },
+  "verification": {
+    "migrationDirectories": [
+      "migrations/core"
+    ],
+    "guidanceFiles": [
+      "AGENTS.md",
+      "CONTRACT.md",
+      "ACCEPTANCE.md",
+      "README.md",
+      "OPERATIONS.md"
+    ]
+  },
+  "setup": {
+    "path": "rer-setup.json",
+    "sha256": "faeaec0c672d3c4c02e37faa006647ac180dd8a6ba40457eaf6b3a6203fe01ec"
+  }
 }

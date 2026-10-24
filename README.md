@@ -54,7 +54,7 @@ The original owner/member identities, classes, packs, bookings, payments, approv
 
 ## Deploy
 
-No domain or provider account is needed locally. For hosting, use your own Cloudflare Workers/D1 account and verified mail sender. Resource identities in `wrangler.jsonc` and `deploy.json` stay stable. Set `MAIL_FROM` in `deploy.json` to your verified sender and provide private `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OWNER_EMAIL`, `SESSION_SECRET`, `SETUP_TOKEN` and `MAIL_API_KEY` environment variables through your secret manager. Mail uses Resend. Never put secrets in arguments or source. Commit intended configuration changes before deploying.
+No domain or provider account is needed locally. For hosting, use your own Cloudflare Workers/D1 account and verified mail sender. Resource identities in `wrangler.jsonc` and `deploy.json` stay stable. Set `MAIL_FROM` in `deploy.json` to your verified sender and provide private `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OWNER_EMAIL`, `SESSION_SECRET`, `SETUP_TOKEN` and `MAIL_API_KEY` environment variables through your secret manager. Assisted hosting can select Resend, SendGrid or Cloudflare Email Sending in rer-setup.json. Cloudflare also needs MAIL_ACCOUNT_ID. Managed hosting assigns MAIL_PROVIDER, MAIL_FROM and MAIL_RELAY_URL and provisions the private MAIL_API_KEY; the sender passes the assigned relay URL. Local development suppresses external delivery. Never put secrets in arguments or source. Commit intended configuration changes before deploying.
 
 ```sh
 rer deploy --dry-run
@@ -65,7 +65,7 @@ Dry run validates and builds without provider calls. Real deployment provisions 
 
 ## Develop
 
-Package mode pins `@runeditrun/rer@0.2.50`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
+Package mode pins `@runeditrun/rer@0.2.79`. The committed Base foundation was `c7cb0613120074c5ffca63f610533802afbda6bd`. [Source adaptation](docs/SOURCES.md), [operations](RUN-LOCALLY.md), [agent guide](AGENTS.md).
 
 ```sh
 pnpm run test:strap

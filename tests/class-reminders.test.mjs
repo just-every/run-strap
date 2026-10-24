@@ -13,6 +13,7 @@ const deliveries=async h=>(await h.db.prepare("SELECT * FROM st_notice_deliverie
 async function proof(h,stage,ana) {if(process.env.STRAP_PROOF_DIR) await(await import('./class-reminders-browser.mjs')).classRemindersBrowser(h,{stage,ana})}
 
 test('MSG-003: current-time email reminders replace obsolete schedules, obey service rules and member choice, reserve once across replay and expose a private failed-channel follow-up',async()=>{
+ for (const provider of ['resend','rer']) {
  const sent=[]
  await run(async h=>{
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
@@ -87,11 +88,16 @@ test('MSG-003: current-time email reminders replace obsolete schedules, obey ser
   assert.ok(portable.tables.st_records.some(r=>r.kind==='reminderTaskEvent'))
   assert.ok((await deliveries(h)).every(d=>d.status==='accepted'||d.status==='rejected'||d.status==='opted_out'))
   assert.equal(new Set(sent.map(m=>m.key)).size,sent.length)
- },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'network-edge-test-key'},outbound:async request=>{
-  assert.equal(request.url,'https://api.resend.com/emails')
-  const letter={...await request.json(),key:request.headers.get('idempotency-key')}
-  if(!letter.subject.startsWith('Class reminder:')) return Response.json({id:letter.key})
+ },{auth:{MAIL_PROVIDER:provider,MAIL_API_KEY:'synthetic-strap-1',...(provider==='rer'?{MAIL_RELAY_URL:'https://relay.example.test/send'}:{})},outbound:async request=>{
+  assert.equal(request.url,provider==='rer'?'https://relay.example.test/send':'https://api.resend.com/emails')
+  assert.equal(request.headers.get('authorization'),'Bearer synthetic-strap-1')
+  const body=await request.json()
+  const letter={...body,key:provider==='rer'?body.messageKey:request.headers.get('idempotency-key')}
+  const accepted=()=>provider==='rer'?Response.json({messageId:'<synthetic-strap-1@example.test>'},{status:202}):Response.json({id:letter.key})
+  if(provider==='rer') {assert.equal('from' in body,false);assert.equal(typeof body.to,'string');assert.ok(body.messageKey)}
+  if(!letter.subject.startsWith('Class reminder:')) return accepted()
   sent.push(letter)
-  return letter.to.includes('ben@studio.example')?Response.json({message:'Provider rejected'},{status:422}):Response.json({id:'reminder-'+sent.length})
+  return letter.to.includes('ben@studio.example')?Response.json({message:'Provider rejected'},{status:422}):accepted()
  }})
+ }
 })

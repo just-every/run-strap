@@ -13,7 +13,11 @@
     {
       "id": "studio-operations",
       "clauses": [
-        "STRAP-001"
+        "BOOK-001",
+        "BOOK-002",
+        "PACK-001",
+        "PAY-001",
+        "ATT-001"
       ]
     }
   ],
@@ -84,5 +88,13 @@
       "operator-auth",
       "owner-claim"
     ]
-  }
+  },
+  "replaces": [
+    "Mindbody",
+    "WellnessLiving",
+    "Vagaro",
+    "Momence",
+    "Arketa",
+    "PushPress"
+  ]
 }

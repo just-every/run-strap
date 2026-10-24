@@ -42,9 +42,10 @@ export interface Bindings {
  SETUP_TOKEN?: string
  /** Seals authenticator-app secrets (SEC-004); never the session secret. */
  MFA_KEY?: string
- MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
+ MAIL_PROVIDER?: 'development' | 'rer' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string
  MAIL_API_KEY?: string
+ MAIL_RELAY_URL?: string
  MAIL_ACCOUNT_ID?: string
 }
 

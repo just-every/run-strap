@@ -62,3 +62,9 @@ instructions under `node_modules/@runeditrun/rer/modules/deploy-kit`; account sc
 resource ownership, migrations, receipt and health checks are defined there.
 Local validation does not prove hosted acceptance, provider delivery or remote
 health.
+
+## Hosted delivery
+
+The seed-owned packaging.json selects the existing build, DB migrations, setup manifest, app origin and recovery instructions. Run `pnpm run build`, then `pnpm delivery:spec` to regenerate the committed deployment specification. `pnpm check:deployment-spec` checks freshness against that build and policy. Package with `node scripts/delivery/base/cli.mjs package --config packaging.json --output rer-package`; generated outputs stay outside source control.
+
+Managed email uses the assigned relay URL and private installation key. Assisted owners configure the selected provider in rer-setup.json. A successful local build does not prove provider delivery.

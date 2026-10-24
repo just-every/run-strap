@@ -29,7 +29,9 @@
     "test:strap": "node --test --test-concurrency=1 tests/staff-time.test.mjs tests/retail.test.mjs tests/strap.test.mjs tests/pack-credits.test.mjs tests/capacity.test.mjs tests/booking-rules.test.mjs tests/attendance.test.mjs tests/spots.test.mjs tests/checkin.test.mjs tests/closures.test.mjs tests/waitlist.test.mjs tests/desk.test.mjs tests/booking-actions.test.mjs tests/staff-actions.test.mjs tests/series.test.mjs tests/teaching-pay.test.mjs tests/recognition.test.mjs tests/leads.test.mjs tests/substitutions.test.mjs tests/plan-changes.test.mjs tests/plan-entitlements.test.mjs tests/demand.test.mjs tests/notices.test.mjs tests/class-reminders.test.mjs tests/profiles.test.mjs tests/integrations.test.mjs tests/reservations.test.mjs tests/studio.test.mjs tests/locations.test.mjs tests/households.test.mjs tests/security.test.mjs",
     "test:archive": "node --test --test-concurrency=1 tests/retail-archive.test.mjs tests/archive.test.mjs tests/staff-actions-archive.test.mjs tests/class-reminders-archive.test.mjs",
     "build:site": "rer build --site",
-    "test:reports": "node --test --test-concurrency=1 tests/reports.test.mjs"
+    "test:reports": "node --test --test-concurrency=1 tests/reports.test.mjs",
+    "delivery:spec": "node scripts/build-deployment-spec.mjs",
+    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check"
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
@@ -43,7 +45,7 @@
     "@cloudflare/vite-plugin": "1.54.5",
     "@cloudflare/workers-types": "5.20260908.1",
     "@playwright/test": "1.63.0",
-    "@runeditrun/rer": "0.2.63",
+    "@runeditrun/rer": "0.2.79",
     "@types/node": "22.18.6",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "just-every/run-strap",
+  "toolchain": {
+    "id": "runeditrun/edition-authoring",
+    "version": "1.1.0"
+  },
+  "parent": null,
+  "components": [
+    {
+      "id": "runeditrun/base",
+      "role": "foundation",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "src/mail.server.mjs",
+          "scripts/delivery/base/setup-manifest.mjs"
+        ],
+        "origin": {
+          "repository": "https://github.com/runeditrun/base",
+          "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
+          "path": ".",
+          "paths": [
+            "foundation/template/src/mail.server.mjs",
+            "modules/delivery-producer/setup-manifest.mjs"
+          ]
+        },
+        "mappings": [
+          {
+            "path": "src/mail.server.mjs",
+            "originPath": "foundation/template/src/mail.server.mjs"
+          },
+          {
+            "path": "scripts/delivery/base/setup-manifest.mjs",
+            "originPath": "modules/delivery-producer/setup-manifest.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "just-every/run-strap",
+      "role": "edition",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "src/strap",
+          "packaging.json",
+          "rer-setup.json"
+        ]
+      }
+    }
+  ]
+}
