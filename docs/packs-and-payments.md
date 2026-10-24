@@ -94,3 +94,45 @@ The intro starts at confirmation, expires after the configured number of elapsed
 The value is unused receipt-allocated prepaid access under the existing elapsed-access calculation, excluding confirmed freeze time and rounded half-up to cents. An eligible unallocated receipt makes the value unavailable; zero means no recorded allocated prepaid value. It is not a refund quote, inferred sale price or payment collection. The screen, CSV and XLSX share their filters, dates, source identities, values, channel permissions and enrollment outcomes.
 
 Create one assigned internal follow-up per pack, or preview and approve a native renewal sequence, then enroll a currently permitted row once. Changed source facts refuse enrollment. Explicit queue review rechecks permission, source eligibility and pause, and holds marketing SMS during the member's quiet hours. It may record one native in-app message. SMS and email remain held as provider delivery unavailable; no external dispatch or automatic sequence runs. Opt-out suppresses queued work and a new rule cannot bypass permission. These foundations do not claim full AUTO-001 or provider-autopay behavior.
+
+
+## Renewal disclosures and future prices
+
+In **Packs and payments**, the owner opens **Schedule renewal disclosure** under an
+active recurring invoice agreement and chooses its lead time, from 15 to 365 elapsed
+days. The agreement personally accepted by the member records its minimum price-notice
+period (30 days by default). Choose a longer scheduling lead time to allow for delivery
+delays; an actually late notice cannot support price acceptance. Old agreements without
+accepted notice terms require a fresh agreement before proposing a price change. An optional exact future price needs the member's personal acceptance before
+the exact accept-by instant shown in the notice. The effective date is that stated
+renewal, after the full accepted notice period. Without acceptance by expiry the original price continues. The accepted price applies
+once at the stated renewal and continues for later invoices; the original agreement
+acknowledgment and the exact amendment remain retained. Changed source terms or a
+moved due date require owner review before billing. No card or bank debit is authorized.
+
+The member sees the same disclosure in **My packs**, accepts its exact price there,
+or follows **Review terms and stop future invoices** to the one-step stop. The owner
+can open the member's acceptance door but cannot accept for them. The staff action
+retains the contract-change right, actor, member, channel and before and after facts.
+
+**Schedule a pack expiry notice** covers a finite pack without an accepted renewal,
+with 1 to 365 elapsed days of lead time. It retains the purchase basis and creates no
+invoice or new term. A notice whose due date changed is closed as stale. The owner
+can cancel a scheduled notice before dispatch.
+
+Each scheduled notice reserves one in-app notice and one email through the configured
+Base provider, regardless of booking-email preferences or whether the in-app notice was
+read. Required email includes the exact old and new prices, effective date, accept-by
+instant and an absolute cancellation link. Its actual email outcome is shown to both
+the member and owner; missing configuration, paused delivery and failed or uncertain
+sends remain visible and never claim successful delivery or silently disappear. A
+failed attempt is never automatically resent. Native restores
+retain the notices but exclude dispatch authority, even at the same origin. Restored
+pending email intent shows as paused; historical outcomes remain retained. A restored
+price proposal cannot accept a new amendment without its original live dispatch authority. New owner
+scheduling creates authority only for that installation; old pending notices stay stale.
+
+The native notice policy and riders were approved by ct on 24 Oct 2026. Provider
+collection remains with BILL-002, BILL-013 and BILL-014; STAFF-001 carries delegated
+staff rights. Installations need a configured, connected mail sender to deliver required
+email. These controls do not claim legal compliance for every jurisdiction.

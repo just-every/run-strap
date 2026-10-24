@@ -13,16 +13,16 @@ export const recurringForPack = (state: State, packId: string) => list(state,'re
 export const recurringBasis = (state: State, packId: string) => recurringForPack(state,packId);
 const packTerms = (pack: RecordData) => ({credits:pack.credits,amountCents:pack.amountCents,entitlement:pack.entitlement ?? null,eligibleServices:pack.eligibleServices ?? [],priorityBooking:pack.priorityBooking === true,guestTerms:pack.guestTerms ?? null});
 const proposalBasis = (state: State, pack: RecordData) => JSON.stringify({pack,member:person(state,pack.personId,false),recurring:recurringForPack(state,pack.id),changes:list(state,'planChange').filter(c => c.packId === pack.id && c.status === 'accepted'),freezes:list(state,'freeze').filter(f => f.packId === pack.id && ['scheduled','active'].includes(f.status))});
-export function contractNotice(tx: Transaction, source: string, personId: string, subject: string, body: string, bookingIds: string[] = []) {
+export function contractNotice(tx: Transaction, source: string, personId: string, subject: string, body: string, bookingIds: string[] = [], requiredEmail = false) {
   putNotice(tx,{id:`notice:${source}`,personId,subject,body},true);
-  return reserveMail(tx,tx.notices,{id:`mail:${source}`,sourceKind:'booking_action',sourceId:source,personId,subject,body,bookingIds,prepared:true});
+  return reserveMail(tx,tx.notices,{id:`mail:${source}`,sourceKind:'booking_action',sourceId:source,personId,subject,body,bookingIds,prepared:true,...(requiredEmail ? {category:'required_contract' as const} : {})});
 }
 export type BillingConnection = {connection_id:string;origin:string};
 const connectionSQL = "SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'";
 const fenceConnection = (tx: Transaction, connection: BillingConnection) => tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_contract_connections WHERE id='billing' AND connection_id=? AND origin=?) THEN 1 ELSE 0 END",connection.connection_id,connection.origin));
 const stopPathFor = (termsId: string) => `/app/packs#recurring-${encodeURIComponent(termsId)}`;
 const debtOnly = 'This authorizes studio-balance debt only. No card or bank payment is authorized or collected.';
-const consentText = (r: RecordData) => `I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`
+const consentText = (r: RecordData) => `Price changes require at least ${r.noticeLeadDays} elapsed days of notice and my personal acceptance before the exact effective renewal date stated in the notice. If I do not accept by then, my original price continues. Renewal and price notices always go by email, regardless of booking email preferences. I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`
   + (r.originalInitiationFeeCents > 0 ? ` The $${(r.originalInitiationFeeCents/100).toFixed(2)} one-time initiation fee was included in the original sale. Each recurring invoice is $${(r.amountCents/100).toFixed(2)}; the initiation fee does not repeat.` : '');
 // The ct ruling supplies this policy; no consent evidence is automatically purged.
 const consentRetention = (acceptedAt: string, endedAt: string | null = null) => ({
@@ -50,6 +50,7 @@ export async function prepareRecurringTerms(tx: Transaction, input: Record<strin
   insist(!list(tx.state,'planChange').some(c => c.packId === pack.id && c.status === 'accepted'),'plan_change_pending',409);
   insist(!list(tx.state,'freeze').some(f => f.packId === pack.id && ['scheduled','active'].includes(f.status)),'freeze_pending',409);
   const intervalMonths = integer(input.intervalMonths,'intervalMonths',1,120), timeZone = zone(tx.state);
+  const noticeLeadDays = integer(input.noticeLeadDays ?? 30,'noticeLeadDays',15,365);
   const saleContext = proposalSaleContext(tx.state,input);
   const origin = text(tx.notices.origin,'billing_origin',2000);
   const connected = await tx.db.prepare(connectionSQL).first<BillingConnection>();
@@ -58,7 +59,7 @@ export async function prepareRecurringTerms(tx: Transaction, input: Record<strin
   if (!connected) tx.sql.push(tx.statement("INSERT INTO st_contract_connections(id,connection_id,origin,approved_by,approved_at) VALUES('billing',?,?,?,?)",connectionId,origin,tx.who.id,now()));
   if (connected) fenceConnection(tx,connected);
   const termsId = id();
-  const proposal = {id:termsId,personId:pack.personId,packId:pack.id,status:'preview',intervalMonths,timeZone,connectionId,...packTerms(pack),firstDueAt:pack.expiresAt,nextRenewalAt:pack.expiresAt,proposalOrigin:origin,stopPath:stopPathFor(termsId),
+  const proposal = {id:termsId,personId:pack.personId,packId:pack.id,status:'preview',intervalMonths,noticeLeadDays,timeZone,connectionId,...packTerms(pack),firstDueAt:pack.expiresAt,nextRenewalAt:pack.expiresAt,proposalOrigin:origin,stopPath:stopPathFor(termsId),
     billingDay:dayIn(pack.expiresAt,timeZone),basis:proposalBasis(tx.state,pack),createdAt:now(),createdBy:tx.who.id,
     collection:'studio-balance-only',continuesUntilStopped:true,originalInitiationFeeCents:pack.initiationFeeCents ?? 0,...saleContext};
   const shown = {...proposal,consent:consentText(proposal)};
@@ -132,18 +133,22 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
       tx.put('recurringTerms',{...terms,status:'needs_review',failure:'source_terms_changed',failedAt:at}); continue;
     }
     if(intakeMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'intake_completion_required',failedAt:at});continue;}
+    const amendment=list(tx.state,'renewalDisclosure').find(d=>d.termsId===terms.id&&d.acceptedAtPrice&&!d.appliedAtPrice&&d.status==='delivered');
+    if(amendment&&(amendment.packId!==pack.id||amendment.dueAt!==due||amendment.currentAmountCents!==terms.amountCents||amendment.acceptedTermsKey!==terms.key||amendment.acceptanceKey!==amendment.key||!Number.isInteger(amendment.requiredNoticeDays)||amendment.requiredNoticeDays!==terms.noticeLeadDays||!amendment.deliveredAt||Date.parse(amendment.deliveredAt)+amendment.requiredNoticeDays*86400000>Date.parse(due)||amendment.acceptByAt!==due||amendment.acceptedAtPrice>=amendment.acceptByAt||(terms.currentPriceDisclosureId ?? null)!==amendment.priorPriceDisclosureId)){tx.put('recurringTerms',{...terms,status:'needs_review',failure:'accepted_price_source_changed',failedAt:at});continue;}
+    const invoiceAmountCents=amendment?.proposedAmountCents ?? terms.amountCents;
     const invoiceId = `invoice:${terms.id}:${due}`;
     insist(!tx.state.records.has(invoiceId),'recurring_invoice_already_exists',409);
     tx.reached(due); tx.future(expiresAt);
-    const next = {id:id(),personId:pack.personId,...packTerms(pack),creditLedgerVersion:1,creditRevision:0,remaining:0,
+    const next = {id:id(),personId:pack.personId,...packTerms(pack),amountCents:invoiceAmountCents,creditLedgerVersion:1,creditRevision:0,remaining:0,
       termStartAt:due,expiresAt,recurringTermsId:terms.id,renewedFromPackId:pack.id,invoiceId,createdAt:at};
     tx.put('pack',next); appendPackEvent(tx,next,{type:'grant',credits:terms.credits});
     const chargeId = `charge:${invoiceId}`;
-    tx.put('charge',{id:chargeId,personId:pack.personId,packId:next.id,invoiceId,recurringTermsId:terms.id,kind:'recurring-invoice',amountCents:terms.amountCents,createdAt:at});
+    tx.put('charge',{id:chargeId,personId:pack.personId,packId:next.id,invoiceId,recurringTermsId:terms.id,kind:'recurring-invoice',amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,createdAt:at});
     tx.put('recurringInvoice',{id:invoiceId,personId:pack.personId,packId:next.id,previousPackId:pack.id,recurringTermsId:terms.id,dueAt:due,termEndAt:expiresAt,
-      amountCents:terms.amountCents,chargeId,status:'open',collection:'studio-balance-only',createdAt:at});
-    contractNotice(tx,invoiceId,pack.personId,'Renewal invoice issued',`Invoice for ${due} to ${expiresAt}: $${(terms.amountCents/100).toFixed(2)} added to your studio balance. No payment has been collected.`);
-    tx.put('recurringTerms',{...terms,currentPackId:next.id,nextRenewalAt:expiresAt,lastInvoiceId:invoiceId});
+      amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,chargeId,status:'open',collection:'studio-balance-only',createdAt:at});
+    contractNotice(tx,invoiceId,pack.personId,'Renewal invoice issued',`Invoice for ${due} to ${expiresAt}: $${(invoiceAmountCents/100).toFixed(2)} added to your studio balance. No payment has been collected.`);
+    if(amendment)tx.put('renewalDisclosure',{...amendment,appliedAtPrice:at,invoiceId});
+    tx.put('recurringTerms',{...terms,amountCents:invoiceAmountCents,currentPriceDisclosureId:amendment?.id ?? terms.currentPriceDisclosureId ?? null,currentPackId:next.id,nextRenewalAt:expiresAt,lastInvoiceId:invoiceId});
   }
 }
 /** A live origin move preserves only agreements tied to the existing local epoch. */

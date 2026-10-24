@@ -125,3 +125,23 @@ export async function retentionEvidenceBrowser(h,row,query) {
     }
   } finally { await browser.close() }
 }
+
+export async function retentionLifecycleBrowser(h,report){
+  const {proofPages}=await import('./renewal-disclosures-browser.mjs')
+  await proofPages(h,async({pageFor,shot})=>{
+    const page=await pageFor(h.owner)
+    await page.goto(h.origin+'/app/retention')
+    const cohort=page.locator('[data-cohort]').filter({hasText:'Lifecycle offer'})
+    assert.match(await cohort.innerText(),/Moved away: 1/);assert.match(await cohort.innerText(),/Price: 1/)
+    assert.match(await cohort.innerText(),/Travel leave: 1/);assert.match(await cohort.innerText(),/70.00/)
+    await shot(page,'RPT-003-lifecycle')
+    const row=report.rows.find(r=>r.collectedRenewalCents===7000)
+    await page.locator(`[data-pack-id="${row.packId}"]`).getByRole('link',{name:'Renewal',exact:true}).click()
+    await page.locator(`[data-recurring-invoice="${row.renewalInvoiceId}"]`).scrollIntoViewIfNeeded();await shot(page,'RPT-003-recurring-invoice')
+    await page.goto(h.origin+'/app/retention')
+    await page.locator(`[data-pack-id="${row.packId}"]`).getByRole('link',{name:'Receipt 1',exact:true}).click()
+    await page.locator('#source-record').waitFor()
+    const source=JSON.parse(await page.getByLabel('Retained source record',{exact:true}).inputValue())
+    assert.equal(source.id,row.paymentIds[0]);await shot(page,'RPT-003-collected-receipt')
+  })
+}
