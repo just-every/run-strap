@@ -59,7 +59,7 @@ export async function renewalDisclosuresSnapshot(db:D1Database,state:State,who:A
 export function launchDisclosureAcceptance(tx:Transaction,input:Record<string,unknown>){
   humanOwner(tx.who);const d=record(tx.state,input.id,'renewalDisclosure');
   insist(d.status==='delivered'&&d.proposedAmountCents!==null&&d.dueAt>now(),'disclosure_not_accepting',409);
-  return {id:id(),personId:d.personId,previewId:d.id,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23freezes'};
+  return {id:id(),personId:d.personId,previewId:d.id,purpose:'renewal-price',status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23freezes'};
 }
 export function acceptDisclosurePrice(tx:Transaction,input:Record<string,unknown>){
   insist(tx.who.role==='member','member_acceptance_required',403);

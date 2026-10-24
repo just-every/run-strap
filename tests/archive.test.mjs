@@ -246,8 +246,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal((await h.db.prepare("SELECT COUNT(*) AS count FROM st_notice_deliveries WHERE source_id LIKE 'renewal-disclosure:%'").first()).count,0);
     assert.equal(after.recurring.terms.find(t=>t.id===agreed.id).status,'needs_reconnection')
     assert.equal(after.recurring.invoices.length,0)
-    assert.deepEqual(after.charges,before.charges,'no restored balance charge')
-    assert.deepEqual(after.packs.map(p=>p.id),before.packs.map(p=>p.id),'no restored renewal entitlement')
+    assert.deepEqual([...after.charges].sort((a,b)=>a.id.localeCompare(b.id)),[...before.charges].sort((a,b)=>a.id.localeCompare(b.id)),'no restored balance charge')
+    assert.deepEqual(after.packs.map(p=>p.id).sort(),before.packs.map(p=>p.id).sort(),'no restored renewal entitlement')
     assert.equal(after.staffNotices.filter(n=>n.id.startsWith('notice:invoice:')).length,0,'no renewal notice')
     assert.equal((await h.db.prepare("SELECT COUNT(*) AS count FROM st_notice_deliveries WHERE source_id LIKE 'invoice:%'").first()).count,0,'no renewal delivery reservation')
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'the scheduler cannot reconnect billing')

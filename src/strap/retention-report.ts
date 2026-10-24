@@ -60,7 +60,7 @@ export function retentionReport(state: State, who: Actor, query: URLSearchParams
         collectedRenewalCents:allocations.length ? allocations.reduce((n,a) => n+a.amountCents,0) : null,paymentIds:allocations.length ? [...new Set(allocations.map(a => a.paymentId))] : null,
         allocationIds:allocations.map(a => a.id),paymentUrls:[...new Set(allocations.map(a => a.paymentId))].map(paymentId => '/app/revenue?sourceId='+encodeURIComponent(paymentId)+'#source-record'),
         packUrl:'/app/packs#pack-'+encodeURIComponent(pack.id),
-        renewalUrl:applied || scheduled ? '/app/packs?person='+encodeURIComponent(member.id)+'#plan-changes' : null,
+        renewalUrl:applied || scheduled ? '/app/packs?person='+encodeURIComponent(member.id)+'#plan-changes' : invoice ? '/app/packs?person='+encodeURIComponent(member.id)+'#invoice-'+encodeURIComponent(invoice.id) : null,
         chargeUrls:evidence.map(charge => '/app/revenue?sourceId='+encodeURIComponent(charge.id)+'#source-record')}
     })
   }).sort((a,b) => a.acquisitionMonth.localeCompare(b.acquisitionMonth) || a.initialOffer.localeCompare(b.initialOffer) || a.personId.localeCompare(b.personId) || a.termStartAt.localeCompare(b.termStartAt) || a.packId.localeCompare(b.packId))

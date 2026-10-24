@@ -50,6 +50,8 @@ export function staffProfileActions(s: any, p: any, back: string) {
 
 function effect(s: any, value: any) {
   if (!value) return 'No previous record'
+  if(value.dispatchConnectionId&&value.sendAt&&value.dueAt)return `${value.kind==='pack-expiry'?'Pack expiry notice':'Renewal disclosure'} · ${h(value.status)} · notice ${when(s,value.sendAt)} · term end ${when(s,value.dueAt)}${value.proposedAmountCents===null?'':' · proposed '+money(value.proposedAmountCents)} · no payment collection`;
+  if(value.purpose==='renewal-price'&&value.status==='member_action_required')return 'Exact renewal price acceptance opened; the member must personally accept';
   if(value.formId && value.expiresAt && value.actorRole) return `Write-only tablet intake handoff · version ${h(value.version)} · ${h(value.status)} · expires ${when(s,value.expiresAt)}`;
   if(value.formId && value.answers) return `Intake version ${h(value.version)} · ${value.staffMade?'Staff-entered':'Member-entered'} · ${h(value.channel)} · ${value.complete?'Complete':'Required answers pending'}`;
   if (value.status === 'member_action_required' && value.url?.startsWith('/app/tuition')) return 'Payer tuition review opened; no bill accepted or payment collected';

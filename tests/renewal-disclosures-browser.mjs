@@ -28,6 +28,7 @@ export async function proofPages(h,run){
           if(iconOnly)assert.equal(await control.locator('[role="tooltip"]').count(),1,'icon control has a tooltip')
         }
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-${width}.png`),fullPage:true})
+        await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-viewport-${width}.png`)})
       }
       await run({width,pageFor,shot})
     }finally{for(const context of contexts)await context.close()}

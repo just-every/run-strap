@@ -418,6 +418,18 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
     assert.equal(applied.charges.filter(c=>c.invoiceId===invoices[0].id).length,1);assert.equal(applied.packs.find(p=>p.id===invoices[0].packId).amountCents,12000);
     assert.equal(applied.recurring.terms.find(t=>t.id===priceTerms.id).amountCents,12000);
     assert.deepEqual(applied.recurring.terms.find(t=>t.id===priceTerms.id).acknowledgement,priceTerms.acknowledgement,'original agreement acceptance is retained verbatim');
+    assert.equal(applied.cancellations.contracts.find(t=>t.id===priceTerms.id).copy.document.priceCents,10000,'the original contract copy keeps the originally accepted price');
+    const stalePack=await buy(),staleProposal=await h.cmd('plan.recurring.prepare',{packId:stalePack.id,intervalMonths:12,requestId:'synthetic-strap-stale-agreement'});
+    const staleTerms=await h.cmd('plan.recurring.accept',{id:staleProposal.id,key:staleProposal.key},member.cookie);
+    const staleNotice=await h.cmd('plan.disclosure.schedule',{termsId:staleTerms.id,leadDays:30,proposedAmountCents:15000,requestId:'synthetic-strap-stale-price'});
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),staleNotice.id).run();await(await h.mf.getWorker()).scheduled();
+    await h.cmd('plan.disclosure.accept',{id:staleNotice.id,key:staleNotice.key},member.cookie);
+    const changedDue=new Date(Date.now()+1200).toISOString();
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.nextRenewalAt',?) WHERE id=?").bind(changedDue,staleTerms.id).run();
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.expiresAt',?) WHERE id=?").bind(changedDue,stalePack.id).run();
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(changedDue)-Date.now()+30)));await(await h.mf.getWorker()).scheduled();
+    assert.equal((await h.state()).recurring.terms.find(t=>t.id===staleTerms.id).failure,'accepted_price_source_changed');
+    assert.equal((await h.state()).recurring.invoices.filter(i=>i.recurringTermsId===staleTerms.id).length,0,'a changed due date cannot reuse an accepted price silently');
     const finite=await buy(),expiryNotice=await h.cmd('plan.disclosure.schedule',{packId:finite.id,leadDays:7,requestId:'synthetic-strap-expiry'});
     assert.equal(expiryNotice.purchaseBasis.draftId,(await h.state()).packs.find(p=>p.id===finite.id).draftId);
     await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),expiryNotice.id).run();await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled();
@@ -431,7 +443,7 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
     await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),pending.id).run()
     await h.db.prepare("DELETE FROM st_contract_connections WHERE id='billing'").run()
     await h.db.prepare('DELETE FROM st_disclosure_connections').run()
-    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,2)
+    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,3)
     assert.equal((await h.state()).renewalDisclosures.find(r=>r.id===pending.id).status,'stale')
   },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-1',MAIL_FROM:'studio@studio.example'},outbound:async request=>{
     assert.equal(request.url,'https://api.resend.com/emails');const message=await request.json()
