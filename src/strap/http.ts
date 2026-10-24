@@ -74,7 +74,10 @@ async function appState(env: Bindings, who: Actor, target: string) {
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
   if (url.pathname === '/app/leads') return {...await state(env,who),leadReport:leadReport(loaded.state,loaded.who,url.searchParams)}
-  return {...await state(env,who),...(url.pathname === '/app/renewals' ? {renewalWorklist:renewalWorklist(loaded.state,loaded.who,url.searchParams)} : {retentionReport:retentionReport(loaded.state,loaded.who,url.searchParams)})}
+  const retentionQuery = new URLSearchParams(url.searchParams)
+  // Native GET forms submit blank optional fields; API query validation remains strict.
+  for (const key of ['month','offer','churnFrom','churnTo']) if (retentionQuery.get(key) === '') retentionQuery.delete(key)
+  return {...await state(env,who),...(url.pathname === '/app/renewals' ? {renewalWorklist:renewalWorklist(loaded.state,loaded.who,url.searchParams)} : {retentionReport:retentionReport(loaded.state,loaded.who,retentionQuery)})}
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {

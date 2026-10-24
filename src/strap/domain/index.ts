@@ -1,3 +1,4 @@
+import { previewRetentionHistory, importRetentionHistory } from './retention-history';
 import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
 import { clockIn, clockStep, requestHoursCorrection, approveHours, timeSnapshot } from './time-clock';
 import { issueGift, adjustGift, savePromotion, giftSnapshot, refundGiftFunding } from './gift-cards';
@@ -69,6 +70,8 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'retention.history.preview':defineCommand(previewRetentionHistory,['owner']),
+  'retention.history.import':defineCommand(importRetentionHistory,['owner']),
   'clock.in':defineCommand(clockIn,['owner','instructor']),
   'clock.out':defineCommand((tx,input)=>clockStep(tx,input,'out'),['owner','instructor']),
   'clock.break.start':defineCommand((tx,input)=>clockStep(tx,input,'break.start'),['owner','instructor']),

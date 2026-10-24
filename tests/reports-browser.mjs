@@ -55,7 +55,7 @@ export async function reportsBrowser(h,{flow,later,report}) {
   } finally { await browser.close() }
 }
 
-// RPT-003 adds HTTP/CSV doors; its evidence links reuse the native pack/charge screens.
+// RPT-003 adds HTTP and CSV doors; its evidence links reuse the native pack and charge screens.
 export async function retentionEvidenceBrowser(h,row,query) {
   const proof = process.env.STRAP_PROOF_DIR
   if (proof) await mkdir(proof,{recursive:true})
@@ -143,5 +143,44 @@ export async function retentionLifecycleBrowser(h,report){
     await page.locator('#source-record').waitFor()
     const source=JSON.parse(await page.getByLabel('Retained source record',{exact:true}).inputValue())
     assert.equal(source.id,row.paymentIds[0]);await shot(page,'RPT-003-collected-receipt')
+  })
+}
+
+
+export async function retentionChurnBrowser(h,report,query) {
+  const {proofPages}=await import('./renewal-disclosures-browser.mjs')
+  await proofPages(h,async({pageFor,shot})=>{
+    const page=await pageFor(h.owner)
+    await page.goto(h.origin+'/app/retention')
+    await page.getByLabel('Churn from (UTC instant)',{exact:true}).fill(report.churnPeriod.from)
+    await page.getByLabel('Churn to (UTC instant)',{exact:true}).fill(report.churnPeriod.to)
+    await page.getByRole('button',{name:'Apply cohort filters',exact:true}).click()
+    const cohort=page.locator('[data-cohort]').filter({hasText:'Churn offer'})
+    assert.match(await cohort.innerText(),/1 of 4 opening members lost/)
+    assert.match(await cohort.innerText(),/25% member churn/)
+    assert.match(await cohort.innerText(),/80% gross canceled recurring revenue/)
+    assert.deepEqual(await downloadNativePair(page,'retention-churn',page.viewportSize().width,'Download retention CSV','Download retention XLSX'),report.rows)
+    await shot(page,'RPT-003-period-churn')
+    await page.getByRole('link',{name:'Opening agreement 1',exact:true}).first().click()
+    await page.locator('[data-recurring]').first().waitFor()
+    await shot(page,'RPT-003-opening-agreement')
+  })
+}
+
+
+export async function retentionHistoryBrowser(h,report,original) {
+  const {proofPages}=await import('./renewal-disclosures-browser.mjs')
+  await proofPages(h,async({pageFor,shot})=>{
+    const page=await pageFor(h.owner)
+    await page.goto(h.origin+'/app/retention')
+    assert.equal(await page.locator('[data-pack-id]').count(),20)
+    assert.match(await page.getByRole('heading',{name:'Imported definition differences',exact:true}).locator('../..').innerText(),/Historical freezes and churn denominators/)
+    assert.deepEqual(await downloadNativePair(page,'retention-history',page.viewportSize().width,'Download retention CSV','Download retention XLSX'),report.rows)
+    await shot(page,'RPT-003-continuous-history')
+    await page.goto(h.origin+original.packUrl)
+    await page.locator('#history-evidence').scrollIntoViewIfNeeded()
+    const source=JSON.parse(await page.getByLabel('Retained historical source',{exact:true}).inputValue())
+    assert.equal(source.terms.length,18);assert.equal(source.terms[0].contractReference,original.sourceRecord.contractReference)
+    await shot(page,'RPT-003-import-source')
   })
 }
