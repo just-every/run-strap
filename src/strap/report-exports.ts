@@ -48,7 +48,7 @@ export function nativeReportDownload(state: State, who: Actor, name: string, for
     const report = retentionReport(state,who,query)
     rows = table([...retentionColumns],report.rows); asOf = report.asOf; filters = report.filters; definitions = report.definitions
     csvContent = retentionCsv(report)
-    const columns = ['acquisitionMonth','initialOffer','members','meanTenureDays','attendedVisits','visitsPer30Days','terms','completedTerms','renewedTerms','scheduledRenewals','expiredWithoutLinkedRenewal','renewalRatePercent','packIds','terminatedAgreements','scheduledTerminations','churnByReason','freezeByType','freezes','reactivations','collectedRenewalCents']
+    const columns = ['acquisitionMonth','initialOffer','members','meanTenureDays','attendedVisits','visitsPer30Days','terms','completedTerms','renewedTerms','scheduledRenewals','expiredWithoutLinkedRenewal','renewalRatePercent','packIds','terminatedAgreements','scheduledTerminations','churnByReason','freezeByType','freezes','reactivations','collectedRenewalCents','churn']
     extra = [{name:'Cohorts',rows:table(columns,report.cohorts)},{name:'Unavailable',rows:[['Metric','Value'],...Object.entries(report.unavailable)]}]
   } else if (name === 'renewals') {
     const report = renewalWorklist(state,who,query)

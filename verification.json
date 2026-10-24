@@ -48,6 +48,14 @@
       "commands": [
         "pnpm run test:archive"
       ]
+    },
+    {
+      "name": "reports",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "pnpm run test:reports"
+      ]
     }
   ],
   "nightly": []

@@ -295,14 +295,14 @@ test('RPT-007 / RPT-006: native plan endings and low-credit screen/HTTP worklist
 
 }))
 
-test('RPT-003 / RPT-006: native finite-pack acquisition cohorts reconcile applied, scheduled, failed and absent renewals to exact pack/change/charge evidence through owner HTTP and matching CSV', () => run(async h => {
+test('RPT-003 / RPT-006: native finite-pack acquisition cohorts reconcile applied, scheduled, failed and absent renewals to exact pack, change and charge evidence through owner HTTP and matching CSV', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const ana = await h.person('CohortAna'), ben = await h.person('CohortBen'), cy = await h.person('CohortCy'), dax = await h.person('CohortDax'), coach = await h.person('CohortCoach','instructor')
   const base = Date.now(), expiry = new Date(base+12_000).toISOString(), later = new Date(base+86400_000).toISOString()
   const buy = async (member,expiresAt,planName='Mat five',extra={}) => h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt,planName,...extra})).id})
   const first = await buy(ana,expiry), second = await buy(ana,later,'Different later offer'), unrenewed = await buy(ben,later,'Mat five'), failedPack = await buy(dax,expiry,'Failed renewal')
-  await buy(cy,later,'Unlimited',{kind:'unlimited',credits:undefined})
+  const unlimited = await buy(cy,later,'Unlimited',{kind:'unlimited',credits:undefined})
   await h.cmd('pack.prepare',{personId:cy.id,credits:99,amountCents:99999,expiresAt:later,planName:'Draft only'})
   const renew = async (member,pack) => {
     const preview = await h.cmd('plan.change.prepare',{packId:pack.id,mode:'renewal',credits:5,amountCents:12000,expiresAt:new Date(base+2*86400_000).toISOString(),requestId:'cohort-'+pack.id})
@@ -352,7 +352,7 @@ test('RPT-003 / RPT-006: native finite-pack acquisition cohorts reconcile applie
   assert.deepEqual([mat.members,mat.terms,mat.completedTerms,mat.renewedTerms,mat.scheduledRenewals,mat.expiredWithoutLinkedRenewal,mat.renewalRatePercent],[2,5,3,1,1,2,33.33])
   const localMonth = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(state.packs.find(pack=>pack.id===first.id).createdAt)).slice(0,7)
   assert.equal(mat.acquisitionMonth,localMonth)
-  assert.deepEqual(new Set(report.rows.map(row=>row.packId)),new Set([first.id,second.id,unrenewed.id,anotherExpired.id,failedPack.id,successor.id]))
+  assert.deepEqual(new Set(report.rows.map(row=>row.packId)),new Set([first.id,second.id,unrenewed.id,anotherExpired.id,failedPack.id,successor.id,unlimited.id]))
   for (const item of report.rows) {
     assert.equal(item.collectedRenewalCents,null); assert.equal(item.paymentIds,null)
     const charges = state.charges.filter(charge=>charge.packId===item.packId)
@@ -494,4 +494,112 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
   assert.equal((await h.send(path,undefined,members[0].cookie)).status,403)
   assert.equal((await h.state()).version,version,'report and evidence reads remain read-only')
   if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionLifecycleBrowser(h,report)
+}))
+
+
+test('RPT-003: period churn reconciles unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const members = [await h.person('ChurnLost'),await h.person('ChurnRetained'),await h.person('ChurnReplacement'),await h.person('ChurnScheduled')]
+  const day = 86400000, base = Date.now(), at = d => new Date(base+d*day).toISOString()
+  const editClock = async (kind,row) => h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  const agreements = []
+  const buy = async (member,kind='credits',amountCents=12000,intervalMonths=1,historical=true) => {
+    const pack = await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,kind,credits:kind==='credits'?5:undefined,amountCents,expiresAt:at(90),planName:'Churn offer'})).id})
+    const proposed = await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths,requestId:'synthetic-strap-'+pack.id})
+    const terms = await h.cmd('plan.recurring.accept',{id:proposed.id,key:proposed.key},member.cookie)
+    if(historical) await editClock('recurringTerms',{...terms,acceptedAt:at(-20)})
+    const item={pack,terms}; agreements.push(item);return item
+  }
+  const lost1=await buy(members[0]),lost2=await buy(members[0],'unlimited',24000,2)
+  const kept=await buy(members[1]),replaced=await buy(members[2]),scheduled=await buy(members[3])
+  // A real, separately sold plan preserves member access when a recurring agreement ends.
+  const other=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:members[1].id,kind:'visits',visits:2,period:'month',amountCents:5000,expiresAt:at(90),planName:'Other access'})).id})
+  for(const [i,item] of [lost1,lost2,kept,replaced,scheduled].entries()) {
+    const p=await h.cmd('plan.cancellation.prepare',{packId:item.pack.id,effectiveAt:at(5),reasonCode:i<2?'Moved away':'Price',reason:'Requested stop',requestId:'synthetic-strap-churn-'+i})
+    const c=await h.cmd('plan.cancellation.confirm',{id:p.id,key:p.key,requestId:'synthetic-strap-churn-confirm-'+i})
+    if(item!==scheduled)await editClock('contractCancellation',{...c,effectiveAt:at(-1)})
+  }
+  await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()
+  await buy(members[2],'unlimited',9000,1,false)
+  const query=new URLSearchParams({churnFrom:at(-10),churnTo:new Date().toISOString()}).toString(),path='/api/strap/reports/retention'
+  const before=(await h.state()).version,response=await h.send(path+'?'+query,undefined,h.owner)
+  assert.equal(response.status,200,response.text)
+  assert.equal((await h.send('/app/retention?month=&offer=&'+query,undefined,h.owner)).status,200,'blank optional form fields are omitted without weakening API validation')
+  const report=response.value,cohort=report.cohorts.find(c=>c.initialOffer==='Churn offer')
+  assert.deepEqual([cohort.churn.openingMembers,cohort.churn.lostMembers,cohort.churn.memberChurnPercent],[4,1,25])
+  assert.deepEqual([cohort.churn.openingMonthlyCents,cohort.churn.lostMonthlyCents,cohort.churn.revenueChurnPercent],[60000,48000,80])
+  const lost=report.rows.find(r=>r.personId===members[0].id).churnEvidence
+  assert.equal(lost.openingAgreementIds.length,2);assert.equal(lost.cancellationIds.length,2);assert.equal(lost.lostMember,true)
+  assert.equal(report.rows.find(r=>r.personId===members[1].id).churnEvidence.lostMember,false)
+  assert.ok(report.rows.some(r=>r.packId===other.id),'non-credit plan access appears in the same cohort projection')
+  for(const row of report.rows) for(const url of row.churnEvidence.agreementUrls)assert.equal((await h.send(url,undefined,h.owner)).status,200)
+  const {parseCsv}=await import('./report-downloads.mjs'),[keys,...values]=parseCsv((await h.send(path+'.csv?'+query,undefined,h.owner)).text)
+  assert.deepEqual(values.map(v=>Object.fromEntries(keys.map((k,i)=>[k,v[i]]))),report.rows)
+  await assertNativeDownloads(h,path,[query,'churnFrom='+encodeURIComponent(at(-40))+'&churnTo='+encodeURIComponent(at(-30))],[members[0].cookie,''],['churnFrom=bad','churnTo=2099-01-01T00:00:00Z','churnFrom='+encodeURIComponent(at(-1))+'&churnTo='+encodeURIComponent(at(-2))])
+  const empty=(await h.send(path+'?churnFrom='+encodeURIComponent(at(-40))+'&churnTo='+encodeURIComponent(at(-30)),undefined,h.owner)).value.cohorts[0].churn
+  assert.equal(empty.memberChurnPercent,null);assert.equal(empty.revenueChurnPercent,null)
+  assert.equal((await h.state()).version,before,'churn and source reads are read-only')
+  if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionChurnBrowser(h,report,query)
+}))
+
+
+test('RPT-003: reviewed eighteen-month historical terms join native cutover renewals and terminations with labeled source and payment evidence', () => run(async h => {
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
+  const member=await h.person('HistoryMember'),other=await h.person('HistoryOther'),coach=await h.person('HistoryCoach','instructor')
+  const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
+  const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:at(90),planName:'Native cutover'})).id})
+  const storedPack=(await h.state()).packs.find(p=>p.id===pack.id)
+  const clock=new Date(storedPack.createdAt),month=n=>new Date(Date.UTC(clock.getUTCFullYear(),clock.getUTCMonth()+n,clock.getUTCDate(),clock.getUTCHours(),clock.getUTCMinutes(),clock.getUTCSeconds(),clock.getUTCMilliseconds())).toISOString()
+  const history={format:'strap-retention-history-v1',personId:member.id,source:'synthetic-strap-18-month-export',cutoverPackId:pack.id,
+    definitionDifferences:'Source terms use UTC month boundaries and reported visit totals. Historical freezes and churn denominators were not exported. Native bookings use corrected attendance; recorded source payments are external observations, never imported debt or receipts.',
+    terms:Array.from({length:18},(_,i)=>({sourceId:'synthetic-strap-'+i,startsAt:month(i-18),endsAt:month(i-17),offer:'Original source offer',contractReference:'synthetic-strap-contract-'+i,paymentReference:'synthetic-strap-payment-'+i,amountCents:10000,paidCents:9000,attendedVisits:2,renewed:true,terminationReason:null}))}
+  const agent=await h.cmd('agent.create',{label:'History import denied'})
+  assert.equal((await h.send('/api/strap/agent/command',{name:'retention.history.import',input:{history}},'',{authorization:`Bearer ${agent.token}`})).status,403)
+  await h.cmd('retention.history.preview',{history},'',401)
+  const before=await h.state(),preview=await h.cmd('retention.history.preview',{history})
+  await h.cmd('retention.history.import',{history:{...history,source:'changed'},fingerprint:preview.fingerprint},h.owner,409)
+  for(const cookie of [member.cookie,coach.cookie])for(const command of ['retention.history.preview','retention.history.import'])await h.cmd(command,{history,fingerprint:preview.fingerprint},cookie,403)
+  await h.cmd('retention.history.preview',{history:{...history,personId:other.id}},h.owner,400)
+  await h.cmd('retention.history.preview',{history:{...history,terms:[history.terms[0],history.terms[0]]}},h.owner,400)
+  await h.cmd('retention.history.preview',{history:{...history,terms:[{...history.terms[0],endsAt:at(1)}]}},h.owner,400)
+  const imported=await h.cmd('retention.history.import',{history:JSON.stringify(history),fingerprint:preview.fingerprint})
+  assert.deepEqual(await h.cmd('retention.history.import',{history,fingerprint:preview.fingerprint}),imported)
+  const changed=await h.cmd('retention.history.preview',{history:{...history,source:'Different source'}})
+  await h.cmd('retention.history.import',{history:{...history,source:'Different source'},fingerprint:changed.fingerprint},h.owner,409)
+  const after=await h.state()
+  for(const key of ['packs','charges','payments','bookings','people'])assert.deepEqual(after[key],before[key],key+' is unaffected by reporting import')
+  const terms=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-history-native'})
+  await h.cmd('plan.recurring.accept',{id:terms.id,key:terms.key},member.cookie)
+  const editClock=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  await editClock('recurringTerms',{...(await h.state()).recurring.terms.find(t=>t.id===terms.id),nextRenewalAt:at(-1)})
+  await editClock('pack',{...storedPack,expiresAt:at(-1)})
+  await(await h.mf.getWorker()).scheduled()
+  const state=await h.state(),invoice=state.recurring.invoices.find(i=>i.recurringTermsId===terms.id)
+  assert.ok(invoice)
+  const payment=await h.cmd('payment.record',{personId:member.id,amountCents:12000,reference:'synthetic-strap-history-native-payment'})
+  await h.cmd('contract.prepayment.record',{packId:invoice.packId,paymentId:payment.id,chargeId:invoice.chargeId,amountCents:12000,reference:'synthetic-strap-history-allocation'})
+  const end=await h.cmd('plan.cancellation.prepare',{packId:invoice.packId,effectiveAt:at(5),reasonCode:'Moved away',reason:'Requested stop',requestId:'synthetic-strap-history-stop'})
+  const cancellation=await h.cmd('plan.cancellation.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-history-stop-confirm'})
+  await editClock('contractCancellation',{...cancellation,effectiveAt:at(-0.5)})
+  await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()
+  const path='/api/strap/reports/retention',report=(await h.send(path,undefined,h.owner)).value
+  assert.equal(report.cohorts.length,1)
+  const cohort=report.cohorts[0]
+  assert.equal(cohort.acquisitionMonth,month(-18).slice(0,7));assert.equal(cohort.initialOffer,'Original source offer')
+  assert.equal(cohort.terms,20);assert.equal(cohort.attendedVisits,36);assert.equal(cohort.renewedTerms,19)
+  assert.deepEqual(cohort.churnByReason,[{label:'Moved away',count:1}])
+  assert.equal(report.rows.filter(r=>r.source==='imported').length,18)
+  const original=report.rows.find(r=>r.source==='imported')
+  assert.deepEqual(original.sourceRecord,preview.history.terms[0]);assert.equal(original.collectedRenewalCents,9000)
+  const native=report.rows.find(r=>r.packId===pack.id)
+  assert.equal(native.renewalInvoiceId,invoice.id);assert.equal(native.collectedRenewalCents,12000);assert.deepEqual(native.paymentIds,[payment.id])
+  const selected=(await h.send(path+'?history='+encodeURIComponent(imported.id),undefined,h.owner)).value.selectedHistory
+  assert.deepEqual(selected.terms,preview.history.terms);assert.equal(selected.importedBy,imported.importedBy)
+  for(const url of [original.packUrl,...original.chargeUrls,...original.paymentUrls,native.renewalUrl,...native.paymentUrls])assert.equal((await h.send(url,undefined,h.owner)).status,200)
+  const {parseCsv}=await import('./report-downloads.mjs'),[keys,...values]=parseCsv((await h.send(path+'.csv',undefined,h.owner)).text)
+  assert.deepEqual(values.map(v=>Object.fromEntries(keys.map((k,i)=>[k,v[i]]))),report.rows)
+  await assertNativeDownloads(h,path,['','month='+cohort.acquisitionMonth],[member.cookie,coach.cookie,''])
+  if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionHistoryBrowser(h,report,original)
 }))
