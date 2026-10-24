@@ -127,7 +127,9 @@ instant and an absolute cancellation link. Its actual email outcome is shown to 
 the member and owner; missing configuration, paused delivery and failed or uncertain
 sends remain visible and never claim successful delivery or silently disappear. A
 failed attempt is never automatically resent. Native restores
-retain the notices but exclude dispatch authority, even at the same origin. New owner
+retain the notices but exclude dispatch authority, even at the same origin. Restored
+pending email intent shows as paused; historical outcomes remain retained. A restored
+price proposal cannot accept a new amendment without its original live dispatch authority. New owner
 scheduling creates authority only for that installation; old pending notices stay stale.
 
 The native notice policy and riders were approved by ct on 24 Oct 2026. Provider

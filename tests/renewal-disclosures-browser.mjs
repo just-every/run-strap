@@ -125,3 +125,13 @@ export async function failedDisclosureBrowser(h,{member,disclosure}){
     }
   });
 }
+
+export async function restoredDisclosureBrowser(h,{owner,member,disclosure}){
+  await proofPages(h,async({pageFor,shot})=>{
+    for(const [role,cookie] of [['owner',owner],['member',member]]){
+      const page=await pageFor(cookie);await page.goto(h.origin+'/app/packs#freezes');
+      const notice=page.locator(`[data-renewal-disclosure="${disclosure.id}"]`);await notice.scrollIntoViewIfNeeded();
+      assert.match(await notice.innerText(),/Email: paused/);await shot(page,'PLAN-008-restored-email-'+role);
+    }
+  });
+}

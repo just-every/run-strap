@@ -57,7 +57,13 @@ export async function deliverRenewalDisclosures(tx:Transaction){
 }
 export async function renewalDisclosuresSnapshot(db:D1Database,state:State,who:Actor){
   const deliveries=(await db.prepare("SELECT id,status FROM st_notice_deliveries WHERE source_id LIKE 'renewal-disclosure:%'").all<{id:string;status:string}>()).results;
-  return list(state,'renewalDisclosure').filter(d=>who.role==='owner'||who.role==='member'&&d.personId===who.personId).map(d=>({...d,canAccept:d.status==='delivered'&&d.proposedAmountCents!==null&&!d.acceptedAtPrice&&d.acceptByAt>now()&&Date.parse(d.deliveredAt)+d.requiredNoticeDays*86400000<=Date.parse(d.dueAt)&&state.records.get(d.termsId)?.data.status==='active'&&state.records.get(d.termsId)?.data.nextRenewalAt===d.dueAt&&state.records.get(d.termsId)?.data.currentPackId===d.packId,delivery:d.delivery?{...d.delivery,status:deliveries.find(row=>row.id===d.delivery.id)?.status ?? d.delivery.status}:null}));
+  const connection=await db.prepare("SELECT connection_id FROM st_disclosure_connections WHERE id='disclosures'").first<{connection_id:string}>();
+  return list(state,'renewalDisclosure').filter(d=>who.role==='owner'||who.role==='member'&&d.personId===who.personId).map(d=>{
+    const receipt=deliveries.find(row=>row.id===d.delivery?.id),connected=!!connection&&connection.connection_id===d.dispatchConnectionId;
+    // Preserve historical outcomes; restored pending intent is not a live queue.
+    const status=!receipt||!connected&&['queued','sending'].includes(receipt.status)?'paused':receipt.status;
+    return {...d,canAccept:connected&&d.status==='delivered'&&d.proposedAmountCents!==null&&!d.acceptedAtPrice&&d.acceptByAt>now()&&Date.parse(d.deliveredAt)+d.requiredNoticeDays*86400000<=Date.parse(d.dueAt)&&state.records.get(d.termsId)?.data.status==='active'&&state.records.get(d.termsId)?.data.nextRenewalAt===d.dueAt&&state.records.get(d.termsId)?.data.currentPackId===d.packId,delivery:d.delivery?{...d.delivery,status}:null};
+  });
 }
 
 /** A staff invitation never substitutes for the member's personal price acceptance. */
@@ -66,12 +72,14 @@ export function launchDisclosureAcceptance(tx:Transaction,input:Record<string,un
   insist(d.status==='delivered'&&d.proposedAmountCents!==null&&d.acceptByAt>now(),'disclosure_not_accepting',409);
   return {id:id(),personId:d.personId,previewId:d.id,purpose:'renewal-price',status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23freezes'};
 }
-export function acceptDisclosurePrice(tx:Transaction,input:Record<string,unknown>){
+export async function acceptDisclosurePrice(tx:Transaction,input:Record<string,unknown>){
   insist(tx.who.role==='member','member_acceptance_required',403);
   const d=record(tx.state,input.id,'renewalDisclosure');insist(d.personId===tx.who.personId,'renewalDisclosure_not_found',404);
   insist(input.key===d.key,'preview_changed',409);
   if(d.acceptedAtPrice){insist(d.acceptedByPrice===tx.who.id,'member_acceptance_required',403);return d;}
   insist(d.status==='delivered'&&d.proposedAmountCents!==null&&d.acceptByAt>now(),'disclosure_not_accepting',409);
+  const connection=await tx.db.prepare("SELECT connection_id,origin FROM st_disclosure_connections WHERE id='disclosures'").first<{connection_id:string;origin:string}>();
+  insist(connection&&connection.connection_id===d.dispatchConnectionId&&connection.origin===tx.notices.origin,'disclosure_dispatch_disconnected',409);
   insist(d.deliveredAt&&Number.isInteger(d.requiredNoticeDays)&&Date.parse(d.deliveredAt)+d.requiredNoticeDays*86400000<=Date.parse(d.dueAt),'accepted_notice_period_not_met',409);
   const terms=record(tx.state,d.termsId,'recurringTerms'),pack=record(tx.state,d.packId,'pack');
   insist(terms.status==='active'&&terms.key===d.acceptedTermsKey&&terms.nextRenewalAt===d.dueAt&&terms.currentPackId===d.packId&&terms.amountCents===d.currentAmountCents&&pack.expiresAt===d.dueAt&&(terms.currentPriceDisclosureId ?? null)===d.priorPriceDisclosureId,'disclosure_source_changed',409);
