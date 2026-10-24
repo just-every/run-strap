@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "parent": null,
   "edition": "just-every/run-strap",
-  "manifest": "80364b42ad784f59a4664c18f37a3b25ee6afbe4151fe4c380b8f00d2fcf9df3",
+  "manifest": "8c421e15482d6b02979161c0b083c10d4f68f6400ec8ed98209979028b9960a7",
   "toolchain": {
     "id": "runeditrun/edition-authoring",
     "version": "1.1.0",
@@ -52,7 +52,8 @@
           "src/modules/dependencies/index.mjs",
           "src/modules/operator-auth/dev/refusal.mjs",
           "src/modules/operator-auth/routes.mjs",
-          "scripts/delivery/base/export.mjs"
+          "scripts/delivery/base/export.mjs",
+          ".github/workflows/verify.yml"
         ],
         "origin": {
           "repository": "https://github.com/runeditrun/base",
@@ -97,7 +98,8 @@
             "modules/dependencies/index.mjs",
             "modules/operator-auth/dev/refusal.mjs",
             "modules/operator-auth/routes.mjs",
-            "modules/delivery-producer/export.mjs"
+            "modules/delivery-producer/export.mjs",
+            "export/verify.yml"
           ]
         },
         "mappings": [
@@ -256,13 +258,17 @@
           {
             "path": "scripts/delivery/base/export.mjs",
             "originPath": "modules/delivery-producer/export.mjs"
+          },
+          {
+            "path": ".github/workflows/verify.yml",
+            "originPath": "export/verify.yml"
           }
         ]
       },
       "baseline": {
-        "key": "152d8180c2e8082687c16e138966b64961be0c3a38b99be2ed9de60a5f5d9b6c",
-        "digest": "57be90259a85e832d7f2607d3321bdc8229c58b8905bbcef417725142bd66893",
-        "sha256": "92567d5ee76dcec7976582f3b9669ad8683e2e8d79864e9dc18fba9a30638e83"
+        "key": "96e713a3d92b30406136fa3b7e778ee220d992dd43ac88b5e095452025abd112",
+        "digest": "aa5eb004a31ce244dc1349dfcf2048cba17334935e38a42923d52a890d110b00",
+        "sha256": "743d43531a10d5685e5ffe4503978d34d3bbc9066c447ac24d3cef54e924600d"
       }
     },
     {
@@ -296,7 +302,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "4d3bd56c619c6c6a2d9c03b480028328ac6939042de5929a72c64d2f66c4af66",
+      "sha256": "8d50f0c8a5fb64c749da5080d7fe27eaa1483244da3f2622cb87489c2b952390",
       "executable": false
     },
     ".gitignore": {
@@ -316,7 +322,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "877b83d3f3b44f8b881dfdb4fd4f446f7ff74df35293c3b763ba9a71e10799c3",
+      "sha256": "d0b9542fc5aebe526d638b1819667790c371c10da91b6a845e8ff9f70f597ff1",
       "executable": false
     },
     "composition.lock.json": {
@@ -404,7 +410,7 @@
       "executable": false
     },
     "edition.json": {
-      "sha256": "80364b42ad784f59a4664c18f37a3b25ee6afbe4151fe4c380b8f00d2fcf9df3",
+      "sha256": "8c421e15482d6b02979161c0b083c10d4f68f6400ec8ed98209979028b9960a7",
       "executable": false
     },
     "HOMEPAGE-VARIANTS.md": {

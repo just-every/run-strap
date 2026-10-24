@@ -51,7 +51,8 @@
           "src/modules/dependencies/index.mjs",
           "src/modules/operator-auth/dev/refusal.mjs",
           "src/modules/operator-auth/routes.mjs",
-          "scripts/delivery/base/export.mjs"
+          "scripts/delivery/base/export.mjs",
+          ".github/workflows/verify.yml"
         ],
         "origin": {
           "repository": "https://github.com/runeditrun/base",
@@ -96,7 +97,8 @@
             "modules/dependencies/index.mjs",
             "modules/operator-auth/dev/refusal.mjs",
             "modules/operator-auth/routes.mjs",
-            "modules/delivery-producer/export.mjs"
+            "modules/delivery-producer/export.mjs",
+            "export/verify.yml"
           ]
         },
         "mappings": [
@@ -255,6 +257,10 @@
           {
             "path": "scripts/delivery/base/export.mjs",
             "originPath": "modules/delivery-producer/export.mjs"
+          },
+          {
+            "path": ".github/workflows/verify.yml",
+            "originPath": "export/verify.yml"
           }
         ]
       }
