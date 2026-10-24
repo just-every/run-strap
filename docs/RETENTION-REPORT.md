@@ -32,7 +32,8 @@ revenue after refunds or provider settlement.
 
 Tenure spans the earliest retained term through the earlier of the report instant
 and the latest term expiry, in whole elapsed 24-hour days, bounded below by zero.
-Native visits use corrected attended bookings within that span; imported visits
+Native visits use corrected attended bookings within that span, starting at the
+reviewed native cutover when history is imported; imported visits
 use the source's declared per-term totals, before the first native pack. Frequency
 is visits times 30 divided by tenure days, rounded to two decimals, or unavailable
 at zero tenure. Cohorts average members' tenure and pool their visits and days.

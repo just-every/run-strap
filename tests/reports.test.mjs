@@ -550,7 +550,15 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   const member=await h.person('HistoryMember'),other=await h.person('HistoryOther'),coach=await h.person('HistoryCoach','instructor')
   const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
   const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:at(90),planName:'Native cutover'})).id})
-  const storedPack=(await h.state()).packs.find(p=>p.id===pack.id)
+  const storedPack={...(await h.state()).packs.find(p=>p.id===pack.id),createdAt:at(-3)}
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(storedPack),pack.id).run()
+  for(const [index,days] of [-4,-2].entries()) {
+    const start=new Date(Date.now()+(index+2)*3600000).toISOString()
+    const session=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Cutover visit '+index,start,end:new Date(Date.parse(start)+60000).toISOString(),capacity:5,instructorId:coach.id}]})).id})).classes[0]
+    const booking=await h.cmd('booking.book',{classId:session.id},member.cookie)
+    await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(at(days),new Date(Date.parse(at(days))+60000).toISOString(),session.id).run()
+  }
   const clock=new Date(storedPack.createdAt),month=n=>new Date(Date.UTC(clock.getUTCFullYear(),clock.getUTCMonth()+n,clock.getUTCDate(),clock.getUTCHours(),clock.getUTCMinutes(),clock.getUTCSeconds(),clock.getUTCMilliseconds())).toISOString()
   const history={format:'strap-retention-history-v1',personId:member.id,source:'synthetic-strap-18-month-export',cutoverPackId:pack.id,
     definitionDifferences:'Source terms use UTC month boundaries and reported visit totals. Historical freezes and churn denominators were not exported. Native bookings use corrected attendance; recorded source payments are external observations, never imported debt or receipts.',
@@ -574,7 +582,7 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   await h.cmd('plan.recurring.accept',{id:terms.id,key:terms.key},member.cookie)
   const editClock=async(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
   await editClock('recurringTerms',{...(await h.state()).recurring.terms.find(t=>t.id===terms.id),nextRenewalAt:at(-1)})
-  await editClock('pack',{...storedPack,expiresAt:at(-1)})
+  await editClock('pack',{...(await h.state()).packs.find(p=>p.id===pack.id),expiresAt:at(-1)})
   await(await h.mf.getWorker()).scheduled()
   const state=await h.state(),invoice=state.recurring.invoices.find(i=>i.recurringTermsId===terms.id)
   assert.ok(invoice)
@@ -588,7 +596,7 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   assert.equal(report.cohorts.length,1)
   const cohort=report.cohorts[0]
   assert.equal(cohort.acquisitionMonth,month(-18).slice(0,7));assert.equal(cohort.initialOffer,'Original source offer')
-  assert.equal(cohort.terms,20);assert.equal(cohort.attendedVisits,36);assert.equal(cohort.renewedTerms,19)
+  assert.equal(cohort.terms,20);assert.equal(cohort.attendedVisits,37,'reported historical visits and post-cutover native visits reconcile without counting a pre-cutover native observation twice');assert.equal(cohort.renewedTerms,19)
   assert.deepEqual(cohort.churnByReason,[{label:'Moved away',count:1}])
   assert.equal(report.rows.filter(r=>r.source==='imported').length,18)
   const original=report.rows.find(r=>r.source==='imported')
