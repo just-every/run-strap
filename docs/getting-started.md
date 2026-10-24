@@ -6,18 +6,18 @@ in your own account.
 
 ## What you need
 
-A Mac, a Linux computer or Windows with WSL2, with Git. With Node 22 or later Strap starts in one line; without it, the
-installer below brings its own Node. Nothing else: Strap brings its own database and opens in your browser.
+A Mac, a Linux computer or Windows with WSL2. Git is required; rer brings Node and pnpm. Nothing else: Strap brings
+its own database and opens in your browser.
 
 ## Run Strap on your computer
 
-One line installs the `rer` command, gets Strap and starts it:
+One line installs the `rer` command, gets Strap into `run-strap` and starts it:
 
 ```sh
-npx -y @runeditrun/rer dev just-every/run-strap
+curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-strap
 ```
 
-Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-strap` does the same. To start it again later, run `cd run-strap && rer dev`.
+Already have Node 22 or later? `npx -y @runeditrun/rer dev just-every/run-strap` does the same. If the installer prints a line that puts `rer` on your PATH, run that line too. To start it again later, run the same line from the same folder, or `cd run-strap && rer dev`.
 
 `rer dev` installs everything, makes you the owner and prints two lines. `RER_OPEN` is a private link that opens Strap
 signed in as you: keep it to yourself. `RER_READY` is the ordinary address. The first launch can take a few minutes;
