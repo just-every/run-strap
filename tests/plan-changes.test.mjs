@@ -395,13 +395,43 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
     await(await h.mf.getWorker()).scheduled()
     assert.equal((await h.state()).recurring.invoices.filter(i=>i.recurringTermsId===terms.id).length,0)
     assert.equal((await h.state()).charges.filter(c=>c.recurringTermsId===terms.id).length,0)
+    const pricedPack=await buy(),priceProposal=await h.cmd('plan.recurring.prepare',{packId:pricedPack.id,intervalMonths:12,requestId:'synthetic-strap-price-agreement'});
+    const priceTerms=await h.cmd('plan.recurring.accept',{id:priceProposal.id,key:priceProposal.key},member.cookie);
+    const priceNotice=await h.cmd('plan.disclosure.schedule',{termsId:priceTerms.id,leadDays:30,proposedAmountCents:12000,requestId:'synthetic-strap-price-notice'});
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),priceNotice.id).run();await(await h.mf.getWorker()).scheduled();
+    await h.cmd('plan.disclosure.accept',{id:priceNotice.id,key:priceNotice.key},h.owner,403);
+    await h.cmd('plan.disclosure.accept',{id:priceNotice.id,key:priceNotice.key},other.cookie,404);
+    await h.cmd('plan.disclosure.accept',{id:priceNotice.id,key:'changed'},member.cookie,409);
+    if(process.env.STRAP_PROOF_DIR)await(await import('./renewal-disclosures-browser.mjs')).priceAcceptanceBrowser(h,{member,terms:priceTerms,disclosure:priceNotice});
+    const price=await h.cmd('plan.disclosure.accept',{id:priceNotice.id,key:priceNotice.key},member.cookie);
+    assert.deepEqual(await h.cmd('plan.disclosure.accept',{id:priceNotice.id,key:priceNotice.key},member.cookie),price);
+    assert.equal((await h.state()).recurring.terms.find(t=>t.id===priceTerms.id).amountCents,10000,'accepted future price is not charged early');
+    assert.equal(price.acceptanceText,price.consent);assert.equal(price.acceptanceKey,price.key);
+    // The retained accepted fixtures cross their next due instant together, as with the existing freeze calendar journey.
+    const due=new Date(Date.now()+1500).toISOString(),consent=price.consent.replaceAll(price.dueAt,due);
+    const key=JSON.stringify([price.id,priceTerms.id,priceTerms.key,pricedPack.id,due,10000,12000,consent]);
+    const current=(await h.state()).packs.find(p=>p.id===pricedPack.id);
+    for(const [kind,row] of [['renewalDisclosure',{...price,dueAt:due,consent,key,acceptanceKey:key,acceptanceText:consent}],['recurringTerms',{...priceTerms,nextRenewalAt:due}],['pack',{...current,expiresAt:due}]])await h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run();
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(due)-Date.now()+30)));await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled();
+    const applied=await h.state(),invoices=applied.recurring.invoices.filter(i=>i.recurringTermsId===priceTerms.id);
+    assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000);assert.equal(invoices[0].priceDisclosureId,price.id);
+    assert.equal(applied.charges.filter(c=>c.invoiceId===invoices[0].id).length,1);assert.equal(applied.packs.find(p=>p.id===invoices[0].packId).amountCents,12000);
+    assert.equal(applied.recurring.terms.find(t=>t.id===priceTerms.id).amountCents,12000);
+    assert.deepEqual(applied.recurring.terms.find(t=>t.id===priceTerms.id).acknowledgement,priceTerms.acknowledgement,'original agreement acceptance is retained verbatim');
+    const finite=await buy(),expiryNotice=await h.cmd('plan.disclosure.schedule',{packId:finite.id,leadDays:7,requestId:'synthetic-strap-expiry'});
+    assert.equal(expiryNotice.purchaseBasis.draftId,(await h.state()).packs.find(p=>p.id===finite.id).draftId);
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),expiryNotice.id).run();await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled();
+    const expiry=(await h.state(member.cookie)).renewalDisclosures.find(d=>d.id===expiryNotice.id);assert.equal(expiry.status,'delivered');assert.equal(expiry.delivery.status,'accepted');assert.match(expiry.body,/No renewal has been accepted/);
+    assert.equal((await h.state()).recurring.invoices.filter(i=>i.previousPackId===finite.id).length,0);
+    if(process.env.STRAP_PROOF_DIR)await(await import('./renewal-disclosures-browser.mjs')).expiryDisclosureBrowser(h,{member,disclosure:expiry});
     // A restore cannot recover authority to dispatch pending disclosures, even at the same origin.
     const second=await buy(),q=await h.cmd('plan.recurring.prepare',{packId:second.id,intervalMonths:12,requestId:'synthetic-strap-restore'})
     const accepted=await h.cmd('plan.recurring.accept',{id:q.id,key:q.key},member.cookie)
     const pending=await h.cmd('plan.disclosure.schedule',{termsId:accepted.id,leadDays:30,requestId:'synthetic-strap-pending'})
     await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(at(-1),pending.id).run()
     await h.db.prepare("DELETE FROM st_contract_connections WHERE id='billing'").run()
-    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,1)
+    await h.db.prepare('DELETE FROM st_disclosure_connections').run()
+    await(await h.mf.getWorker()).scheduled();assert.equal(sent.length,2)
     assert.equal((await h.state()).renewalDisclosures.find(r=>r.id===pending.id).status,'stale')
   },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-1',MAIL_FROM:'studio@studio.example'},outbound:async request=>{
     assert.equal(request.url,'https://api.resend.com/emails');const message=await request.json()

@@ -132,18 +132,22 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
       tx.put('recurringTerms',{...terms,status:'needs_review',failure:'source_terms_changed',failedAt:at}); continue;
     }
     if(intakeMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'intake_completion_required',failedAt:at});continue;}
+    const amendment=list(tx.state,'renewalDisclosure').find(d=>d.termsId===terms.id&&d.acceptedAtPrice&&!d.appliedAtPrice&&d.status==='delivered');
+    if(amendment&&(amendment.packId!==pack.id||amendment.dueAt!==due||amendment.currentAmountCents!==terms.amountCents||amendment.acceptedTermsKey!==terms.key||amendment.acceptanceKey!==amendment.key||(terms.currentPriceDisclosureId ?? null)!==amendment.priorPriceDisclosureId)){tx.put('recurringTerms',{...terms,status:'needs_review',failure:'accepted_price_source_changed',failedAt:at});continue;}
+    const invoiceAmountCents=amendment?.proposedAmountCents ?? terms.amountCents;
     const invoiceId = `invoice:${terms.id}:${due}`;
     insist(!tx.state.records.has(invoiceId),'recurring_invoice_already_exists',409);
     tx.reached(due); tx.future(expiresAt);
-    const next = {id:id(),personId:pack.personId,...packTerms(pack),creditLedgerVersion:1,creditRevision:0,remaining:0,
+    const next = {id:id(),personId:pack.personId,...packTerms(pack),amountCents:invoiceAmountCents,creditLedgerVersion:1,creditRevision:0,remaining:0,
       termStartAt:due,expiresAt,recurringTermsId:terms.id,renewedFromPackId:pack.id,invoiceId,createdAt:at};
     tx.put('pack',next); appendPackEvent(tx,next,{type:'grant',credits:terms.credits});
     const chargeId = `charge:${invoiceId}`;
-    tx.put('charge',{id:chargeId,personId:pack.personId,packId:next.id,invoiceId,recurringTermsId:terms.id,kind:'recurring-invoice',amountCents:terms.amountCents,createdAt:at});
+    tx.put('charge',{id:chargeId,personId:pack.personId,packId:next.id,invoiceId,recurringTermsId:terms.id,kind:'recurring-invoice',amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,createdAt:at});
     tx.put('recurringInvoice',{id:invoiceId,personId:pack.personId,packId:next.id,previousPackId:pack.id,recurringTermsId:terms.id,dueAt:due,termEndAt:expiresAt,
-      amountCents:terms.amountCents,chargeId,status:'open',collection:'studio-balance-only',createdAt:at});
-    contractNotice(tx,invoiceId,pack.personId,'Renewal invoice issued',`Invoice for ${due} to ${expiresAt}: $${(terms.amountCents/100).toFixed(2)} added to your studio balance. No payment has been collected.`);
-    tx.put('recurringTerms',{...terms,currentPackId:next.id,nextRenewalAt:expiresAt,lastInvoiceId:invoiceId});
+      amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,chargeId,status:'open',collection:'studio-balance-only',createdAt:at});
+    contractNotice(tx,invoiceId,pack.personId,'Renewal invoice issued',`Invoice for ${due} to ${expiresAt}: $${(invoiceAmountCents/100).toFixed(2)} added to your studio balance. No payment has been collected.`);
+    if(amendment)tx.put('renewalDisclosure',{...amendment,appliedAtPrice:at,invoiceId});
+    tx.put('recurringTerms',{...terms,amountCents:invoiceAmountCents,currentPriceDisclosureId:amendment?.id ?? terms.currentPriceDisclosureId ?? null,currentPackId:next.id,nextRenewalAt:expiresAt,lastInvoiceId:invoiceId});
   }
 }
 /** A live origin move preserves only agreements tied to the existing local epoch. */

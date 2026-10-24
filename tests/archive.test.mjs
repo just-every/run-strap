@@ -210,17 +210,21 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
     const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    const expiryPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
+    const expiryDisclosure=await h.cmd('plan.disclosure.schedule',{packId:expiryPack.id,leadDays:7,requestId:'synthetic-strap-expiry-archive'});
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port)}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
     assert.equal(before.recurring.invoices.length,0)
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,1)
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_disclosure_connections').first()).count,1);
     await h.close();h=null
     const archive=join(temporary,'billing.rer')
     await command(source,['export','--output',archive,'--no-queue'])
     const archived=(await readFile(archive,'utf8')).split('\n').filter(Boolean).map(JSON.parse)
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_contract_connections'))
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_contract_connections'))
+    assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_disclosure_connections'));
     await command(restored,['import','--input',archive,'--yes','--no-queue'])
     h=await harness({root:restored,...identity})
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
@@ -228,6 +232,9 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     // Reuse the actual listening origin, not a rewritten request URL.
     assert.equal(h.origin,sourceOrigin)
     const state=()=>h.state(restoredOwner)
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_disclosure_connections').first()).count,0);
+    assert.equal((await state()).renewalDisclosures.find(d=>d.id===expiryDisclosure.id).status,'scheduled');
+    await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.sendAt',?) WHERE id=?").bind(new Date(Date.now()-1000).toISOString(),expiryDisclosure.id).run();
     const retained=(await state()).recurring.terms.find(t=>t.id===agreed.id)
     assert.equal(retained.status,'active','the native archive retains the accepted agreement')
     assert.equal(retained.billingOrigin,sourceOrigin,'origin mismatch is not the reason billing stops')
@@ -235,6 +242,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(dueAt)-Date.now()+100)))
     for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'})
     const after=await state()
+    assert.equal(after.renewalDisclosures.find(d=>d.id===expiryDisclosure.id).status,'stale','restored expiry notice has no dispatch authority');
+    assert.equal((await h.db.prepare("SELECT COUNT(*) AS count FROM st_notice_deliveries WHERE source_id LIKE 'renewal-disclosure:%'").first()).count,0);
     assert.equal(after.recurring.terms.find(t=>t.id===agreed.id).status,'needs_reconnection')
     assert.equal(after.recurring.invoices.length,0)
     assert.deepEqual(after.charges,before.charges,'no restored balance charge')

@@ -51,7 +51,44 @@ export async function disclosuresBrowser(h,{member,disclosure,terms}){
     const stop=page.locator(`[data-recurring="${terms.id}"]`)
     await stop.scrollIntoViewIfNeeded()
     assert.equal(await stop.getByRole('button',{name:'Stop future invoices now',exact:true}).count(),1)
-    // Exercise the actual cancellation once after both viewport reviews below.
     await shot(page,'PLAN-008-member-stop')
+    if(width===390){await stop.getByRole('button',{name:'Stop future invoices now',exact:true}).click();assert.equal((await h.state()).recurring.terms.find(t=>t.id===terms.id).status,'cancellation_scheduled');await shot(page,'PLAN-008-member-cancelled');}
+  })
+}
+
+export async function priceAcceptanceBrowser(h,{member,terms,disclosure}){
+  await proofPages(h,async({width,pageFor,shot})=>{
+    const owner=await pageFor(h.owner),page=await pageFor(member.cookie)
+    await owner.goto(h.origin+'/app/packs#freezes')
+    const staff=owner.locator(`[data-renewal-disclosure="${disclosure.id}"]`)
+    await staff.scrollIntoViewIfNeeded()
+    await staff.getByRole('button',{name:'Open member price acceptance',exact:true}).click()
+    assert.ok((await h.state()).staffActions.some(a=>a.command==='plan.disclosure.accept.launch'&&a.personId===member.id&&a.right==='contract-change'))
+    await shot(owner,'PLAN-008-staff-price-launch')
+    await page.goto(h.origin+'/app/packs#freezes')
+    const price=page.locator(`[data-renewal-disclosure="${disclosure.id}"]`)
+    await price.scrollIntoViewIfNeeded()
+    assert.match(await price.innerText(),/120.00/);assert.ok((await price.innerText()).includes(disclosure.dueAt))
+    assert.equal(await price.getByRole('button',{name:'I accept this exact renewal price',exact:true}).count(),1)
+    await shot(page,'PLAN-008-exact-price-acceptance')
+    if(width===390){
+      await price.getByRole('button',{name:'I accept this exact renewal price',exact:true}).click()
+      await page.locator(`[data-renewal-disclosure="${disclosure.id}"]`).getByText(/Price personally accepted/).waitFor()
+      await shot(page,'PLAN-008-price-accepted')
+    }
+  })
+}
+
+export async function expiryDisclosureBrowser(h,{member,disclosure}){
+  await proofPages(h,async({pageFor,shot})=>{
+    const owner=await pageFor(h.owner),page=await pageFor(member.cookie)
+    await owner.goto(h.origin+'/app/packs#freezes')
+    await owner.getByText('Schedule a pack expiry notice',{exact:true}).click()
+    await owner.getByLabel('Finite pack for expiry notice',{exact:true}).selectOption(disclosure.packId)
+    await shot(owner,'PLAN-008-expiry-schedule')
+    await page.goto(h.origin+'/app/packs#freezes')
+    const notice=page.locator(`[data-renewal-disclosure="${disclosure.id}"]`)
+    await notice.scrollIntoViewIfNeeded();assert.match(await notice.innerText(),/No renewal has been accepted/)
+    await shot(page,'PLAN-008-pack-expiry-notice')
   })
 }

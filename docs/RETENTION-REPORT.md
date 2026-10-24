@@ -27,11 +27,10 @@ renewal attempt ID, the accepted/applied change and applied successor where pres
 and the pack's exact signed charge IDs and assessed USD cents. `packUrl`,
 `renewalUrl` and `chargeUrls` open the retained evidence in existing owner screens;
 `renewalChangeId` identifies the change in the Plan changes panel and native state.
-Receipts without a pack allocation are never assigned to a renewal: `paymentIds`
-and `collectedRenewalCents` remain null, even if a member has paid their balance.
+Only explicit retained allocations to the positive linked successor renewal charge populate `paymentIds`, `allocationIds`, `paymentUrls` and `collectedRenewalCents`. Unallocated receipts and unrelated successor fees never count. These are gross allocated collections, not net revenue after refunds. With no allocation the collected amount remains null.
 
 A completed term expires at or before the report instant. A renewed term needs both
-an applied PLAN-005 renewal and its distinct successor's `renewedFromPackId`, for
+an applied PLAN-005 renewal or native recurring invoice and its distinct successor's `renewedFromPackId`, for
 the same member. An accepted future change is **scheduled**, not applied, paid or
 renewal revenue. Previews and failed changes never count as renewals. Expiry without
 a linked applied renewal is labeled exactly that; it is not a membership cancellation.
@@ -53,8 +52,14 @@ decimals, null at zero tenure days. Every term row repeats its member's `tenureD
 its members), pooled `attendedVisits` and `visitsPer30Days` (pooled visits × 30 ÷ pooled
 tenure days).
 
-Member and revenue churn, imported 18-month history,
-freeze/reactivation, PLAN-011 termination reasons/freeze types, and collected
-renewal attribution are unavailable. Recurring contracts, payment providers and
-migration records are not reconstructed from finite packs. The complete RPT-003
-acceptance remains required.
+**Native lifecycle events.** `cancellationIds` and `terminationReasons` count applied
+agreement terminations once; scheduled cancellations remain separately labeled and
+withdrawn or superseded cancellations do not count. `freezeIds` and `freezeTypes`
+count confirmed started freezes, while `resumedFreezeIds` requires a retained actual
+resumption. Cohorts carry the matching counts and reason and type breakdowns. Links
+open the retained cancellation and freeze evidence. A termination is an agreement
+event, not necessarily a lost member with no other plan.
+
+Member and revenue churn rates, imported 18-month continuity and cohorts beyond
+native finite credit packs remain unavailable. The complete RPT-003 acceptance
+remains required.

@@ -1,4 +1,4 @@
-import { scheduleRenewalDisclosure, cancelRenewalDisclosure, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
+import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
 import { clockIn, clockStep, requestHoursCorrection, approveHours, timeSnapshot } from './time-clock';
 import { issueGift, adjustGift, savePromotion, giftSnapshot, refundGiftFunding } from './gift-cards';
 import { saveSupplier, saveSku, receiveStock, countStock, transferStock, sellRetail, returnRetail, inventorySnapshot } from './inventory';
@@ -153,6 +153,8 @@ export const handlers = {
   'freeze.confirm':defineCommand(confirmFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.prepare':defineCommand(prepareEndFreeze,['owner'],{staffRight:'contract-change'}),
   'freeze.end.confirm':defineCommand(confirmEndFreeze,['owner'],{staffRight:'contract-change'}),
+  'plan.disclosure.accept':defineCommand(acceptDisclosurePrice,['member'],{member:{staff:'plan.disclosure.accept.launch',right:'contract-change',ownStep:true}}),
+  'plan.disclosure.accept.launch':defineCommand(launchDisclosureAcceptance,['owner'],{staffRight:'contract-change'}),
   'plan.disclosure.schedule':defineCommand(scheduleRenewalDisclosure,['owner'],{staffRight:'contract-change'}),
   'plan.disclosure.cancel':defineCommand(cancelRenewalDisclosure,['owner'],{staffRight:'contract-change'}),
   'plan.recurring.reconnect':defineCommand(reconnectRecurringBilling,['owner'],{staffRight:'contract-change'}),
