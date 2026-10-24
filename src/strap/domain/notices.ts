@@ -46,11 +46,11 @@ export function confirmBooking(tx: Transaction, booking: RecordData) {
 }
 
 /** Reserves one email for a member about one source record (a closure or a booking). */
-export function reserveMail(tx: Transaction, context: NoticeContext, mail: {id: string; sourceKind: 'closure' | 'booking' | 'booking_action' | 'confirmation' | 'reminder'; sourceId: string; personId: string; bookingIds: string[]; subject: string; body: string; prepared?: boolean; category?: 'waitlist_offer'}) {
+export function reserveMail(tx: Transaction, context: NoticeContext, mail: {id: string; sourceKind: 'closure' | 'booking' | 'booking_action' | 'confirmation' | 'reminder'; sourceId: string; personId: string; bookingIds: string[]; subject: string; body: string; prepared?: boolean; category?: 'waitlist_offer' | 'required_contract'}) {
   const member = tx.state.people.find(p => p.id === mail.personId);
   const connection = memberMail(tx.state);
   if (!connection && context.origin) tx.put('mailConnection',{id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:'first-use'});
-  const status = mail.category !== 'waitlist_offer' && messagePreference(tx.state,mail.personId).optedOut ? 'opted_out' : connection && connection.origin !== context.origin ? 'paused' : !context.mailConfigured ? 'not_configured' : member?.email && !member.erasedAt ? 'queued' : 'no_address';
+  const status = mail.category !== 'waitlist_offer' && mail.category !== 'required_contract' && messagePreference(tx.state,mail.personId).optedOut ? 'opted_out' : connection && connection.origin !== context.origin ? 'paused' : !context.mailConfigured ? 'not_configured' : member?.email && !member.erasedAt ? 'queued' : 'no_address';
   // UNIQUE(source_kind, source_id, person_id) refuses a second reservation for the same source.
   tx.sql.push(tx.statement('INSERT INTO st_notice_deliveries(id,source_kind,source_id,person_id,booking_ids,recipient,subject,body,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
     mail.id,mail.sourceKind,mail.sourceId,mail.personId,JSON.stringify(mail.bookingIds),status === 'queued' ? member!.email : null,mail.subject,(mail.prepared ? mail.body : messageBody(tx.state,mail.body,mail.bookingIds)) + (context.origin ? `\n\nOpen Strap: ${context.origin}/app` : ''),status,Date.parse(now())));

@@ -100,8 +100,12 @@ Create one assigned internal follow-up per pack, or preview and approve a native
 
 In **Packs and payments**, the owner opens **Schedule renewal disclosure** under an
 active recurring invoice agreement and chooses its lead time, from 15 to 365 elapsed
-days. An optional exact future price needs the member's personal acceptance before
-that renewal. Without it the original price continues. The accepted price applies
+days. The agreement personally accepted by the member records its minimum price-notice
+period (30 days by default). Choose a longer scheduling lead time to allow for delivery
+delays; an actually late notice cannot support price acceptance. Old agreements without
+accepted notice terms require a fresh agreement before proposing a price change. An optional exact future price needs the member's personal acceptance before
+the exact accept-by instant shown in the notice. The effective date is that stated
+renewal, after the full accepted notice period. Without acceptance by expiry the original price continues. The accepted price applies
 once at the stated renewal and continues for later invoices; the original agreement
 acknowledgment and the exact amendment remain retained. Changed source terms or a
 moved due date require owner review before billing. No card or bank debit is authorized.
@@ -117,12 +121,16 @@ invoice or new term. A notice whose due date changed is closed as stale. The own
 can cancel a scheduled notice before dispatch.
 
 Each scheduled notice reserves one in-app notice and one email through the configured
-Base provider. Its actual email outcome is shown; missing configuration, opted-out
-email, paused delivery and failures never claim successful delivery. Native restores
+Base provider, regardless of booking-email preferences or whether the in-app notice was
+read. Required email includes the exact old and new prices, effective date, accept-by
+instant and an absolute cancellation link. Its actual email outcome is shown to both
+the member and owner; missing configuration, paused delivery and failed or uncertain
+sends remain visible and never claim successful delivery or silently disappear. A
+failed attempt is never automatically resent. Native restores
 retain the notices but exclude dispatch authority, even at the same origin. New owner
 scheduling creates authority only for that installation; old pending notices stay stale.
 
-PLAN-008 remains partial pending approval of the conservative policy and the remaining
-statutory notice rules, legally required email treatment, accepted-term lead times,
-delegated staff rights and payment-provider collection. These controls do not claim
-legal compliance for every renewal or price change.
+The native notice policy and riders were approved by ct on 24 Oct 2026. Provider
+collection remains with BILL-002, BILL-013 and BILL-014; STAFF-001 carries delegated
+staff rights. Installations need a configured, connected mail sender to deliver required
+email. These controls do not claim legal compliance for every jurisdiction.

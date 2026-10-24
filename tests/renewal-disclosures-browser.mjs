@@ -24,8 +24,15 @@ export async function proofPages(h,run){
         // Every visible icon-only control must expose the shared short tooltip.
         for(const control of await page.locator('a,button').all()){
           if(!await control.isVisible())continue
-          const iconOnly=await control.evaluate(el=>el.querySelector('svg')&&!el.textContent.trim())
-          if(iconOnly)assert.equal(await control.locator('[role="tooltip"]').count(),1,'icon control has a tooltip')
+          const iconOnly=await control.evaluate(el=>{const copy=el.cloneNode(true);copy.querySelectorAll('[role="tooltip"]').forEach(t=>t.remove());return el.querySelector('svg')&&!copy.textContent.trim()})
+          if(iconOnly){
+            const tip=control.locator('[role="tooltip"]');assert.equal(await tip.count(),1,'icon control has a tooltip');
+            const scroll=await page.evaluate(()=>scrollY);
+            await control.focus();assert.equal(await tip.isVisible(),true,'tooltip appears on keyboard focus');
+            await control.evaluate(el=>el.blur());await control.hover();await page.waitForTimeout(350);
+            assert.equal(await tip.isVisible(),true,'tooltip appears after hover delay');
+            await page.mouse.move(0,0);await page.evaluate(y=>scrollTo(0,y),scroll);
+          }
         }
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-${width}.png`),fullPage:true})
         await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-viewport-${width}.png`)})
@@ -38,7 +45,21 @@ export async function proofPages(h,run){
 export async function disclosuresBrowser(h,{member,disclosure,terms}){
   await proofPages(h,async({width,pageFor,shot})=>{
     const owner=await pageFor(h.owner),page=await pageFor(member.cookie)
+    const spare=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:new Date(Date.now()+90*86400000).toISOString()})).id});
     await owner.goto(h.origin+'/app/packs#freezes')
+    await owner.getByText('Propose recurring studio invoices',{exact:true}).click();
+    const prepare=owner.locator('form[action*="name=plan.recurring.prepare"]');
+    await prepare.locator('select[name="packId"]').selectOption(spare.id);
+    await prepare.getByLabel('Minimum price notice days',{exact:true}).fill('21');
+    await shot(owner,'PLAN-008-owner-accepted-notice-terms');
+    await prepare.getByRole('button',{name:'Preview recurring invoices',exact:true}).click();
+    const proposed=(await h.state()).recurring.terms.find(t=>t.packId===spare.id);assert.equal(proposed.noticeLeadDays,21);
+    const own=await pageFor(member.cookie);await own.goto(h.origin+'/app/packs#freezes');
+    const consent=own.locator(`[data-recurring="${proposed.id}"]`);await consent.scrollIntoViewIfNeeded();
+    assert.match(await consent.innerText(),/at least 21 elapsed days/);await shot(own,'PLAN-008-member-accepted-notice-terms');
+    await consent.getByRole('button',{name:'I agree to these recurring invoices',exact:true}).click();
+    assert.equal((await h.state()).recurring.terms.find(t=>t.id===proposed.id).noticeLeadDays,21);
+    await owner.goto(h.origin+'/app/packs#freezes');
     const article=owner.locator(`[data-renewal-disclosure="${disclosure.id}"]`)
     await article.scrollIntoViewIfNeeded();assert.match(await article.innerText(),/accepted/)
     const recurring=owner.locator(`[data-recurring="${terms.id}"]`)
@@ -92,4 +113,15 @@ export async function expiryDisclosureBrowser(h,{member,disclosure}){
     await notice.scrollIntoViewIfNeeded();assert.match(await notice.innerText(),/No renewal has been accepted/)
     await shot(page,'PLAN-008-pack-expiry-notice')
   })
+}
+
+export async function failedDisclosureBrowser(h,{member,disclosure}){
+  await proofPages(h,async({pageFor,shot})=>{
+    for(const [role,cookie] of [['owner',h.owner],['member',member.cookie]]){
+      const page=await pageFor(cookie);await page.goto(h.origin+'/app/packs#freezes');
+      const notice=page.locator(`[data-renewal-disclosure="${disclosure.id}"]`);await notice.scrollIntoViewIfNeeded();
+      assert.match(await notice.innerText(),/Email: uncertain/);assert.match(await notice.innerText(),/Accept before/);
+      await shot(page,'PLAN-008-failed-email-'+role);
+    }
+  });
 }

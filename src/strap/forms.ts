@@ -38,6 +38,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name==='plan.recurring.prepare'&&input.noticeLeadDays!==undefined)input.noticeLeadDays=Number(input.noticeLeadDays)
   if(name.startsWith('clock.')) {for(const key of ['revision','breakMinutes'])if(key in input)input[key]=Number(input[key]);for(const key of ['startAt','endAt'])if(input[key])input[key]=String(input[key])+'Z';}
   if(name.startsWith('retail.') || name.startsWith('drawer.')) {
     for(const key of ['quantity','count','lowStock','maxUses','perMember']) if(key in input) input[key]=Number(input[key]);
