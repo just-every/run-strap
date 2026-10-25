@@ -242,7 +242,12 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   const guestPreferences=(await h.state(guests[0].cookie)).memberPreferences;
   assert.equal((await h.state()).pipeline.leads.length,0,'a preview never creates a lead');
   const existing = await h.cmd('lead.create',{personId:guests[1].id,ownerId:(await h.state()).actor.id,source:'Walk-in inquiry',nextAction:'Call only when requested',dueAt:classes.get('g1').start,requestId:'existing-guest-inquiry'});
+  const outboxBefore = (await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first()).n;
   const first = await confirm(firstDraft), second = await confirm(await preview(guests[1],'g1'));
+  assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first()).n,outboxBefore,'private inquiry capture sends no mail');
+  const captureDeliveries = (await h.db.prepare('SELECT source_kind,source_id FROM st_notice_deliveries').all()).results;
+  assert.ok(captureDeliveries.every(r=>r.source_kind==='booking' && [first.id,second.id].includes(r.source_id)),'only the existing guest booking notices are reserved');
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind IN ('referral','winbackOffer','emptyPlaceOffer') OR json_extract(data,'$.reason')='referral_reward'").first()).n,0,'capture creates no referral or reward record');
   assert.deepEqual((await h.state()).pipeline.leads.find(l=>l.id===existing.id),{...existing,overdue:false},'guest capture preserves the existing inquiry');
   assert.equal((await h.state()).pipeline.guestSources.filter(s=>s.leadId===existing.id&&s.referrerId===host.id&&s.bookingId===second.id).length,1);
   const inquiry = (await h.state()).pipeline.leads.find(l=>l.personId===guests[0].id);
@@ -324,6 +329,15 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   assert.deepEqual(retainedInquiry,inquiry,'cancel, move, restore and later guest bookings preserve the first inquiry');
   assert.equal((await h.state()).pipeline.leads.filter(l=>l.personId===guests[0].id).length,1);
   assert.equal((await h.state()).pipeline.events.filter(e=>e.leadId===inquiry.id).length,1);
+  // A second consenting host supplies another source, never a replacement attribution.
+  await h.cmd('booking.cancel',{id:first.id},host.cookie);
+  const later = await confirm(await preview(guests[0],'g3',otherPack.id,other.cookie,other.id),other.cookie);
+  const afterSecondHost = await h.state();
+  assert.deepEqual(afterSecondHost.pipeline.leads.find(l=>l.id===inquiry.id),inquiry,'second host keeps the first attribution immutable');
+  assert.equal(afterSecondHost.pipeline.guestSources.filter(s=>s.leadId===inquiry.id && s.referrerId===other.id && s.bookingId===later.id).length,1);
+  assert.equal((await h.state(other.cookie)).pipeline,null,'the second host cannot read either private source');
+  assert.equal((await h.state(coach.cookie)).pipeline,null,'an instructor cannot read private sources');
+  assert.deepEqual((await h.state(guests[0].cookie)).memberPreferences,guestPreferences,'a later inquiry source leaves marketing permission unchanged');
   const rollGuests=[];
   for (const name of ['River','Skyler','Dakota','Marley','Finley']) {
     const guest=await h.person(name); rollGuests.push(guest);

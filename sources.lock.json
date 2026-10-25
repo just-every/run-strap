@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "ea412a1763c91531b5fc4f51a1a887351c4e3d55b2c7ebe27493191fcb499883",
+      "sha256": "08668d725ee658da62717e4a89e6c314b9a52855743fb5bd029c3e33e92b3e43",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b3478c9a78392038d6f39f40df2fe2fdd1402a13b8091e915d2662b8c9090613",
+      "sha256": "95b11857c6799abce7f88e9125ea5dc9c9c68d3c4aaee8d9cd67c07384a7899f",
       "executable": false
     },
     "DEMO.md": {
@@ -4022,7 +4022,7 @@
       "executable": false
     },
     "tests/plan-entitlements.test.mjs": {
-      "sha256": "2d1c31477238d3c242475086f3f25eb061f2a9792071255c6f38e002d19bb469",
+      "sha256": "23b08e90457818fa4171dbe0ed76f00dfab0faf5b708587b8eded1b4f7539790",
       "executable": false
     },
     "tests/preferences-browser.mjs": {
