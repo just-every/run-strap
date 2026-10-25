@@ -76,7 +76,7 @@ rer verify
 
 Integration tests use real workerd/D1, native invitations/sessions and public HTTP commands, plus the public archive CLI. Build/deploy never run tests. One sharded Verify workflow runs per push commit; the separate lane runs the stranger journey.
 
-The mark is a sea-glass stability ball with a plum band (`public/brand/mark.svg`; `mark-dark.svg` for dark grounds; hand-tuned `favicon-16.svg` and `favicon-32.svg`). The run site's look (Playfair Display headings in plum, Figtree text, white and sea-glass grounds) has its tokens in `public/site/theme.css`. The app's tokens are in `public/rer-theme.css`, Strap's shared app components in `public/brand/strap.css`, which also dresses Base's sign-in and setup frames, and the app layout in `src/strap/ui/style.ts`.
+The mark is a sea-glass stability ball with a plum band (`public/brand/mark.svg`; `mark-dark.svg` for dark grounds; hand-tuned `favicon-16.svg` and `favicon-32.svg`). The run site's look (Playfair Display headings in plum, Figtree text, white and sea-glass grounds) has its tokens in `public/site/theme.css`. The app's tokens are in `public/rer-theme.css` (the faces and the theme tokens rer's reader takes) and `public/fonts/fonts.css` (the rest), Strap's shared app components in `public/brand/strap.css`, which also dresses Base's sign-in and setup frames, and the app layout in `src/strap/ui/style.ts`.
 
 ## Run site
 

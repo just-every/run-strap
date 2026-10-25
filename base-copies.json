@@ -4962,17 +4962,6 @@
       "modes": {
         "src/router.tsx": "100644"
       }
-    },
-    {
-      "path": "src/server.dev.ts",
-      "originPath": "foundation/template/src/server.dev.ts",
-      "revision": "11f94fec479228d71ba6d7dd6ea7796c0d42c544",
-      "files": {
-        "src/server.dev.ts": "4892545be3afaf55d1a45b99933f017baa43512d7152f56b21422010aa70b8a5"
-      },
-      "modes": {
-        "src/server.dev.ts": "100644"
-      }
     }
   ]
 }

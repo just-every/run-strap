@@ -1,7 +1,7 @@
 /* Strap's shared components: buttons, pills, chips, avatars, panels and form
    controls, used by the app and by Base's server-rendered frames (sign-in,
    /setup, email-link confirmation, sign-in settings). Every colour, face and
-   radius is a token from /rer-theme.css, linked before this file. */
+   radius is a token from /rer-theme.css or /fonts/fonts.css. */
 
 /* Buttons: plum for the one main action, quiet white for the rest. */
 .btn, .btn-quiet {

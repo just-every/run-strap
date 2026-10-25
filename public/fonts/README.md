@@ -12,7 +12,8 @@ third-party font request.
 The variable WOFF2 subsets come from Fontsource's distributions (`@fontsource-variable/playfair-display` 5.2.6; Figtree and
 JetBrains Mono from their Fontsource packages).
 
-`/rer-theme.css` declares the three families and every brand token once; the run site's `/site/theme.css` imports it
-and sets the site's white page. Site pages preload the Latin Playfair Display and Figtree files; the app and Base's
-documents preload the same two (`src/base/font-head.ts`). Every body-font stack reads `--rer-font-body`; controls inherit
-it.
+`/rer-theme.css` declares the three families and the `--rer-*` theme tokens, which is all rer's theme reader takes;
+`/fonts/fonts.css` holds every other brand token (Base's other `--rer-*` names and Strap's `--strap-*`) and the page
+rules, and every page that links the theme links it too. The run site's `/site/theme.css` imports the theme and sets the
+site's white page. Site pages preload the Latin Playfair Display and Figtree files; the app and Base's documents preload
+the same two (`src/base/font-head.ts`). Every body-font stack reads `--rer-font-body`; controls inherit it.

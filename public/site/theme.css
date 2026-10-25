@@ -1,5 +1,6 @@
-/* The run site's theme: Strap's one brand file (/rer-theme.css: fonts, --rer-* and
-   --strap-* tokens) with the site's white page. Base's /run, /contract and
-   not-found pages read the same tokens. */
+/* The run site's theme: Strap's theme file (/rer-theme.css: the faces and the
+   --rer-* theme tokens; every site page links the rest, /fonts/fonts.css, before
+   this file) with the site's white page. Base's /run, /contract and not-found
+   pages read the same tokens. */
 @import url('/rer-theme.css');
 :root { --rer-page: #FFFFFF; }

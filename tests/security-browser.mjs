@@ -19,7 +19,7 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
         const context = await browser.newContext({ viewport: { width, height: 1000 } })
         await context.route(h.origin + '/**', async route => {
           const path = new URL(route.request().url()).pathname
-          if (!path.includes('..') && types[extname(path)] && path.startsWith('/brand') || path === '/rer-theme.css' || path === '/favicon.ico') return route.fulfill({ body: await readFile(join(process.cwd(), 'public', path)), contentType: types[extname(path)] })
+          if (!path.includes('..') && types[extname(path)] && path.startsWith('/brand') || path === '/rer-theme.css' || path === '/fonts/fonts.css' || path === '/favicon.ico') return route.fulfill({ body: await readFile(join(process.cwd(), 'public', path)), contentType: types[extname(path)] })
           return route.continue()
         })
         const index = cookie.indexOf('='); await context.addCookies([{ name: cookie.slice(0, index), value: cookie.slice(index + 1), url: h.origin }])

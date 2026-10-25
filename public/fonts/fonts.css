@@ -1,0 +1,90 @@
+/* The rest of Strap's brand, beside /rer-theme.css (the faces and the --rer-* theme tokens, which is all rer's
+   theme reader takes): Base's other --rer-* names (the code face and colours, the wordmark), Strap's own --strap-*
+   colours, radii and shadows, sampled from the approved desk (hero and app pick F, 18 Oct 2026), then the page
+   rules. Every page that links the theme links this file too (Base's font head, the edition identity's fonts, the
+   run site's pages and the dev layer's own pages), and rer's hosted demo inlines it with the theme. */
+:root {
+  --rer-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --rer-code-background: #33101F;
+  --rer-code-text: #F4EEF1;
+  --rer-wordmark-tracking: -.01em;
+  --rer-wordmark-weight: 700;
+
+  /* Headline plum and the button's, the mark's sea-glass, the icons' deep green. */
+  --strap-plum: #580934;
+  --strap-plum-button: #6E1041;
+  --strap-plum-band: #3A0B25;
+  --strap-plum-glow: #741A4F;
+  --strap-plum-tint: #F9DFEA;
+  --strap-ink: #221528;
+  --strap-sea: #A2DEC9;
+  --strap-sea-deep: #8FBFBF;
+  --strap-sea-tint: #DCEFEC;
+  --strap-sea-ink: #2C6A64;
+  --strap-green: #136951;
+  --strap-green-tint: #E1F3EE;
+  --strap-red: #C92A3C;
+  --strap-red-tint: #FBE1E4;
+  --strap-amber: #F0BE2E;
+  --strap-amber-tint: #FBE6A6;
+  --strap-ground-sea: #F1F6F5;
+  --strap-ground-blue: #EEF3F6;
+  --strap-hairline: #E3E7EB;
+  --strap-card-line: #E6E9EE;
+  --strap-card-shadow: 0 1px 2px rgba(29, 26, 42, .04), 0 10px 30px -18px rgba(29, 26, 42, .22);
+  --strap-device: #18161C;
+  --strap-blueprint: #5D6E8C;
+  --strap-reformer: #F2E6EE;
+
+  /* The app (pick F): cool ground and hairlines, sea-glass spot pills, rose only for
+     the one exception on a screen, amber for what is pending. */
+  --strap-ground: #F5F8FB;
+  --strap-line: #E3EAF1;
+  --strap-line-soft: #EDF2F7;
+  --strap-control-line: #CCD7E3;
+  --strap-quiet: #5D6B85;
+  --strap-wash: #F3F7FA;
+  --strap-plum-wash: #F5ECF2;
+  --strap-sea-strong: #1C857D;
+  --strap-sea-wash: #E0F1F3;
+  --strap-rose: #E2577F;
+  --strap-rose-line: #F4B3C8;
+  --strap-rose-wash: #FFF5F8;
+  --strap-rose-tint: #FCE6EE;
+  --strap-amber-ink: #8F5200;
+  --strap-amber-wash: #FFF3E0;
+  --strap-chevron: #5D6B85;
+  --strap-spots: #BCE3E5;
+  --strap-nav-ink: #3F4D6B;
+  --strap-teacher-ink: #34405C;
+  --strap-past-ink: #4C5874;
+  --strap-copy-ink: #4E5A76;
+  --strap-tab-ink: #44506C;
+  --strap-icon-ink: #3D4A6A;
+  --strap-pending: #F2A93B;
+  --strap-hover-line: #AEBBCB;
+  --strap-glow: #FBFDFF;
+  --strap-rose-end: #FDF4F8;
+  --strap-sidebar: rgba(255, 255, 255, .72);
+  --strap-card-surface: rgba(255, 255, 255, .86);
+  --strap-decision-surface: rgba(255, 255, 255, .7);
+  --strap-roster-surface: rgba(255, 255, 255, .6);
+  --strap-search-shadow: 0 3px 8px rgba(38, 62, 112, .05);
+  --strap-button-shadow: 0 6px 14px -10px rgba(88, 9, 52, .8);
+  --strap-quiet-shadow: 0 2px 6px -4px rgba(31, 26, 51, .18);
+  --strap-radius-xs: 3px;
+  --strap-radius-sm: 8px;
+  --strap-radius-control: 10px;
+  --strap-radius-card: 12px;
+  --strap-radius-large: 16px;
+  --strap-radius-pill: 999px;
+  --strap-radius-round: 50%;
+  --strap-radius-notice: 4px 10px 10px 4px;
+  --strap-panel-shadow: 0 1px 2px rgba(31, 26, 51, .03), 0 8px 24px -18px rgba(31, 26, 51, .18);
+}
+/* Playfair's default figures are old-style; every page here sets times and money, so figures line up. */
+html { font-variant-numeric: lining-nums; }
+/* Base's Run page (/run) reads this sheet before its own: at phone width its installer line stays clear of a
+   leading pipe, and between 761 and 900 px the code stays clear of the Copy button. */
+@media (max-width: 400px) { body .code pre { font-size: 12px; } }
+@media (min-width: 761px) and (max-width: 900px) { body .code pre { font-size: 13px; } }
