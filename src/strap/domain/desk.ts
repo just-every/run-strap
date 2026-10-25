@@ -68,6 +68,7 @@ export function settleUnpaid(tx: Transaction, pack: RecordData) {
 export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const member = person(tx.state,input.personId), entry = record(tx.state,input.classId,'class');
+  insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(member.role === 'member','member_required');
   insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);

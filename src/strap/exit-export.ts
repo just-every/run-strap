@@ -31,6 +31,12 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'appointmentReservation', when: 'kind=appointmentPreview' },
+  { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=appointmentBookingGrant' },
+  { from: 'st_records.data.privatePersonId', to: 'st_people.id', when: 'kind=class' },
+  { from: 'st_records.data.appointmentReservationId', to: 'st_records.id', kind: 'appointmentReservation' },
+  { from: 'st_records.data.occurrences[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=appointmentReservation' },
+  { from: 'st_records.data.offerId', to: 'st_records.id', kind: 'appointmentSeriesOffer', when: 'kind=appointmentReservation or kind=appointmentPreview' },
   { from: 'st_records.data.priceDisclosureId', to: 'st_records.id', kind: 'renewalDisclosure' },
   { from: 'st_records.data.currentPriceDisclosureId', to: 'st_records.id', kind: 'renewalDisclosure' },
   { from: 'st_records.data.giftCardId', to: 'st_records.id', kind: 'giftCard' },
@@ -82,7 +88,7 @@ const relationships = [
   { from: 'st_records.data.makeupCreditId', to: 'st_records.id', kind: 'makeupCredit' },
   { from: 'st_records.data.absenceId', to: 'st_records.id', kind: 'absence' },
   { from: 'st_records.data.leadId', to: 'st_records.id', kind: 'lead', when: 'kind=renewalFollowup' },
-  { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'reservation' },
+  { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'reservation', when: 'kind=booking or kind=reservationPreview' },
   { from: 'st_records.data.outcomes[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=reservation' },
   { from: 'st_records.data.parentActionId', to: 'st_records.id', kind: 'staffAction', when: 'kind=bookingAction' },
   { from: 'st_records.data.chargeId', to: 'st_records.id', kind: 'charge', when: 'kind=payment' },

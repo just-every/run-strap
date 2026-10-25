@@ -60,28 +60,28 @@ function classPay(state: State, entry: RecordData) {
     bookingIds:bookings.map(b => b.id),attendedBookingIds:attended.map(b => b.id),attendees:attended.length,
     ruleId:rule?.id ?? null,ruleVersion:rule?.version ?? null,rule,substitute,substitution:entry.substitution ?? null,adjustments,adjustmentCents};
   if (!rate) return {...source,status:'unconfigured' as const,unconfiguredReason:substitute && rule ? 'substitute_rate_missing' : 'pay_rule_missing',calculation:null,baseCents:null,totalCents:null};
-  if (rule!.mode === 'per-appointment' || rate.mode === 'per-appointment') return {...source,status:'unsupported' as const,unconfiguredReason:'appointment_pay_requires_appointment',calculation:null,baseCents:null,totalCents:null};
-  const calculation = calculatePay(rate,entry.start,entry.end,attended.length,entry.status === 'cancelled' ? rule!.cancellation : undefined);
+  if (!entry.appointmentReservationId && (rule!.mode === 'per-appointment' || rate.mode === 'per-appointment')) return {...source,status:'unsupported' as const,unconfiguredReason:'appointment_pay_requires_appointment',calculation:null,baseCents:null,totalCents:null};
+  const calculation = calculatePay(entry.appointmentReservationId && rate.mode === 'per-appointment' ? {...rate,mode:'flat-class'} : rate,entry.start,entry.end,attended.length,entry.status === 'cancelled' ? rule!.cancellation : undefined);
   return {...source,status:'calculated' as const,unconfiguredReason:null,calculation,baseCents:calculation.baseCents,totalCents:sumCents([calculation.baseCents,adjustmentCents])};
 }
 
 /** Earned rows only: completed classes and explicitly cancelled classes.
  * Inclusive exact-instant start filters, UTC comparison; no local-date guessing.
  * Incomplete rows keep null amounts; a partial sum never masquerades as total.
- * Appointment records are not implemented by the studio and are not fabricated. */
+ * Private sessions earn pay only with retained attended booking provenance. */
 export function teachingPay(state: State, instructorId?: string, from?: string, to?: string) {
   const lower = from === undefined ? null : instant(from,'from'), upper = to === undefined ? null : instant(to,'to');
   insist(!lower || !upper || lower <= upper,'invalid_pay_date_range');
   const at = now();
   const rows = list(state,'class').filter(c => (!instructorId || c.instructorId === instructorId)
-    && (c.status === 'cancelled' || instant(c.end,'end') <= at)
+    && (c.appointmentReservationId ? c.status !== 'cancelled' && instant(c.end,'end') <= at && list(state,'booking').some(b=>b.classId === c.id && b.attendance === 'attended') : c.status === 'cancelled' || instant(c.end,'end') <= at)
     && (!lower || instant(c.start,'start') >= lower) && (!upper || instant(c.start,'start') <= upper))
     .sort((a,b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id)).map(entry => classPay(state,entry));
   const incomplete = rows.filter(row => row.totalCents === null);
   const configuredTotalCents = sumCents(rows.flatMap(row => row.totalCents === null ? [] : [row.totalCents]));
   return {asOf:at,instructorId:instructorId ?? null,from:lower,to:upper,currency:'USD',rows,complete:incomplete.length === 0,
     unconfiguredClassIds:incomplete.map(row => row.classId),configuredTotalCents,totalCents:incomplete.length ? null : configuredTotalCents,
-    adjustmentTotalCents:sumCents(rows.map(row => row.adjustmentCents)),appointmentSupport:'not_implemented',substitutionSupport:'explicit_class_provenance_required'};
+    adjustmentTotalCents:sumCents(rows.map(row => row.adjustmentCents)),appointmentSupport:'taught_sessions_only',substitutionSupport:'explicit_class_provenance_required'};
 }
 
 /** Exact additive correction; neither a rule nor attendance is rewritten. The
@@ -96,7 +96,7 @@ export function adjustTeachingPay(tx: Transaction, input: Record<string,unknown>
   const prior = list(tx.state,'payAdjustment').find(a => a.createdBy === tx.who.id && a.requestId === requestId);
   if (prior) { insist(prior.requestBasis === requestBasis,'pay_request_changed',409); return prior; }
   const entry = record(tx.state,classId,'class'), createdAt = now();
-  insist(entry.status === 'cancelled' || instant(entry.end,'end') <= createdAt,'teaching_pay_not_earned',409);
+  insist(entry.appointmentReservationId ? entry.status !== 'cancelled' && instant(entry.end,'end') <= createdAt && list(tx.state,'booking').some(b=>b.classId === entry.id && b.attendance === 'attended') : entry.status === 'cancelled' || instant(entry.end,'end') <= createdAt,'teaching_pay_not_earned',409);
   if (entry.status !== 'cancelled') tx.reached(entry.end);
   const before = classPay(tx.state,entry);
   sumCents([before.adjustmentCents,amountCents]);

@@ -38,6 +38,20 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if (name === 'appointment.booking.grant') {
+    input.enabled = input.enabled === 'true'
+    input.memberIds = Object.keys(input).filter(k=>k.startsWith('member_') && input[k] === 'true').map(k=>k.slice(7))
+    input.locationIds = Object.keys(input).filter(k=>k.startsWith('loc_') && input[k] === 'true').map(k=>k.slice(4))
+    for (const key of Object.keys(input)) if (key.startsWith('member_') || key.startsWith('loc_')) delete input[key]
+  }
+  if (name === 'appointment.reservation.prepare' && !input.offerId) {
+    if (input.proposal) { const source = JSON.parse(String(input.proposal)); delete input.proposal; Object.assign(input,{...source,...input}) }
+    input.minutes = Number(input.minutes)
+    const choices = new Map((Array.isArray(input.choices) ? input.choices : []).map((c: any)=>[c.date,c]))
+    for (const key of Object.keys(input)) if (key.startsWith('alt_')) {if(input[key]) choices.set(key.slice(4),{date:key.slice(4),start:input[key]});delete input[key]}
+    input.choices = [...choices.values()]
+  }
+  if (name === 'appointment.move.prepare') return input
   if(name==='plan.recurring.prepare'&&input.noticeLeadDays!==undefined)input.noticeLeadDays=Number(input.noticeLeadDays)
   if(name === 'clock.approver.grant') input.enabled = input.enabled === 'true';
   if(name.startsWith('clock.')) {for(const key of ['revision','breakMinutes'])if(key in input)input[key]=Number(input[key]);for(const key of ['startAt','endAt'])if(input[key])input[key]=String(input[key])+'Z';}

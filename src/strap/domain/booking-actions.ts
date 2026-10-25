@@ -15,6 +15,7 @@ import { actionChannel, bookingHistory, staffReason } from './booking-history';
 
 function futureClass(tx: Transaction, classId: unknown) {
   const entry = record(tx.state,classId,'class');
+  insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start); return entry;
 }

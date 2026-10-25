@@ -18,7 +18,7 @@ export function saveAppointmentOffer(tx: Transaction, input: Record<string,unkno
   }
   insist(input.id === undefined,'appointment_offer_immutable',409);
   const fields = appointmentFields(tx,input);
-  const offer = {...fields,status:'offered',requestId,requestBasis:basis,createdAt:now(),createdBy:tx.who.id,availabilityAtCreation:availability(tx,fields)};
+  const offer = {...fields,status:'offered',requestId,requestBasis:basis,createdAt:now(),createdBy:tx.who.id,availabilityAtCreation:appointmentAvailability(tx,fields)};
   tx.put('appointmentOffer',offer);
   return offer;
 }
@@ -42,10 +42,10 @@ function appointmentFields(tx: Transaction, input: Record<string,unknown>) {
 export function previewAppointmentOffer(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const offer = record(tx.state,input.id,'appointmentOffer');
-  return {id:offer.id,offer,...availability(tx,offer)};
+  return {id:offer.id,offer,...appointmentAvailability(tx,offer)};
 }
 
-function availability(tx: Transaction, offer: RecordData, siblings: RecordData[] = []) {
+export function appointmentAvailability(tx: Transaction, offer: RecordData, siblings: RecordData[] = []) {
   const blockers: RecordData[] = [];
   const instructor = tx.state.people.find(p => p.id === offer.instructorId && p.active && !p.erasedAt && p.role === 'instructor');
   if (!instructor || instructor.version !== offer.instructorVersion) blockers.push({id:offer.instructorId,kind:'instructor_changed'});
@@ -72,6 +72,37 @@ export function saveAppointmentSeriesOffer(tx: Transaction, input: Record<string
     return prior;
   }
   insist(input.id === undefined,'appointment_offer_immutable',409);
+  const {rule,occurrences:checkedOccurrences} = appointmentSeriesFields(tx,input);
+  const offer = {id:id(),rule,occurrences:checkedOccurrences,requestId,requestBasis:basis,status:'offered',createdAt:now(),createdBy:tx.who.id,
+    reserved:false,bookingAvailable:false,paymentCollected:false};
+  tx.put('appointmentSeriesOffer',offer);
+  return offer;
+}
+
+export function previewAppointmentSeriesOffer(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const offer = record(tx.state,input.id,'appointmentSeriesOffer');
+  const occurrences = offer.occurrences.map((entry: RecordData) => {
+    const checked = appointmentAvailability(tx,entry,offer.occurrences), alternatives: RecordData[] = [];
+    if (!checked.available) for (let day = 1; day <= Math.min(6,offer.rule.intervalWeeks*7-1); day++) {
+      const date = addDays(entry.occurrenceDate,day);
+      let start: string;
+      try { start = instant(wallStart(date,offer.rule.time,offer.rule.timeZone),'start'); }
+      catch (error) {
+        if (error instanceof DomainError && error.code === 'local_time_does_not_exist') continue;
+        throw error;
+      }
+      const candidate = {...entry,start,end:new Date(Date.parse(start)+offer.rule.minutes*60_000).toISOString(),localDate:date};
+      if (appointmentAvailability(tx,candidate,offer.occurrences).available) alternatives.push(candidate);
+    }
+    return {...entry,...checked,alternatives};
+  });
+  return {id:offer.id,offer,occurrences,available:occurrences.every((o: RecordData) => o.available),
+    reserved:false,paymentCollected:false,bookingAvailable:false};
+}
+
+/** Shared normalization for the separate explicit desk reservation preview. */
+export function appointmentSeriesFields(tx: Transaction,input: Record<string,unknown>) {
   const rule = recurrence(tx.state,input);
   const choices = input.choices ?? [];
   insist(Array.isArray(choices) && choices.length <= rule.dates.length,'invalid_appointment_choices');
@@ -90,34 +121,9 @@ export function saveAppointmentSeriesOffer(tx: Transaction, input: Record<string
     return {...offer,occurrenceDate:date,originalStart,chosenAlternative:!!choice};
   });
   const checkedOccurrences = occurrences.map(entry => {
-    const checked = availability(tx,entry,occurrences);
+    const checked = appointmentAvailability(tx,entry,occurrences);
     if (entry.chosenAlternative) insist(checked.available,'appointment_choice_unavailable',409);
     return {...entry,availabilityAtCreation:checked};
   });
-  const offer = {id:id(),rule,occurrences:checkedOccurrences,requestId,requestBasis:basis,status:'offered',createdAt:now(),createdBy:tx.who.id,
-    reserved:false,bookingAvailable:false,paymentCollected:false};
-  tx.put('appointmentSeriesOffer',offer);
-  return offer;
-}
-
-export function previewAppointmentSeriesOffer(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
-  const offer = record(tx.state,input.id,'appointmentSeriesOffer');
-  const occurrences = offer.occurrences.map((entry: RecordData) => {
-    const checked = availability(tx,entry,offer.occurrences), alternatives: RecordData[] = [];
-    if (!checked.available) for (let day = 1; day <= Math.min(6,offer.rule.intervalWeeks*7-1); day++) {
-      const date = addDays(entry.occurrenceDate,day);
-      let start: string;
-      try { start = instant(wallStart(date,offer.rule.time,offer.rule.timeZone),'start'); }
-      catch (error) {
-        if (error instanceof DomainError && error.code === 'local_time_does_not_exist') continue;
-        throw error;
-      }
-      const candidate = {...entry,start,end:new Date(Date.parse(start)+offer.rule.minutes*60_000).toISOString(),localDate:date};
-      if (availability(tx,candidate,offer.occurrences).available) alternatives.push(candidate);
-    }
-    return {...entry,...checked,alternatives};
-  });
-  return {id:offer.id,offer,occurrences,available:occurrences.every((o: RecordData) => o.available),
-    reserved:false,paymentCollected:false,bookingAvailable:false};
+  return {rule,occurrences:checkedOccurrences};
 }

@@ -1,3 +1,5 @@
+import { appointmentBookingAccess } from './appointment-access'
+import { appointmentsPanel } from './appointments'
 import { memberHistoryPanel, memberRecordAccess, memberRecordDesk } from './member-records'
 import { reservationsPanel } from './reservations'
 import { feesPanel } from './fees'
@@ -22,7 +24,7 @@ function card(s: any, p: any, back: string) {
   const teaching = rows(s, 'classes').filter(c => c.instructorId === p.id && Date.parse(c.start) > Date.now()).sort((a, b) => a.start.localeCompare(b.start))
   const upcomingList = p.role === 'instructor'
     ? (teaching.length ? `<div class="table-wrap">${table(['Teaching', 'Class', '>Booked'], teaching.slice(0, 8).map(c => `<tr>${cell('Teaching', `${h(dayShort(s, dayOf(s, c.start, c.timeZone)))} · ${h(clock(s, c.start, c.timeZone))}`)}${cell('Class', h(classTitle(c)))}${cell('Booked', `${attendance(s, c.id).booked.length} of ${c.occupancy.total}`, 'right')}</tr>`).join(''))}</div>` : emptyLine('No upcoming classes to teach.'))
-    : (bookings.length ? `<div class="table-wrap">${table(['Booked', 'Class', '>Status'], bookings.map(({ b, c }) => `<tr>${cell('Booked', `${h(dayShort(s, dayOf(s, c.start, c.timeZone)))} · ${h(clock(s, c.start, c.timeZone))}`)}${cell('Class', h(classTitle(c)))}${cell('Status', b.status === 'booked' ? '<span class="pill done">Booked</span>' : b.status === 'cancelled' ? '<span class="pill quiet">Cancelled</span>' : b.status === 'offered' ? '<span class="pill pending">Spot offered</span>' : '<span class="pill pending">Waitlist</span>', 'right')}</tr>${owner(s) ? `<tr><td colspan="3">${b.status !== 'cancelled' ? `<details class="more"><summary>Cancel booking</summary><div class="panel-body">${staffCancelControls(s, b, back)}</div></details>` : ''}${bookingControls(s, c, b, back)}</td></tr>` : ''}`).join(''))}</div>` : emptyLine('No upcoming bookings.'))
+    : (bookings.length ? `<div class="table-wrap">${table(['Booked', 'Class', '>Status'], bookings.map(({ b, c }) => `<tr>${cell('Booked', `${h(dayShort(s, dayOf(s, c.start, c.timeZone)))} · ${h(clock(s, c.start, c.timeZone))}`)}${cell('Class', h(classTitle(c)))}${cell('Status', b.status === 'booked' ? '<span class="pill done">Booked</span>' : b.status === 'cancelled' ? '<span class="pill quiet">Cancelled</span>' : b.status === 'offered' ? '<span class="pill pending">Spot offered</span>' : '<span class="pill pending">Waitlist</span>', 'right')}</tr>${owner(s) && !c.privatePersonId ? `<tr><td colspan="3">${b.status !== 'cancelled' ? `<details class="more"><summary>Cancel booking</summary><div class="panel-body">${staffCancelControls(s, b, back)}</div></details>` : ''}${bookingControls(s, c, b, back)}</td></tr>` : ''}`).join(''))}</div>` : emptyLine('No upcoming bookings.'))
   const stats = p.role === 'member' ? `<div class="stat-row"><div class="stat"><b>${credits}</b><small>credits left</small></div><div class="stat"><b>${money(balance(s, p.id))}</b><small>owed</small></div><div class="stat"><b>${visit ? h(datePlain(dayOf(s, visit)).replace(/, \d{4}$/, '')) : '—'}</b><small>last visit</small></div></div>` : ''
   const packLines = packs.map(x => `<p class="meta">${h(packName(x))}: ${countsCredits(x) ? '' : `${h(planTerms(x.entitlement))}; `}${h(packLeft(x))}, good through ${h(datePlain(dayOf(s, x.expiresAt)))}</p>`).join('')
   const actions = `<div class="actions">${p.active ? form('person.invite', back, hidden('id', p.id), 'Invite to sign in', 'quiet', 'small') : ''}${p.role === 'member' && p.active ? `<a class="btn small" href="/app/packs?person=${encodeURIComponent(p.id)}#prepare-pack">Prepare a pack</a>` : ''}</div>`
@@ -30,7 +32,7 @@ function card(s: any, p: any, back: string) {
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(phoneText(p.phone))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${contact}${packLines}${actions}</div>${upcomingList}`
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
-    + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? reservationsPanel(s,p.id,back) + appointmentsPanel(s,p.id,back) : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
     + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
@@ -59,6 +61,6 @@ export function peoplePage(s: any, query: URLSearchParams) {
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
     + staffActionHistory(s, query)
-    + memberRecordAccess(s)
+    + memberRecordAccess(s) + appointmentBookingAccess(s)
     + `</div><aside class="rail">${chosen ? card(s, chosen, back) : ''}${add}${cancellationReasonsPanel(s)}</aside></div>`
 }

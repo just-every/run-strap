@@ -64,6 +64,7 @@ export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pa
 export function book(tx: Transaction, input: Record<string,unknown>, forMember?: string) {
   if (forMember) humanOwner(tx.who);
   const member = forMember ? person(tx.state,forMember) : actingMember(tx,input.participantId), entry = record(tx.state,input.classId,'class');
+  insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.status !== 'cancelled','class_cancelled',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(entry.start);
@@ -84,6 +85,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
   const booking = record(tx.state,input.id,'booking');
   insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId || (tx.who.role === 'member' && guardianOf(tx.state,tx.who.personId,booking.personId)) || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');
+  insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.start > now(),'cancellation_closed',409);
   tx.future(entry.start);
   insist(booking.status !== 'cancelled','already_cancelled',409);

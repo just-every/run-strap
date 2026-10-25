@@ -2,7 +2,7 @@ import { body, cell, emptyLine, field, form, h, hidden, owner, panel, person, ro
 import { money, when } from './format'
 
 const path = '/app/teaching-pay'
-const modes: [string,string][] = [['flat-class','Per class'],['hourly','Per teaching hour'],['per-attendee','Per attendee'],['tiered','Marginal attendance tiers'],['per-appointment','Per appointment (available when appointments ship)']]
+const modes: [string,string][] = [['flat-class','Per class'],['hourly','Per teaching hour'],['per-attendee','Per attendee'],['tiered','Marginal attendance tiers'],['per-appointment','Per taught private appointment']]
 
 function ruleForm(s: any) {
   return form('pay.rule.save',path,
