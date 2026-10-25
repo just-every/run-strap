@@ -3670,7 +3670,7 @@
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "1877dfd5f3e0a3f588d1ac1121967a92471196087e185fd673e611d17870b78e",
+      "sha256": "5e4dcb87505af10c7c02255db7ab8ac6e42adae30ab03c41fa0bd83587006546",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {

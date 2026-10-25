@@ -16,7 +16,7 @@ import { noticesPanel } from './closures'
 import { memberOffer } from './waitlist'
 
 function bookAction(s: any, c: any) {
-  if (c.privatePersonId) return '<span class="pill done">Private appointment · contact the desk for changes</span>'
+  if (c.privatePersonId) return c.status === 'cancelled' ? '<span class="pill quiet">Cancelled</span>' : '<span class="pill done">Private appointment</span><small>Contact the desk for changes.</small>'
   const own = rows(s, 'bookings').find(b => b.classId === c.id && b.personId === s.actor.personId && b.status !== 'cancelled')
   if (c.status === 'cancelled') return '<span class="chip quiet">Class cancelled</span>'
   if (own?.status === 'offered') return memberOffer(s, own, '/app')
