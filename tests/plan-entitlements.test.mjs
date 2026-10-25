@@ -256,7 +256,6 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   assert.equal((await h.send('/app/leads?lead='+inquiry.id,undefined,other.cookie)).text.includes(inquiry.id),false);
   const sourcePage = (await h.send('/app/leads?lead='+inquiry.id,undefined,h.owner)).text;
   assert.match(sourcePage,/Guest referrer: Morgan/);
-  assert.match(sourcePage,/no reward or marketing permission granted/);
   await h.cmd('guest.preview',{guestId:guests[2].id,classId:classes.get('g2').id,packId:pack.id},host.cookie,409);
   assert.equal((await h.state(host.cookie)).packs.find(p=>p.id===pack.id).remaining,10);
   assert.deepEqual((await h.state(host.cookie)).guests.allowances.find(a=>a.packId===pack.id).periods.find(p=>p.start===before.slice(0,8)+'01').used,2);

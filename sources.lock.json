@@ -3630,7 +3630,7 @@
       "executable": false
     },
     "src/strap/ui/leads.ts": {
-      "sha256": "32048e8fb51af7d2d2300da11f0473f250a4a5b73d10900fa9b2ab46de740f24",
+      "sha256": "72d9392f6e839a08c66c584a45f6aceed8ec2988c8e5b855213124f451f193ed",
       "executable": false
     },
     "src/strap/ui/locations.ts": {
@@ -3930,7 +3930,7 @@
       "executable": false
     },
     "tests/guests-browser.mjs": {
-      "sha256": "bd6e463520bcf60d34606e36c09c39c069d848f4ebdbd4a45574fc91dec0bf39",
+      "sha256": "b6f132786c5278fc07b418c485d090cbcf26f95465c6512aa878452c60d9ee29",
       "executable": false
     },
     "tests/harness.mjs": {
@@ -4022,7 +4022,7 @@
       "executable": false
     },
     "tests/plan-entitlements.test.mjs": {
-      "sha256": "be527e91c94156dc678788a1ec0c34dc818fda8bfd0060fe2851991b32c4c397",
+      "sha256": "d4ad5e12aea42a30d222887511932d5d995db4ba7cee7841c4049236487cbd8a",
       "executable": false
     },
     "tests/preferences-browser.mjs": {
