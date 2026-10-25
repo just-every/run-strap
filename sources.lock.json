@@ -3534,7 +3534,7 @@
       "executable": false
     },
     "src/strap/ui/appointments.ts": {
-      "sha256": "66b5e957cdfd5e3e0ae34e620f4faac2c1c6915e13c3669ef55118a8c4c52eae",
+      "sha256": "14464547787c109be4aedaf46c14a0031eeeaf144bad89355c6ed8fa0fe569ac",
       "executable": false
     },
     "src/strap/ui/attendance.ts": {
@@ -4102,7 +4102,7 @@
       "executable": false
     },
     "tests/reservations-browser.mjs": {
-      "sha256": "20c1caeeaafa24012b41d30cfbc0a0cbb16c6c5260806e73d232b7f1f74438cc",
+      "sha256": "20a202570ddc5efbbfa6d0b71761e028c4a1afec7e3799607e67d95947cd3432",
       "executable": false
     },
     "tests/reservations.test.mjs": {

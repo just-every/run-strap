@@ -182,7 +182,7 @@ export async function appointmentsBrowser(h,{coach,start}) {
       await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(past,new Date(Date.parse(past)+50*60_000).toISOString(),first.id).run()
       const rule=await h.cmd('pay.rule.save',{service:'Private Pilates',instructorId:coach.id,effectiveAt:new Date(Date.now()+60_000).toISOString(),mode:'per-appointment',rateCents:4500,minimumCents:0,cancellation:{treatment:'none'}})
       await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.effectiveAt',?) WHERE id=?").bind(new Date(Date.parse(past)-60_000).toISOString(),rule.id).run()
-      await owner.goto(h.origin+back);await shot(owner,'owner-ending',owner.locator('.person-card'))
+      await owner.goto(h.origin+back);await shot(owner,'owner-ending',owner.locator('#appointments'))
       await owner.keyboard.press('Tab')
       const iconControls=owner.locator('a,button').filter({has:owner.locator('svg')})
       for(let i=0;i<await iconControls.count();i++) {
