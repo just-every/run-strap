@@ -4,7 +4,7 @@ import { appointmentBookingVisible, requireAppointmentBooking } from './appointm
 import { checkAllocations } from './classes';
 import { acknowledged, bookingPack, seat } from './bookings';
 import { cancelTerms, insistBookingOpen } from './booking-policy';
-import { bookingCredit, packCanSeat, packServiceEligible } from './pack-credits';
+import { bookingCredit, packCanSeat, packServiceEligible, packSummary } from './pack-credits';
 import { countsCredits } from './entitlements';
 import { putNotice, reserveMail, messageBody } from './notices';
 import { mailBasis, seriesBasis, wallStart } from './series-model';
@@ -34,7 +34,7 @@ function allocate(tx: Transaction, occurrences: RecordData[], personId: string, 
     tx.put('class',saved);
     const booking = seat(tx,{id:id(),classId:saved.id,personId,status:'booked',capacityPool:'desk',bookingChannel:channel,
       madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',appointmentReservationId:reservationId,cancelTerms:cancelTerms(tx.state,saved,pack),createdAt:now()},saved,pack);
-    return {...saved,bookingId:booking.id,packId:pack.id,status:'booked'};
+    return {...saved,bookingId:booking.id,packId:pack.id,packLabel:`${pack.credits}-session pack`,status:'booked'};
   });
 }
 export async function prepareAppointmentReservation(tx: Transaction,input: Record<string,unknown>) {
@@ -166,7 +166,7 @@ export async function confirmAppointmentChange(tx: Transaction,input: Record<str
 }
 export function appointmentSnapshot(state: State,who: import('./types').Actor) {
   const visible = (kind: string) => list(state,kind).filter(r=>(r.occurrences ?? []).every((o: RecordData)=>appointmentBookingVisible(state,who,r.personId,o.locationId ?? 'studio')) && (who.role === 'owner' || who.role === 'front-desk') || (who.role === 'member' && r.personId === who.personId));
-  return {appointmentBookingGrants:who.role === 'owner' ? list(state,'appointmentBookingGrant') : [],appointments:visible('appointmentReservation').map(r=>({...r,occurrences:r.occurrences.map((o: RecordData)=>{const c=state.records.get(o.id)?.data,b=state.records.get(o.bookingId)?.data;return {...o,start:c?.start ?? o.start,end:c?.end ?? o.end,status:b?.attendance ?? b?.status ?? o.status};})})),appointmentPreviews:['owner','front-desk'].includes(who.role) ? visible('appointmentPreview').map(r=>who.role === 'owner' ? r : {...r,occurrences:r.occurrences.map(({availabilityAtCreation,...o}: RecordData)=>({...o,blockers:(o.blockers ?? []).map(({reason,...b}: RecordData)=>b)}))}) : [],appointmentSeriesOffers:who.role === 'owner' ? [...list(state,'appointmentSeriesOffer'),...list(state,'appointmentOffer').map(o=>({...o,occurrences:[o]}))] : []};
+  return {appointmentBookingGrants:who.role === 'owner' ? list(state,'appointmentBookingGrant') : [],appointments:visible('appointmentReservation').map(r=>({...r,funding:[...new Set<string>(r.occurrences.map((o: RecordData)=>String(o.packId)))].map(packId=>{const pack=record(state,packId,'pack');return {id:packId,label:`${pack.credits}-session pack`,...packSummary(state,pack)};}),occurrences:r.occurrences.map((o: RecordData)=>{const c=state.records.get(o.id)?.data,b=state.records.get(o.bookingId)?.data;return {...o,start:c?.start ?? o.start,end:c?.end ?? o.end,status:b?.attendance ?? b?.status ?? o.status};})})),appointmentPreviews:['owner','front-desk'].includes(who.role) ? visible('appointmentPreview').map(r=>who.role === 'owner' ? r : {...r,occurrences:r.occurrences.map(({availabilityAtCreation,...o}: RecordData)=>({...o,blockers:(o.blockers ?? []).map(({reason,...b}: RecordData)=>b)}))}) : [],appointmentSeriesOffers:who.role === 'owner' ? [...list(state,'appointmentSeriesOffer'),...list(state,'appointmentOffer').map(o=>({...o,occurrences:[o]}))] : []};
 }
 
 /** This runs before canonical request replay, so revocation also fences replays. */

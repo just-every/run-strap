@@ -166,20 +166,29 @@ export async function appointmentsBrowser(h,{coach,start}) {
       assert.equal(preview.occurrences.length,5);await shot(page,'week-six-preview',review)
       await review.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click();await shot(page,'five-sessions-released',savedPanel)
       const state=await h.state(),pack=state.packs.find(p=>p.personId===member.id);assert.deepEqual([pack.summary.remaining,pack.summary.reserved,pack.summary.consumed],[5,5,0])
+      const first=saved.occurrences[0]
+      await h.cmd('attendance.checkin',{id:first.bookingId})
+      const past=new Date(Date.now()-3_600_000).toISOString()
+      await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.start',?,'$.end',?) WHERE id=?").bind(past,new Date(Date.parse(past)+50*60_000).toISOString(),first.id).run()
+      const rule=await h.cmd('pay.rule.save',{service:'Private Pilates',instructorId:coach.id,effectiveAt:new Date(Date.now()+60_000).toISOString(),mode:'per-appointment',rateCents:4500,minimumCents:0,cancellation:{treatment:'none'}})
+      await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.effectiveAt',?) WHERE id=?").bind(new Date(Date.parse(past)-60_000).toISOString(),rule.id).run()
       await owner.goto(h.origin+back);await shot(owner,'owner-ending',owner.locator('.person-card'))
+      await owner.keyboard.press('Tab')
       const iconControls=owner.locator('a,button').filter({has:owner.locator('svg')})
       for(let i=0;i<await iconControls.count();i++) {
         const control=iconControls.nth(i)
         if((await control.innerText()).trim()) continue
         assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips')
         await control.focus();const tooltip=owner.locator('[id="'+await control.getAttribute('aria-describedby')+'"]');await tooltip.waitFor({state:'visible'})
-        await shot(owner,'focus-tooltip',control);break
+        await owner.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-focus-tooltip-${width}.png`)})
+        await control.blur();await control.hover();await tooltip.waitFor({state:'visible'})
+        await owner.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-hover-tooltip-${width}.png`)});break
       }
       const mine=await pageFor(member.cookie);await mine.goto(h.origin+'/app');await shot(mine,'member-notices-and-balance')
       assert.equal((await h.state(member.cookie)).notices.length,3)
       // Pay screen and its private appointment rate selector are the same built route.
       await owner.goto(h.origin+'/app/teaching-pay');await shot(owner,'taught-pay-report')
-      await owner.getByText('Publish a pay rule',{exact:true}).count()
+      await owner.locator(`[data-pay-class="${first.id}"]`).getByText('$45.00',{exact:true}).waitFor()
       assert.ok((await owner.content()).includes('Per taught private appointment'))
     } finally {for(const context of contexts) await context.close()}
   }} finally {await browser.close()}

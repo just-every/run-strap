@@ -14,7 +14,7 @@ function occurrenceCells(s: any, occurrence: any) {
   return cell('Date',`${when(s,occurrence.start,occurrence.timeZone)}<br><small>${h(occurrence.service)}</small>`)
     + cell('Instructor',h(occurrence.instructorName))
     + cell('Room',h(occurrence.room))
-    + cell('Pack',`<span style="overflow-wrap:anywhere">${h(occurrence.packId)}</span>`)
+    + cell('Pack',h(occurrence.packLabel ?? (occurrence.packId ? 'Session pack' : 'Not reserved')))
     + cell('Status',statusPill(occurrence.status))
 }
 
@@ -45,7 +45,8 @@ function occurrenceActions(s: any, personId: string, back: string, reservation: 
 
 function savedReservation(s: any, personId: string, back: string, reservation: any) {
   const occurrences = reservation.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}${cell('Manage',occurrenceActions(s,personId,back,reservation,occurrence))}</tr>`).join('')
-  return `<details class="more" open data-appointment-reservation="${h(reservation.id)}"><summary>Appointment reservation · ${h(reservation.status)}</summary><div class="panel-body"><div class="table-wrap">`
+  const funding = (reservation.funding ?? []).map((p: any)=>`<p>${h(p.label)}: <strong>${h(p.remaining)} available</strong> · ${h(p.reserved)} reserved · ${h(p.consumed)} used</p>`).join('')
+  return `<details class="more" open data-appointment-reservation="${h(reservation.id)}"><summary>Appointment reservation · ${h(reservation.status)}</summary><div class="panel-body">${funding}<div class="table-wrap">`
     + table(['Date','Instructor','Room','Pack','Status','Manage'],occurrences) + '</div></div></details>'
 }
 

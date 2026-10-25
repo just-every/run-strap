@@ -45,7 +45,7 @@ export function processClassReminders(tx: Transaction) {
     const member = tx.state.people.find(p => p.id === booking.personId && p.role === 'member' && p.active && !p.erasedAt);
     if (!member) continue;
     const entry = tx.state.records.get(booking.classId)?.data;
-    if (!entry || entry.status !== 'published' || Date.parse(entry.start) <= time) continue;
+    if (!entry || entry.privatePersonId || entry.status !== 'published' || Date.parse(entry.start) <= time) continue;
     const key = serviceKey(String(entry.service ?? titleOf(entry)));
     const rule = configured.find(r => r.serviceKey === key) ?? configured.find(r => r.serviceKey === '');
     if (!rule?.enabled || Date.parse(entry.start) > time + rule.leadMinutes*60_000) continue;

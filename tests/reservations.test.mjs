@@ -344,6 +344,10 @@ test('Private appointment changes reserve one configured Base email and keep una
     assert.ok(sent.every(m=>m.to[0]===ana.email && m.text.includes('Private Mat') && m.text.includes('America/New_York')));
     let deliveries=(await h.db.prepare('SELECT * FROM st_notice_deliveries WHERE person_id=?').bind(ana.id).all()).results;
     assert.equal(deliveries.length,3);assert.ok(deliveries.every(d=>d.status==='accepted'));
+    await h.cmd('reminder.rule.save',{service:'',enabled:true,leadMinutes:60,revision:0,requestId:'synthetic-strap-class-reminders-only'});
+    await backdate(h,saved.occurrences[0].id,new Date(Date.now()+30*60_000).toISOString());
+    await (await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+    assert.equal(sent.length,3,'class reminder rules grant no new private appointment outbound authority');
     const single=async(date)=>confirm(await h.cmd('appointment.reservation.prepare',{...source,startDate:date,endDate:date}));
     await h.setAuth({MAIL_PROVIDER:'development'});await single('2095-01-04');assert.equal(sent.length,3);
     await h.setAuth({MAIL_PROVIDER:'resend'});

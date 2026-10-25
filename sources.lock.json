@@ -3066,7 +3066,7 @@
       "executable": false
     },
     "src/strap/domain/appointments.ts": {
-      "sha256": "504b61b58853d93c266478db32d86fb5d811b0749fe5cc4ccac6733ceb931873",
+      "sha256": "3df8811c6e85a837f966aaa06a32c91f57c43689d7adf7e91095a0b7ecdab11b",
       "executable": false
     },
     "src/strap/domain/attendance.ts": {
@@ -3114,7 +3114,7 @@
       "executable": false
     },
     "src/strap/domain/class-reminders.ts": {
-      "sha256": "d70d2c4ca772c0ecd425307102f9858d24a2c1eead2ab15246859aad03f6a42a",
+      "sha256": "83170d858ae278eb0080d72bdbc8e564bb4fac73126384f7aaa8a0b3928d560d",
       "executable": false
     },
     "src/strap/domain/classes.ts": {
@@ -3534,7 +3534,7 @@
       "executable": false
     },
     "src/strap/ui/appointments.ts": {
-      "sha256": "be5bf555fbf68e76be46c9c1df4f6bc74ad6e55b87ed4495ba563179d9c00f08",
+      "sha256": "00e6c349ba226b738e10b3eae8a7fd92d32aca919ce6042047f42e91d49b30f6",
       "executable": false
     },
     "src/strap/ui/attendance.ts": {
@@ -4102,11 +4102,11 @@
       "executable": false
     },
     "tests/reservations-browser.mjs": {
-      "sha256": "e4b02f6bb6ba46ed73ba5adf9cfef372ae7adc941cf8a63c9edcfb07850572bb",
+      "sha256": "eb20a0509d291cdb8cef21fcac0fd169d99064447dbd44ce2ebbc7c2bd11a0e7",
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "47207e8827a3e48fd998b83125ba3e9e8b71ce57f371d2e7d393cb96b6bca4e2",
+      "sha256": "66248835809a3d72a6483d6c5d3d2f9649df08293e2b0c61967b5e7478bbb4c6",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
