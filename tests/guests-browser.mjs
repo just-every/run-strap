@@ -20,6 +20,15 @@ export async function guestsBrowser(h, {host,guest,packId,classId}) {
           const page=await context.newPage(); await page.goto(h.origin+'/app/packs#guests');
           await page.locator('#guests').getByRole('heading',{name:'Guest passes',exact:true}).waitFor();
           if (role==='owner') {
+            const lead=(await h.state()).pipeline.leads.find(l=>l.personId===guest.id);
+            await page.goto(h.origin+'/app/leads?lead='+encodeURIComponent(lead.id)+'#lead');
+            const leadPanel=page.locator('#lead');
+            assert.match(await leadPanel.innerText(),new RegExp('Guest referrer: '+host.name));
+            assert.match(await leadPanel.innerText(),/no reward or marketing permission granted/);
+            await leadPanel.scrollIntoViewIfNeeded();
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+            await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-012-guest-lead-${width}.png`),fullPage:false});
+            await page.goto(h.origin+'/app/packs#guests');
             const form=page.locator('form[action*="name=pack.prepare"]');
             await form.getByText('Guest-pass allowance',{exact:true}).click();
             await form.locator('select[name=personId]').selectOption(host.id);

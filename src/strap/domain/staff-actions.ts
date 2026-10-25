@@ -47,6 +47,7 @@ export function priorStaffRequest(tx: Transaction, name: string, input: Record<s
 }
 /** One canonical entry; SCHED-014 and APP-003 already made one, so annotate rather than duplicate it. */
 export function retainStaffAction(tx: Transaction, name: string, right: string, input: Record<string,unknown>, result: RecordData, before: unknown, priorIds: Set<string>) {
+  if (name === 'guest.book' && list(tx.state,'staffAction').some(a => a.command === name && a.actorId === tx.who.id && a.after?.id === result.id)) return;
   const channel = staffChannel(input), after = staffAfter(name,result);
   const personId = result.personId ?? input.personId;
   const existing = ['bookingAction','profileChange'].flatMap(kind => list(tx.state,kind).map(data => ({kind,data})))

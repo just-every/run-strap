@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5734d3924c38d735149767e2aa20408897e884c489d36550b6a66f3e3d97fcbf",
+      "sha256": "ea412a1763c91531b5fc4f51a1a887351c4e3d55b2c7ebe27493191fcb499883",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5e27618a577d27ceb9af592b16464a12254ef6a3480266d97f1c1eb89da39065",
+      "sha256": "b3478c9a78392038d6f39f40df2fe2fdd1402a13b8091e915d2662b8c9090613",
       "executable": false
     },
     "DEMO.md": {
@@ -3234,7 +3234,7 @@
       "executable": false
     },
     "src/strap/domain/leads.ts": {
-      "sha256": "d4b66e0c825dd6c828ed468e05bbb06b33d38e5097f2ef5dbecbb5ba7b34432d",
+      "sha256": "a0c11f95da15b9dc7938a8c2730f6f169e6f26a55160426415fe1e696cd3aa11",
       "executable": false
     },
     "src/strap/domain/locations.ts": {
@@ -3350,7 +3350,7 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "b8890db55e0d5ee7b1cfab35a95fc9db2b7ee507cf4d43bb9d418d4417f8f792",
+      "sha256": "e5a2371f63e32d0ec4a66b57c1b5b1f97ba13846daf8994419713cf4f1298913",
       "executable": false
     },
     "src/strap/domain/store.ts": {
@@ -3630,7 +3630,7 @@
       "executable": false
     },
     "src/strap/ui/leads.ts": {
-      "sha256": "b609ee14fa6657c3b62263722a1aea90f8099297ee785e4575159b783e944f5a",
+      "sha256": "32048e8fb51af7d2d2300da11f0473f250a4a5b73d10900fa9b2ab46de740f24",
       "executable": false
     },
     "src/strap/ui/locations.ts": {
@@ -3930,7 +3930,7 @@
       "executable": false
     },
     "tests/guests-browser.mjs": {
-      "sha256": "11ecf00a1a96421b49d074ecc25add30dc62a921f89de83ac782530333ae1449",
+      "sha256": "bd6e463520bcf60d34606e36c09c39c069d848f4ebdbd4a45574fc91dec0bf39",
       "executable": false
     },
     "tests/harness.mjs": {
@@ -4022,7 +4022,7 @@
       "executable": false
     },
     "tests/plan-entitlements.test.mjs": {
-      "sha256": "1f381a4a4fca98da75a09cbfa8e9ec22f189f94cce8abe357e7a2b7f3b5205eb",
+      "sha256": "be527e91c94156dc678788a1ec0c34dc818fda8bfd0060fe2851991b32c4c397",
       "executable": false
     },
     "tests/preferences-browser.mjs": {

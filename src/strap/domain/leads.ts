@@ -172,7 +172,7 @@ export function leadSnapshot(state: State, who: Actor) {
   const queue = leads.filter(lead => open(lead.stage)).sort((a,b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id));
   const events = list(state,'leadEvent').sort((a,b) => a.at.localeCompare(b.at) || a.after.version-b.after.version || a.id.localeCompare(b.id));
   const stages = leadStages.map(stage => ({stage,count:leads.filter(lead => lead.stage === stage).length,overdue:leads.filter(lead => lead.stage === stage && lead.overdue).length}));
-  return {asOf,leads,events,queue,overdue:queue.filter(lead => lead.overdue),stages,recoveryRule:state.records.get('recovery-rule')?.data ?? null,recoveryTasks:list(state,'recoveryTask')};
+  return {asOf,leads,events,guestSources:list(state,'guestLeadSource'),queue,overdue:queue.filter(lead => lead.overdue),stages,recoveryRule:state.records.get('recovery-rule')?.data ?? null,recoveryTasks:list(state,'recoveryTask')};
 }
 
 // Recovery uses studio-local weekly slots, not a duration since an arbitrary
