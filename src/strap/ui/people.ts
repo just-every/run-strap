@@ -32,7 +32,7 @@ function card(s: any, p: any, back: string) {
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(phoneText(p.phone))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${contact}${packLines}${actions}</div>${upcomingList}`
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
-    + (p.role === 'member' ? reservationsPanel(s,p.id,back) + appointmentsPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
     + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
@@ -58,6 +58,7 @@ export function peoplePage(s: any, query: URLSearchParams) {
   const add = panel('Add a person', body(form('person.save', '/app/people', personFields(), 'Add person')), { id: 'add-person', icon: 'addperson' })
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>People</h1><p>${members} active members · ${instructors} instructors</p></div>`
     + panel(q ? `Matching “${query.get('q')}”` : 'Members and instructors', `<div class="panel-body">${search}</div>${table_}`, { icon: 'users' })
+    + (chosen?.role === 'member' ? appointmentsPanel(s,chosen.id,back) : '')
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
     + staffActionHistory(s, query)

@@ -10,10 +10,9 @@ const localTime = (s: any, occurrence: any) => new Intl.DateTimeFormat('en-GB',{
   timeZone:occurrence.timeZone ?? s.studio.timeZone,hourCycle:'h23',hour:'2-digit',minute:'2-digit',
 }).format(new Date(occurrence.start))
 
+const appointmentTable = (heads: string[],content: string) => table(heads,content).replace(/<th>/g,'<th style="font-size:13px">')
 function occurrenceCells(s: any, occurrence: any) {
-  return cell('Date',`${when(s,occurrence.start,occurrence.timeZone)}<br><small>${h(occurrence.service)}</small>`)
-    + cell('Instructor',h(occurrence.instructorName))
-    + cell('Room',h(occurrence.room))
+  return cell('Appointment',`<strong>${h(occurrence.service)}</strong><small>${when(s,occurrence.start,occurrence.timeZone)}</small><small>${h(occurrence.instructorName)} · ${h(occurrence.room)}</small>`)
     + cell('Pack',h(occurrence.packLabel ?? (occurrence.packId ? 'Session pack' : 'Not reserved')))
     + cell('Status',statusPill(occurrence.status))
 }
@@ -25,7 +24,7 @@ function preview(s: any, personId: string, back: string, entry: any) {
     hidden('id',entry.id) + hidden('key',entry.key) + memberIdentity(personId) + channel(entry.channel),
     saving ? 'Confirm appointment reservation' : entry.operation === 'move' ? 'Confirm appointment move' : 'Confirm appointment cancellation')
   return `<details class="more" open data-appointment-preview="${h(entry.id)}"><summary>${title}</summary><div class="panel-body">`
-    + `<div class="table-wrap">${table(['Date','Instructor','Room','Pack','Status'],entry.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}</tr>`).join(''))}</div>`
+    + `<div class="table-wrap">${appointmentTable(['Appointment','Pack','Status'],entry.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}</tr>`).join(''))}</div>`
     + confirmation + '</div></details>'
 }
 
@@ -47,7 +46,7 @@ function savedReservation(s: any, personId: string, back: string, reservation: a
   const occurrences = reservation.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}${cell('Manage',occurrenceActions(s,personId,back,reservation,occurrence))}</tr>`).join('')
   const funding = (reservation.funding ?? []).map((p: any)=>`<p>${h(p.label)}: <strong>${h(p.remaining)} available</strong> · ${h(p.reserved)} reserved · ${h(p.consumed)} used</p>`).join('')
   return `<details class="more" open data-appointment-reservation="${h(reservation.id)}"><summary>Appointment reservation · ${h(reservation.status)}</summary><div class="panel-body">${funding}<div class="table-wrap">`
-    + table(['Date','Instructor','Room','Pack','Status','Manage'],occurrences) + '</div></div></details>'
+    + appointmentTable(['Appointment','Pack','Status','Manage'],occurrences) + '</div></div></details>'
 }
 
 /** Owner tools live within the selected member's card. Offers remain immutable. */

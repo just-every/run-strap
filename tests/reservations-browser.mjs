@@ -25,7 +25,12 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
           await page.waitForLoadState('networkidle')
           await page.evaluate(()=>document.fonts.ready)
           if (locator) await locator.waitFor({state:'visible'})
-          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,`${name} fits ${width}`)
+          const fits=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)
+      if(!fits) {
+        await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-overflow-${name}-${width}.png`),fullPage:true})
+        const overflowing=await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(-8).map(e=>({tag:e.tagName,class:e.className,text:e.textContent?.slice(0,80)})))
+        assert.fail(`${name} fits ${width}: ${JSON.stringify(overflowing)}`)
+      }
           await (locator??page).screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-005-${name}-${width}.png`),...(locator?{}:{fullPage:true})})
         }
         const date=plus(start,width===390?70:0),end=plus(date,49),member=await h.person(`Series${width}`)
@@ -115,7 +120,12 @@ export async function appointmentsBrowser(h,{coach,start}) {
     }
     const shot=async(page,name,locator)=>{
       await page.waitForLoadState('networkidle');await page.evaluate(()=>document.fonts.ready)
-      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,`${name} fits ${width}`)
+      const fits=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)
+      if(!fits) {
+        await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-overflow-${name}-${width}.png`),fullPage:true})
+        const overflowing=await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(-8).map(e=>({tag:e.tagName,class:e.className,text:e.textContent?.slice(0,80)})))
+        assert.fail(`${name} fits ${width}: ${JSON.stringify(overflowing)}`)
+      }
       if(locator) await locator.waitFor({state:'visible'})
       await (locator??page).screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-${name}-${width}.png`),...(locator?{}:{fullPage:true})})
     }

@@ -3534,7 +3534,7 @@
       "executable": false
     },
     "src/strap/ui/appointments.ts": {
-      "sha256": "00e6c349ba226b738e10b3eae8a7fd92d32aca919ce6042047f42e91d49b30f6",
+      "sha256": "66b5e957cdfd5e3e0ae34e620f4faac2c1c6915e13c3669ef55118a8c4c52eae",
       "executable": false
     },
     "src/strap/ui/attendance.ts": {
@@ -3686,7 +3686,7 @@
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "96723b2edcc876e5ed4577536d5c3fc4d6a52fa30e46c5bc6381fadeb83e70bc",
+      "sha256": "2b6b04d13f20a531b0880f00693788af385bc168ee58424a0a9edbecacd1d649",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -4102,7 +4102,7 @@
       "executable": false
     },
     "tests/reservations-browser.mjs": {
-      "sha256": "eb20a0509d291cdb8cef21fcac0fd169d99064447dbd44ce2ebbc7c2bd11a0e7",
+      "sha256": "20c1caeeaafa24012b41d30cfbc0a0cbb16c6c5260806e73d232b7f1f74438cc",
       "executable": false
     },
     "tests/reservations.test.mjs": {
