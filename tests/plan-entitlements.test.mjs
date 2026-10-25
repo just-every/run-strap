@@ -238,7 +238,19 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   const pack = await sell(h,host.id,{credits:10,guestTerms}), otherPack = await sell(h,other.id,{credits:10,guestTerms});
   const preview = (guest,index,packId=pack.id,cookie=host.cookie,payerId=host.id) => h.cmd('guest.preview',{guestId:guest.id,classId:classes.get(index).id,packId,payerId},cookie);
   const confirm = (d,cookie=host.cookie) => h.cmd('guest.book',{id:d.id,confirm:true},cookie);
-  const first = await confirm(await preview(guests[0],'g0')), second = await confirm(await preview(guests[1],'g1'));
+  const firstDraft = await preview(guests[0],'g0');
+  assert.equal((await h.state()).pipeline.leads.length,0,'a preview never creates a lead');
+  const first = await confirm(firstDraft), second = await confirm(await preview(guests[1],'g1'));
+  const inquiry = (await h.state()).pipeline.leads.find(l=>l.personId===guests[0].id);
+  assert.deepEqual([inquiry.referrerId,inquiry.bookingId,inquiry.stage,inquiry.source],[host.id,first.id,'inquiry','Guest booking']);
+  assert.equal((await confirm(firstDraft)).id,first.id);
+  assert.equal((await h.state()).pipeline.events.filter(e=>e.leadId===inquiry.id).length,1,'booking replay creates one inquiry event');
+  assert.equal((await h.state(host.cookie)).pipeline,null,'the host cannot inspect the private lead');
+  assert.equal((await h.state(guests[0].cookie)).pipeline,null,'the guest cannot inspect the private lead');
+  assert.equal((await h.send('/app/leads?lead='+inquiry.id,undefined,other.cookie)).text.includes(inquiry.id),false);
+  const sourcePage = (await h.send('/app/leads?lead='+inquiry.id,undefined,h.owner)).text;
+  assert.match(sourcePage,/Guest referrer: Morgan/);
+  assert.match(sourcePage,/no reward or marketing permission granted/);
   await h.cmd('guest.preview',{guestId:guests[2].id,classId:classes.get('g2').id,packId:pack.id},host.cookie,409);
   assert.equal((await h.state(host.cookie)).packs.find(p=>p.id===pack.id).remaining,10);
   assert.deepEqual((await h.state(host.cookie)).guests.allowances.find(a=>a.packId===pack.id).periods.find(p=>p.start===before.slice(0,8)+'01').used,2);
@@ -290,6 +302,7 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   const stale = await preview(stranger,'g5',charged.id);
   await h.cmd('guest.consent.save',{sponsorEmail:host.email,consent:true},stranger.cookie);
   await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,409);
+  assert.equal((await h.state()).pipeline.leads.some(l=>l.personId===stranger.id),false,'failed and stale confirmations never capture a lead');
   const grant = (await h.state(stranger.cookie)).guests.consents.find(c=>c.type==='guest');
   await h.cmd('guest.consent.revoke',{id:grant.id},stranger.cookie);
   await h.cmd('guest.book',{id:stale.id,confirm:true},host.cookie,403);
@@ -302,6 +315,10 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   assert.equal((await h.state()).guests.consents.find(c=>c.id===grant.id).name,stranger.name,'the owner retains studio authorization history');
   assert.ok(!(await h.state(other.cookie)).people.some(p=>p.id===host.id));
   assert.equal(second.guestFunding,'pass');
+  const retainedInquiry=(await h.state()).pipeline.leads.find(l=>l.id===inquiry.id);
+  assert.deepEqual(retainedInquiry,inquiry,'cancel, move, restore and later guest bookings preserve the first inquiry');
+  assert.equal((await h.state()).pipeline.leads.filter(l=>l.personId===guests[0].id).length,1);
+  assert.equal((await h.state()).pipeline.events.filter(e=>e.leadId===inquiry.id).length,1);
   const rollGuests=[];
   for (const name of ['River','Skyler','Dakota','Marley','Finley']) {
     const guest=await h.person(name); rollGuests.push(guest);

@@ -94,6 +94,31 @@ export async function createLead(tx: Transaction, input: Record<string,unknown>)
   return save(tx,'lead.create',req,null,lead,note);
 }
 
+/** A committed guest reservation records its source privately, without a reward,
+ * marketing permission, external message or change to an existing inquiry. */
+export async function captureGuestLead(tx: Transaction, booking: RecordData) {
+  const sourceId = `guest-lead-source:${booking.id}`;
+  if (tx.state.records.has(sourceId)) return;
+  let lead = list(tx.state,'lead').find(l => l.personId === booking.personId);
+  const at = now();
+  if (!lead) {
+    const owner = await tx.db.prepare("SELECT id,version FROM oa_operators WHERE role='owner' AND status='active' ORDER BY id LIMIT 1").first<{id:string;version:number}>();
+    insist(owner,'active_native_owner_required',409);
+    const ownerId = await assignment(tx,owner.id);
+    lead = {id:`guest-lead:${booking.personId}`,personId:booking.personId,ownerId,stage:'inquiry',version:1,
+      source:'Guest booking',referrerId:booking.sponsorId,bookingId:booking.id,
+      nextAction:'Review guest booking; no marketing permission granted',dueAt:booking.createdAt,
+      lostReason:null,externalMembershipReference:null,externalMembershipNote:null,externalOutcomeLabel:null,
+      createdAt:at,createdBy:tx.who.id,updatedAt:at,updatedBy:tx.who.id};
+    const req = {requestId:booking.id,basis:JSON.stringify([booking.personId,booking.sponsorId,booking.id]),key:`guest-lead-event:${booking.personId}`,prior:null};
+    save(tx,'guest.book',req,null,lead,null);
+  }
+  // Retain each booking's host separately: a later host never rewrites the
+  // original inquiry, assignment, source, stage or first referrer.
+  tx.put('guestLeadSource',{id:sourceId,leadId:lead.id,personId:booking.personId,referrerId:booking.sponsorId,
+    bookingId:booking.id,actorId:tx.who.id,actorRole:tx.who.role,channel:booking.bookingChannel,at});
+}
+
 export async function updateLead(tx: Transaction, input: Record<string,unknown>) {
   const req = await request(tx,input,'lead.update');
   if (req.prior) return req.prior;
