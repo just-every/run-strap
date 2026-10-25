@@ -65,7 +65,7 @@ export function appointmentsPanel(s: any, personId: string, back: string) {
     .slice().reverse().map(entry => preview(s,personId,back,entry)).join('')
   const saved = rows(s,'appointments').filter(entry => entry.personId === personId)
     .slice().reverse().map(entry => savedReservation(s,personId,back,entry)).join('')
-  return panel('Appointments',body('<p class="meta">Review each date, instructor, room and funding pack before confirming.</p>'
+  return '<style>#appointments .data.stack td[data-label]::before{font-size:13px}</style>' + panel('Appointments',body('<p class="meta">Review each date, instructor, room and funding pack before confirming.</p>'
     + composer(s,personId,back) + (owner(s) ? prepare : '') + previews + saved),{id:'appointments'})
 }
 

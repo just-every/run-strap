@@ -3534,7 +3534,7 @@
       "executable": false
     },
     "src/strap/ui/appointments.ts": {
-      "sha256": "14464547787c109be4aedaf46c14a0031eeeaf144bad89355c6ed8fa0fe569ac",
+      "sha256": "b78ddd9cb3bca71e65c9b0c94087da82938064711ab600ca17db577d0fcd5ca4",
       "executable": false
     },
     "src/strap/ui/attendance.ts": {
