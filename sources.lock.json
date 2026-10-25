@@ -4102,7 +4102,7 @@
       "executable": false
     },
     "tests/reservations-browser.mjs": {
-      "sha256": "20a202570ddc5efbbfa6d0b71761e028c4a1afec7e3799607e67d95947cd3432",
+      "sha256": "73a58201dd8ed9136fefb39a9b1d49246a97214a35cbe87f0ba3e956c0655db2",
       "executable": false
     },
     "tests/reservations.test.mjs": {

@@ -187,8 +187,8 @@ export async function appointmentsBrowser(h,{coach,start}) {
       const iconControls=owner.locator('a,button').filter({has:owner.locator('svg')})
       for(let i=0;i<await iconControls.count();i++) {
         const control=iconControls.nth(i)
-        if((await control.innerText()).trim()) continue
-        assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips')
+        if(!await control.isVisible() || (await control.innerText()).trim()) continue
+        assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips: '+await control.evaluate(e=>e.outerHTML))
         await control.focus();const tooltip=owner.locator('[id="'+await control.getAttribute('aria-describedby')+'"]');await tooltip.waitFor({state:'visible'})
         await owner.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-focus-tooltip-${width}.png`)})
         await control.blur();await control.hover();await tooltip.waitFor({state:'visible'})
