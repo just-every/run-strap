@@ -527,12 +527,34 @@ test(
         409,
       );
       assert.equal((await h.state()).version, version);
+      const deskPerson = await h.person("GiftDesk");
+      const grant = {personId:deskPerson.id,enabled:true,sale:true,refund:false,memberIds:[member.id],locationIds:["studio"]};
+      await h.cmd("retail.staff.grant",grant);
+      const giftDesk=await h.signIn(deskPerson.email);
+      await h.enroll(giftDesk);
+      await denied(h,"retail.gift.adjust",{giftCardId:gift.id,amountCents:1,reason:"No refund right",requestId:"real-desk-denied"},giftDesk);
+      const hidden=(await h.send("/api/strap/retail",undefined,giftDesk)).value;
+      assert.equal(hidden.gifts.cards.length,1);
+      assert.equal(hidden.gifts.cards[0].reference,undefined);
+      assert.equal(hidden.gifts.cards[0].balanceCents,6000);
+      assert.equal((await h.send("/api/strap/retail?giftCardId="+gift.id,undefined,member.cookie)).status,403);
+      const stranger=await h.person("OtherGiftRecipient");
+      await denied(h,"retail.sell",sell(stranger,last,"foreign-recipient",{tender:"gift",giftCardId:gift.id}),giftDesk);
       const finalInput = sell(member, last, "gift-final", {
           tender: "gift",
           giftCardId: gift.id,
         }),
-        final = await h.cmd("retail.sell", finalInput);
-      assert.deepEqual(await h.cmd("retail.sell", finalInput), final);
+        final = await h.cmd("retail.sell", finalInput, giftDesk);
+      assert.deepEqual(await h.cmd("retail.sell", finalInput, giftDesk), final);
+      const audit=(await h.state()).staffActions.filter(a=>a.command==="retail.sell" && a.after.id===final.id);
+      assert.equal(audit.length,1);
+      assert.equal(audit[0].actorRole,"front-desk");
+      assert.equal(audit[0].personId,member.id);
+      assert.equal(audit[0].right,"sale");
+      assert.equal(audit[0].channel,"desk");
+      await h.cmd("retail.staff.grant",{...grant,sale:false});
+      await denied(h,"retail.sell",finalInput,giftDesk);
+      await h.cmd("retail.staff.grant",grant);
       assert.equal((await retail(h)).gifts.liabilityCents, 0);
       await h.cmd("retail.return", {
         saleId: first.id,
@@ -581,6 +603,12 @@ test(
         requestId: "adjust-gift",
       });
       assert.equal((await retail(h)).gifts.liabilityCents, 3900);
+      const trail=(await retail(h)).gifts.entries.find(e=>e.reason==="Correct agreed gift value");
+      assert.deepEqual([trail.before,trail.after,trail.amountCents],[4000,3900,-100]);
+      assert.ok(trail.actorId);
+      const beforeIneligible=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"retail.sell",input:sell(member,last,"ineligible-code",{promoCodes:["WELCOME"],expectedCents:5000})},h.owner)).status,409);
+      assert.equal((await h.state()).version,beforeIneligible);
       const second = await h.cmd("retail.promotion.add", {
         ...promo,
         code: "SECOND",
@@ -599,6 +627,14 @@ test(
         h.owner,
       );
       assert.equal(stack.status, 409);
+      await h.cmd("retail.sell",sell(member,sku,"member-promo-once",{promoCodes:[second.code],expectedCents:4000}));
+      const beforeLimit=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"retail.sell",input:sell(member,sku,"member-promo-twice",{promoCodes:[second.code],expectedCents:4000})},h.owner)).status,409);
+      assert.equal((await h.state()).version,beforeLimit);
+      await h.cmd("retail.sell",sell(stranger,sku,"global-promo-last",{promoCodes:[second.code],expectedCents:4000}));
+      const third=await h.person("ThirdGiftRecipient"), beforeGlobal=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"retail.sell",input:sell(third,sku,"global-promo-over",{promoCodes:[second.code],expectedCents:4000})},h.owner)).status,409);
+      assert.equal((await h.state()).version,beforeGlobal);
       const expired = await h.cmd("retail.promotion.add", {
         ...promo,
         code: "EXPIRED",
@@ -630,9 +666,20 @@ test(
         requestId: "funding-refund",
       });
       assert.equal(refund.tender, "external");
+      const refundInput={giftCardId:gift.id,amountCents:1000,reason:"Refund part of remaining original funding",reference:"synthetic-strap-105",requestId:"funding-refund"};
+      assert.deepEqual(await h.cmd("retail.gift.refund",refundInput),refund);
+      const beforeRefund=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"retail.gift.refund",input:{...refundInput,amountCents:4000,requestId:"over-refund"}},h.owner)).status,409);
+      assert.equal((await h.state()).version,beforeRefund);
       assert.equal((await retail(h)).gifts.liabilityCents, 2900);
+      const privateGift=await h.cmd("retail.gift.issue",{personId:stranger.id,recipientId:stranger.id,amountCents:1000,tender:"external",reference:"synthetic-strap-140",requestId:"private-gift"});
+      assert.ok(!(await h.send("/api/strap/retail",undefined,giftDesk)).value.gifts.cards.some(c=>c.id===privateGift.id));
+      await h.cmd("retail.staff.grant",{...grant,refund:true});
+      await denied(h,"retail.gift.adjust",{giftCardId:privateGift.id,personId:member.id,locationId:"studio",amountCents:1,reason:"Spoofed recipient",requestId:"spoof-adjust"},giftDesk);
+      await denied(h,"retail.gift.refund",{giftCardId:privateGift.id,personId:member.id,locationId:"studio",amountCents:1,reason:"Spoofed recipient",reference:"synthetic-strap-141",requestId:"spoof-refund"},giftDesk);
+      await h.cmd("retail.staff.grant",grant);
       if (process.env.STRAP_PROOF_DIR)
-        await (await import("./retail-browser.mjs")).giftBrowser(h, gift.id);
+        await (await import("./retail-browser.mjs")).giftBrowser(h, gift.id, {cookie:giftDesk,member,last});
     }),
 );
 

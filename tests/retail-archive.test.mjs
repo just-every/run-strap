@@ -137,6 +137,15 @@ test(
         stackable: false,
         requestId: "promo",
       });
+      const deskPerson=await h.person("ArchiveDesk"), manager=await h.person("ArchiveManager");
+      const retailGrant={personId:deskPerson.id,enabled:true,sale:true,refund:false,memberIds:[member.id],locationIds:["studio"]};
+      await h.cmd("retail.staff.grant",retailGrant);
+      const desk=await h.signIn(deskPerson.email);
+      await h.enroll(desk);
+      await h.cmd("manager.grant",{id:manager.id,locationIds:["studio"]});
+      await h.cmd("clock.approver.grant",{personId:manager.id,enabled:true});
+      const managerCookie=await h.signIn(manager.email);
+      await h.enroll(managerCookie);
       const giftInput = {
           skuId: sku.id,
           personId: member.id,
@@ -148,7 +157,7 @@ test(
           reference: "synthetic-strap-106",
           requestId: "gift-sale",
         },
-        giftSale = await h.cmd("retail.sell", giftInput);
+        giftSale = await h.cmd("retail.sell", giftInput, desk);
       const coach = await h.person("ClockStaff", "instructor");
       const shift = await h.cmd(
           "clock.in",
@@ -177,7 +186,7 @@ test(
           revision: 1,
           requestId: "clock-approve",
         },
-        approval = await h.cmd("clock.approve", approvalInput);
+        approval = await h.cmd("clock.approve", approvalInput, managerCookie);
       const beforeClock = (
         await h.send("/api/strap/time-clock", undefined, h.owner)
       ).value;
@@ -202,9 +211,14 @@ test(
       assert.equal(replay.sessions[0].expectedCents, 17000);
       assert.equal(replay.sessions[0].countedCents, 17000);
       assert.equal(replay.gifts.liabilityCents, 8500);
-      assert.deepEqual(await h.cmd("retail.sell", giftInput, owner), giftSale);
+      const restoredDesk=await h.signIn(deskPerson.email);
+      assert.equal((await h.send("/api/strap/retail",undefined,restoredDesk)).status,403);
+      await h.enroll(restoredDesk);
+      assert.deepEqual(await h.cmd("retail.sell", giftInput, restoredDesk), giftSale);
+      const restoredManager=await h.signIn(manager.email);
+      await h.enroll(restoredManager);
       assert.deepEqual(
-        await h.cmd("clock.approve", approvalInput, owner),
+        await h.cmd("clock.approve", approvalInput, restoredManager),
         approval,
       );
       const afterClock = (

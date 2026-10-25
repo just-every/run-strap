@@ -46,14 +46,15 @@ function people(s: any) {
     + managersPanel(s, members, finance)
 }
 
-/** STUDIO-002: location managers read the revenue and attendance reports of their locations, behind a second factor, and nothing else. */
+/** STUDIO-002: location managers read the revenue and attendance reports of their locations, behind a second factor; time approval needs its separate grant. */
 function managersPanel(s: any, members: any[], finance: Set<string>) {
   const grants = new Map<string, string[]>((s.access.managers as any[]).map(m => [m.personId, m.locationIds]))
   const places = rows(s, 'locations'), name = (id: string) => places.find(l => l.id === id)?.name ?? id
   const lines = rows(s, 'people').filter(p => grants.has(p.id)).map(p => `<tr>${cell('Person', `<strong>${h(p.name)}</strong><small>${h(p.email)}</small>`)}${cell('Locations', h(grants.get(p.id)!.map(name).join(', ')))}${cell('', form('manager.revoke', '/app/security', hidden('id', p.id), 'Remove manager access', 'quiet', 'small'))}</tr>`).join('')
   const checks = `<fieldset class="days"><legend>Locations they manage</legend>${places.map(l => `<label class="check"><input type="checkbox" name="loc_${h(l.id)}" value="true"> ${h(l.name)}</label>`).join('')}</fieldset>`
-  return panel('Location managers', body(`<p>A manager opens the revenue and attendance reports for the locations you choose, behind a second factor, and nothing else. Invite the person from People first.</p>${lines ? `<div class="table-wrap">${table(['Person', 'Locations', ''], lines)}</div>` : emptyLine('No location managers.')}`
-    + form('manager.grant', '/app/security', select('id', 'Person', [['', 'Choose a member with an email'], ...members.filter(p => !finance.has(p.id)).map(p => [p.id, `${p.name} (${p.email})`] as [string, string])], '', 'required') + checks, 'Make location manager')), { icon: 'pin' })
+  return panel('Location managers', body(`<p>A manager opens reports for the locations you choose, behind a second factor. Time approval also needs the separate right below. Invite the person from People first.</p>${lines ? `<div class="table-wrap">${table(['Person', 'Locations', ''], lines)}</div>` : emptyLine('No location managers.')}`
+    + form('manager.grant', '/app/security', select('id', 'Person', [['', 'Choose a member with an email'], ...members.filter(p => !finance.has(p.id)).map(p => [p.id, `${p.name} (${p.email})`] as [string, string])], '', 'required') + checks, 'Make location manager')
+    + form('clock.approver.grant', '/app/security', select('personId', 'Approval manager', members.filter(p => grants.has(p.id)).map(p => [p.id,p.name] as [string,string])) + select('enabled', 'Time approval right', [['true','Grant'],['false','Revoke']]), 'Save approval right')), { icon: 'pin' })
 }
 
 export function securityPage(s: any, query: URLSearchParams, notice: any) {

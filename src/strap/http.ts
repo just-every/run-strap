@@ -19,7 +19,7 @@ import { revenueReport } from './revenue-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
 import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
-import { commandCatalogue, command, financeSnapshot, managerSnapshot, snapshot, sweep, type Actor } from './domain'
+import { deskRetailSnapshot, commandCatalogue, command, financeSnapshot, managerSnapshot, snapshot, sweep, type Actor } from './domain'
 import { importCommand } from './movein'
 import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { inAppOnly, integrationCommand, integrationKeys } from './integrations'
@@ -107,10 +107,10 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if (who.role === 'front-desk' && !['/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
-  if (who.role === 'front-desk' && name && !['lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.')) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && !['/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && name && !['lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
-  if (who.role === 'manager' && !managerRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
+  if (who.role === 'manager' && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
   const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
@@ -156,15 +156,16 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (request.method === 'GET') {
       if(path==='/api/strap/time-clock' || path==='/api/strap/time-clock.csv') {
         if(path.endsWith('.csv') && who.role!=='owner') fail('owner_required',403)
-        if(!['owner','instructor'].includes(who.role)) fail('staff_clock_required',403)
+        if(!['owner','instructor','manager'].includes(who.role)) fail('staff_clock_required',403)
         const loaded=await load(env.DB,who)
         if(path.endsWith('.csv')) return new Response('approvalId,shiftId,employeeId,locationId,job,startAt,endAt,breakMinutes,minutes,approvedBy\n'+approvedHours(loaded.state).map(r=>[r.id,r.shiftId,r.employeeId,r.locationId,r.job,r.startAt,r.endAt,r.breakMinutes,r.minutes,r.approvedBy].map(v=>'"'+JSON.stringify(v).replace(/"/g,'""')+'"').join(',')).join('\n')+'\n',{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="approved-hours.csv"'}})
         return json(timeSnapshot(loaded.state,who))
       }
-      if(path==='/app/retail' && who.role!=='owner') fail('owner_required',403)
+      if(path==='/app/retail' && !['owner','front-desk'].includes(who.role)) fail('owner_required',403)
       if(path.startsWith('/api/strap/retail')) {
-        if(who.role!=='owner') fail('owner_required',403)
+        if(!['owner','front-desk'].includes(who.role)) fail('owner_required',403)
         const loaded=await load(env.DB,who)
+        if(who.role==='front-desk') {if(path!=='/api/strap/retail') fail('owner_required',403); const view=deskRetailSnapshot(loaded.state,who); if(!('saleGrant' in view)) fail('retail_right_required',403); return json(view)}
         if(path==='/api/strap/retail') {const inventory=inventorySnapshot(loaded.state),barcode=url.searchParams.get('barcode');return json({...inventory,...drawerSnapshot(loaded.state),gifts:giftSnapshot(loaded.state),lookup:barcode ? inventory.skus.find(s=>s.barcode===barcode) ?? null : null})}
         if(path==='/api/strap/retail/day' || path==='/api/strap/retail/day.csv') {
           const report=tenderDay(loaded.state,url.searchParams.get('date') ?? '')

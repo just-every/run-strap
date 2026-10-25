@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { chromium } from "@playwright/test";
-export async function staffTimeBrowser(h, coach) {
+export async function staffTimeBrowser(h, coach, manager) {
   const browser = await chromium.launch({
     headless: true,
     args: ["--use-mock-keychain", "--password-store=basic"],
@@ -13,6 +13,7 @@ export async function staffTimeBrowser(h, coach) {
       for (const [role, cookie] of [
         ["owner", h.owner],
         ["instructor", coach.cookie],
+        ["manager", manager.cookie],
       ]) {
         const context = await browser.newContext({
           viewport: { width, height: 1000 },
@@ -63,7 +64,7 @@ export async function staffTimeBrowser(h, coach) {
             (await download).suggestedFilename(),
             "approved-hours.csv",
           );
-        } else {
+        } else if (role === "instructor") {
           assert.equal(
             await page
               .getByRole("button", { name: "Approve hours", exact: true })
@@ -102,6 +103,21 @@ export async function staffTimeBrowser(h, coach) {
             .getByRole("heading", { name: "Time clock", exact: true })
             .waitFor();
         }
+        if (role === "manager") {
+          const row=page.getByRole("row").filter({hasText:"Reception " + width});
+          await row.getByRole("button",{name:"Approve hours",exact:true}).click();
+          await page.getByRole("heading",{name:"Time clock",exact:true}).waitFor();
+          const saved=(await h.send("/api/strap/time-clock",undefined,manager.cookie)).value.shifts.find(r=>r.job==="Reception "+width);
+          assert.equal(saved.status,"approved");
+        }
+        const tip=page.locator('.has-tooltip').first();
+        if(await tip.count()) {
+          await tip.focus();
+          await tip.locator('[role="tooltip"]').waitFor({state:"visible"});
+          await tip.evaluate(e=>e.blur());
+          await tip.hover();
+          await tip.locator('[role="tooltip"]').waitFor({state:"visible"});
+        }
         const iconOnly = await page
           .locator("a,button,summary")
           .evaluateAll((els) =>
@@ -118,6 +134,19 @@ export async function staffTimeBrowser(h, coach) {
           ),
           fullPage: true,
         });
+        if (role === "owner") {
+          await page.goto(h.origin + "/app/security");
+          const rights=page.locator('form').filter({has:page.getByRole('button',{name:'Save approval right',exact:true})});
+          await rights.getByLabel('Approval manager',{exact:true}).selectOption(manager.id);
+          await rights.getByLabel('Time approval right',{exact:true}).selectOption('true');
+          await rights.getByRole('button',{name:'Save approval right',exact:true}).click();
+          await page.getByRole('heading',{name:'Security',exact:true}).waitFor();
+          assert.equal(await page.locator('.notice.error[role="alert"]').count(),0,await page.locator("body").innerText());
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+          const tip=page.locator('.has-tooltip').first();
+          if(await tip.count()){await tip.focus();await tip.locator('[role="tooltip"]').waitFor({state:'visible'});}
+          await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`STAFF-003-security-${width}.png`),fullPage:true});
+        }
         await context.close();
       }
   } finally {

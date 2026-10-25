@@ -28,6 +28,8 @@ const req = () => hidden("requestId", crypto.randomUUID());
 const detail = (title: string, html: string) =>
   `<details class="more"><summary>${breakable(title)}</summary><div class="panel-body">${html}</div></details>`;
 export function retailPage(s: any, query: URLSearchParams) {
+  const desk = s.actor.role === "front-desk";
+  if (desk) s = {...s,people:s.retailPeople ?? []};
   const r = s.retail ?? {
       skus: [],
       suppliers: [],
@@ -61,7 +63,7 @@ export function retailPage(s: any, query: URLSearchParams) {
             (s.locations.find((l: any) => l.id === v.locationId)?.name ??
               v.locationId),
         ]),
-      ]);
+      ], "", "");
   const quantity = () =>
     field("quantity", "Quantity", 1, "number", 'required min="1" step="1"');
   const barcode = query.get("barcode")?.trim(),
@@ -174,9 +176,9 @@ export function retailPage(s: any, query: URLSearchParams) {
     ),
   );
   const sales = panel(
-    "Desk sales and returns",
+    desk ? "Gift redemption" : "Desk sales and returns",
     body(
-      "<p>Cash, gift cards or externally recorded payment. Gift redemption is noncash. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>" +
+      (desk ? "<p>Redeem a named recipient’s gift at an authorized location. Confirm the exact total after eligible promotions. Each sale records the stock, gift value and receipt together.</p>" : "<p>Cash, gift cards or externally recorded payment. Gift redemption is noncash. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>") +
         detail(
           "Sell retail",
           form(
@@ -194,7 +196,7 @@ export function retailPage(s: any, query: URLSearchParams) {
                 "number",
                 'required min="0.01" step="0.01"',
               ) +
-              select("tender", "Tender", [
+              select("tender", "Tender", desk ? [["gift", "Gift card"]] : [
                 ["external", "Externally recorded"],
                 ["cash", "Cash"],
                 ["gift", "Gift card"],
@@ -215,7 +217,7 @@ export function retailPage(s: any, query: URLSearchParams) {
             "Record sale",
           ),
         ) +
-        detail(
+        (desk ? "" : detail(
           "Return retail",
           form(
             "retail.return",
@@ -238,7 +240,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               reason(),
             "Record return",
           ),
-        ) +
+        )) +
         (r.sales.length
           ? table(
               ["Sale", "Tender", "Total", "Returns"],
@@ -330,7 +332,7 @@ export function retailPage(s: any, query: URLSearchParams) {
     body(
       "<p>Outstanding gift liability: <strong>" +
         breakable(money(gift.liabilityCents)) +
-        "</strong>. Cards have no expiration or fees. Only the owner can issue, look up, redeem or adjust them. Returns restore the original gift value; no automatic cash payout occurs.</p>" +
+        "</strong>. Cards have no expiration or fees. The owner controls custody. Explicit sale and refund rights limit staff to named recipients and locations. Returns restore the original gift value; no automatic cash payout occurs.</p>" +
         detail(
           "Issue gift card",
           form(
@@ -503,5 +505,5 @@ export function retailPage(s: any, query: URLSearchParams) {
         )
       : emptyLine("No stock movements."),
   );
-  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Inventory and drawers</h1><p>Receive, sell, transfer and reconcile studio retail.</p></div>${catalog}${setup}${sales}${gifts}${drawers}${cashTrail}${trail}</div></div>`;
+  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Inventory and drawers</h1><p>Receive, sell, transfer and reconcile studio retail.</p></div>${catalog}${desk ? "" : setup}${sales}${desk ? "" : gifts + drawers + cashTrail + trail}</div></div>`;
 }

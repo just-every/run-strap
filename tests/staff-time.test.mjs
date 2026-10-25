@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { run } from "./harness.mjs";
+import { emailStepUp } from "./mfa-helpers.mjs";
 
 test(
-  "Staff clock two shifts, record breaks, correct a missed clock-out and export only owner-approved hours with original entries retained",
+  "Staff clock two shifts, retain corrections, require independent scoped approval and export only approved hours",
   { timeout: 120000 },
   () =>
     run(async (h) => {
@@ -80,6 +81,7 @@ test(
       );
       assert.equal((await h.state()).version, version);
       await h.cmd("manager.grant", { id: manager.id, locationIds: [annex.id] });
+      await h.cmd("clock.approver.grant", { personId: manager.id, enabled:true });
       manager.cookie = await h.signIn(manager.email);
       await h.enroll(manager.cookie);
       assert.equal(
@@ -100,6 +102,8 @@ test(
         ).status,
         403,
       );
+      assert.equal((await h.state()).version, version + 1);
+      assert.equal((await h.send("/api/strap/time-clock",undefined,manager.cookie)).value.shifts.length, 0);
       assert.equal(
         (
           await h.send(
@@ -176,6 +180,20 @@ test(
         "clockRequest",
       ])
         assert.ok(portable.tables.st_records.some((r) => r.kind === kind));
+      await h.cmd("manager.grant", {id:manager.id,locationIds:["studio"]});
+      assert.equal((await h.send("/api/strap/time-clock",undefined,manager.cookie)).value.shifts.length,2);
+      const managerApproval = await h.cmd("clock.approve", {shiftId:first.id,revision:shift.revision,requestId:"manager-approve"},manager.cookie);
+      assert.equal(managerApproval.approvedBy,(await h.send("/auth/session",undefined,manager.cookie)).value.operator.id);
+      await h.cmd("manager.grant", {id:manager.id,locationIds:[annex.id]});
+      const movedVersion=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"clock.approve",input:{shiftId:first.id,revision:shift.revision,requestId:"manager-approve"}},manager.cookie)).status,403);
+      assert.equal((await h.state()).version,movedVersion);
+      await h.cmd("manager.grant", {id:manager.id,locationIds:["studio"]});
+      await h.cmd("clock.approver.grant", {personId:manager.id,enabled:false});
+      const revokedVersion=(await h.state()).version;
+      assert.equal((await h.send("/api/strap/command",{name:"clock.approve",input:{shiftId:first.id,revision:0,requestId:"revoked"}},manager.cookie)).status,403);
+      assert.equal((await h.state()).version,revokedVersion);
+      await h.cmd("clock.approver.grant", {personId:manager.id,enabled:true});
       const ownShift = await h.cmd("clock.in", {
         locationId: "studio",
         job: "Owner desk",
@@ -200,9 +218,32 @@ test(
         403,
       );
       assert.equal((await h.state()).version, beforeSelf);
+      await h.cmd("clock.correction.request", {shiftId:ownShift.id,revision:0,startAt:"2026-01-05T14:00:00Z",endAt:"2026-01-05T15:00:00Z",breakMinutes:0,reason:"Missed owner clock-out",requestId:"owner-correct"});
+      await emailStepUp(h,h.owner,"owner:transfer");
+      assert.equal((await h.send("/auth/invite",{email:"second@studio.example",displayName:"Second Owner",role:"owner"},h.owner)).status,202);
+      const secondOwner=await h.signIn("second@studio.example");
+      await h.enroll(secondOwner);
+      const independent=await h.cmd("clock.approve",{shiftId:ownShift.id,revision:1,requestId:"independent-owner"},secondOwner);
+      assert.notEqual(independent.approvedBy,ownShift.actorId);
+      // Fixed historical local-week fixtures avoid dependence on today's week or midnight.
+      for(let day=5;day<=10;day++) {
+        const hours=day===10?1:8, startAt=`2026-01-${String(day).padStart(2,"0")}T14:00:00Z`;
+        const entry=await h.cmd("clock.in",{job:"Weekly review",requestId:"week-in-"+day},coach.cookie);
+        await h.cmd("clock.correction.request",{shiftId:entry.id,revision:0,startAt,endAt:new Date(Date.parse(startAt)+hours*3600000).toISOString(),breakMinutes:0,reason:"Historical shift",requestId:"week-correct-"+day},coach.cookie);
+        const input={shiftId:entry.id,revision:1,requestId:"week-approve-"+day};
+        if(day===10) {
+          const before=(await h.state()).version;
+          assert.equal((await h.send("/api/strap/command",{name:"clock.approve",input},h.owner)).status,400);
+          assert.equal((await h.state()).version,before);
+          input.exceptionReason="Reviewed 41 approved studio-local-week hours";
+        }
+        const approved=await h.cmd("clock.approve",input);
+        assert.equal(approved.reviewThresholdExceeded,day===10);
+        assert.equal(approved.week,"2026-01-05");
+      }
       if (process.env.STRAP_PROOF_DIR)
         await (
           await import("./staff-time-browser.mjs")
-        ).staffTimeBrowser(h, coach);
+        ).staffTimeBrowser(h, coach, manager);
     }),
 );

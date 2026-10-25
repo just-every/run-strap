@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "0141ab2d3b0b6b7b21840875ed21f1d62c2630e7d4acb32dbefab0518278fee8",
+      "sha256": "5734d3924c38d735149767e2aa20408897e884c489d36550b6a66f3e3d97fcbf",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "df66c2e549a6bd37a6d12a99736ed2653b39ca67f3e78b53a293605da407add3",
+      "sha256": "5e27618a577d27ceb9af592b16464a12254ef6a3480266d97f1c1eb89da39065",
       "executable": false
     },
     "DEMO.md": {
@@ -386,7 +386,7 @@
       "executable": false
     },
     "docs/people.md": {
-      "sha256": "dc3ec44abd20215180bff582ecc443ad4d7f440c53dc2b3623c9598749f5fd14",
+      "sha256": "af985a306d6d150ab3add4bcc8819e4c50658b0cf34154913029242483853809",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3198,7 +3198,7 @@
       "executable": false
     },
     "src/strap/domain/gift-cards.ts": {
-      "sha256": "6d025e6a57e550513a531bc6dc5009af145368c70138e164a6e5a1cec30245e1",
+      "sha256": "8caabbcea5bfc906c36e4396af56ad785e00384f91befc812c0ff0908ee10902",
       "executable": false
     },
     "src/strap/domain/guest-allowances.ts": {
@@ -3218,7 +3218,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "a439b6bcb86dc45f4978ae0434fd6f5907d0a970679b1adbd3e0e56673fd92bc",
+      "sha256": "fcac34af07e2fbf2f981e6585e734e7799b6fda1a307e3d7e687d66dd0392b84",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3318,7 +3318,7 @@
       "executable": false
     },
     "src/strap/domain/retail-records.ts": {
-      "sha256": "5a4da7006c95e4e427c3ac2d207710eab996322fabf93e79ba898133f36841cb",
+      "sha256": "2a118cfa9ff4c7a92c39fe15352be1ee71ec038ad50d214f448119195234678f",
       "executable": false
     },
     "src/strap/domain/retention-history.ts": {
@@ -3350,11 +3350,11 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "5b26c3c36190d85b7090d4d99f32ab8b9fed6fd5fefa737724c6e153d5260624",
+      "sha256": "b8890db55e0d5ee7b1cfab35a95fc9db2b7ee507cf4d43bb9d418d4417f8f792",
       "executable": false
     },
     "src/strap/domain/store.ts": {
-      "sha256": "06c1a7bc7123974744cf17b5bd73c3ace92c2c5e78ca9aff6717d4b2cd603602",
+      "sha256": "6e26cfb66cfd8053108aa3a886f6672349473226d00393a055b5a386d13f7cce",
       "executable": false
     },
     "src/strap/domain/studio-profile.ts": {
@@ -3378,7 +3378,7 @@
       "executable": false
     },
     "src/strap/domain/time-clock.ts": {
-      "sha256": "7a3865a2e99f2117d09b9b89b91e74ffc89b9bf976b334e5413f151c28e4f4fb",
+      "sha256": "1ed3a8023c6cda96c2c300feed6b5fcd8215e15c8310c7f25cadcc3869dee60a",
       "executable": false
     },
     "src/strap/domain/types.ts": {
@@ -3394,11 +3394,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "1cc69a28af99bb7785d7e151cad011803e549645515f6638b48c8517ca7782d9",
+      "sha256": "e2b47f804ffd25c4a721814658ecd32fab963a4fe08985551625319c381a5fdc",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "f1380cbe2682407e5c2bb71a1b36d569ce47aea49ebf5c7fb724b6fc02f28d20",
+      "sha256": "8558562e7d73711815fb704630714d7fd23cdb0c528e499ad42791cce33adf51",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3494,7 +3494,7 @@
       "executable": false
     },
     "src/strap/security/manager.ts": {
-      "sha256": "6c8add56fd28f1b84bdcc1ef71a5e25fcc334eccbd317902ca94d4c23155f7d1",
+      "sha256": "b94172b553a2503f092d48e1b59fa357ca05cd8fe35dec35266d8a34c650f8e8",
       "executable": false
     },
     "src/strap/security/mfa.ts": {
@@ -3706,7 +3706,7 @@
       "executable": false
     },
     "src/strap/ui/retail.ts": {
-      "sha256": "1d1489bc2d9299039db2ad3f9b3507bc2cb5b7cf85d675ff248871dd4b21e140",
+      "sha256": "6fad4626408b0ed769a841548a31b9f18177bd7d3d9968e7c557e0ab071b7b64",
       "executable": false
     },
     "src/strap/ui/retention.ts": {
@@ -3726,7 +3726,7 @@
       "executable": false
     },
     "src/strap/ui/security.ts": {
-      "sha256": "114c590d2a4ba99d36747f05e8f4c2862013f287b1d48fa7a169687cf6ac809e",
+      "sha256": "caa69e0fde2a0eb9996b6df2e7390f2c8dfebfdfdd4bbeba2164ffe3e94613df",
       "executable": false
     },
     "src/strap/ui/series.ts": {
@@ -3738,7 +3738,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "8b63bf4e0f92f2e6475ec633cdbf5bc479029c13e94fc2c65e85395b95839cf2",
+      "sha256": "9d4959bff728e264e3558e9244cbbdb484cd72cd73c1a5712a344c6474562118",
       "executable": false
     },
     "src/strap/ui/spots.ts": {
@@ -3770,7 +3770,7 @@
       "executable": false
     },
     "src/strap/ui/time-clock.ts": {
-      "sha256": "f59b28d4343dd504a28dc7fff98d5fff9bb604a982c7e96f2afe48ba7b7a44e5",
+      "sha256": "23b4e9af835b1e2c133837e32c73f16609da4668c8c61f1a29fe6a320fe672d3",
       "executable": false
     },
     "src/strap/ui/today.ts": {
@@ -4090,15 +4090,15 @@
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
-      "sha256": "d3bb43660cb8171b6e1c1a6321f3025be83aca12dc096bcbc45cc74aace897ce",
+      "sha256": "48a91b9a0e7485a264023227d90569729f53942bc2611c94803a2aef9eba2cff",
       "executable": false
     },
     "tests/retail-browser.mjs": {
-      "sha256": "5f2372725af27b9cd79899333b92aa48b74838e9cf832bd90ac9adc76b26ef69",
+      "sha256": "85e8300296f2edaa60e4ca7b9fd0a311c71be2c6c19ed3e7c8df738792293df2",
       "executable": false
     },
     "tests/retail.test.mjs": {
-      "sha256": "9dd8f5c5fbe4ad0c1a8ea89d16e12155f73389abb9045c5520a8662c9162f166",
+      "sha256": "4512d121cfc98a5aa5b53f4a314e1c0e2418676a48a2748186ce244d04ea2319",
       "executable": false
     },
     "tests/revenue-browser.mjs": {
@@ -4150,11 +4150,11 @@
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
-      "sha256": "9532a27fe045475c8f2db89169ac6bc6e74a9b7a625c11516190640bd1e1054b",
+      "sha256": "85649eb1f3c8d57cdc5c29f82868bcd2e88c32b25a97eeac6f7dd037d3e7badc",
       "executable": false
     },
     "tests/staff-time.test.mjs": {
-      "sha256": "5a40a8adc99b9bde8ffa2beb3275701892dc3818e82db54b03655ef39579697a",
+      "sha256": "f3513c4d6932fd372c4c109f2f4e73a5a35ecc50114cb83b31d0c0ba74acc4fd",
       "executable": false
     },
     "tests/strap.test.mjs": {

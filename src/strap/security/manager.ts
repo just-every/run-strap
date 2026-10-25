@@ -1,6 +1,6 @@
 // STUDIO-002: a manager is a staff identity for named locations. The owner grants it to an active person with an
 // email (who signs in through the ordinary invitation link); it reaches the revenue and attendance reports of those
-// locations, behind a second factor, and nothing else. A grant replaces nothing: revoking it returns the person to
+// locations, behind a second factor. STAFF-003 separately grants scoped time approval. A grant replaces nothing: revoking it returns the person to
 // their member identity on the next request. Wider manager rights wait for STAFF-001.
 import type { Bindings } from '../../auth.server'
 import { fail } from '../credentials'

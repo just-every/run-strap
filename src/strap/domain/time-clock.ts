@@ -27,7 +27,7 @@ function request(
   input: Record<string, unknown>,
   apply: () => RecordData,
 ) {
-  staff(tx.who);
+  if (action !== "approve" || tx.who.role !== "manager") staff(tx.who);
   const requestId = text(input.requestId, "clock_request", 100),
     basis = JSON.stringify(
       Object.fromEntries(
@@ -223,10 +223,25 @@ function weekKey(s: State, shift: RecordData, startAt: string) {
     day = new Date(date + "T12:00:00Z").getUTCDay();
   return addDays(date, -((day + 6) % 7));
 }
-export function approveHours(tx: Transaction, input: Record<string, unknown>) {
+export async function grantClockApprover(tx: Transaction, input: Record<string, unknown>) {
   insist(tx.who.role === "owner" && tx.who.isOwner, "owner_required", 403);
+  const personId = text(input.personId, "person_id", 100);
+  insist(tx.state.people.some(p => p.id === personId && p.active && !p.erasedAt), "person_not_found", 404);
+  insist(typeof input.enabled === "boolean", "invalid_approval_grant");
+  if (input.enabled) insist(await tx.db.prepare("SELECT 1 FROM st_managers WHERE person_id=?").bind(personId).first(), "location_manager_required", 409);
+  const key = "clock-approver:" + personId, before = tx.state.records.get(key)?.data ?? null;
+  const saved = {id:key,personId,enabled:input.enabled,updatedBy:tx.who.id,updatedAt:now()};
+  tx.put("clockApprover", saved);
+  tx.put("clockApproverEvent", {id:id(),before,after:saved,actorId:tx.who.id,createdAt:now()});
+  return saved;
+}
+export function approveHours(tx: Transaction, input: Record<string, unknown>) {
+  insist((tx.who.role === "owner" && tx.who.isOwner) ||
+    (tx.who.role === "manager" && tx.state.records.get("clock-approver:" + tx.who.personId)?.data.enabled), "clock_approval_right_required", 403);
+  const shift = record(tx.state, input.shiftId, "clockShift");
+  insist(tx.who.role !== "manager" || tx.who.locationIds?.includes(shift.locationId), "clock_location_required", 403);
   return request(tx, "approve", input, () => {
-    const shift = record(tx.state, input.shiftId, "clockShift");
+    if (tx.who.role === "manager") tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_managers WHERE person_id=? AND location_ids=?) THEN 1 ELSE 0 END", tx.who.personId, JSON.stringify(tx.who.locationIds)));
     insist(shift.actorId !== tx.who.id, "another_owner_approval_required", 403);
     insist(input.revision === shift.revision, "clock_shift_changed", 409);
     insist(
@@ -295,9 +310,9 @@ export function approveHours(tx: Transaction, input: Record<string, unknown>) {
   });
 }
 export function timeSnapshot(s: State, who: Actor) {
-  if (!["owner", "instructor"].includes(who.role)) return null;
+  if (!["owner", "instructor", "manager"].includes(who.role)) return null;
   const shifts = ordered(s, "clockShift").filter(
-      (r) => who.role === "owner" || r.actorId === who.id,
+      (r) => who.role === "owner" || r.actorId === who.id || (who.role === "manager" && s.records.get("clock-approver:" + who.personId)?.data.enabled && who.locationIds?.includes(r.locationId)),
     ),
     ids = new Set(shifts.map((r) => r.id));
   return {

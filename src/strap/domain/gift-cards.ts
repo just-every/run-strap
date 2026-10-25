@@ -225,6 +225,7 @@ export function adjustGift(tx: Transaction, input: Record<string, unknown>) {
     const saved = {
       id: id(),
       giftCardId: card.id,
+      personId: card.personId,
       amountCents,
       before,
       after: before + amountCents,

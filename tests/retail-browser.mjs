@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { chromium } from "@playwright/test";
 
-async function screens(h, name, act) {
+async function screens(h, name, act, cookie = h.owner) {
   const browser = await chromium.launch({
     headless: true,
     args: ["--use-mock-keychain", "--password-store=basic"],
@@ -29,11 +29,11 @@ async function screens(h, name, act) {
           });
         return route.continue();
       });
-      const i = h.owner.indexOf("=");
+      const i = cookie.indexOf("=");
       await context.addCookies([
         {
-          name: h.owner.slice(0, i),
-          value: h.owner.slice(i + 1),
+          name: cookie.slice(0, i),
+          value: cookie.slice(i + 1),
           url: h.origin,
         },
       ]);
@@ -50,6 +50,14 @@ async function screens(h, name, act) {
         true,
         "screen fits viewport",
       );
+      const tip=page.locator('.has-tooltip').first();
+      if(await tip.count()) {
+        await tip.focus();
+        await tip.locator('[role="tooltip"]').waitFor({state:"visible"});
+        await tip.evaluate(e=>e.blur());
+        await tip.hover();
+        await tip.locator('[role="tooltip"]').waitFor({state:"visible"});
+      }
       const iconOnly = await page
         .locator("a,button,summary")
         .evaluateAll((els) =>
@@ -154,14 +162,12 @@ export async function drawerBrowser(h, sessionId) {
     assert.equal(file.suggestedFilename(), "tenders.csv");
   });
 }
-export async function giftBrowser(h, giftCardId) {
+export async function giftBrowser(h, giftCardId, desk) {
   await screens(h, "SALE-001", async (page, width) => {
     await page
       .getByRole("heading", { name: "Gift cards and promotions", exact: true })
       .waitFor();
-    const details = page.locator("details").filter({
-      has: page.getByText("Refund-right adjustment", { exact: true }),
-    });
+    const details = page.getByRole("row").filter({has:page.locator('input[name="giftCardId"][value="'+giftCardId+'"]')}).locator("details");
     await details.locator("summary").click();
     await details
       .getByLabel("Signed adjustment in USD", { exact: true })
@@ -183,4 +189,23 @@ export async function giftBrowser(h, giftCardId) {
     );
     assert.ok(r.gifts.cards.some((c) => c.id === giftCardId));
   });
+  await h.cmd("retail.receive",{skuId:desk.last.id,quantity:2,reference:"synthetic-strap-130",requestId:"browser-gift-stock"});
+  await screens(h,"SALE-001-desk",async(page,width)=>{
+    const gift=await h.cmd("retail.gift.issue",{personId:desk.member.id,recipientId:desk.member.id,amountCents:6000,tender:"external",reference:"synthetic-strap-131"+width,requestId:"browser-gift-"+width});
+    await page.reload();
+    const sale=page.locator("details").filter({has:page.getByText("Sell retail",{exact:true})});
+    await sale.locator("summary").click();
+    await sale.getByLabel("Member",{exact:true}).selectOption(desk.member.id);
+    await sale.getByLabel("SKU variant",{exact:true}).selectOption(desk.last.id);
+    await sale.getByLabel("Confirm total in USD",{exact:true}).fill("60.00");
+    await sale.getByLabel("Gift card",{exact:true}).selectOption(gift.id);
+    await sale.getByLabel("Tender reference",{exact:true}).fill("synthetic-strap-132"+width);
+    assert.equal(await sale.locator("form").evaluate(f=>f.reportValidity()),true);
+    await sale.getByRole("button",{name:"Record sale",exact:true}).click();
+    await page.getByRole("heading",{name:"Inventory and drawers",exact:true}).waitFor();
+    const saved=(await h.send("/api/strap/retail",undefined,h.owner)).value;
+    assert.equal(saved.gifts.cards.find(c=>c.id===gift.id).balanceCents,0,await page.locator("body").innerText());
+    assert.equal(saved.sales.filter(s=>s.reference==="synthetic-strap-132"+width).length,1);
+    assert.equal(await page.getByRole("button",{name:"Adjust gift value",exact:true}).count(),0);
+  },desk.cookie);
 }

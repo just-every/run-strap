@@ -1,6 +1,7 @@
 import { previewRetentionHistory, importRetentionHistory } from './retention-history';
 import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
-import { clockIn, clockStep, requestHoursCorrection, approveHours, timeSnapshot } from './time-clock';
+import { grantRetailStaff, retailGrant, requireRetail } from './retail-records';
+import { clockIn, clockStep, requestHoursCorrection, approveHours, grantClockApprover, timeSnapshot } from './time-clock';
 import { issueGift, adjustGift, savePromotion, giftSnapshot, refundGiftFunding } from './gift-cards';
 import { saveSupplier, saveSku, receiveStock, countStock, transferStock, sellRetail, returnRetail, inventorySnapshot } from './inventory';
 import { openDrawer, closeDrawer, drawerCash, adjustDrawer, reopenDrawer, drawerSnapshot } from './drawer';
@@ -77,17 +78,19 @@ export const handlers = {
   'clock.break.start':defineCommand((tx,input)=>clockStep(tx,input,'break.start'),['owner','instructor']),
   'clock.break.end':defineCommand((tx,input)=>clockStep(tx,input,'break.end'),['owner','instructor']),
   'clock.correction.request':defineCommand(requestHoursCorrection,['owner','instructor']),
-  'clock.approve':defineCommand(approveHours,['owner']),
-  'retail.gift.refund':defineCommand(refundGiftFunding,['owner']),
-  'retail.gift.issue':defineCommand(issueGift,['owner']),
-  'retail.gift.adjust':defineCommand(adjustGift,['owner']),
+  'clock.approve':defineCommand(approveHours,['owner','manager']),
+  'clock.approver.grant':defineCommand(grantClockApprover,['owner']),
+  'retail.staff.grant':defineCommand(grantRetailStaff,['owner']),
+  'retail.gift.refund':defineCommand(refundGiftFunding,['owner','front-desk'],{staffRight:'refund'}),
+  'retail.gift.issue':defineCommand(issueGift,['owner','front-desk'],{staffRight:'sale'}),
+  'retail.gift.adjust':defineCommand(adjustGift,['owner','front-desk'],{staffRight:'refund'}),
   'retail.promotion.add':defineCommand(savePromotion,['owner']),
   'retail.supplier.add':defineCommand(saveSupplier,['owner']),
   'retail.sku.add':defineCommand(saveSku,['owner']),
   'retail.receive':defineCommand(receiveStock,['owner']),
   'retail.count':defineCommand(countStock,['owner']),
   'retail.transfer':defineCommand(transferStock,['owner']),
-  'retail.sell':defineCommand(sellRetail,['owner']),
+  'retail.sell':defineCommand(sellRetail,['owner','front-desk'],{staffRight:'sale'}),
   'retail.return':defineCommand(returnRetail,['owner']),
   'drawer.open':defineCommand(openDrawer,['owner']),
   'drawer.close':defineCommand(closeDrawer,['owner']),
@@ -300,8 +303,8 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if (who.role === 'agent') insist(['recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = handlers[name as keyof typeof handlers];
   if (!spec) throw new DomainError('unknown_command',404);
-  if (who.role === 'front-desk') { insist(spec.roles.includes('front-desk'),'member_record_right_required',403);requireMemberRecord(tx.state,tx.who,input.personId); }
-  insist(who.role !== 'finance' && who.role !== 'manager','owner_required',403);
+  if (who.role === 'front-desk') { insist(spec.roles.includes('front-desk'),'member_record_right_required',403);if (!name.startsWith('retail.')) requireMemberRecord(tx.state,tx.who,input.personId); }
+  insist(who.role !== 'finance' && (who.role !== 'manager' || name === 'clock.approve'),'owner_required',403);
   insist(who.role !== 'member' || spec.roles.includes('member'),spec.denial ?? 'owner_required',403);
   if(name==='plan.recurring.prepare')insist(tx.who.role==='owner'&&tx.who.isOwner,'owner_required',403);
   if(name==='plan.recurring.accept'){insist(tx.who.role==='member','member_acceptance_required',403);const proposal=record(tx.state,input.id,'recurringTerms');insist(proposal.personId===tx.who.personId,'recurringTerms_not_found',404);}
@@ -314,6 +317,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const staff = !!spec.staffRight && (['owner','front-desk'].includes(tx.who.role) || (name === 'attendance.checkin' && tx.who.role === 'instructor'));
   if(name === 'intake.submit.staff') authorizeIntakeSubmission(tx,input);
   const enrollmentBasis = intakeEnrollmentBasis(tx.state);
+  if (name.startsWith('retail.') && who.role === 'front-desk') requireRetail(tx, name === 'retail.sell' ? 'sale' : name.slice(7), input);
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
@@ -371,7 +375,7 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
   const places = (full.locations as unknown as {id:string;name:string;timeZone:string}[]).filter(l => scope.has(l.id));
   // The business's own identity and clock, never the original location's address, phone or hours unless it is one of theirs.
   const studio = {id:'studio',location:places.map(l => l.name).join(' · '),timeZone:places[0]?.timeZone ?? 'UTC',legalName:(full.studio as unknown as {legalName?:string}|null)?.legalName ?? null};
-  return {actor:loaded.who,people,locations:places,studio,version:full.version,classes,packs,charges,payments,balances,
+  return {actor:loaded.who,people,locations:places,studio,timeClock:timeSnapshot(loaded.state,loaded.who),version:full.version,classes,packs,charges,payments,balances,
     bookings:full.bookings.filter(b => classIds.has(b.classId)),bookingActions:full.bookingActions.filter(a => classIds.has(a.classId))};
 }
 export async function snapshot(db: D1Database, who: Actor, origin?: string) {
@@ -383,7 +387,7 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
   if (who.role === 'front-desk') {
     const grant = memberRecordGrant(state,who);
     const members = grant?.enabled ? state.people.filter(p => !p.erasedAt && grant.memberIds.includes(p.id)) : [];
-    return {winback:winbackSnapshot(state,who),intake:intakeSnapshot(state,who),actor:who,version:state.version,studio:studioSettings(state),classes:[],people:members.map(p => ({...p,...profileOfForDesk(state,p)})),
+    return {...deskRetailSnapshot(state,who),winback:winbackSnapshot(state,who),intake:intakeSnapshot(state,who),actor:who,version:state.version,studio:studioSettings(state),classes:[],people:members.map(p => ({...p,...profileOfForDesk(state,p)})),
       memberRecords:members.map(p => memberHistory(state,who,p.id)),recordGrant:grant,bookingActions:[],staffActions:[],waiver:null,drafts:[],profileChanges:[],bookings:[],packs:[],charges:[],payments:[],waiverLaunches:[]};
   }
   const owner = who.role === 'owner' || who.role === 'agent';
@@ -412,4 +416,15 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? withWards('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],
     balances:state.people.filter(p => !p.erasedAt && (owner || p.id === who.personId)).map(p => ({personId:p.id,balanceCents:balance(state,p.id)}))};
+}
+
+export function deskRetailSnapshot(state: State, who: Actor) {
+  const grant = retailGrant(state,who);
+  insist(who.role === 'front-desk','retail_right_required',403);
+  if (!grant?.enabled || (!grant.sale && !grant.refund)) return {};
+  const inventory = inventorySnapshot(state), all = giftSnapshot(state);
+  const cards = all.cards.filter((c: any) => grant.memberIds.includes(c.personId) && grant.locationIds.includes(c.locationId));
+  const gifts = {cards:cards.map(({id,personId,locationId,balanceCents}: any) => ({id,personId,locationId,balanceCents})),entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
+  const retail = {...inventory,suppliers:[],receipts:[],returns:[],movements:[],actions:[],sales:inventory.sales.filter(c => grant.memberIds.includes(c.personId) && grant.locationIds.includes(c.locationId)),stock:inventory.stock.filter(c => grant.locationIds.includes(c.locationId))};
+  return {saleGrant:grant,gifts,retail,drawers:{sessions:[],adjustments:[]},locations:locations(state).filter(l => grant.locationIds.includes(l.id)),retailPeople:state.people.filter(p => grant.memberIds.includes(p.id)).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}))};
 }

@@ -18,7 +18,7 @@ const managerScopes = (rows: unknown[]) => new Map((rows as {person_id:string;lo
 export async function actor(db: D1Database, input: { userId: string; email: string; isOwner: boolean }): Promise<Actor> {
   const results = await db.batch([
     db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(input.userId),
-    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind='memberRecordGrant' AND json_extract(data,'$.enabled')=1"),
+    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"),
   ]);
   return resolve(results[0].results[0] as Native | undefined, (results[1].results as unknown as PersonRow[]).map(asPerson), false, financeIds(results[2].results), managerScopes(results[3].results), financeIds(results[4].results));
 }
@@ -26,7 +26,7 @@ export async function load(db: D1Database, who: Actor): Promise<{ state: State; 
   const rows = await db.batch([
     db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
     db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
-    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind='memberRecordGrant' AND json_extract(data,'$.enabled')=1"),
+    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"),
   ]);
   const people = (rows[1].results as unknown as PersonRow[]).map(asPerson);
   const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results), managerScopes(rows[5].results), financeIds(rows[6].results));
@@ -83,7 +83,7 @@ export class Transaction {
       ? this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_kiosks WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL) THEN 1 ELSE 0 END',who.kioskId)
       : who.isOwner
       ? this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",who.id,who.email,state.operator.version)
-      : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,who.role === 'front-desk' ? 'member' : who.role,p?.version);
+      : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,['front-desk','manager'].includes(who.role) ? 'member' : who.role,p?.version);
     try {
       await this.db.batch([
         this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN version=? THEN 1 ELSE 0 END FROM st_meta WHERE id=1',state.version),
