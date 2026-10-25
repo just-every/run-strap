@@ -38,7 +38,11 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
-  if (name === 'appointment.booking.grant') {
+  if(name === 'attendance.availability.save') {
+    const convert = (value: unknown) => {const [date,time]=String(value).split('T');return localInstant(date,time,zoneOf(timeZone));};
+    return {version:Number(input.version),windows:[{start:convert(input.availabilityStart),end:convert(input.availabilityEnd)}],locationIds:[input.locationId]};
+  }
+  if (name === 'appointment.booking.grant' || name === 'attendance.booking.grant') {
     input.enabled = input.enabled === 'true'
     input.memberIds = Object.keys(input).filter(k=>k.startsWith('member_') && input[k] === 'true').map(k=>k.slice(7))
     input.locationIds = Object.keys(input).filter(k=>k.startsWith('loc_') && input[k] === 'true').map(k=>k.slice(4))
@@ -236,6 +240,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'guest.consent.save') { input.consent = input.consent === 'true'; if (input.maxCharge) input.maxChargeCents = cents(input.maxCharge,'maximum guest charge'); delete input.maxCharge; }
   if (name === 'guest.book') input.confirm = input.confirm === 'true';
   if (name === 'pack.prepare') {
+    for (const [key,target] of [['cycleStartOn','cycleStartAt'],['joinOn','joinAt']]) { if(input[key]) input[target]=localInstant(String(input[key]),'00:00',zoneOf(timeZone)); delete input[key]; }
     if (String(input.guestPasses ?? '').trim()) input.guestTerms = {passes:Number(input.guestPasses),period:input.guestPeriod,rollover:Number(input.guestRollover),services:String(input.guestServices ?? '').split(/\r?\n/).map(v=>v.trim()).filter(Boolean),perGuest:Number(input.guestLimit),windowDays:Number(input.guestWindow),excess:input.guestExcess,priceCents:cents(input.guestPrice || '0','guest drop-in price')};
     for (const key of ['guestPasses','guestPeriod','guestRollover','guestServices','guestLimit','guestWindow','guestExcess','guestPrice']) delete input[key];
     input.priorityBooking = ['on', 'true', '1'].includes(String(input.priorityBooking))

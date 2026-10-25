@@ -1,3 +1,4 @@
+import { requireAttendanceBooking } from './attendance-access';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { canManageGuest } from './guest-consent';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
@@ -62,7 +63,7 @@ export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pa
   tx.put('booking',updated); return updated;
 }
 export function book(tx: Transaction, input: Record<string,unknown>, forMember?: string) {
-  if (forMember) humanOwner(tx.who);
+  if (forMember) {if(tx.who.role==='front-desk')requireAttendanceBooking(tx,forMember,[record(tx.state,input.classId,'class').locationId ?? 'studio']);else humanOwner(tx.who);}
   const member = forMember ? person(tx.state,forMember) : actingMember(tx,input.participantId), entry = record(tx.state,input.classId,'class');
   insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.status !== 'cancelled','class_cancelled',409);

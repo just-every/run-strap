@@ -33,6 +33,10 @@ type Row = Record<string, unknown>
 const relationships = [
   { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'appointmentReservation', when: 'kind=appointmentPreview' },
   { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=appointmentBookingGrant' },
+  { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=attendanceBookingGrant' },
+  { from: 'st_records.data.choices[].classId', to: 'st_records.id', kind: 'class', when: 'kind=attendancePlan' },
+  { from: 'st_records.data.choices[].packId', to: 'st_records.id', kind: 'pack', when: 'kind=attendancePlan' },
+  { from: 'st_records.data.visits[]', to: 'st_records.id', kind: 'booking', when: 'kind=attendancePlan' },
   { from: 'st_records.data.privatePersonId', to: 'st_people.id', when: 'kind=class' },
   { from: 'st_records.data.appointmentReservationId', to: 'st_records.id', kind: 'appointmentReservation' },
   { from: 'st_records.data.occurrences[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=appointmentReservation' },

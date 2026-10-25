@@ -86,9 +86,13 @@ test('RPT-005: first-source inquiries reconcile to retained stages and corrected
   const duplicate=await create(ana,'second-inquiry','Phone')
   await h.cmd('lead.update',{id:other.id,version:other.version,requestId:'lost',stage:'lost',lostReason:'Chose another studio'})
   await h.cmd('lead.update',{id:lead.id,version:lead.version,requestId:'change-source',source:'Paid campaign'},h.owner,409)
-  const start=new Date(Date.now()+10000).toISOString(),d=new Date(start)
-  const week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
-  const classes=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[0,1,2].map(i=>({title:['First Mat','Second Mat','Future Mat'][i],room:'Room '+i,start:new Date(Date.parse(start)+(i===2?3600000:i*1000)).toISOString(),end:new Date(Date.parse(start)+(i===2?7200000:(i+1)*1000)).toISOString(),capacity:4,instructorId:coach.id}))})).id})).classes
+  const start=new Date(Date.now()+10000).toISOString(),classes=[]
+  // The later class may be in the next UTC week; publish each actual date in its own week.
+  for(const i of [0,1,2]) {
+    const entry={title:['First Mat','Second Mat','Future Mat'][i],room:'Room '+i,start:new Date(Date.parse(start)+(i===2?3600000:i*1000)).toISOString(),end:new Date(Date.parse(start)+(i===2?7200000:(i+1)*1000)).toISOString(),capacity:4,instructorId:coach.id};
+    const d=new Date(entry.start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);
+    classes.push((await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[entry]})).id})).classes[0]);
+  }
   for(const person of [ana,ben]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:4,amountCents:6000,expiresAt:'2099-12-31T00:00:00Z'})).id})
   const visits=[]
   for(const c of classes) visits.push(await h.cmd('booking.book',{classId:c.id},ana.cookie))
@@ -453,3 +457,105 @@ test('LEAD-005: approved former-member audiences renew native plans, phone refer
   if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).winbackBrowser(h,{member:ana,offer:(await h.state()).winback.offers.find(o=>o.id===offer.id),preview,result:true})
   if(process.env.STRAP_PROOF_DIR)await(await import('./leads-browser.mjs')).leadAuditBrowser(h,{personId:referrer.id})
 }))
+
+test('Attendance offers respect member windows and entitlements and recheck concurrent capacity before member or desk acceptance',()=>run(async h=>{
+  await h.confirmSetup(h.owner);
+  await h.cmd('studio.save',{location:'Attendance studio',timeZone:'America/New_York'});
+  const member=await h.person('AttendancePlan'),other=await h.person('AttendanceOther'),teacher=await h.person('AttendanceTeacher','instructor');
+  for(const p of [member,other]) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:10000,eligibleServices:['Mat'],expiresAt:'2099-03-01T00:00:00Z'})).id});
+  const publish=async(title,service,hour,capacity=2)=>{
+    const start=`2099-02-02T${String(hour).padStart(2,'0')}:00:00.000Z`,end=`2099-02-02T${String(hour+1).padStart(2,'0')}:00:00.000Z`;
+    return (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:'2099-02-02',classes:[{title,service,room:'Room '+hour,start,end,capacity,instructorId:teacher.id}]})).id})).classes[0];
+  };
+  const mat=await publish('Eligible mat','Mat',10),reformer=await publish('Ineligible reformer','Reformer',11),late=await publish('Outside narrow window','Mat',15),last=await publish('One remaining seat','Mat',12,1);
+  const availability={version:0,windows:[{start:'2099-02-02T10:00:00Z',end:'2099-02-02T13:00:00Z'}],locationIds:['studio']};
+  await h.cmd('attendance.availability.save',availability,h.owner,403);
+  await h.cmd('attendance.availability.save',availability,member.cookie);
+  await h.cmd('attendance.availability.save',availability,member.cookie,409);
+  const agent=await h.cmd('agent.create',{label:'Synthetic attendance preparer'});
+  const prepared=await h.send('/api/strap/agent/command',{name:'attendance.plan.prepare',input:{personId:member.id}},'',{authorization:'Bearer '+agent.token});assert.equal(prepared.status,200,prepared.text);
+  const offer=prepared.value;
+  const versionBeforeAgent=(await h.state()).version;
+  assert.equal((await h.send('/api/strap/agent/command',{name:'attendance.plan.accept',input:{id:offer.id,classId:mat.id}},'',{authorization:'Bearer '+agent.token})).status,403);
+  assert.equal((await h.state()).version,versionBeforeAgent);
+  assert.deepEqual(offer.choices.map(c=>c.classId),[mat.id,last.id]);
+  assert.ok(!offer.choices.some(c=>[reformer.id,late.id].includes(c.classId)));
+  assert.equal((await h.state(other.cookie)).attendancePlans.offers.length,0);
+  await h.cmd('attendance.plan.accept',{id:offer.id,classId:mat.id},other.cookie,404);
+  // Another real member books after the offer; the remaining seat is still feasible.
+  const concurrent=await h.cmd('booking.book',{classId:mat.id},other.cookie);
+  assert.equal(concurrent.status,'booked');
+  const accepted=await h.cmd('attendance.plan.accept',{id:offer.id,classId:mat.id},member.cookie);
+  assert.equal(accepted.status,'booked');
+  assert.deepEqual(await h.cmd('attendance.plan.accept',{id:offer.id,classId:mat.id},member.cookie),accepted);
+  assert.equal((await h.state()).bookings.filter(b=>b.classId===mat.id&&b.status==='booked').length,2);
+  const stale=await h.cmd('attendance.plan.prepare',{personId:member.id});
+  await h.cmd('booking.book',{classId:last.id},other.cookie);
+  const version=(await h.state()).version;
+  await h.cmd('attendance.plan.accept',{id:stale.id,classId:last.id},member.cookie,409);
+  assert.equal((await h.state()).version,version,'full stale choice refuses without partial booking or credit');
+  const empty=await h.cmd('attendance.plan.prepare',{personId:member.id});assert.equal(empty.choices.length,0);
+  if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).attendancePlanBrowser(h,{member,other,publish});
+  // The desk uses the same recheck and retains one canonical booking-right action.
+  const deskClass=await publish('Desk eligible mat','Mat',13);
+  await h.cmd('attendance.availability.save',{...availability,version:(await h.state(member.cookie)).attendancePlans.availability[0].version,windows:[{start:'2099-02-02T13:00:00Z',end:'2099-02-02T14:00:00Z'}]},member.cookie);
+  const desk=await h.cmd('attendance.plan.prepare',{personId:member.id});
+  assert.deepEqual(desk.choices.map(c=>c.classId),[deskClass.id]);
+  const input={id:desk.id,classId:deskClass.id,requestId:'synthetic-strap-attendance-desk',channel:'phone'};
+  await h.cmd('attendance.plan.accept.staff',input,member.cookie,403);
+  const booked=await h.cmd('attendance.plan.accept.staff',input);
+  assert.deepEqual(await h.cmd('attendance.plan.accept.staff',input),booked);
+  const actions=(await h.state()).staffActions.filter(a=>a.command==='attendance.plan.accept.staff'&&a.requestId===input.requestId);
+  assert.equal(actions.length,1);assert.deepEqual([actions[0].right,actions[0].channel,actions[0].personId],['booking','phone',member.id]);
+  const staff=await h.person('AttendanceDesk');
+  await h.cmd('member.record.grant',{personId:staff.id,enabled:true,canCreate:false,memberIds:[member.id,other.id]});
+  staff.cookie=await h.signIn(staff.email);await h.enroll(staff.cookie);
+  const noWrite=async(name,input,status=403)=>{const version=(await h.state()).version;await h.cmd(name,input,staff.cookie,status);assert.equal((await h.state()).version,version);};
+  await noWrite('attendance.plan.prepare',{personId:member.id});
+  const grant={personId:staff.id,enabled:true,memberIds:[member.id],locationIds:['studio']};
+  await h.cmd('attendance.booking.grant',grant);
+  await noWrite('attendance.plan.prepare',{personId:other.id});
+  const remote=await h.cmd('location.save',{name:'Other attendance location',timeZone:'America/New_York'});
+  await h.cmd('attendance.booking.grant',{...grant,locationIds:[remote.id]});
+  await noWrite('attendance.plan.prepare',{personId:member.id});
+  await h.cmd('attendance.booking.grant',grant);
+  const staffClass=await publish('Scoped attendance mat','Mat',21,2);
+  await h.cmd('attendance.availability.save',{version:(await h.state(member.cookie)).attendancePlans.availability[0].version,windows:[{start:staffClass.start,end:staffClass.end}],locationIds:['studio']},member.cookie);
+  const staffOffer=await h.cmd('attendance.plan.prepare',{personId:member.id},staff.cookie);
+  assert.deepEqual(staffOffer.choices.map(c=>c.classId),[staffClass.id]);
+  const staffInput={id:staffOffer.id,classId:staffClass.id,channel:'phone',requestId:'synthetic-strap-scoped-attendance'};
+  const staffBooking=await h.cmd('attendance.plan.accept.staff',staffInput,staff.cookie);
+  assert.deepEqual(await h.cmd('attendance.plan.accept.staff',staffInput,staff.cookie),staffBooking);
+  const staffAudit=(await h.state()).staffActions.filter(a=>a.command==='attendance.plan.accept.staff'&&a.requestId===staffInput.requestId);
+  assert.equal(staffAudit.length,1);assert.deepEqual([staffAudit[0].actorRole,staffAudit[0].right,staffAudit[0].channel],['front-desk','booking','phone']);
+  assert.deepEqual((await h.state(staff.cookie)).charges,[]);
+  await h.cmd('attendance.booking.grant',{...grant,enabled:false});
+  await noWrite('attendance.plan.accept.staff',staffInput);
+  assert.deepEqual((await h.state(staff.cookie)).attendancePlans,{availability:[],offers:[]});
+  const changedClass=await publish('Changed availability mat','Mat',20,2);
+  await h.cmd('attendance.availability.save',{version:(await h.state(member.cookie)).attendancePlans.availability[0].version,windows:[{start:changedClass.start,end:changedClass.end}],locationIds:['studio']},member.cookie);
+  const changed=await h.cmd('attendance.plan.prepare',{personId:member.id});assert.ok(changed.choices.some(c=>c.classId===changedClass.id));
+  await h.cmd('attendance.availability.save',{version:(await h.state(member.cookie)).attendancePlans.availability[0].version,windows:[],locationIds:[]},member.cookie);
+  assert.equal((await h.cmd('attendance.plan.accept',{id:changed.id,classId:changedClass.id},member.cookie,409)).error,'availability_changed');
+  const raceClass=await publish('Concurrent final attendance seat','Mat',22,1);
+  await h.cmd('attendance.availability.save',{version:(await h.state(member.cookie)).attendancePlans.availability[0].version,windows:[{start:raceClass.start,end:raceClass.end}],locationIds:['studio']},member.cookie);
+  const raceOffer=await h.cmd('attendance.plan.prepare',{personId:member.id});
+  const race=await Promise.all([
+    h.send('/api/strap/command',{name:'attendance.plan.accept',input:{id:raceOffer.id,classId:raceClass.id}},member.cookie),
+    h.send('/api/strap/command',{name:'booking.book',input:{classId:raceClass.id}},other.cookie)
+  ]);
+  assert.ok(race.every(r=>[200,409].includes(r.status)),JSON.stringify(race));
+  assert.equal((await h.state()).bookings.filter(b=>b.classId===raceClass.id&&b.status==='booked').length,1);
+  if(race[0].status===200)assert.equal(race[0].value.status,'booked');
+  // The retained visit becomes an actual attended source through the public check-in door.
+  const currentClass=(await h.state()).classes.find(c=>c.id===mat.id);
+  const elapsed={...currentClass,start:new Date(Date.now()-120000).toISOString(),end:new Date(Date.now()-60000).toISOString()};
+  await h.db.prepare("UPDATE st_records SET data=? WHERE kind='class' AND id=?").bind(JSON.stringify(elapsed),mat.id).run();
+  await h.cmd('attendance.checkin',{id:accepted.id});
+  const withVisit=await h.cmd('attendance.plan.prepare',{personId:member.id});assert.deepEqual(withVisit.visits,[accepted.id]);
+  const exported=await h.send('/api/strap/exit.json',undefined,h.owner);assert.equal(exported.status,200);
+  const exportedOffer=exported.value.tables.st_records.find(r=>r.kind==='attendancePlan'&&r.id===offer.id);
+  assert.deepEqual(JSON.parse(exportedOffer.data).choices,offer.choices);assert.deepEqual(JSON.parse(exportedOffer.data).visits,offer.visits);
+  assert.equal(JSON.parse(exportedOffer.data).bookingId,accepted.id);
+
+}));

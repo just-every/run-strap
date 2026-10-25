@@ -1,3 +1,5 @@
+import { attendanceBookingAccess } from './attendance-access'
+import { attendancePlanControls } from './attendance-plan'
 import { appointmentBookingAccess } from './appointment-access'
 import { appointmentsPanel } from './appointments'
 import { memberHistoryPanel, memberRecordAccess, memberRecordDesk } from './member-records'
@@ -34,6 +36,7 @@ function card(s: any, p: any, back: string) {
     + personCheckin(s, p, back)
     + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
+    + (p.role === 'member' ? attendancePlanControls(s,p.id,back+'#attendance-plan') : '')
     + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
     + (p.role === 'member'
@@ -62,6 +65,6 @@ export function peoplePage(s: any, query: URLSearchParams) {
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})
     + cancellationsPanel(s, query)
     + staffActionHistory(s, query)
-    + memberRecordAccess(s) + appointmentBookingAccess(s)
+    + memberRecordAccess(s) + appointmentBookingAccess(s) + attendanceBookingAccess(s)
     + `</div><aside class="rail">${chosen ? card(s, chosen, back) : ''}${add}${cancellationReasonsPanel(s)}</aside></div>`
 }

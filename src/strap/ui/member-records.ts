@@ -1,3 +1,4 @@
+import { attendancePlanControls } from './attendance-plan'
 import { appointmentsPanel } from './appointments'
 import { intakeAnswersPanel } from './intake'
 import { preferencesPanel } from './preferences';
@@ -35,7 +36,7 @@ export function memberRecordDesk(s:any,query:URLSearchParams) {
   const list=s.people.map((p:any) => `<li><a href="/app/people?person=${encodeURIComponent(p.id)}">${h(p.name)}</a> · ${h(p.email)}</li>`).join('');
   const profile=chosen?panel(chosen.name,body(`<p>${h(chosen.email)} · ${h(chosen.phone ?? 'No phone recorded')}</p>`
     + form('profile.save.staff',back,hidden('personId',chosen.id)+identity()+field('name','Full name',chosen.name,'text','required')+field('phone','Mobile phone',chosen.phone ?? '','tel')+field('emergencyName','Contact name',chosen.emergencyContact?.name ?? '')+field('emergencyPhone','Contact phone',chosen.emergencyContact?.phone ?? '','tel')+field('emergencyRelationship','Relationship',chosen.emergencyContact?.relationship ?? ''),'Save profile for member')
-    + form('member.record.invite',back,hidden('personId',chosen.id)+identity(),'Send account invitation')+memberHistoryPanel(s,chosen,back)+appointmentsPanel(s,chosen.id,back))):'';
+    + form('member.record.invite',back,hidden('personId',chosen.id)+identity(),'Send account invitation')+memberHistoryPanel(s,chosen,back)+attendancePlanControls(s,chosen.id,back)+appointmentsPanel(s,chosen.id,back))):'';
   const create=s.recordGrant?.canCreate?panel('Create a member profile',body(form('member.record.create',back,identity()+field('name','Full name','','text','required maxlength="160"')+field('email','Email','','email','required')+field('phone','Mobile phone','','tel'),'Create member profile'))):'';
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Member records</h1><p>Only the member records explicitly assigned to you.</p></div>${panel('Assigned members',body('<ul>'+list+'</ul>'))}${profile}</div><aside class="rail">${create}</aside></div>`;
 }

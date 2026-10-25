@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b1c19e1287ec30a82671a59cc9827ced3175e797ee58228d0dc4408ae5d0d574",
+      "sha256": "6f571c5eb3ae62fac1f1fcc87cffbd42d1f62eb71dcb5be6163cc07b4a96e1e4",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6363d9c3f666c3b0cfed4b45e631416c3e1cc9ed63f8726efd4631403364c1d2",
+      "sha256": "c3b159be0e3c6d5b3eb9227bbbc9f781320f6f60f4c2075017ba3df95c17c522",
       "executable": false
     },
     "DEMO.md": {
@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "2dde89fed92983ba152eec076aa7ec7ca958247ad2e7c78067e616e49c86bffb",
+      "sha256": "be2beeab2473ef66d639729d77fb1e16dcd3fc3a2920fdf9fa57e681ec74fb9d",
       "executable": false
     },
     "docs/backup-and-restore.md": {
@@ -3069,6 +3069,14 @@
       "sha256": "3df8811c6e85a837f966aaa06a32c91f57c43689d7adf7e91095a0b7ecdab11b",
       "executable": false
     },
+    "src/strap/domain/attendance-access.ts": {
+      "sha256": "d68018b40243e841cd22195573577ab3b4239d8b3ff394c1582ba6ab65b905e7",
+      "executable": false
+    },
+    "src/strap/domain/attendance-plan.ts": {
+      "sha256": "7fc1631385da81f05c8a87498a77787eb4075256292812f457e4066244f031ef",
+      "executable": false
+    },
     "src/strap/domain/attendance.ts": {
       "sha256": "531d449b931ef19c29aa2ad0f2991cd02630f02f06ca20edd02e7979dfb942d8",
       "executable": false
@@ -3090,7 +3098,7 @@
       "executable": false
     },
     "src/strap/domain/bookings.ts": {
-      "sha256": "c15858ec34f47968b9064ae30e9590f645533f3da2449e9432df1ec666477fe5",
+      "sha256": "58d425216fbfbbb32271102ba39a2ffa587c6f3f9ea50149cdbc3e0505a91a45",
       "executable": false
     },
     "src/strap/domain/cancellation-calendar.ts": {
@@ -3230,7 +3238,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "7f3550504e499a03f23f4a2ecc1d9d5aa1b1541ec705b6324628fa40e459e8bd",
+      "sha256": "e2b7f9ac2cb6574a97dc69aeda929496d5b68903754190567bef78e4092996f3",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3270,7 +3278,7 @@
       "executable": false
     },
     "src/strap/domain/money.ts": {
-      "sha256": "8cbe81a98b76f1d5cdc005964451669d1c9301d4348d378090e03de9772d8f5a",
+      "sha256": "04d6f8a7ae03c5faf08cb8a8fb3efae389f71f074948fad944b27bd96af27f8d",
       "executable": false
     },
     "src/strap/domain/notices.ts": {
@@ -3402,15 +3410,15 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "b329a3bfa0c63af55d6773f4532aa785ac2ffafafb5199a1cf47b3d94c2a5b50",
+      "sha256": "569de3412db448d0c90f98f7d2324c4dbb7d04028ff07c937092a9f7bd09d899",
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "c1683f7e5e8e4ddfcf20bc2ccd7e0664b7ce9fb6ec4d58317d38ba5cf2e735e7",
+      "sha256": "08d6a907f31eee506d55352af60f2ec1179f14609615845f3400ac7560a89f2a",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "1065798328e4b7880d6188256eae681f098ff833a6feaf42d0d8c4ddb07de3d6",
+      "sha256": "f21e1b6449a3dc78a69b775c44fe7fe9d95900520b40d21f5e3cd8975ca75014",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3502,7 +3510,7 @@
       "executable": false
     },
     "src/strap/security/gate.ts": {
-      "sha256": "4036d041209e0087928517caa79c2100ae95e81c14f51064baaec5e688e4893d",
+      "sha256": "38099ec524cba9f4ab5263a10446512d8473ec224eb19ca4e8b96168f8374ca9",
       "executable": false
     },
     "src/strap/security/manager.ts": {
@@ -3535,6 +3543,14 @@
     },
     "src/strap/ui/appointments.ts": {
       "sha256": "b78ddd9cb3bca71e65c9b0c94087da82938064711ab600ca17db577d0fcd5ca4",
+      "executable": false
+    },
+    "src/strap/ui/attendance-access.ts": {
+      "sha256": "59a9400ce4a9eac1dc59b3342674c509e45e597c762a1af88528cd683e9b8fdd",
+      "executable": false
+    },
+    "src/strap/ui/attendance-plan.ts": {
+      "sha256": "1800c10217f48919ef52d3b9dfbebe83b297cd870a8413943e6ffb524cd74740",
       "executable": false
     },
     "src/strap/ui/attendance.ts": {
@@ -3586,7 +3602,7 @@
       "executable": false
     },
     "src/strap/ui/drafts.ts": {
-      "sha256": "62e20570f856598ec45e0b292f96fa24e7fdf2fdb9307067976ee3172e108fb1",
+      "sha256": "890c6ff1eb076862228f61b333dd79d2f57696cfab42de3d904c98f5e7b848d6",
       "executable": false
     },
     "src/strap/ui/facts.ts": {
@@ -3666,11 +3682,11 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "ba22a8f8cd7e8a3e25afea6c25b7cb1cc44e396a4139c37267ea9bc184b40010",
+      "sha256": "c473fd2dbc6f73cec48ca6c1a0b4a6cd23417fded59ab605f152d690ed42b476",
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "5e4dcb87505af10c7c02255db7ab8ac6e42adae30ab03c41fa0bd83587006546",
+      "sha256": "12a528b1675a988af7e51028bc6b244669703104d9ed4cae660122e23bcd8267",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {
@@ -3682,11 +3698,11 @@
       "executable": false
     },
     "src/strap/ui/packs.ts": {
-      "sha256": "c5738e4ba55b408f9f0504391b1b2f33d5568217773a4a36758795f817ef9b25",
+      "sha256": "c60701310ca9e169b0640f8d90a71d1293e92aa3204409f55ba1eeee8eb62f55",
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "2b6b04d13f20a531b0880f00693788af385bc168ee58424a0a9edbecacd1d649",
+      "sha256": "3d68b17a0af94938ff57631ce3ccb571619ae1775b53378f86d940a558667dd1",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -3706,7 +3722,7 @@
       "executable": false
     },
     "src/strap/ui/receipts.ts": {
-      "sha256": "24f43424bd0ef0a543f0b71f3f8a62579737ed85933d5398526c506ddd58e83e",
+      "sha256": "ddb799b357850efa8c55f2326f1293fdcad601716ede7df7d116ee59f42ef1d0",
       "executable": false
     },
     "src/strap/ui/recognition.ts": {
@@ -3766,7 +3782,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "83d093ebd45225009fb642386ee7a55ad9e4c1e3514b24d65a0ac36fd67ad748",
+      "sha256": "7b9d7f776cba167fd7c8ff6a139510bb82346cda852cf2d03ff4441904e25844",
       "executable": false
     },
     "src/strap/ui/studio-profile.ts": {
@@ -3839,6 +3855,10 @@
     },
     "tests/booking-rules.test.mjs": {
       "sha256": "280373b172f4e40212bfda7dd8967ef76b7a924b31f82a643a70b58258bf7e62",
+      "executable": false
+    },
+    "tests/campaign-browser.mjs": {
+      "sha256": "e6a498d63b51680a7a8f5d3db632bd40f09b4b5f4648d7664490962567ddf911",
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
@@ -3990,7 +4010,7 @@
       "executable": false
     },
     "tests/leads.test.mjs": {
-      "sha256": "f2b01179c04ea1884ddd7ec6c82caa4cc8364ae05d6fa74f03914f6c167c4699",
+      "sha256": "1ee0e3a6b8be58998767798f20a5456bc87db26d4f6a54cec50f61f86c3f9abd",
       "executable": false
     },
     "tests/locations-browser.mjs": {
@@ -4034,7 +4054,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "d863b14a62905d643ac7248bb22e1b7ac5ab05648609a28ddf48d501264c4c39",
+      "sha256": "d245b42f2b234f62d12d1657aa26f27ee11d6a647bddd05f2f48fdebb48f7de0",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
@@ -4166,7 +4186,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "4e57af49d8f13137a4deda3c9a8fd185785b3b9a2f994d76e1fed1839061e015",
+      "sha256": "1cd4e32c079fa00f4540d1ad3f9efb95fe11f35ffbcf13a58671cf39574a60e1",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {

@@ -12,12 +12,13 @@ const saleTime = (at: string, zone: string) => new Intl.DateTimeFormat('en-US', 
 
 export function receipt(s: any, pack: any, staff: boolean) {
   const place = rows(s, 'locations').find(l => l.id === (pack.locationId ?? 'studio')), zone = place?.timeZone ?? s.studio?.timeZone ?? 'UTC'
-  const lines: [string, number][] = [[packName(pack), pack.amountCents], ...(pack.initiationFeeCents ? [['One-time initiation fee', pack.initiationFeeCents] as [string, number]] : [])]
+  const lines: [string, number][] = [[packName(pack), pack.purchaseAmountCents ?? rows(s,'charges').find(c=>c.packId===pack.id&&!c.planChangeId&&!c.reason&&!c.kind)?.amountCents ?? pack.amountCents], ...(pack.initiationFeeCents ? [['One-time initiation fee', pack.initiationFeeCents] as [string, number]] : [])]
   const total = lines.reduce((n, [, cents]) => n + cents, 0)
   return `<article class="receipt panel-body" id="receipt-${h(pack.id)}" data-pack-id="${h(pack.id)}"><h3>${h(s.studio?.legalName ?? s.studio?.location ?? 'Studio')}</h3>`
     + `<p>${h(place?.name ?? s.studio?.location ?? 'Studio')} · ${h(addressText(place?.address))}${place?.phone ? ` · ${h(phoneText(place.phone))}` : ''}</p>`
     + `<p><time datetime="${h(pack.createdAt)}">${h(saleTime(pack.createdAt, zone))}</time>${staff ? ` · ${h(person(s, pack.personId))}` : ''}</p>`
     + `<div class="table-wrap">${table(['Item', '>Amount (USD)'], lines.map(([label, cents]) => `<tr>${cell('Item', h(label))}${cell('Amount (USD)', money(cents), 'right')}</tr>`).join('') + `<tr>${cell('Item', '<strong>Total charged</strong>')}${cell('Amount (USD)', `<strong>${money(total)}</strong>`, 'right')}</tr>`)}</div>`
+    + (pack.proration ? `<p>First-term calculation: ${money(pack.proration.fullAmountCents)} × ${pack.proration.remainingSeconds} remaining ÷ ${pack.proration.totalSeconds} cycle seconds (UTC), rounded half-up to the cent. Join ${h(pack.proration.joinAt)}; cycle ${h(pack.proration.cycleStartAt)} to ${h(pack.proration.cycleEndAt)}.</p>` : '')
     + (s.studio?.receiptDetails ? `<p>${h(s.studio.receiptDetails)}</p>` : '')
     + `<p class="meta">Prices are in US dollars. This receipt records the charge added to the balance; a payment is recorded separately.</p></article>`
 }

@@ -1,3 +1,4 @@
+import { halfUp } from './plan-changes';
 import { parseGuestTerms } from './guest-allowances';
 import { humanOwner, preparer, id, instant, integer, insist, list, now, person, record, text, type State } from './types';
 import type { Transaction } from './store';
@@ -25,7 +26,18 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   if (entitlement && entitlement.kind !== 'credits') insist(input.credits === undefined || input.credits === null || input.credits === '','plan_has_no_credit_count');
   const guestTerms = parseGuestTerms(input.guestTerms);
   const initiationFeeCents = integer(input.initiationFeeCents === undefined ? 0 : input.initiationFeeCents,'initiationFeeCents',0,100_000_000);
-  const draft = {guestTerms,eligibleServices,priorityBooking,...packPlaces(tx.state,input),...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:integer(input.amountCents,'amountCents',0,100_000_000),initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const fullAmountCents = integer(input.amountCents,'amountCents',0,100_000_000);
+  let proration = null;
+  if (input.cycleStartAt !== undefined || input.joinAt !== undefined) {
+    const cycleStartAt = instant(input.cycleStartAt,'cycleStartAt'), joinAt = instant(input.joinAt,'joinAt');
+    insist([cycleStartAt,joinAt,expiresAt].every(at=>Date.parse(at)%1000===0),'proration_requires_whole_seconds');
+    insist(cycleStartAt < joinAt && joinAt < expiresAt,'join_outside_cycle');
+    const totalSeconds = (Date.parse(expiresAt)-Date.parse(cycleStartAt))/1000;
+    const remainingSeconds = (Date.parse(expiresAt)-Date.parse(joinAt))/1000;
+    proration = {cycleStartAt,joinAt,cycleEndAt:expiresAt,totalSeconds,remainingSeconds,fullAmountCents,
+      amountCents:halfUp(BigInt(fullAmountCents)*BigInt(remainingSeconds),BigInt(totalSeconds)),rounding:'half-up',clock:'elapsed UTC seconds'};
+  }
+  const draft = {proration,guestTerms,eligibleServices,priorityBooking,...packPlaces(tx.state,input),...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:proration?.amountCents ?? fullAmountCents,initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -37,7 +49,7 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {purchaseAmountCents:draft.amountCents,proration:draft.proration ?? null,...(draft.proration ? {termStartAt:draft.proration.joinAt} : {}),guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   const debtor = debtorOf(tx.state,member.id), forMember = debtor === member.id ? {} : {forPersonId:member.id};

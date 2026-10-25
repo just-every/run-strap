@@ -69,3 +69,36 @@ The native human owner can also call `appointment.series.offer.save` with the sa
 `appointment.series.offer.preview` takes the saved `id` and lists current availability and private reasons for every date. A conflicted occurrence lists available alternatives at the same local time on up to the next six days, excluding resource conflicts, closures and conflicts with other proposed occurrences. Alternatives are suggestions, never holds. Submit a new request with `choices: [{date, start}]` to retain a checked alternative for that original occurrence date; the chosen start must stay before the next recurrence and is checked again when saving. Duplicate dates, unavailable choices and changed replays are refused atomically. The original offer and its initial conflict reasons remain unchanged.
 
 Both series commands refuse members, instructors, front desk, managers, finance users and agent keys. They follow the ct-approved private owner-only SCHED-002 offer policy. Session reservations, explicit skipped dates, booking rights, changes, notices, pay and appointment screens remain SCHED-013 gaps.
+
+
+## SUCCESS-002 attendance options
+
+A member saves their own dated availability windows and preferred locations in
+**Classes → Attendance options**. `attendance.availability.save` takes the current
+`version` (zero initially), up to 28 `windows` containing ISO `start` and `end`
+instants, and `locationIds`. A window is at most 24 elapsed hours. Saving replaces
+previous windows; an empty set withdraws availability. Staff may open the member
+sign-in step with `attendance.availability.launch`, but cannot set these choices.
+
+`attendance.plan.prepare` takes `personId`. An owner, connected preparation key or
+explicitly scoped front-desk user receives up to ten chronological published
+choices that fit the complete available interval and chosen location. Each cites
+the class, times, service and eligible pack, plus actual attended booking IDs.
+Current credits, plan hours, booking windows, freezes, intake, waiver, existing
+bookings and online capacity all apply. A suggestion holds nothing and sends
+nothing. No suitable class is reported honestly; members can request a plan change
+or freeze through the existing packs doors, with their existing approval rules.
+
+Only the member accepts with `attendance.plan.accept` and the offer `id` and
+chosen `classId`. Staff use `attendance.plan.accept.staff` with a stable `requestId`
+and `channel`. Acceptance rechecks current eligibility and capacity in the same
+fenced transaction as the ordinary booking. Changed availability or class details,
+spent credits and a full class refuse without a partial booking. Replays retain
+one booking and one ordinary confirmation. A key can prepare but never accept.
+
+The owner grants `attendance.booking.grant` separately from member-record access,
+with the staff `personId`, `enabled`, named `memberIds` and `locationIds`. Both
+grants must remain active and match on every staff request, including replay.
+Front desk requires second-factor enrollment and sees only scoped attendance
+options. Grants, revisions, preferences and source-linked offers remain portable;
+no permission to send a future message or collect money is created.

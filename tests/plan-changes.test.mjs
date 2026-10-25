@@ -480,3 +480,40 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
     return Response.json({id:'synthetic-strap-mail-'+sent.length})
   }})
 })
+
+
+test('First-term join preview retains exact prorated debt and original receipt after later price changes',()=>run(async h=>{
+  await h.confirmSetup(h.owner);
+  await h.cmd('studio.save',{location:'Synthetic studio',timeZone:'America/New_York'});
+  const member=await h.person('Prorated'),other=await h.person('ProrationOther');
+  const input={personId:member.id,credits:10,amountCents:31000,cycleStartAt:'2099-01-01T00:00:00Z',joinAt:'2099-01-16T00:00:00Z',expiresAt:'2099-02-01T00:00:00Z'};
+  const draft=await h.cmd('pack.prepare',input);
+  assert.equal(draft.amountCents,16000);
+  assert.deepEqual([draft.proration.totalSeconds,draft.proration.remainingSeconds],[31*86400,16*86400]);
+  const before=(await h.state()).version;
+  await h.cmd('pack.approve',{id:draft.id},member.cookie,403);
+  assert.equal((await h.state()).version,before);
+  const approved=await h.cmd('pack.approve',{id:draft.id});
+  const state=await h.state(),pack=state.packs.find(p=>p.id===approved.id);
+  assert.equal(pack.termStartAt,'2099-01-16T00:00:00.000Z');
+  assert.deepEqual(pack.proration,draft.proration);
+  assert.equal(state.charges.filter(c=>c.packId===pack.id).length,1);
+  assert.equal(state.charges.find(c=>c.packId===pack.id).amountCents,draft.amountCents);
+  // A later plan price must never rewrite the retained purchase receipt.
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.amountCents',?) WHERE kind='pack' AND id=?").bind(50000,pack.id).run();
+  for(const cookie of [h.owner,member.cookie]){
+    const page=await h.send('/app/packs',undefined,cookie);
+    assert.equal(page.status,200);assert.match(page.text,/First-term calculation/);
+    const receipt=page.text.split('id="receipt-'+pack.id+'"')[1].split('</article>')[0];
+    assert.match(receipt,/160\.00/);assert.doesNotMatch(receipt,/500\.00/);
+  }
+  assert.ok(!(await h.send('/app/packs',undefined,other.cookie)).text.includes('receipt-'+pack.id));
+  await h.cmd('pack.prepare',{...input,joinAt:input.expiresAt},h.owner,400);
+  await h.cmd('pack.prepare',{...input,joinAt:'2099-01-16T00:00:00.500Z'},h.owner,400);
+  const stale=await h.cmd('pack.prepare',input);
+  await h.cmd('person.save',{id:member.id,name:'Changed proration member',email:member.email,role:'member',active:true});
+  await h.cmd('pack.approve',{id:stale.id},h.owner,409);
+  const rounded=await h.cmd('pack.prepare',{...input,amountCents:1,cycleStartAt:'2099-01-01T00:00:00Z',joinAt:'2099-01-02T00:00:00Z',expiresAt:'2099-01-03T00:00:00Z'});
+  assert.equal(rounded.amountCents,1,'half a cent rounds up');
+  if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).prorationBrowser(h,{member});
+}));
