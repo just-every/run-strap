@@ -19,23 +19,61 @@ const receiptOf = (html, packId) => html.match(new RegExp(`<article class="recei
 const brooklyn = { line1: '85 Jay Street', city: 'Brooklyn', region: 'NY', postalCode: '11201', country: 'US' }
 const santaMonica = { line1: '1 Ocean Avenue', line2: 'Suite 4', city: 'Santa Monica', region: 'CA', postalCode: '90401', country: 'US' }
 
+// Profile edits and the multi-location journey share one native runtime and invited actors.
+async function studioProfile(h) {
+  await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
+  const settings = {location:'Brooklyn studio',timeZone:'America/New_York',legalName:'Willow Movement LLC',
+    address:{line1:'85 Jay Street',line2:'Suite 2',city:'Brooklyn',region:'NY',postalCode:'11201-1234',country:'US'},
+    receiptDetails:'Questions about an external receipt? Contact the studio desk.',
+    businessHours:[{day:6,opens:'08:00',closes:'13:00'},{day:1,opens:'06:00',closes:'21:00'}]}
+  const saved = await h.cmd('studio.save',settings)
+  assert.deepEqual(saved.businessHours,[settings.businessHours[1],settings.businessHours[0]])
+  const member = await h.person('Ana'), coach = await h.person('Maya','instructor')
+  const before = await h.state()
+  for (const cookie of [member.cookie,coach.cookie]) await h.cmd('studio.save',{...settings,legalName:'Changed without authority'},cookie,403)
+  for (const patch of [
+    {address:{...settings.address,postalCode:'1120'}},
+    {address:{...settings.address,region:'XX'}},
+    {address:{...settings.address,country:'CA'}},
+    {address:{...settings.address,city:''}},
+    {businessHours:[{day:1,opens:'21:00',closes:'06:00'}]},
+    {businessHours:[{day:1,opens:'25:00',closes:'26:00'}]},
+    {businessHours:[{day:1,opens:'06:00',closes:'21:00'},{day:1,opens:'07:00',closes:'08:00'}]},
+    {businessHours:[{day:2,opens:'06:00'}]},
+  ]) await h.cmd('studio.save',{...settings,...patch},h.owner,400)
+  const after = await h.state()
+  assert.deepEqual([after.studio,after.version],[before.studio,before.version],'rejected settings do not change the studio or revision')
+  await h.cmd('studio.save',{location:'Downtown Brooklyn',timeZone:'America/New_York'})
+  const retained = (await h.state()).studio
+  for (const key of ['legalName','address','receiptDetails','businessHours']) assert.deepEqual(retained[key],saved[key],'a location-only edit retains '+key)
+  const exit = await h.send('/api/strap/exit.json',undefined,h.owner)
+  assert.equal(exit.status,200)
+  const record = exit.value.tables.st_records.find(row => row.kind==='studio')
+  assert.deepEqual(JSON.parse(record.data),retained,'portable exit retains the exact configuration')
+  if (process.env.STRAP_PROOF_DIR || process.env.CI) await (await import('./studio-browser.mjs')).studioBrowser(h)
+  await h.cmd('studio.save',{location:retained.location,timeZone:retained.timeZone,legalName:'',address:null,receiptDetails:'',businessHours:[]})
+  const cleared = (await h.state()).studio
+  assert.deepEqual([cleared.legalName,cleared.address,cleared.receiptDetails,cleared.businessHours],[null,null,null,[]])
+  return { member, coach }
+}
+
 async function twoLocations(h) {
-  await h.mf.dispatchFetch(h.origin + '/setup', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes', redirect: 'manual' })
+  const { member: ana, coach } = await studioProfile(h)
   await h.cmd('studio.save', { location: 'Brooklyn', timeZone: 'America/New_York', legalName: 'Larkhill Movement LLC', phone: '(718) 555-0100', address: brooklyn, receiptDetails: 'Questions? Visit the front desk.', businessHours: [{ day: 1, opens: '06:00', closes: '21:00' }] })
   const la = await h.cmd('location.save', { name: 'Los Angeles', timeZone: 'America/Los_Angeles', phone: '1 (310) 555-0111', address: santaMonica, businessHours: [{ day: 1, opens: '07:00', closes: '20:00' }] })
-  const coach = await h.person('Maya', 'instructor'), second = await h.person('Noor', 'instructor')
+  const second = await h.person('Noor', 'instructor')
   const publish = async (title, start, instructor, locationId, room = 'Studio A') => (await h.cmd('classes.publish', { id: (await h.cmd('classes.prepare', { week: monday(start), classes: [{ title, start, end: new Date(Date.parse(start) + 50 * minute).toISOString(), capacity: 6, room, instructorId: instructor.id, ...(locationId ? { locationId } : {}) }] })).id })).classes[0]
   const sell = async (member, fields) => (await h.cmd('pack.approve', { id: (await h.cmd('pack.prepare', { personId: member.id, credits: 10, expiresAt: '2099-12-31T00:00:00Z', ...fields })).id })).id
-  return { la, coach, second, publish, sell }
+  return { la, coach, second, publish, sell, ana }
 }
 
 test('STUDIO-001/002: a New York studio and a Los Angeles location keep their own addresses, phones and clocks; plans name where they are valid, receipts and screens agree, and a closure touches one location', () => run(async h => {
-  const { la, coach, second, publish, sell } = await twoLocations(h)
+  const { la, coach, second, publish, sell, ana } = await twoLocations(h)
   let state = await h.state()
   assert.equal(state.studio.phone, '7185550100'); assert.equal(la.phone, '3105550111')
   assert.deepEqual(state.locations.map(l => [l.id, l.name, l.timeZone]), [['studio', 'Brooklyn', 'America/New_York'], [la.id, 'Los Angeles', 'America/Los_Angeles']])
   // Configuration is the owner's alone and refuses invalid values, writing nothing.
-  const ana = await h.person('Ana'), ben = await h.person('Ben'), cy = await h.person('Cy')
+  const ben = await h.person('Ben'), cy = await h.person('Cy')
   for (const cookie of [ana.cookie, coach.cookie]) await refused(h, 'location.save', { name: 'Austin', timeZone: 'America/Chicago' }, cookie, 403, 'owner_required')
   await refused(h, 'location.save', { name: ' los  ANGELES ', timeZone: 'America/Los_Angeles' }, h.owner, 409, 'location_name_used')
   await refused(h, 'location.save', { name: 'Austin', timeZone: 'Mars/Olympus' }, h.owner, 400, 'invalid_time_zone')
