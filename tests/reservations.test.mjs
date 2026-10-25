@@ -299,6 +299,9 @@ test('Scoped front desk books private sessions with checked alternatives, denies
   await refused(h,'appointment.series.offer.preview',{id:original.id},desk.cookie,null,403);
   const blockedDate=plus(input.startDate,21),blockStart=original.occurrences[3].start;
   await h.cmd('scheduling.unavailable.save',{resourceKind:'instructor',resourceId:coach.id,start:blockStart,end:original.occurrences[3].end,reason:'Confidential medical leave'});
+  const ownerConflict=await h.cmd('appointment.reservation.prepare',{...input,requestId:'synthetic-strap-owner-conflict'});
+  assert.ok(JSON.stringify(ownerConflict).includes('Confidential medical leave'));
+  assert.ok(!JSON.stringify((await h.state(desk.cookie)).appointmentPreviews).includes('Confidential medical leave'),'scoped reads also redact an owner-prepared conflict');
   const conflict=await h.cmd('appointment.reservation.prepare',input,desk.cookie);
   assert.equal(conflict.available,false);assert.equal(conflict.occurrences[3].status,'conflict');
   assert.ok(!JSON.stringify(conflict).includes('Confidential medical leave'),'delegated resource preview never reveals private exception reasons');
@@ -308,6 +311,13 @@ test('Scoped front desk books private sessions with checked alternatives, denies
   const saved=await h.cmd('appointment.reservation.confirm',confirmInput,desk.cookie);
   assert.equal(saved.occurrences.length,10);assert.equal(saved.occurrences[3].start,wednesday.start);
   const read=await h.state(desk.cookie);assert.equal(read.appointments.length,1);assert.deepEqual(read.appointmentSeriesOffers,[]);assert.deepEqual(read.charges,[]);
+  const agent=await h.cmd('agent.create',{label:'Private preparation assistant'});
+  const context=(await h.send('/api/strap/agent/context',undefined,'',{authorization:'Bearer '+agent.token})).value;
+  assert.deepEqual(context.appointments,[]);assert.ok(context.classes.every(c=>!c.privatePersonId));assert.ok(context.bookings.every(b=>!b.appointmentReservationId));
+  const version=(await h.state()).version;
+  assert.equal((await h.send('/api/strap/agent/command',{name:'appointment.reservation.confirm',input:confirmInput},'',{authorization:'Bearer '+agent.token})).status,403);
+  assert.equal((await h.state()).version,version);
+
   const actions=(await h.state()).staffActions.filter(a=>a.command==='appointment.reservation.confirm' && a.personId===ana.id);
   assert.equal(actions.length,1);assert.equal(actions[0].actorRole,'front-desk');assert.equal(actions[0].right,'booking');assert.equal(actions[0].channel,'phone');
   const move=await h.cmd('appointment.move.prepare',{reservationId:saved.id,classId:saved.occurrences[1].id,startDate:plus(input.startDate,8),time:'09:00',channel:'phone'},desk.cookie);
@@ -349,3 +359,19 @@ test('Private appointment changes reserve one configured Base email and keep una
     assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-message-'+sent.length});
   }});
 });
+
+test('Concurrent private saves share the resource and credit fence; stale resource and funding reviews refuse without partial holds',()=>run(async h=>{
+  const {coach,ana,ben}=await studio(h);await pack(h,ana,{eligibleServices:['Private Flow']});await pack(h,ben,{eligibleServices:['Private Flow']});
+  const source={service:'Private Flow',instructorId:coach.id,room:'Private Flow room',startDate:'2096-10-16',endDate:'2096-12-18',time:'09:00',minutes:50};
+  const a=await h.cmd('appointment.reservation.prepare',{...source,personId:ana.id}),b=await h.cmd('appointment.reservation.prepare',{...source,personId:ben.id});
+  const responses=await Promise.all([a,b].map(d=>h.send('/api/strap/command',{name:'appointment.reservation.confirm',input:{id:d.id,key:d.key,requestId:'synthetic-strap-concurrent-'+d.id}},h.owner)));
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);
+  let state=await h.state();assert.equal(state.appointments.length,1);assert.equal(state.bookings.length,10);assert.equal(state.packs.reduce((n,p)=>n+p.summary.reserved,0),10);assert.equal(state.packs.reduce((n,p)=>n+p.remaining,0),10);
+  const loser=state.appointments[0].personId===ana.id?ben:ana;
+  const safe={...source,personId:loser.id,startDate:'2097-01-08',endDate:'2097-03-12'};
+  const draft=await h.cmd('appointment.reservation.prepare',safe);
+  await h.cmd('scheduling.unavailable.save',{resourceKind:'room',resourceId:source.room,start:draft.occurrences[0].start,end:draft.occurrences[0].end,reason:'Maintenance after review'});
+  await refused(h,'appointment.reservation.confirm',{id:draft.id,key:draft.key},h.owner,'appointment_facts_changed',409);
+  await refused(h,'appointment.reservation.prepare',{...safe,startDate:'2097-04-02',endDate:'2097-06-11'},h.owner,'private_session_pack_required',409);
+  state=await h.state();assert.equal(state.bookings.length,10);assert.equal(state.packs.find(p=>p.personId===loser.id).remaining,10,'failed eleven-session simulation commits no partial holds');
+}));

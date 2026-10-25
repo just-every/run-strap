@@ -39,7 +39,7 @@ async function classPage(env: Bindings, url: URL, granted: string[], attendance:
   const asked = url.searchParams.get('location')
   if (asked !== null && !granted.includes(asked)) refuse(403, 'location_not_granted', { locations: granted })
   const people = new Map(state.people.filter(p => !p.erasedAt && preferencesOf(state,p.id).attendanceSharing).map(p => [p.id, p]))
-  const classes = list(state, 'class').filter(c => granted.includes(c.locationId ?? 'studio')).sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
+  const classes = list(state, 'class').filter(c => !c.privatePersonId).filter(c => granted.includes(c.locationId ?? 'studio')).sort((a, b) => a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1)
     .filter(c => !after || c.start > after[0] || (c.start === after[0] && c.id > after[1]))
   const shown = classes.slice(0, limit), bookings = list(state, 'booking')
   const refs = attendance === 'outcomes' ? await memberRefs(refKey!, [...people.values()]) : new Map<string, string>()

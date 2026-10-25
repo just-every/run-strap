@@ -36,7 +36,7 @@ const relationships = [
   { from: 'st_records.data.privatePersonId', to: 'st_people.id', when: 'kind=class' },
   { from: 'st_records.data.appointmentReservationId', to: 'st_records.id', kind: 'appointmentReservation' },
   { from: 'st_records.data.occurrences[].bookingId', to: 'st_records.id', kind: 'booking', when: 'kind=appointmentReservation' },
-  { from: 'st_records.data.offerId', to: 'st_records.id', kind: 'appointmentSeriesOffer', when: 'kind=appointmentReservation or kind=appointmentPreview' },
+  { from: 'st_records.data.offerId', to: 'st_records.id', when: 'kind=appointmentReservation or kind=appointmentPreview' },
   { from: 'st_records.data.priceDisclosureId', to: 'st_records.id', kind: 'renewalDisclosure' },
   { from: 'st_records.data.currentPriceDisclosureId', to: 'st_records.id', kind: 'renewalDisclosure' },
   { from: 'st_records.data.giftCardId', to: 'st_records.id', kind: 'giftCard' },

@@ -25,6 +25,9 @@ Binary columns use null or `{ "encoding": "hex", "storageType": "blob" | "text",
 | Kind | Meaning and links |
 | --- | --- |
 | `classReminderRule` / `classReminderRuleEvent` | MSG-003 versioned studio/service email timing, enabled state and immutable owner/request provenance. |
+| `appointmentReservation` | Private series owner or scoped front-desk save; original occurrence order, chosen alternatives, stable class and booking identities, funding pack links and retained cancellations. |
+| `appointmentPreview` | Exact reviewed private save, move or cancellation, scope, key, source proposal, funding and resource facts, actor and channel. A preview holds no resources or credits. |
+| `appointmentBookingGrant` | Explicit booking scope for named members and locations, additionally bounded by the current member-record grant. `appointmentBookingGrantEvent` retains every grant change. No financial authority. |
 | `classReminder` | Once-only current booking/class/start reminder identity, rule/revision, delivery ID, reservation status and system provenance; never dispatch authority. |
 | `reminderTask` / `reminderTaskEvent` | Private failed/unavailable-channel observation, delivery/reminder/member/class links and reasoned owner follow-up completion; no retry or receipt claim. |
 | `messagePreference` / `messagePreferenceEvent` | MSG-002 member-owned booking/class email opt-out and immutable member-session before/after provenance; mandatory authentication, security, receipt, failed-payment and legal email are outside this choice. |

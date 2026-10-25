@@ -67,7 +67,7 @@ export async function prepareAppointmentReservation(tx: Transaction,input: Recor
   });
   const available = checked.every(o=>o.available), simulation = new Transaction(tx.db,structuredClone(tx.state),tx.who);
   const funded = available ? allocate(simulation,occurrences,member.id,'preview',channel).map(({bookingId,...entry})=>entry) : checked;
-  const preview = {id:id(),personId:member.id,offerId,source:input.offerId ? null : input,operation:'save',status:'preview',available,occurrences:funded,
+  const preview = {id:id(),personId:member.id,offerId,source:input.offerId ? null : Object.fromEntries(['personId','service','instructorId','locationId','room','equipment','startDate','endDate','time','minutes','intervalWeeks','choices','bufferBeforeMinutes','bufferAfterMinutes'].filter(k=>input[k] !== undefined).map(k=>[k,input[k]])),operation:'save',status:'preview',available,occurrences:funded,
     key:id(),channel,basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
   tx.put('appointmentPreview',preview); return preview;
 }
@@ -166,7 +166,7 @@ export async function confirmAppointmentChange(tx: Transaction,input: Record<str
 }
 export function appointmentSnapshot(state: State,who: import('./types').Actor) {
   const visible = (kind: string) => list(state,kind).filter(r=>(r.occurrences ?? []).every((o: RecordData)=>appointmentBookingVisible(state,who,r.personId,o.locationId ?? 'studio')) && (who.role === 'owner' || who.role === 'front-desk') || (who.role === 'member' && r.personId === who.personId));
-  return {appointmentBookingGrants:who.role === 'owner' ? list(state,'appointmentBookingGrant') : [],appointments:visible('appointmentReservation').map(r=>({...r,occurrences:r.occurrences.map((o: RecordData)=>{const c=state.records.get(o.id)?.data,b=state.records.get(o.bookingId)?.data;return {...o,start:c?.start ?? o.start,end:c?.end ?? o.end,status:b?.attendance ?? b?.status ?? o.status};})})),appointmentPreviews:['owner','front-desk'].includes(who.role) ? visible('appointmentPreview') : [],appointmentSeriesOffers:who.role === 'owner' ? [...list(state,'appointmentSeriesOffer'),...list(state,'appointmentOffer').map(o=>({...o,occurrences:[o]}))] : []};
+  return {appointmentBookingGrants:who.role === 'owner' ? list(state,'appointmentBookingGrant') : [],appointments:visible('appointmentReservation').map(r=>({...r,occurrences:r.occurrences.map((o: RecordData)=>{const c=state.records.get(o.id)?.data,b=state.records.get(o.bookingId)?.data;return {...o,start:c?.start ?? o.start,end:c?.end ?? o.end,status:b?.attendance ?? b?.status ?? o.status};})})),appointmentPreviews:['owner','front-desk'].includes(who.role) ? visible('appointmentPreview').map(r=>who.role === 'owner' ? r : {...r,occurrences:r.occurrences.map(({availabilityAtCreation,...o}: RecordData)=>({...o,blockers:(o.blockers ?? []).map(({reason,...b}: RecordData)=>b)}))}) : [],appointmentSeriesOffers:who.role === 'owner' ? [...list(state,'appointmentSeriesOffer'),...list(state,'appointmentOffer').map(o=>({...o,occurrences:[o]}))] : []};
 }
 
 /** This runs before canonical request replay, so revocation also fences replays. */

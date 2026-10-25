@@ -136,7 +136,7 @@ export async function appointmentsBrowser(h,{coach,start}) {
       await h.cmd('scheduling.unavailable.save',{resourceKind:'instructor',resourceId:coach.id,start:offer.occurrences[3].start,end:offer.occurrences[3].end,reason:'Private family leave'})
       const page=await pageFor(desk.cookie),back='/app/people?person='+member.id;await page.goto(h.origin+back)
       const panel=page.locator('#appointments');await panel.getByText('Book a private series',{exact:true}).click()
-      const compose=panel.locator('form').filter({has:panel.getByRole('button',{name:'Preview private series',exact:true})})
+      const compose=panel.locator('form').filter({has:page.getByRole('button',{name:'Preview private series',exact:true})})
       await compose.getByLabel('Private service').fill('Private Pilates');await compose.getByLabel('Instructor',{exact:true}).selectOption(coach.id)
       await compose.getByLabel('Room',{exact:true}).fill('Reformer studio');await compose.getByLabel('First appointment date').fill(date);await compose.getByLabel('Last appointment date').fill(end)
       await compose.getByLabel('Request received by').selectOption('phone');await shot(page,'desk-series-form',panel)
