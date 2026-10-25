@@ -4,7 +4,7 @@ import { join, extname } from 'node:path'
 import { chromium } from '@playwright/test'
 const plus = (date,n) => new Date(Date.parse(date+'T12:00:00Z')+n*86_400_000).toISOString().slice(0,10)
 // SCHED-005: members and the owner's booking-right door review every outcome,
-// commit, cancel a single occurrence, then review and cancel the future series.
+// commit eight weeks at 6 pm (six booked, one waitlisted, one closed), cancel a single occurrence, then review and cancel the future series.
 export async function reservationsBrowser(h,{coach,ben,start}) {
   const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
@@ -22,23 +22,28 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
           const index=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,index),value:cookie.slice(index+1),url:h.origin}]);return context.newPage()
         }
         const shot=async(page,name,locator)=>{
+          await page.waitForLoadState('networkidle')
+          await page.evaluate(()=>document.fonts.ready)
+          if (locator) await locator.waitFor({state:'visible'})
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,`${name} fits ${width}`)
           await (locator??page).screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-005-${name}-${width}.png`),...(locator?{}:{fullPage:true})})
         }
-        const date=plus(start,width===390?42:0),end=plus(date,21),member=await h.person(`Series${width}`)
-        await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:8000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+        const date=plus(start,width===390?70:0),end=plus(date,49),member=await h.person(`Series${width}`)
+        await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:8,amountCents:16000,expiresAt:'2099-12-31T00:00:00Z'})).id})
         const waiver=(await h.state()).waiver;if(waiver) await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
-        const published=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:date,endDate:end,time:'14:00',minutes:50,intervalWeeks:1,title:`Weekly practice ${width}`,service:'Yoga',room:`Practice ${width}`,capacity:1,instructorId:coach.id})).id})
+        const published=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{startDate:date,endDate:end,time:'18:00',minutes:50,intervalWeeks:1,title:`Weekly practice ${width}`,service:'Yoga',room:`Practice ${width}`,capacity:1,instructorId:coach.id})).id})
         await h.cmd('booking.book',{classId:published.classes[1].id},ben.cookie)
         const closure=await h.cmd('series.cancel.prepare',{classId:published.classes[2].id,scope:'this',reason:'Holiday closure'});await h.cmd('series.cancel.confirm',{id:closure.id,impact:closure.impact.key})
         const mine=await pageFor(member.cookie);await mine.goto(h.origin+'/app#recurring-reservations')
+        await shot(mine,'member-page')
         const panel=mine.locator('#recurring-reservations')
         await panel.getByLabel('First class').selectOption(published.classes[0].id)
         await panel.getByLabel('Reserve through (inclusive)').fill(end)
         await shot(mine,'member-form',panel)
         await panel.getByRole('button',{name:'Preview recurring reservation',exact:true}).click()
         const preview=(await h.state(member.cookie)).reservationPreviews.at(-1),review=mine.locator(`[data-reservation-preview="${preview.id}"]`)
-        assert.deepEqual(preview.outcomes.map(o=>o.status),['booked','waitlisted','skipped','booked'])
+        assert.ok(published.classes.every(c=>new Intl.DateTimeFormat('en-GB',{timeZone:c.timeZone,hourCycle:'h23',hour:'2-digit',minute:'2-digit'}).format(new Date(c.start))==='18:00'));
+        assert.deepEqual(preview.outcomes.map(o=>o.status),['booked','waitlisted','skipped','booked','booked','booked','booked','booked'])
         await review.getByText('Class closed',{exact:true}).waitFor();await shot(mine,'member-preview',review)
         await review.getByRole('button',{name:'Confirm recurring reservation',exact:true}).click()
         const reservation=(await h.state(member.cookie)).reservations.at(-1),saved=mine.locator(`[data-reservation="${reservation.id}"]`)
@@ -49,25 +54,31 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
         assert.equal((await h.state(member.cookie)).bookings.find(b=>b.id===first).status,'cancelled')
         await saved.getByRole('button',{name:'Review future cancellations',exact:true}).click()
         const cancellation=(await h.state(member.cookie)).reservationPreviews.at(-1),cancelReview=mine.locator(`[data-reservation-preview="${cancellation.id}"]`)
-        assert.equal(cancellation.outcomes.length,2)
+        assert.equal(cancellation.outcomes.length,6)
         await shot(mine,'member-cancel-preview',cancelReview)
         await cancelReview.getByRole('button',{name:'Confirm future cancellations',exact:true}).click()
         await mine.getByText('Future cancellations recorded. Past and started visits were kept.',{exact:true}).waitFor()
         await shot(mine,'member-cancelled',saved)
-        assert.equal((await h.state(member.cookie)).packs[0].remaining,4)
+        assert.equal((await h.state(member.cookie)).packs[0].remaining,8)
         // The same existing screen's owner door, with request channel and one
         // canonical booking-right audit for each command.
         const staff=await pageFor(h.owner),back=`/app/people?person=${member.id}#person`;await staff.goto(h.origin+back)
+        await shot(staff,'staff-page')
         const staffPanel=staff.locator('#recurring-reservations')
         await staffPanel.getByLabel('First class').selectOption(published.classes[0].id)
         await staffPanel.getByLabel('Reserve through (inclusive)').fill(end)
         await staffPanel.getByLabel('Request channel').selectOption('phone')
         await staffPanel.getByRole('button',{name:'Preview recurring reservation',exact:true}).click()
         const staffDraft=(await h.state()).reservationPreviews.filter(r=>r.personId===member.id).at(-1),staffReview=staff.locator(`[data-reservation-preview="${staffDraft.id}"]`)
+        assert.equal(await staffReview.getByLabel('Request channel').inputValue(),'phone','review preserves the chosen phone channel')
         await shot(staff,'staff-preview',staffReview)
         await staffReview.getByRole('button',{name:'Confirm recurring reservation',exact:true}).click()
         const staffReservation=(await h.state()).reservations.filter(r=>r.personId===member.id).at(-1),staffSaved=staff.locator(`[data-reservation="${staffReservation.id}"]`)
         await shot(staff,'staff-saved',staffSaved)
+        assert.deepEqual(staffReservation.outcomes.map(o=>o.status),['booked','waitlisted','skipped','booked','booked','booked','booked','booked'])
+        assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,2,'only the six booked occurrences reserve a credit')
+        assert.ok((await h.state()).bookings.filter(b=>b.reservationId===staffReservation.id).every(b=>b.madeByRole==='owner'&&b.right==='booking'&&b.bookingChannel==='phone'))
+
         await staffSaved.getByRole('button',{name:'Review future cancellations',exact:true}).click()
         const staffCancellation=(await h.state()).reservationPreviews.filter(r=>r.personId===member.id).at(-1),staffCancel=staff.locator(`[data-reservation-preview="${staffCancellation.id}"]`)
         await staffCancel.getByLabel('Cancellation reason').selectOption('Schedule conflict')

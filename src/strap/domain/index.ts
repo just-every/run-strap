@@ -1,4 +1,4 @@
-import { saveAppointmentOffer, previewAppointmentOffer } from './appointment-offers';
+import { saveAppointmentOffer, previewAppointmentOffer, saveAppointmentSeriesOffer, previewAppointmentSeriesOffer } from './appointment-offers';
 import { previewRetentionHistory, importRetentionHistory } from './retention-history';
 import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
 import { grantRetailStaff, retailGrant, requireRetail } from './retail-records';
@@ -238,6 +238,8 @@ export const handlers = {
   'series.cancel.confirm':defineCommand(confirmSeriesCancellation,['owner']),
   'classes.prepare':defineCommand(prepareClasses,['owner','agent']),
   'classes.publish':defineCommand(publishClasses,['owner']),
+  'appointment.series.offer.save':defineCommand(saveAppointmentSeriesOffer,['owner']),
+  'appointment.series.offer.preview':defineCommand(previewAppointmentSeriesOffer,['owner']),
   'appointment.offer.save':defineCommand(saveAppointmentOffer,['owner']),
   'appointment.offer.preview':defineCommand(previewAppointmentOffer,['owner']),
   'scheduling.unavailable.save':defineCommand(saveUnavailability,['owner']),
@@ -324,14 +326,18 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
+  const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  // A private offer must not execute unrelated due billing, notices or entitlements.
+  if (!privateAppointmentOffer) {
+    applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
+  }
   const result = await spec.run(tx,input,context);
   assertIntakeEnrollments(tx.state,enrollmentBasis);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);
   if (name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
-  processRecognition(tx); suppressNurture(tx); suppressWinback(tx);
+  if (!privateAppointmentOffer) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); }
   await tx.commit(); return result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and

@@ -153,3 +153,80 @@ test('SCHED-005: concurrent series confirmations share the seat/credit fence and
   state=await h.state();assert.ok(state.packs.every(p=>p.remaining>=0));
   assert.ok(state.reservationPreviews.every(p=>/^[a-f0-9]{64}$/.test(p.basis)),'opaque review fingerprints expose no other member waiver history');
 }));
+
+test('SCHED-013: private ten-week appointment offers retain dated conflicts, recheck chosen alternatives and never reserve or send',()=>run(async h=>{
+  await h.cmd('studio.save',{location:'Brooklyn',timeZone:'America/New_York'});
+  const coach=await h.person('Priya','instructor'),member=await h.person('Alex'),desk=await h.person('Desk'),manager=await h.person('Manager'),finance=await h.person('Finance');
+  await h.cmd('member.record.grant',{personId:desk.id,memberIds:[member.id],enabled:true,canCreate:false});
+  await h.cmd('manager.grant',{id:manager.id,locationIds:['studio']});
+  await h.cmd('finance.grant',{id:finance.id});
+  for (const staff of [desk,manager,finance]) { staff.cookie=await h.signIn(staff.email); await h.enroll(staff.cookie); }
+  const memberPack=await pack(h,member,{credits:10,eligibleServices:['Private Mat']});
+  const start='2096-10-23',end=plus(start,63),conflictDate=plus(start,21);
+  // Fixed civil dates cross fall DST independently of the clock running the test.
+  const at=(date,hour=14)=>date+'T'+hour+':00:00.000Z';
+  const exception=await h.cmd('scheduling.unavailable.save',{resourceKind:'instructor',resourceId:coach.id,start:at(conflictDate),end:at(conflictDate,15),reason:'Private time off'});
+  const input={service:'Private Mat',room:'Main',instructorId:coach.id,startDate:start,endDate:end,time:'09:00',minutes:50,bufferAfterMinutes:15,requestId:'synthetic-strap-series-1'};
+  const records=async()=> (await h.db.prepare("SELECT id,kind,data FROM st_records WHERE kind!='appointmentSeriesOffer' ORDER BY id").all()).results;
+  const baseline=await records(),delivery=await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first(),outbox=await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first();
+  const offer=await h.cmd('appointment.series.offer.save',input);
+  assert.equal(offer.occurrences.length,10);
+  assert.deepEqual(offer.occurrences.map(o=>o.occurrenceDate),Array.from({length:10},(_,i)=>plus(start,7*i)));
+  assert.ok(offer.occurrences.every(o=>local(o.start)==='09:00'));
+  assert.equal(Date.parse(offer.occurrences[2].start)-Date.parse(offer.occurrences[1].start),7*day+3_600_000);
+  assert.equal(offer.occurrences[3].availabilityAtCreation.blockers.find(b=>b.id===exception.id).reason,'Private time off');
+  assert.deepEqual(await h.cmd('appointment.series.offer.save',input),offer);
+  const preview=await h.cmd('appointment.series.offer.preview',{id:offer.id});
+  assert.equal(preview.available,false);
+  assert.deepEqual(preview.occurrences.map(o=>o.available),[true,true,true,false,true,true,true,true,true,true]);
+  const wednesday=preview.occurrences[3].alternatives.find(o=>o.localDate===plus(conflictDate,1));
+  assert.ok(wednesday);
+  assert.equal(local(wednesday.start),'09:00');
+  const chosenInput={...input,choices:[{date:conflictDate,start:wednesday.start}],requestId:'synthetic-strap-series-2'};
+  const chosen=await h.cmd('appointment.series.offer.save',chosenInput);
+  assert.equal(chosen.occurrences.length,10);
+  assert.equal(chosen.occurrences[3].start,wednesday.start);
+  assert.equal(chosen.occurrences[3].originalStart,offer.occurrences[3].start);
+  assert.equal(chosen.occurrences[3].chosenAlternative,true);
+  assert.equal((await h.cmd('appointment.series.offer.preview',{id:chosen.id})).available,true);
+  for(const proposal of [offer,chosen]) {
+    assert.deepEqual([proposal.reserved,proposal.bookingAvailable,proposal.paymentCollected],[false,false,false]);
+    assert.ok(proposal.occurrences.every(o=>!o.availabilityAtCreation.reserved));
+  }
+  for(const cookie of [member.cookie,coach.cookie,desk.cookie,manager.cookie,finance.cookie,'']) {
+    await h.cmd('appointment.series.offer.save',input,cookie,cookie?403:401);
+    await h.cmd('appointment.series.offer.preview',{id:offer.id},cookie,cookie?403:401);
+    await h.cmd('appointment.offer.save',{...input,start:offer.occurrences[0].start,durationMinutes:50},cookie,cookie?403:401);
+    await h.cmd('appointment.offer.preview',{id:offer.id},cookie,cookie?403:401);
+    if(cookie) assert.ok(!(await h.send('/api/strap/state',undefined,cookie)).text.includes('Private time off'));
+  }
+  assert.deepEqual(await records(),baseline,'offer save, read, replay and all refusals change no entitlement, financial, booking or notice record');
+  assert.deepEqual(await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first(),delivery);
+  assert.deepEqual(await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first(),outbox);
+  assert.equal((await h.state()).packs.find(p=>p.id===memberPack.id).remaining,10);
+  const key=await h.cmd('agent.create',{label:'No private series access'});
+  for(const name of ['appointment.series.offer.save','appointment.series.offer.preview']) {
+    assert.equal((await h.send('/api/strap/agent/command',{name,input:{id:offer.id}},'',{authorization:`Bearer ${key.token}`})).status,403);
+  }
+  const allocated=await h.cmd('series.publish',{id:(await h.cmd('series.prepare',{...input,title:'Later class',startDate:plus(conflictDate,1),endDate:plus(conflictDate,1),time:'09:00',capacity:1})).id});
+  assert.equal(allocated.classes.length,1,'an offer never holds its chosen alternative against a real publication');
+  const changed=await h.cmd('appointment.series.offer.preview',{id:chosen.id});
+  assert.equal(changed.occurrences[3].available,false);
+  const count=await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind='appointmentSeriesOffer'").first();
+  await h.cmd('appointment.series.offer.save',{...chosenInput,requestId:'synthetic-strap-series-stale'},h.owner,409);
+  await h.cmd('appointment.series.offer.save',{...input,choices:[{date:conflictDate,start:offer.occurrences[4].start}],requestId:'synthetic-strap-series-outside'},h.owner,400);
+  await h.cmd('appointment.series.offer.save',{...chosenInput,choices:[...chosenInput.choices,...chosenInput.choices],requestId:'synthetic-strap-series-duplicate'},h.owner,400);
+  await h.cmd('appointment.series.offer.save',{...input,time:'10:00'},h.owner,409);
+  assert.deepEqual(await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind='appointmentSeriesOffer'").first(),count);
+  await h.cmd('scheduling.unavailable.remove',{id:exception.id});
+  const retained=await h.cmd('appointment.series.offer.preview',{id:offer.id});
+  assert.equal(retained.occurrences[3].available,true);
+  assert.equal(retained.offer.occurrences[3].availabilityAtCreation.blockers.find(b=>b.id===exception.id).reason,'Private time off');
+  const roomClosure=await h.cmd('closure.prepare',{scope:'room',room:' MAIN ',start:offer.occurrences[6].start,end:offer.occurrences[6].end,reason:'Room maintenance'});
+  await h.cmd('closure.confirm',{id:roomClosure.id,impact:roomClosure.impact.key});
+  const roomPreview=await h.cmd('appointment.series.offer.preview',{id:offer.id});
+  assert.equal(roomPreview.occurrences[6].blockers.find(b=>b.id===roomClosure.id).reason,'Room maintenance');
+  assert.equal(roomPreview.occurrences[6].blockers.find(b=>b.id===roomClosure.id).kind,'room_closed');
+  const exported=(await h.send('/api/strap/exit.json',undefined,h.owner)).value;
+  assert.equal(JSON.parse(exported.tables.st_records.find(r=>r.id===offer.id).data).occurrences[3].availabilityAtCreation.blockers.find(b=>b.id===exception.id).reason,'Private time off');
+}));

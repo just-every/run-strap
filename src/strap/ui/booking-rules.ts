@@ -45,7 +45,7 @@ export function memberCancel(b: any, back: string) {
 }
 
 /** Staff records how the request arrived and an explicit notice suppression. */
-export const actionChannel = () => select('channel', 'Request channel', [['desk', 'Front desk'], ['phone', 'Phone'], ['inbox', 'Inbox']], 'desk')
+export const actionChannel = (selected = 'desk') => select('channel', 'Request channel', [['desk', 'Front desk'], ['phone', 'Phone'], ['inbox', 'Inbox']], selected)
 export const actionNotice = () => '<label class="check"><input name="suppressNotice" type="checkbox" value="true"> Suppress the member notice</label>'
   + field('suppressionReason', 'Suppression reason (required when suppressing)', '', 'text', 'maxlength="500"')
 export const cancellationReason = (s: any) => select('cancelReason', 'Cancellation reason', [['', 'Choose a reason'], ...rows(s, 'cancellationReasons').map(reason => [reason, reason] as [unknown, unknown])])

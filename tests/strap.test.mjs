@@ -360,8 +360,17 @@ test('Private appointment offers retain overlapping alternatives and recheck liv
   let preview = await h.cmd('appointment.offer.preview',{id:left.id});
   assert.equal(preview.available,false,'cleanup buffer blocks the offer');
   assert.equal(preview.blockers.find(b=>b.id===unavailable.id).reason,'Private absence');
+  const conflictedInput = {...input,requestId:'synthetic-strap-appointment-conflict'};
+  const conflicted = await h.cmd('appointment.offer.save',conflictedInput);
+  assert.equal(conflicted.availabilityAtCreation.blockers.find(b=>b.id===unavailable.id).reason,'Private absence');
+
   await h.cmd('scheduling.unavailable.remove',{id:unavailable.id});
   assert.equal((await h.cmd('appointment.offer.preview',{id:left.id})).available,true);
+  const retained = await h.cmd('appointment.offer.preview',{id:conflicted.id});
+  assert.equal(retained.available,true);
+  assert.equal(retained.offer.availabilityAtCreation.blockers.find(b=>b.id===unavailable.id).reason,'Private absence','original conflict reason survives exception removal');
+  assert.deepEqual(await h.cmd('appointment.offer.save',conflictedInput),conflicted,'replay preserves the original review');
+
   const draft = await h.cmd('classes.prepare',{week:monday,classes:[{title:'Allocated class',start:at(10,15),end:at(11,15),capacity:4,instructorId:coach.id,room:'MAIN studio'}]});
   await h.cmd('classes.publish',{id:draft.id});
   preview = await h.cmd('appointment.offer.preview',{id:right.id});
@@ -388,6 +397,25 @@ test('Private appointment offers retain overlapping alternatives and recheck liv
   assert.equal(state.charges.length,0);
   assert.equal(state.payments.length,0);
   assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first()).n,0);
-  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind='appointmentOffer'").first()).n,3);
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind='appointmentOffer'").first()).n,4);
   assert.ok(!(await h.state(member.cookie)).classes.some(c=>c.id===left.id),'private offers are not published classes');
+
+  const p = await pack(h,member.id,10);
+  const change = await h.cmd('plan.change.prepare',{packId:p.id,mode:'now',effectiveAt:new Date(Date.now()+86400_000).toISOString().replace(/\.\d{3}Z$/,'.000Z'),credits:12,amountCents:15000,requestId:'synthetic-strap-due-change'});
+  await h.cmd('plan.change.accept',{id:change.id,key:change.key},member.cookie);
+  // Move the approved record across its due boundary; no production clock override.
+  await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.effectiveAt',?) WHERE id=?").bind(new Date(Date.now()-86400_000).toISOString(),change.id).run();
+  const rows = async () => (await h.db.prepare("SELECT id,kind,data FROM st_records WHERE kind NOT IN ('appointmentOffer','appointmentSeriesOffer') ORDER BY id").all()).results;
+  const pending = await rows(), outbox = await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first();
+  const single = await h.cmd('appointment.offer.save',{...input,requestId:'synthetic-strap-no-effects'});
+  await h.cmd('appointment.offer.preview',{id:single.id});
+  await h.cmd('appointment.offer.save',{...input,requestId:'synthetic-strap-no-effects'});
+  const seriesInput={...input,startDate:monday,endDate:monday,time:'09:00',minutes:60,requestId:'synthetic-strap-series-no-effects'};
+  const series=await h.cmd('appointment.series.offer.save',seriesInput);
+  await h.cmd('appointment.series.offer.preview',{id:series.id});
+  await h.cmd('appointment.series.offer.save',seriesInput);
+  assert.deepEqual(await rows(),pending,'save, read and replay do not execute due billing or entitlement work');
+  assert.deepEqual(await h.db.prepare('SELECT COUNT(*) AS n FROM rer_mail_development_outbox').first(),outbox);
+  assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first()).n,0);
+
 }));

@@ -68,7 +68,7 @@ export async function prepareReservations(tx: Transaction, input: Record<string,
   const who = member(tx,input), {series,classes,throughDate} = selection(tx.state,input);
   const outcomes = review(tx,classes,who.id).map(({bookingId,...outcome}) => outcome);
   const draft = {id:id(),personId:who.id,status:'preview',operation:'reserve',classId:input.classId,seriesId:series.id,throughDate,timeZone:series.timeZone,outcomes,
-    key:id(),basis:await basis(tx.state,tx),createdAt:now(),createdBy:tx.who.id};
+    key:id(),basis:await basis(tx.state,tx),channel:tx.who.role === 'owner' ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
   tx.put('reservationPreview',draft); return draft;
 }
 function ownPreview(tx: Transaction, input: Record<string,unknown>, operation: string) {
@@ -103,7 +103,7 @@ function cancellationOutcomes(state: State, reservation: RecordData) {
 export async function prepareReservationCancellation(tx: Transaction, input: Record<string,unknown>) {
   const reservation = record(tx.state,input.reservationId,'reservation'); member(tx,{...input,personId:reservation.personId});
   const outcomes = cancellationOutcomes(tx.state,reservation);
-  const draft = {id:id(),personId:reservation.personId,reservationId:reservation.id,status:'preview',operation:'cancel',timeZone:reservation.timeZone,outcomes,key:id(),basis:await basis(tx.state,tx),createdAt:now(),createdBy:tx.who.id};
+  const draft = {id:id(),personId:reservation.personId,reservationId:reservation.id,status:'preview',operation:'cancel',timeZone:reservation.timeZone,outcomes,key:id(),basis:await basis(tx.state,tx),channel:tx.who.role === 'owner' ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
   tx.put('reservationPreview',draft); return draft;
 }
 export async function confirmReservationCancellation(tx: Transaction, input: Record<string,unknown>) {

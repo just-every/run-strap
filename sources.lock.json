@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4d82f966c2ba4abf5e814aaac7f117cadf05fbf7008b98d3818e9ba314d0b8c4",
+      "sha256": "0284c95a1f4a0d8d11f7391f5632b6f2c9c0ccd0645a84360fdd3d6e1ac30473",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "bac278fe9ae45a77ab0c8c10045ec79a70fd0a01501f359ded8736146736c1f8",
+      "sha256": "05c7b82d74e7aa7ca4f933f3d74646142eb1158fa202976786fbb6d933d5d89c",
       "executable": false
     },
     "DEMO.md": {
@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "586516f7e928c0d4e3e3cf4e7bfb44d1bcd643ba77963e55a2b2c18646c08ed8",
+      "sha256": "2dde89fed92983ba152eec076aa7ec7ca958247ad2e7c78067e616e49c86bffb",
       "executable": false
     },
     "docs/backup-and-restore.md": {
@@ -3058,7 +3058,7 @@
       "executable": false
     },
     "src/strap/domain/appointment-offers.ts": {
-      "sha256": "34695b1aeeb6118b2f097b48dd3b71ff964d8c7fb890df53c6881deee72c7b6e",
+      "sha256": "89f2fe09f379a7c757289371c8d602bb4dd644b18bacffcd7892a38bae784f22",
       "executable": false
     },
     "src/strap/domain/attendance.ts": {
@@ -3222,7 +3222,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "b0dd0175ac43d1c7ff5d82b9d84b78ecf59e34dfa8755cd9cc6906864740908a",
+      "sha256": "2478fb9b3ac4c69498f400d20356039574700b5b32ba731e31df3a0e29e51f14",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3318,7 +3318,7 @@
       "executable": false
     },
     "src/strap/domain/reservations.ts": {
-      "sha256": "e15ca5c238c17c93c5fd0f55a2fee26c3a4529edc9541ea16082f6a467c04d03",
+      "sha256": "c16b4ed3f01f55be23873452aa2a6f548043bab25da86cd9675da58633b683aa",
       "executable": false
     },
     "src/strap/domain/retail-records.ts": {
@@ -3530,7 +3530,7 @@
       "executable": false
     },
     "src/strap/ui/booking-rules.ts": {
-      "sha256": "dfacb7b79e8b56cf53eadaf667cc00aa1197f7a321f03b32c60188e07ad00ccc",
+      "sha256": "843591e12fb5842e7d40de738df5c3a4f60d87a65027fa33e5741016dc415ee6",
       "executable": false
     },
     "src/strap/ui/checkin.ts": {
@@ -3706,7 +3706,7 @@
       "executable": false
     },
     "src/strap/ui/reservations.ts": {
-      "sha256": "fe23261622e3c4f61121d796b56ab0cb08254faa75f4885da64ab32010e14d42",
+      "sha256": "78df96b16cadebe19ad7fea9d4f5b75e7bcb2f4096d2c26b2f03e2c4828b6710",
       "executable": false
     },
     "src/strap/ui/retail.ts": {
@@ -4086,11 +4086,11 @@
       "executable": false
     },
     "tests/reservations-browser.mjs": {
-      "sha256": "aeb71a43b705fb20f296120b0db297cffdb612aac9f51f96bd1905526d5545bd",
+      "sha256": "fd46606b23a5efdbdf8711596c738b336cad2aaaf3e3c371b63535e986bc3bf3",
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "9b72cc33446a43e8a4f5f798df9b634bee3402e6b83a5a23403eda94a794fe8d",
+      "sha256": "767d5b8313c4ecc538880251706f84380b75300352738474c3aa1d4216276794",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
@@ -4162,7 +4162,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "c5a732a0879339b33d3389c4e3010fa98f82018e9316bb4e2b4d666343b090b9",
+      "sha256": "441a45d3199adc8d28f7f681e577cbcc6c3a2aa24accb99f64dccc5fb27cf2ea",
       "executable": false
     },
     "tests/studio-browser.mjs": {
