@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "08668d725ee658da62717e4a89e6c314b9a52855743fb5bd029c3e33e92b3e43",
+      "sha256": "4d82f966c2ba4abf5e814aaac7f117cadf05fbf7008b98d3818e9ba314d0b8c4",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "95b11857c6799abce7f88e9125ea5dc9c9c68d3c4aaee8d9cd67c07384a7899f",
+      "sha256": "bac278fe9ae45a77ab0c8c10045ec79a70fd0a01501f359ded8736146736c1f8",
       "executable": false
     },
     "DEMO.md": {
@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "be85726ac21f03ac5aee85c2356613b6cce794562cfed827fc268b1e699f9aad",
+      "sha256": "586516f7e928c0d4e3e3cf4e7bfb44d1bcd643ba77963e55a2b2c18646c08ed8",
       "executable": false
     },
     "docs/backup-and-restore.md": {
@@ -3057,6 +3057,10 @@
       "sha256": "82299c41a13247c3585ebd2b469e18607426df84f4ffc1732405902d7ac76a15",
       "executable": false
     },
+    "src/strap/domain/appointment-offers.ts": {
+      "sha256": "34695b1aeeb6118b2f097b48dd3b71ff964d8c7fb890df53c6881deee72c7b6e",
+      "executable": false
+    },
     "src/strap/domain/attendance.ts": {
       "sha256": "531d449b931ef19c29aa2ad0f2991cd02630f02f06ca20edd02e7979dfb942d8",
       "executable": false
@@ -3218,7 +3222,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "fcac34af07e2fbf2f981e6585e734e7799b6fda1a307e3d7e687d66dd0392b84",
+      "sha256": "b0dd0175ac43d1c7ff5d82b9d84b78ecf59e34dfa8755cd9cc6906864740908a",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -4158,7 +4162,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "2b89b4e5c84066b5e9cfa78bdf434bab87bbce1da96bcb4412c297533f0f39b9",
+      "sha256": "c5a732a0879339b33d3389c4e3010fa98f82018e9316bb4e2b4d666343b090b9",
       "executable": false
     },
     "tests/studio-browser.mjs": {

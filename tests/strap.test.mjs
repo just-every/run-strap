@@ -340,3 +340,54 @@ test('SCHED-003: concurrent publication commits one complete allocation and disp
     assert.equal((await h.state()).approvals.length, state.approvals.length)
   }
 }))
+
+
+test('Private appointment offers retain overlapping alternatives and recheck live resources without reservations or money', () => run(async h => {
+  await h.cmd('studio.save',{location:'Park Slope',timeZone:'America/New_York'});
+  const coach = await h.person('Priya','instructor'), member = await h.person('Alex');
+  const monday = week(), at = (hour,minute=0) => `${monday}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00Z`;
+  const input = {service:'Private Mat',start:at(10),durationMinutes:60,instructorId:coach.id,room:' Main   Studio ',equipment:[' Tower ','tower'],bufferAfterMinutes:15,requestId:'synthetic-strap-appointment-1'};
+  const left = await h.cmd('appointment.offer.save',input);
+  const right = await h.cmd('appointment.offer.save',{...input,start:at(10,30),requestId:'synthetic-strap-appointment-2'});
+  assert.deepEqual([left.end,left.room,left.equipment,left.capacity,left.locationId,left.timeZone],[at(11).replace('Z','.000Z'),'Main Studio',['tower'],1,'studio','America/New_York']);
+  assert.equal((await h.cmd('appointment.offer.save',input)).id,left.id);
+  await h.cmd('appointment.offer.save',{...input,durationMinutes:30},h.owner,409);
+  for (const offer of [left,right]) {
+    const preview = await h.cmd('appointment.offer.preview',{id:offer.id});
+    assert.deepEqual([preview.available,preview.reserved,preview.paymentCollected,preview.bookingAvailable],[true,false,false,false]);
+  }
+  const unavailable = await h.cmd('scheduling.unavailable.save',{resourceKind:'instructor',resourceId:coach.id,start:at(11,10),end:at(12),reason:'Private absence'});
+  let preview = await h.cmd('appointment.offer.preview',{id:left.id});
+  assert.equal(preview.available,false,'cleanup buffer blocks the offer');
+  assert.equal(preview.blockers.find(b=>b.id===unavailable.id).reason,'Private absence');
+  await h.cmd('scheduling.unavailable.remove',{id:unavailable.id});
+  assert.equal((await h.cmd('appointment.offer.preview',{id:left.id})).available,true);
+  const draft = await h.cmd('classes.prepare',{week:monday,classes:[{title:'Allocated class',start:at(10,15),end:at(11,15),capacity:4,instructorId:coach.id,room:'MAIN studio'}]});
+  await h.cmd('classes.publish',{id:draft.id});
+  preview = await h.cmd('appointment.offer.preview',{id:right.id});
+  assert.equal(preview.available,false,'a later publication invalidates prior availability');
+  assert.ok(preview.blockers.some(b=>b.id===draft.classes[0].id && b.resource.kind==='room'));
+  const overnight = await h.cmd('appointment.offer.save',{...input,start:at(2),requestId:'synthetic-strap-appointment-3'});
+  assert.equal(overnight.localDate,new Date(Date.parse(monday+'T12:00:00Z')-86400_000).toISOString().slice(0,10),'offer date follows its location clock');
+  const closure = await h.cmd('closure.prepare',{scope:'location',start:at(2),end:at(3),reason:'Private studio closure'});
+  await h.cmd('closure.confirm',{id:closure.id,impact:closure.impact.key});
+  assert.ok((await h.cmd('appointment.offer.preview',{id:overnight.id})).blockers.some(b=>b.kind==='location_closed' && b.id===closure.id));
+  const snapshot = (await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results;
+  for (const cookie of [member.cookie,coach.cookie,'']) {
+    for (const [name,fields] of [['appointment.offer.save',input],['appointment.offer.preview',{id:left.id}]]) {
+      await h.cmd(name,fields,cookie,cookie ? 403 : 401);
+    }
+  }
+  const key = await h.cmd('agent.create',{label:'Appointment preparation denied'});
+  for (const name of ['appointment.offer.save','appointment.offer.preview']) {
+    assert.equal((await h.send('/api/strap/agent/command',{name,input:{id:left.id}},'',{authorization:`Bearer ${key.token}`})).status,403);
+  }
+  assert.deepEqual((await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,snapshot,'denials never change product records');
+  const state = await h.state();
+  assert.equal(state.bookings.length,0);
+  assert.equal(state.charges.length,0);
+  assert.equal(state.payments.length,0);
+  assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first()).n,0);
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind='appointmentOffer'").first()).n,3);
+  assert.ok(!(await h.state(member.cookie)).classes.some(c=>c.id===left.id),'private offers are not published classes');
+}));

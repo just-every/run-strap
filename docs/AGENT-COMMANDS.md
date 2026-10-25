@@ -55,3 +55,10 @@ notice. Past/started visits remain, and a moved booking keeps its series identit
 Members use **Recurring reservations** on Classes; owners use the same controls on
 the member's People card. The owner acts for the booking right until STAFF-001.
 Agent keys cannot use these reservation commands.
+
+
+## Private appointment offer foundation
+
+The native human owner can call `appointment.offer.save` with `requestId`, `service`, ISO `start`, `durationMinutes` (5–600), `instructorId`, `room`, optional `locationId` (the original studio by default), `equipment`, `bufferBeforeMinutes` and `bufferAfterMinutes`. The end is derived from the duration. Offers are immutable alternatives: two overlapping offers may coexist, and an exact request replay returns the original offer; a changed replay is refused. Save the returned offer ID.
+
+`appointment.offer.preview` takes that `id` and rechecks current published allocations, unavailable intervals, instructor changes and applied location closures. Only the owner can save or preview these private offers. `available` describes current resource availability only; `reserved`, `paymentCollected` and `bookingAvailable` remain false. No seat, credit, deposit, payment or message results. Appointment reservation, member booking, rescheduling and collection remain SCHED-002 gaps; use the existing class workflow for released class bookings.

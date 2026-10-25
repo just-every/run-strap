@@ -1,3 +1,4 @@
+import { saveAppointmentOffer, previewAppointmentOffer } from './appointment-offers';
 import { previewRetentionHistory, importRetentionHistory } from './retention-history';
 import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
 import { grantRetailStaff, retailGrant, requireRetail } from './retail-records';
@@ -237,6 +238,8 @@ export const handlers = {
   'series.cancel.confirm':defineCommand(confirmSeriesCancellation,['owner']),
   'classes.prepare':defineCommand(prepareClasses,['owner','agent']),
   'classes.publish':defineCommand(publishClasses,['owner']),
+  'appointment.offer.save':defineCommand(saveAppointmentOffer,['owner']),
+  'appointment.offer.preview':defineCommand(previewAppointmentOffer,['owner']),
   'scheduling.unavailable.save':defineCommand(saveUnavailability,['owner']),
   'scheduling.unavailable.remove':defineCommand(removeUnavailability,['owner']),
   'pack.prepare':defineCommand(preparePack,['owner','agent']),
