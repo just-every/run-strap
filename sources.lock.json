@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/EXIT-EXPORT.md": {
-      "sha256": "2682c3ce7933e1991effcd4b8b2381baa6ce000a72325effec6b8d16c3771ea7",
+      "sha256": "c9a8cdd88d84dc3a3dbf21967c8ff2c75726a992fabca3793fbf48c53df32043",
       "executable": false
     },
     "docs/getting-started.md": {
@@ -3390,7 +3390,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "8c90bd287bf03d495cddc3d47b24af7e80c96bcf352dacf6123a352febabafd1",
+      "sha256": "dbc57ce6bcce01931f6d1bf745a377a78ede32674445a3ff5bef5525565352ac",
       "executable": false
     },
     "src/strap/forms.ts": {
@@ -4022,7 +4022,7 @@
       "executable": false
     },
     "tests/plan-entitlements.test.mjs": {
-      "sha256": "d4ad5e12aea42a30d222887511932d5d995db4ba7cee7841c4049236487cbd8a",
+      "sha256": "2d1c31477238d3c242475086f3f25eb061f2a9792071255c6f38e002d19bb469",
       "executable": false
     },
     "tests/preferences-browser.mjs": {

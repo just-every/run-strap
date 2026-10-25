@@ -339,6 +339,12 @@ test('Guest allowances: two monthly passes, payer-confirmed excess once, reset, 
   await h.cmd('pack.adjust',{id:rolling.id,creditsDelta:0,reason:'Guest allowance ended with the pack',requestId:'guest-expiry',revision:current.summary.revision,expiresAt:new Date(Date.parse(classes.get('next').start)-1000).toISOString()});
   await h.cmd('guest.preview',{guestId:rollGuests[4].id,classId:classes.get('next').id,packId:rolling.id},other.cookie,409);
 
+  const portable=await h.send('/api/strap/exit.json',undefined,h.owner);
+  assert.equal(portable.status,200);
+  const exportedSource=portable.value.tables.st_records.filter(row=>row.kind==='guestLeadSource').map(row=>JSON.parse(row.data)).find(source=>source.bookingId===first.id);
+  assert.deepEqual([exportedSource.personId,exportedSource.referrerId,exportedSource.leadId],[guests[0].id,host.id,inquiry.id]);
+  const exportedLead=JSON.parse(portable.value.tables.st_records.find(row=>row.id===inquiry.id).data);
+  assert.deepEqual([exportedLead.personId,exportedLead.referrerId],[guests[0].id,host.id]);
   if (process.env.STRAP_PROOF_DIR) await (await import('./guests-browser.mjs')).guestsBrowser(h,{host,guest:guests[0],packId:charged.id,classId:classes.get('g2').id});
 }));
 
