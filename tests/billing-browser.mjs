@@ -50,6 +50,8 @@ export async function billingBrowser(h,edge) {
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('signed')
       const [download]=await Promise.all([page.waitForEvent('download'),section.getByRole('link',{name:'Download readable agreement',exact:true}).click()])
       const copy=await readFile(await download.path(),'utf8');assert.ok(copy.includes(seed.member.name));assert.ok(copy.includes(agreement.documentHash))
+      const readable=await context.newPage()
+      try {await readable.setContent(copy);assert.equal(await readable.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await readable.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-readable-copy-${width}.png`),fullPage:true})}finally{await readable.close()}
       const launch=page.waitForRequest(r=>r.url().startsWith('https://checkout.stripe.com/'))
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor();await capture('stripe-handoff')
