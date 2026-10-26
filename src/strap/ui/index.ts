@@ -54,6 +54,8 @@ export async function renderApp(state: any, target: string, notice: { message?: 
   const todays = classesOn(state, studioToday(state)), now = currentClass(state, todays)
   const day = current === '/app' && desk ? dayNav(state, query) : `<p class="today-date"><span>${h(dayLong(studioToday(state)))}</span></p>`
   const checkIn = now ? `/app?class=${encodeURIComponent(now.id)}#class-${now.id}` : '/app'
-  const notices = `${bulkResult(notice)}${notice.error ? `<div class="notice error" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" role="status">${h(notice.message)}</div>` : ''}`
+  const handoff=notice.result?.result ?? notice.result;
+  const signingHandoff=handoff?.waiverId && handoff?.url?.startsWith('/intake/tablet/start?') ? `<div class="notice"><p>Open on a dedicated signed-out tablet within 15 minutes. Only this document is available.</p><a href="${h(handoff.url)}">Open private signing handoff</a></div>` : '';
+  const notices = `${signingHandoff}${bulkResult(notice)}${notice.error ? `<div class="notice error" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" role="status">${h(notice.message)}</div>` : ''}`
   return new Response(shell(state, current, title, topBar(state, day, checkIn), content, notices), { status: allowed ? 200 : 403, headers: current === '/app/security' ? { ...security, 'content-security-policy': security['content-security-policy'] + "; script-src 'self'; connect-src 'self'" } : security })
 }

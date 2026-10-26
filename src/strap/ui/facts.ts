@@ -53,7 +53,7 @@ export const packLeft = (p: any) => countsCredits(p) ? `${p.remaining} of ${p.cr
 export const creditsLeft = (p: any) => countsCredits(p) ? `${p.remaining} credits left` : packLeft(p)
 export const shortLeft = (p: any) => countsCredits(p) ? `${p.remaining} left` : packLeft(p)
 export const balance = (s: any, personId: string) => rows(s, 'balances').find(b => b.personId === personId)?.balanceCents ?? 0
-export const waiverSigned = (s: any, personId: string) => !s.waiver || rows(s, 'acknowledgements').some(a => a.personId === personId && a.waiverId === s.waiver.id)
+export const waiverSigned = (s: any, personId: string) => !s.waiver || rows(s, 'acknowledgements').some(a => a.personId === personId && a.waiverId === s.waiver.id && (!s.waiver.requiresSignature || a.signature?.documentHash === s.waiver.documentHash))
 export const lastVisit = (s: any, personId: string) => rows(s, 'bookings').filter(b => b.personId === personId && b.checkedInAt).map(b => b.checkedInAt).sort().at(-1)
 export const packName = (p: any) => p.entitlement?.name ?? (p.entitlement?.kind === 'unlimited' ? 'Unlimited plan' : p.entitlement?.kind === 'visits' ? `${p.entitlement.visits}-visit ${p.entitlement.period === 'week' ? 'weekly' : 'monthly'} plan` : p.kind === 'drop-in' ? 'Drop-in' : `${p.credits}-class pack`)
 

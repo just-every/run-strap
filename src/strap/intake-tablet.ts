@@ -1,17 +1,19 @@
+import { requireTabletSigningAuthority, completeTabletSignature } from './signing-tablet';
+import { latestWaiver } from './domain/bookings';
 import { fontHead } from '../base/font-head';
 import { operatorAuth, type Bindings } from '../auth.server';
 import { loadSystem, Transaction } from './domain/store';
 import { id, insist, now, person, record, text, type RecordData } from './domain/types';
 import { requireMemberRecord } from './domain/member-records';
 import { submitIntake } from './domain/intake';
-import { h, hidden, textarea } from './ui/shared';
+import { field, h, hidden, textarea } from './ui/shared';
 
 export const tabletCookie='strap_intake_tablet';
 const tokenOf=(request: Request) => (request.headers.get('cookie') ?? '').split(/;\s*/).find(part => part.startsWith(tabletCookie+'='))?.slice(tabletCookie.length+1) ?? '';
 const hash=async(token: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(b => b.toString(16).padStart(2,'0')).join('');
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
 const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'strict-origin','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
-const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private intake · Strap</title><link rel="stylesheet" href="/rer-theme.css">${fontHead}<link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"><link rel="stylesheet" href="/brand/app/intake-tablet.css"></head><body><main class="intake-tablet page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
+const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private tablet · Strap</title><link rel="stylesheet" href="/rer-theme.css">${fontHead}<link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"><link rel="stylesheet" href="/brand/app/intake-tablet.css"></head><body><main class="intake-tablet page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
 export const lockedTablet=()=>page('<h1>Tablet locked</h1><p>This device has no access to member records. Ask studio staff to open the next intake form.</p>',403);
 /** A dedicated, signed-out tablet cannot reach native sign-in or private product doors. */
 export function intakeTabletGuard(request: Request) {
@@ -54,7 +56,9 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
     insist(/^[0-9a-f]{64}$/.test(secret),'tablet_unavailable',410);
     const row=await env.DB.prepare("SELECT * FROM st_intake_tablets WHERE token_hash=? AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND consumed_at IS NULL").bind(await hash(secret)).first<RecordData>();
     insist(row,'tablet_unavailable',410);
-    const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who),{launch,member,form}=liveLaunch(tx,row);
+    const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who);
+    if(tx.state.records.get(row.id)?.kind === 'waiverTabletLaunch')return await signingResponse(tx,row,path,request.method,input,secret,url);
+    const {launch,member,form}=liveLaunch(tx,row);
     await nativeCreatorActive(tx,launch);
     if(path === '/intake/tablet/start') {
       insist(!row.paired_at,'tablet_unavailable',410);
@@ -72,4 +76,25 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
     tx.put('intakeTabletLaunch',{...launch,status:'completed',completedAt:now()});await tx.commit();
     return page('<h1>Intake saved · tablet locked</h1><p>Your answers were saved. No member records are available here. Hand the tablet back to studio staff.</p>');
   }catch(error){const response=page('<h1>Tablet locked</h1><p>This form is unavailable or could not be saved. Ask studio staff for a new handoff. No member records are available here.</p>',Number((error as any).status)||500);response.headers.set('x-strap-refusal',(error as any).code ?? 'tablet_unavailable');return response;}
+}
+
+async function signingResponse(tx: Transaction,row: RecordData,path: string,method: string,input: Record<string,unknown>,secret: string,url: URL) {
+  const launch=record(tx.state,row.id,'waiverTabletLaunch'),member=person(tx.state,launch.personId),waiver=latestWaiver(tx.state);
+  insist(waiver && waiver.id===launch.waiverId && waiver.documentHash===launch.documentHash,'document_changed',409);
+  requireTabletSigningAuthority(tx,launch);
+  await nativeCreatorActive(tx,launch);
+  if(path==='/intake/tablet/start') {
+    insist(!row.paired_at,'tablet_unavailable',410);
+    if(method==='GET')return page(`<h1>Private document signing</h1><p>For ${h(member.name)} only. Open on a dedicated, signed-out tablet. No member records or earlier answers are available here.</p><form class="form" method="post" action="/intake/tablet/start">${hidden('token',secret)}<button class="btn" type="submit">Open this document</button></form>`);
+    tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN paired_at IS NULL AND consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));
+    tx.sql.push(tx.statement('UPDATE st_intake_tablets SET paired_at=? WHERE id=?',now(),row.id));await tx.commit();
+    return new Response(null,{status:303,headers:{location:'/intake/tablet','cache-control':'no-store','referrer-policy':'strict-origin','set-cookie':`${tabletCookie}=${secret}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900${url.protocol==='https:'?'; Secure':''}`}});
+  }
+  insist(row.paired_at,'tablet_unavailable',410);
+  if(method==='GET')return page(`<h1>Review your document</h1><p>For ${h(member.name)} · Version ${h(waiver.version)}</p><p class="letter">${h(waiver.text)}</p><p>This records your personal affirmation. It makes no claim of legal enforceability and does not authorize payment.</p><form class="form" method="post" action="/intake/tablet">${field('signerName','Your full name','','text','required maxlength="160"')}<label class="check"><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and personally affirm this exact document.</label><button class="btn" type="submit">Sign and lock tablet</button></form>`);
+  completeTabletSignature(tx,launch,input);
+  tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));
+  tx.sql.push(tx.statement('UPDATE st_intake_tablets SET consumed_at=? WHERE id=?',now(),row.id));
+  tx.put('waiverTabletLaunch',{...launch,status:'completed',completedAt:now()});await tx.commit();
+  return page('<h1>Document saved · tablet locked</h1><p>Your affirmation was saved. No member records are available here. Hand the tablet back to studio staff.</p>');
 }

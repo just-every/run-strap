@@ -15,7 +15,7 @@ export { promoteAll };
 export const latestWaiver = (state: State) => list(state,'waiver').sort((a,b) => a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1) ?? null;
 export function acknowledged(state: State, personId: string) {
   const waiver = latestWaiver(state);
-  return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id);
+  return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id && (!waiver.requiresSignature || a.signature?.documentHash === waiver.documentHash));
 }
 /** Packs that can seat this member in this class, earliest expiring first: a
  * credit or plan visit (PLAN-002 hours, upcoming cap and period visits), the
@@ -121,9 +121,12 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
   if (staff) staffReason(tx,input);
   tx.put('booking',cancelled); bookingHistory(tx,'cancel',booking,cancelled,input,{id:cancellationId,...(parentActionId ? {parentActionId} : {})}); promote(tx,entry); return cancelled;
 }
-export function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
+export async function publishWaiver(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
-  const waiver = {id:id(),text:text(input.text,'text',20_000),createdAt:now(),createdBy:tx.who.id,version:list(tx.state,'waiver').length+1};
+  insist(input.requiresSignature === undefined || typeof input.requiresSignature === 'boolean','invalid_signature_requirement');
+  const documentText = text(input.text,'text',20_000);
+  const documentHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(documentText)))].map(b => b.toString(16).padStart(2,'0')).join('');
+  const waiver = {id:id(),text:documentText,documentHash,requiresSignature:input.requiresSignature === true,createdAt:now(),createdBy:tx.who.id,version:list(tx.state,'waiver').length+1};
   tx.put('waiver',waiver); return waiver;
 }
 // Adapted latest-version receipt fence from Willow src/willow/documents.ts,
@@ -132,6 +135,20 @@ export function acknowledgeWaiver(tx: Transaction, input: Record<string,unknown>
   const member = actingMember(tx,input.participantId), waiver = latestWaiver(tx.state);
   insist(waiver && waiver.id === input.id,'not_latest_version',409);
   insist(!list(tx.state,'acknowledgement').some(a => a.personId === member.id && a.waiverId === waiver.id),'already_acknowledged',409);
-  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),actorId:tx.who.id,...(member.id !== tx.who.personId ? {signedBy:tx.who.personId} : {})};
+  let signature: Record<string,unknown> | null = null;
+  if(waiver.requiresSignature) {
+    insist(tx.who.role === 'member' && tx.who.personId,'member_signature_required',403);
+    insist(input.documentHash === waiver.documentHash,'document_changed',409);
+    insist(input.confirm === true,'signature_confirmation_required');
+    const signer = person(tx.state,tx.who.personId);
+    const signerName = text(input.signerName,'signerName',160);
+    insist(signerName === signer.name,'signer_name_mismatch');
+    const household = member.id !== signer.id ? list(tx.state,'household').find(h => h.guardianIds.includes(signer.id) && h.participantIds.includes(member.id)) : null;
+    signature = {method:'typed-affirmation',documentHash:waiver.documentHash,documentText:waiver.text,documentVersion:waiver.version,
+      signerPersonId:signer.id,signerName,signerEmail:signer.email,participantName:member.name,confirmed:true,channel:'member-account',
+      authority:household ? {kind:'recorded-guardian',householdId:household.id,revision:household.revision,evidence:{...household.guardianEvidence[signer.id]}} : {kind:'self'},
+      meaning:'Personal affirmation of this exact document; legal enforceability and payment authorization are not asserted.'};
+  }
+  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),actorId:tx.who.id,...(signature ? {signature} : {}),...(member.id !== tx.who.personId ? {signedBy:tx.who.personId} : {})};
   tx.put('acknowledgement',receipt); promoteAll(tx); return receipt;
 }

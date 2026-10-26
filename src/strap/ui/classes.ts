@@ -50,7 +50,7 @@ function editor(s: any, count: number) {
 function waiver(s: any) {
   const current = s.waiver
   const text = current ? `<p><span class="pill done">Version ${h(current.version ?? 1)}</span></p><p class="letter">${h(current.text)}</p>` : emptyLine('No waiver published. Publish one and members acknowledge it before they book.')
-  return panel('Waiver', `<div class="panel-body">${text}</div>${owner(s) ? `<details class="more"><summary>Publish a new version</summary><div class="panel-body"><p class="meta">Members acknowledge the new version before their next booking.</p>${form('waiver.publish', '/app/classes', textarea('text', 'Waiver text', '', 'required'), 'Publish new waiver version')}</div></details>` : ''}`, { icon: 'report' })
+  return panel('Waiver', `<div class="panel-body">${text}</div>${owner(s) ? `<details class="more"><summary>Publish a new version</summary><div class="panel-body"><p class="meta">Members acknowledge the new version before their next booking.</p>${form('waiver.publish', '/app/classes', textarea('text', 'Waiver text', '', 'required') + '<label class="check"><input type="checkbox" name="requiresSignature" value="yes">Require a personal typed signature</label>', 'Publish new waiver version')}</div></details>` : ''}`, { icon: 'report' })
 }
 
 export function classesPage(s: any, query: URLSearchParams) {

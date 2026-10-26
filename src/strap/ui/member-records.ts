@@ -1,3 +1,4 @@
+import { waiverLaunch } from './staff-actions'
 import { attendancePlanControls } from './attendance-plan'
 import { appointmentsPanel } from './appointments'
 import { intakeAnswersPanel } from './intake'
@@ -29,6 +30,7 @@ export function memberHistoryPanel(s:any,p:any,back:string) {
 export function memberRecordAccess(s:any) {
   const people=s.people.filter((p:any) => p.active && p.role === 'member');
   return panel('Member-record staff access',body('<p>Grant a front-desk identity access only to explicitly named member records. Restricted notes, duplicate merges and financial history stay owner-only. Revocation takes effect on the next request.</p>'
+    + form('waiver.signing.grant','/app/people',select('personId','Signing staff identity',people.map((p:any)=>[p.id,p.name]))+select('enabled','Signing check-in right',[['true','Grant'],['false','Revoke']])+'<fieldset><legend>Signing member scope</legend>'+people.map((p:any)=>`<label><input type="checkbox" name="member_${h(p.id)}" value="true"> ${h(p.name)}</label>`).join('')+'</fieldset><fieldset><legend>Signing location scope</legend>'+s.locations.map((l:any)=>`<label><input type="checkbox" name="location_${h(l.id)}" value="true"> ${h(l.name)}</label>`).join('')+'</fieldset>','Save signing launch access')
     + form('member.record.grant','/app/people',select('personId','Staff sign-in identity',people.map((p:any) => [p.id,p.name]))+select('enabled','Member-record right',[['true','Grant'],['false','Revoke']])+select('canCreate','May create new member profiles',[['false','No'],['true','Yes']])+'<fieldset><legend>Permitted member records</legend>'+people.map((p:any) => `<label><input type="checkbox" name="member_${h(p.id)}" value="true"> ${h(p.name)} · ${h(p.email)}</label>`).join('')+'</fieldset>'+hidden('requestId',crypto.randomUUID()),'Save member-record access')));
 }
 export function memberRecordDesk(s:any,query:URLSearchParams) {
@@ -36,6 +38,7 @@ export function memberRecordDesk(s:any,query:URLSearchParams) {
   const list=s.people.map((p:any) => `<li><a href="/app/people?person=${encodeURIComponent(p.id)}">${h(p.name)}</a> · ${h(p.email)}</li>`).join('');
   const profile=chosen?panel(chosen.name,body(`<p>${h(chosen.email)} · ${h(chosen.phone ?? 'No phone recorded')}</p>`
     + form('profile.save.staff',back,hidden('personId',chosen.id)+identity()+field('name','Full name',chosen.name,'text','required')+field('phone','Mobile phone',chosen.phone ?? '','tel')+field('emergencyName','Contact name',chosen.emergencyContact?.name ?? '')+field('emergencyPhone','Contact phone',chosen.emergencyContact?.phone ?? '','tel')+field('emergencyRelationship','Relationship',chosen.emergencyContact?.relationship ?? ''),'Save profile for member')
+    + (s.signingGrant?.enabled ? '<details class="more"><summary>Member waiver link</summary>'+waiverLaunch(s,chosen,back)+'</details>' : '')
     + form('member.record.invite',back,hidden('personId',chosen.id)+identity(),'Send account invitation')+memberHistoryPanel(s,chosen,back)+attendancePlanControls(s,chosen.id,back)+appointmentsPanel(s,chosen.id,back))):'';
   const create=s.recordGrant?.canCreate?panel('Create a member profile',body(form('member.record.create',back,identity()+field('name','Full name','','text','required maxlength="160"')+field('email','Email','','email','required')+field('phone','Mobile phone','','tel'),'Create member profile'))):'';
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Member records</h1><p>Only the member records explicitly assigned to you.</p></div>${panel('Assigned members',body('<ul>'+list+'</ul>'))}${profile}</div><aside class="rail">${create}</aside></div>`;

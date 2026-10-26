@@ -1,3 +1,4 @@
+import { requireSigningLaunch } from './signing-access';
 import { feeStatus } from './fees';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -27,7 +28,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   return target ? structuredClone(target) : null;
 }
 export function staffAfter(name: string, result: RecordData) {
-  if(name === 'intake.tablet.launch') return Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'url')) as RecordData;
+  if(name === 'intake.tablet.launch' || name === 'waiver.tablet.launch') return Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'url')) as RecordData;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(result);
   if (name === 'notice.dismiss.staff') return noticeEffect(result);
   return structuredClone(result);
@@ -66,7 +67,7 @@ export function dismissForMember(tx: Transaction, input: Record<string,unknown>)
   tx.put('notice',updated); return updated;
 }
 export function launchWaiver(tx: Transaction, input: Record<string,unknown>, context: {origin?: string} = {}) {
-  humanOwner(tx.who);
+  requireSigningLaunch(tx.state,tx.who,input.personId,String(input.locationId??'studio'));
   const connection = memberMail(tx.state);
   insist(!connection || connection.origin === context.origin,'member_email_reconnect_required',409);
   const member = person(tx.state,input.personId), waiver = latestWaiver(tx.state);

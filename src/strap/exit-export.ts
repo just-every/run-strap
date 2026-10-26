@@ -198,7 +198,7 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
       provenance: { jobs: 'ik_jobs', originals: 'ik_originals', originalChunks: 'ik_d1_original_chunks',
         sourceIdentities: 'ik_sources', effects: 'ik_provenance', history: 'ik_d1_history', batches: 'ik_batches' },
       actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no native auth identities are exported. Member-record grants travel as attributed studio data only and grant no authority to an independent receiver.',
-      documents: { waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
+      documents: { typedAffirmations: 'st_records kind=acknowledgement data.signature retains exact text, SHA-256, signer, authority and tablet provenance; not a legal-enforceability or payment-authorization claim', waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
         signedWaivers: { status: 'not_implemented', files: [] }, media: { status: 'not_implemented', files: [] },
         acknowledgementMeaning: 'Receipt of an exact waiver version; not a signature or signed waiver.' },
       providers: { connections: [], status: 'No studio billing or message-delivery connections exist in the current schema.',

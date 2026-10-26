@@ -99,7 +99,7 @@ export function memberHistory(state: State,who: Actor,personId: string) {
     .filter(e => who.role === 'owner' || (['profileChange','memberMessage','memberInvitation'].includes(e.kind) || (e.kind === 'staffAction' && ['member.record.create','profile.save.staff','member.record.invite','member.message.send.staff'].includes(e.record.command)))).sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
   return {personId:member.id,profile:profileOf(state,member),sourceIdentities:ids.map(key => person(state,key,false)),timeline,
     notes:who.role === 'owner' ? own('memberNote') : [],preferences:own('memberPreference').map(p => visiblePreferences(p,who)),
-    packs:who.role === 'owner' ? own('pack') : own('pack').map(deskPack),bookings:who.role === 'owner' ? own('booking') : own('booking').map(deskBooking),waivers:own('acknowledgement'),
+    packs:who.role === 'owner' ? own('pack') : own('pack').map(deskPack),bookings:who.role === 'owner' ? own('booking') : own('booking').map(deskBooking),waivers:own('acknowledgement').map(r=>who.role==='owner'?r:{id:r.id,personId:r.personId,waiverId:r.waiverId,createdAt:r.createdAt}),
     ledger:who.role === 'owner' ? [...own('charge').map(r => ({...r,kind:'charge'})),...own('payment').map(r => ({...r,kind:'payment'}))] : [],
     merges:who.role === 'owner' ? list(state,'memberMerge').filter(m => ids.includes(m.sourceId) || ids.includes(m.targetId)) : []};
 }
