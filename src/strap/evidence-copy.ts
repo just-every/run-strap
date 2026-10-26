@@ -109,7 +109,7 @@ async function dispatchCopy(env: Bindings,row: CopyRow,secret: string): Promise<
 }
 
 const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
-const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Private document copy</title><style>body{max-width:640px;margin:48px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif}button{font:inherit;padding:12px 20px}</style></head><body><main>${body}</main></body></html>`,{status,headers});
+const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="same-origin"><title>Private document copy</title><style>body{max-width:640px;margin:48px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif}button{font:inherit;padding:12px 20px}</style></head><body><main>${body}</main></body></html>`,{status,headers:{...headers,'referrer-policy':'same-origin'}});
 /** A capability door independent of native accounts; it never grants private navigation. */
 export async function evidenceCopyResponse(request: Request,env: Bindings): Promise<Response> {
   try {
