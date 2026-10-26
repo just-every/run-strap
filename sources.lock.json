@@ -561,6 +561,10 @@
       "sha256": "9c8fa5f94c48a230f326cd4d666cbc2bd1e7d5a18327b89e65b339ac6a533d9a",
       "executable": false
     },
+    "migrations/core/0035-sms-test.sql": {
+      "sha256": "24400da96b5f1c9e4e01ba33d174b6b3d677cd95f28d2bf569a70204d61d196f",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "5835eaca766b9cddadaa3560763aa840dc4206e4cf87df6b1798e971627d1c0c",
       "executable": false
@@ -3541,6 +3545,22 @@
       "sha256": "cb688345c4172a11f9e24379ad34dd93ead366480bc18a152264538f1b2b4bce",
       "executable": false
     },
+    "src/strap/twilio/config.ts": {
+      "sha256": "7849bf27b73f3310525f30c86fa9f5dcad24c95b92d6b7ece97f4d52c9c3a094",
+      "executable": false
+    },
+    "src/strap/twilio/signature.ts": {
+      "sha256": "1c5479bbe0b26e203f0ba8d551d04ae625dd3ddc200dfe0da40c6ec054c4c15d",
+      "executable": false
+    },
+    "src/strap/twilio/test-transport.ts": {
+      "sha256": "e7ac191afabbbb2f43e148673472a8af94786bc2cea502b5e67bf36894ceb7dc",
+      "executable": false
+    },
+    "src/strap/twilio/webhooks.ts": {
+      "sha256": "2b4f31489fff5eb0ffb9fc0146a67f2421b1ed672b02434a8e5d0fb3823043bf",
+      "executable": false
+    },
     "src/strap/ui/agent.ts": {
       "sha256": "0e387375f9c6c768881664616a19469f486a71035f1f846bfbfa36f2eca2d0b5",
       "executable": false
@@ -3783,6 +3803,10 @@
     },
     "src/strap/ui/shell.ts": {
       "sha256": "9d4959bff728e264e3558e9244cbbdb484cd72cd73c1a5712a344c6474562118",
+      "executable": false
+    },
+    "src/strap/ui/sms-test.ts": {
+      "sha256": "c1b29e3b557524e705e86ba98ee1b4e4f975eca8258605149317e6eeb01c2f61",
       "executable": false
     },
     "src/strap/ui/spots.ts": {
@@ -4185,6 +4209,14 @@
       "sha256": "90e78b614506a593c3fd340af92f749a777ded9f769e0aaa9ba68aad16d0b370",
       "executable": false
     },
+    "tests/sms-test-browser.mjs": {
+      "sha256": "a39e70c9b5e6adf5c9f7b56262e65e65fee248e63abe32354aa62cc7072307ef",
+      "executable": false
+    },
+    "tests/sms-test-cases.mjs": {
+      "sha256": "ef604d65520441b00f0ebcfc98e2d5c7488258989dbc3dcd6589bbebae26f1e8",
+      "executable": false
+    },
     "tests/spots-browser.mjs": {
       "sha256": "64b04fb282ad50904ca1374e3d0fbe8f53205cb5037ce85c3cbd679c5c1bf4e1",
       "executable": false
@@ -4239,6 +4271,10 @@
     },
     "tests/tuition-browser.mjs": {
       "sha256": "c44c0289d02cac15f016e42a779fe0b8af4bb65eecb2155c1eb8fb115ac196f7",
+      "executable": false
+    },
+    "tests/twilio-test-sandbox.mjs": {
+      "sha256": "ecc5a5d9a93f5dd075a532aa0bc8ce25d5c19bbc80550fc41664e294da9d40b5",
       "executable": false
     },
     "tests/waitlist-browser.mjs": {
