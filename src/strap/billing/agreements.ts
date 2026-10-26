@@ -1,3 +1,4 @@
+import { membershipDocument } from './document';
 import { contractCopy } from '../domain/contract-copies';
 import { humanOwner, id, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
 import type { Transaction } from '../domain/store';
@@ -21,7 +22,7 @@ export async function prepareAgreement(tx: Transaction,input: Record<string,unkn
   const agreementId = id(), revocationPath = '/app/packs#billing-'+agreementId;
   const financialTerms = {currency:'usd',amountCents:terms.amountCents,intervalMonths:terms.intervalMonths,firstDueAt:terms.nextRenewalAt,timeZone:terms.timeZone,servicePeriod:{startAt:pack.termStartAt ?? pack.createdAt,endAt:pack.expiresAt},eligibleServices:terms.eligibleServices ?? [],originalAgreementHash:copy.digest,revocationPath,
     meaning:'Permission for the stated future recurring amount only after personal Stripe method authorization. No setup payment is collected. Revocation stops future payment permission immediately; existing studio debt and access follow the original agreement. No miscellaneous staff charge, fee, price increase, ACH debit or guardian authority is granted.'};
-  const documentVersion = 1, documentText = source.title+'\n\n'+source.documentText+'\n\nOriginal studio invoice agreement:\n'+canonical(copy.document)+'\n\nSeparate recurring-payment permission:\n'+canonical(financialTerms);
+  const documentVersion = 1, documentText = membershipDocument(source.title,source.documentText,copy.document,financialTerms);
   const saved = {id:agreementId,personId:member.id,termsId:terms.id,termsKey:terms.key,amountCents:terms.amountCents,intervalMonths:terms.intervalMonths,priceDisclosureId:terms.currentPriceDisclosureId ?? null,requestId,requestBasis:canonical(source),title:source.title,documentText,documentVersion,documentHash:await sha256Hex(documentText),originalAgreement:copy.document,originalAgreementHash:copy.digest,financialTerms,financialHash:await digest(financialTerms),agreementAffirmation,mandateAffirmation,
     adultEvidenceReference:source.adultEvidenceReference,adultVerifiedBy:tx.who.id,createdBy:tx.who.id,createdAt:now(),sellingStaffId:tx.who.id,status:'awaiting-member',signature:null};
   tx.put('billingAgreement',saved);

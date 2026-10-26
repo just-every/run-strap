@@ -3066,7 +3066,7 @@
       "executable": false
     },
     "src/strap/billing/agreements.ts": {
-      "sha256": "3af6942fa88b960e1b007a3ffd9d3b931f58e94106886465d304a8bb24c025ec",
+      "sha256": "896f9237762a3aaaa5ea96c471bb67af65bd668a55ae91c996a9568248b16f96",
       "executable": false
     },
     "src/strap/billing/index.ts": {
@@ -3678,7 +3678,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "027d29dd0a01ecea4a756d6175823b2d9a6c8a81391dd6a7cd282f24926705f1",
+      "sha256": "7527c5e47fe643066f8ab0eab58bae64ec2b95673422ab9e22e7608d17022410",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
