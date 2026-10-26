@@ -3510,7 +3510,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "ca968c9c5669380dcff7574b3527a926042170d1d31f2bb11d8affd69dab3b83",
+      "sha256": "ec37ba4c12010b6b755c2754d4081bfccaf064b861fbbb949e46635088cbf832",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3786,7 +3786,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "d7d5792c6e74c76b438bc5c22b4902fde7bc737b20fdbbc9ae265339f6e5335b",
+      "sha256": "81bbba97a9f2f93e2ecb882e15a2a3a9ba3e335d96900015f0178d570881fe4d",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
