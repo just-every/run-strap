@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { run } from './harness.mjs'
 import { totp } from './mfa-helpers.mjs'
+import { financeRestatement } from './finance-restatement.mjs'
 import { financeExclusions } from './finance-exclusions.mjs'
 import { assertFinanceDownloads as assertDownloads } from './finance-downloads.mjs'
 
@@ -102,11 +103,11 @@ export async function financeTiming() {
     }
     await assertDownloads(h,owner,feb)
     if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2032-02'})
-    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish})
+    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift})
   },{mfa:false})} finally {await writeFile(path+'.new',original);await rename(path+'.new',path)}
 }
 
-async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish}) {
+async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift}) {
   const freezeType=await cmd('freeze.type.save',{name:'Travel',reason:'Agreed leave',feeCents:1234,defaultLengthDays:5,maxLengthDays:30})
   const preview=await cmd('freeze.prepare',{packId:ten.pack.id,freezeTypeId:freezeType.id,startAt:'2032-03-15',endAt:'2032-03-20',requestId:key(),channel:'desk'})
   assert.equal((await read('2032-03')).rows.find(r=>r.id===ten.charge.id).earnedCents,2000,'an unconfirmed freeze never changes recognition')
@@ -165,6 +166,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})
   await timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember})
   await financeExclusions(h,{cmd,state,read,jump,buy,key,people,coach,publish})
+  await financeRestatement(h,{cmd,state,read,jump,buy,key,people,coach,publish,retail,gift})
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)

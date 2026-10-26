@@ -3081,6 +3081,10 @@
       "sha256": "f68ef86ef2f89f233f1a561c374f4626501080c1ad51b4c5816c36ea31d05dc9",
       "executable": false
     },
+    "src/strap/billing/launch.ts": {
+      "sha256": "f9fad923bfcbc3598b34789cc440b757a72d1f10198687da3020e9b355efe220",
+      "executable": false
+    },
     "src/strap/billing/model.ts": {
       "sha256": "8c31cd3f8a5403785eb0a88d9571de1a412ce3d569cbf2e97baca02e24eec71f",
       "executable": false
@@ -4149,8 +4153,16 @@
       "sha256": "e2e0905a7fe8d382e6a9e0ba28c78dcbde47aec6f9b14c2d8fdefbc7f0f27770",
       "executable": false
     },
+    "tests/finance-downloads.mjs": {
+      "sha256": "b41abefa60c2a156530a4f1878972f44c85df1249b6c67e5f3b9b9606528e542",
+      "executable": false
+    },
+    "tests/finance-exclusions.mjs": {
+      "sha256": "95ebeeb77538c0a1baf7102075eed42f6f7c14e579c2c0f0bdaaeaf2c43168f6",
+      "executable": false
+    },
     "tests/finance-timing.mjs": {
-      "sha256": "db0fea4b2de24a45e7c8f6d81a99a25230b3ddd18f6955b191260c3b3374e3d6",
+      "sha256": "1388e697a833c2fcf5be027cb9083d35b5e8db481de4c75638df17a7aad0c7ef",
       "executable": false
     },
     "tests/fixtures/members.csv": {
