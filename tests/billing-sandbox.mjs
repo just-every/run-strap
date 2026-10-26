@@ -39,6 +39,54 @@ export function billingEdge() {
   return {calls,outbound,setComplete:v=>complete=v,setUncertain:v=>uncertain=v,setLive:v=>live=v};
 }
 
+async function actualHostedSetup(h,agreement,member) {
+  const { chromium }=await import('@playwright/test');
+  const { readFile,mkdir }=await import('node:fs/promises');
+  const { join,extname }=await import('node:path');
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
+  try {
+    const context=await browser.newContext({viewport:{width:390,height:1000}});
+    try {
+      const at=member.cookie.indexOf('=');await context.addCookies([{name:member.cookie.slice(0,at),value:member.cookie.slice(at+1),url:h.origin}]);
+      await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()});
+      const page=await context.newPage();page.setDefaultTimeout(45000);
+      await page.goto(h.origin+'/app/packs#billing');
+      const section=page.locator('[data-billing-agreement="'+agreement.id+'"]');
+      await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click();
+      await page.waitForURL(url=>url.hostname === 'checkout.stripe.com');
+      const snapshot=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
+      const setup=snapshot.setups.find(s=>s.agreementId === agreement.id);assert.ok(setup);
+      const start=snapshot.operations.find(o=>o.resultId === setup.id);assert.ok(start);
+      // The synthetic authenticated member enters Stripe's published TEST card in
+      // Stripe-hosted fields. Neither Strap nor its staff receives those fields.
+      const field=async(selector,value,required=true)=>{
+        for(const frame of page.frames()) {
+          const input=frame.locator(selector).first();
+          if(await input.count() && await input.isVisible()) {await input.fill(value);return;}
+        }
+        if(required)throw new Error('Hosted test field unavailable: '+selector);
+      };
+      await page.locator('#email, input[name="email"]').first().waitFor({state:'visible'});
+      await field('#email, input[name="email"]',member.email);
+      await field('#cardNumber, input[name="cardNumber"]','4242424242424242');
+      await field('#cardExpiry, input[name="cardExpiry"]','12/34');
+      await field('#cardCvc, input[name="cardCvc"]','123');
+      await field('#billingName, input[name="billingName"]',member.name,false);
+      const country=page.locator('#billingCountry, select[name="billingCountry"]').first();
+      if(await country.count() && await country.isVisible())await country.selectOption('US');
+      await field('#billingPostalCode, input[name="billingPostalCode"]','98104',false);
+      await page.locator('button[type="submit"]').click();
+      await page.waitForURL(url=>url.origin === h.origin,{timeout:90000});
+      const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete'},member.cookie);
+      assert.equal(verified.result.last4,'4242');assert.equal(verified.result.livemode,false);
+      await page.goto(h.origin+'/app/packs#billing');
+      await section.getByText(/visa ending 4242/).waitFor();
+      if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await section.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-method-390.png')});}
+      return {setup,start,method:verified.result};
+    } finally {await context.close();}
+  } finally {await browser.close();}
+}
+
 async function sandbox() {
   const key=process.env.STRAP_STRIPE_TEST_KEY;
   assert.ok(key && /^(?:sk|rk)_test_/.test(key),'Held Stripe TEST key required through the environment helper');
@@ -49,18 +97,24 @@ async function sandbox() {
     const connection=await billingSucceeded(h,'billing.connect',{accountId:account.id,mode:'test',confirm:true,requestId:'synthetic-strap-10'});
     const agreement=await h.cmd('billing.agreement.prepare',seed.prepare);
     await h.cmd('billing.agreement.accept',acceptance(agreement),seed.member.cookie);
-    const input={id:agreement.id,requestId:'synthetic-strap-11'};
-    const setup=await billingSucceeded(h,'billing.setup.start',input,seed.member.cookie);
-    assert.equal(new URL(setup.launchURL).hostname,'checkout.stripe.com');
+    const ledgerBefore=await h.state();
+    const actual=process.env.STRAP_BILLING_HOSTED_PROOF === '1';
+    const hosted=actual?await actualHostedSetup(h,agreement,seed.member):null;
+    const input={id:agreement.id,requestId:hosted?.start.requestId ?? 'synthetic-strap-11'};
+    const setup=hosted?{result:hosted.setup}:await billingSucceeded(h,'billing.setup.start',input,seed.member.cookie);
+    if(!actual)assert.equal(new URL(setup.launchURL).hostname,'checkout.stripe.com');
     const before=edge.filter(e=>e.method === 'POST').length;
     const replay=await h.cmd('billing.setup.start',input,seed.member.cookie);assert.equal(replay.result.id,setup.result.id);assert.ok(!replay.launchURL);assert.equal(edge.filter(e=>e.method === 'POST').length,before);
-    const incomplete=await h.cmd('billing.setup.complete',{id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-12'},seed.member.cookie);
-    assert.equal(incomplete.status,'incomplete');
+    if(!actual) {
+      const incomplete=await h.cmd('billing.setup.complete',{id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-12'},seed.member.cookie);
+      assert.equal(incomplete.status,'incomplete');
+    }
     const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
-    assert.equal(state.methods.length,0);assert.equal(state.mandates[0].methodAuthorized,false);
+    assert.equal(state.methods.length,actual?1:0);assert.equal(state.mandates[0].methodAuthorized,actual);
     await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
     assert.equal((await h.send('/api/strap/command',{name:'billing.setup.complete',input:{id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-13'}},seed.member.cookie)).status,409);
-    console.log(JSON.stringify({at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:false,storedMethodAuthorized:false,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
+    const ledgerAfter=await h.state();assert.deepEqual(ledgerAfter.charges,ledgerBefore.charges);assert.deepEqual(ledgerAfter.payments,ledgerBefore.payments);
+    console.log(JSON.stringify({at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,setupIntentId:hosted?.method.setupIntentId ?? null,paymentMethodId:hosted?.method.paymentMethodId ?? null,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:actual,storedMethodAuthorized:actual,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:actual?'Synthetic member completed real Stripe-hosted TEST method authorization; recurring collection remains unproved':'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
   },{auth:{STRIPE_BILLING_TEST_KEY:key},outbound:async request=>{
     const url=new URL(request.url);assert.equal(url.origin,'https://api.stripe.com');
     assert.ok(url.pathname === '/v1/account' || url.pathname.startsWith('/v1/checkout/sessions'));

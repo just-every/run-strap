@@ -10,6 +10,7 @@ import { getPlatformProxy } from 'wrangler'
 import { harness } from './harness.mjs'
 import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
+import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
 const exec = promisify(execFile)
 const cli = resolve('node_modules/@runeditrun/rer/global/rer.mjs')
 const command = async (cwd, args, expected = 0) => {
@@ -33,7 +34,7 @@ function assertWaiverDocuments(bundle,packages) {
   const records=bundle.tables.st_records.filter(row=>row.kind==='acknowledgement').map(row=>JSON.parse(row.data)).filter(receipt=>receipt.signature?.method==='typed-affirmation');
   const files=bundle.manifest.documents.typedAffirmationFiles;
   assert.equal(files.length,records.length*2);
-  assert.deepEqual(Object.keys(bundle.files).sort(),files.map(file=>file.path).sort());
+  assert.deepEqual(Object.keys(bundle.files).sort(),[...files,...bundle.manifest.documents.membershipAgreementFiles].map(file=>file.path).sort());
   for(const file of files) {
     assert.ok(file.path.startsWith('./documents/waivers/'),'artifact paths are explicit relative file paths');
     const content=bundle.files[file.path],bytes=Buffer.from(content,'utf8'),receipt=records.find(record=>record.id===file.receiptId);
@@ -52,15 +53,34 @@ function assertWaiverDocuments(bundle,packages) {
     assert.ok(!html.includes(evidence.document.text),'document markup is escaped, never executed');
   }
 }
+function assertAgreementDocuments(bundle,evidence) {
+  const inventory=bundle.manifest.documents.membershipAgreementFiles,records=bundle.tables.st_records.map(row=>({kind:row.kind,data:JSON.parse(row.data)}));
+  assert.equal(inventory.length,records.filter(row=>row.kind==='billingAgreement'&&row.data.signature?.method==='typed-affirmation').length*2);
+  for(const file of inventory) {
+    const agreement=records.find(row=>row.kind==='billingAgreement'&&row.data.id===file.agreementId)?.data,mandate=records.find(row=>row.kind==='paymentMandate'&&row.data.id===file.mandateId)?.data;
+    assert.ok(file.path.startsWith('./documents/membership-agreements/'));assert.ok(agreement);assert.ok(mandate);
+    assert.equal(file.termsId,agreement.termsId);assert.equal(file.personId,agreement.personId);assert.equal(file.signerPersonId,agreement.signature.signerPersonId);assert.equal(file.sellingStaffId,agreement.sellingStaffId);assert.equal(mandate.agreementId,agreement.id);
+    const bytes=Buffer.from(bundle.files[file.path],'utf8');assert.equal(file.bytes,bytes.length);assert.equal(file.sha256,createHash('sha256').update(bytes).digest('hex'));
+  }
+  const copies=inventory.filter(file=>file.agreementId===evidence.agreement.id),json=copies.find(file=>file.mediaType==='application/json'),html=copies.find(file=>file.mediaType==='text/html');
+  assert.ok(json);assert.ok(html);assert.deepEqual(JSON.parse(bundle.files[json.path]),evidence);
+  const copy=bundle.files[html.path],escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  for(const value of [evidence.agreement.documentText,evidence.agreement.documentHash,evidence.agreement.documentVersion,evidence.agreement.originalAgreementHash,evidence.agreement.signedAt])assert.ok(copy.includes(escape(value)));
+  for(const value of [evidence.agreement.signature,evidence.agreement.financialTerms,evidence.mandate])assert.ok(copy.includes(escape(JSON.stringify(value,null,2))),'agreement copy retains exact personal signature and separate payment permission');
+  assert.ok(!/<script\b|<iframe\b|<form\b|<link\b|\s(?:src|href|onclick)=/i.test(copy),'membership document markup is inert and self-contained');
+  assert.ok(!copy.includes(evidence.agreement.documentText));
+  return {json:bundle.files[json.path],html:copy};
+}
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
+  const paymentEdge=billingEdge(),billingAuth={STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'};
   try {
     for (const path of [source,restored,erased]) await checkout(path)
     await exec(process.execPath, [resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'], { cwd:source, env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'}, maxBuffer:2e6 })
-    h=await harness({root:source})
+    h=await harness({root:source,auth:billingAuth,outbound:paymentEdge.outbound})
     assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
     const p=await h.cmd('person.save',{name:'Temporary joiner',email:'temporary@venue.example',role:'member',active:false})
     // APP-003: a staff-entered emergency contact is the third party's personal data and follows the member.
@@ -121,6 +141,23 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const signedBefore=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,member.cookie);
     const guardianBefore=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,h.owner);
     await h.cmd('household.guardian.remove',{id:signingFamily.id,guardianId:signingGuardian.id,reason:'Authority ended before archive'});
+    const billingPack=(await h.state()).packs.find(pack=>pack.personId===member.id);
+    const billingPreview=await h.cmd('plan.recurring.prepare',{packId:billingPack.id,intervalMonths:1,requestId:'synthetic-strap-archive-billing-terms'});
+    const billingTerms=await h.cmd('plan.recurring.accept',{id:billingPreview.id,key:billingPreview.key},member.cookie);
+    const membership=await h.cmd('billing.agreement.prepare',{termsId:billingTerms.id,title:'Archived membership agreement',documentText:'Original agreed studio service.\n<agreement source="synthetic-strap-1">Care & separate consent.</agreement><script>throw new Error("synthetic agreement")</script>',adultVerified:true,adultEvidenceReference:'synthetic-strap-archive-adult-eligibility',requestId:'synthetic-strap-archive-billing-agreement'});
+    await h.cmd('billing.agreement.accept',acceptance(membership,member.name),member.cookie);
+    // Only the paid network edge is simulated; no collection or real provider completion is claimed.
+    await billingSucceeded(h,'billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-archive-billing-connect'});
+    const methodSetup=await billingSucceeded(h,'billing.setup.start',{id:membership.id,requestId:'synthetic-strap-archive-billing-setup'},member.cookie);
+    paymentEdge.setComplete(true);
+    const methodInput={id:membership.id,setupId:methodSetup.result.id,requestId:'synthetic-strap-archive-billing-complete'};
+    const methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
+    const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
+    assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
+    for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAlias.cookie)).status,404,'another member cannot download a membership agreement');
+    const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
+    assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
     // Installation-local provider authority is a credential edge, never portable studio data.
     const taxConnectionMarker='synthetic-strap-archive-tax-connection';
     await h.db.prepare('INSERT INTO st_tax_connections(id,connection_hash,connected_by,connected_at) VALUES(?,?,?,?)').bind('tax',taxConnectionMarker,(await h.state()).actor.id,new Date().toISOString()).run();
@@ -133,6 +170,9 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(taxConnectionMarker),'portable exit excludes installation-local tax execution authority');
     reconstructExit(portable,csv)
     assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value]);
+    const membershipCopies=assertAgreementDocuments(portable,membershipBefore.value);
+    assert.equal(membershipCopies.html,membershipHtmlBefore.text);
+    assert.ok(!('st_payment_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_BILLING_TEST_KEY));
     const adultCopy=portable.manifest.documents.typedAffirmationFiles.find(file=>file.receiptId===adultEvidence.id&&file.mediaType==='text/html');
     const guardianCopy=portable.manifest.documents.typedAffirmationFiles.find(file=>file.receiptId===guardianEvidence.id&&file.mediaType==='text/html');
     const adultHtmlBefore=await h.send('/api/strap/waiver-evidence.html?id='+adultEvidence.id,undefined,member.cookie);
@@ -143,14 +183,17 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner,...(h.mfaOwner ? [h.mfaOwner.secret,h.mfaOwner.recoveryCodes[0]] : [])]) assert.ok(!download.text.includes(value))
     assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
-    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner}
+    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner,port:Number(new URL(h.origin).port),outbound:paymentEdge.outbound},originalOrigin=h.origin;
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
     const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'));assert.ok(!bytes.includes('Excluded integration'),'API-002 integration keys never travel in the native archive')
     for (const value of [identity.factor.secret,...identity.factor.recoveryCodes,...factorMaterial]) assert.ok(!bytes.includes(value),'native archive excludes factor secrets and recovery codes')
     assert.ok(!bytes.includes(taxConnectionMarker),'native archive excludes the tax connection credential');
+    assert.ok(!bytes.includes(billingAuth.STRIPE_BILLING_TEST_KEY),'native archive excludes billing provider credentials');
     const archived = bytes.split('\n').filter(Boolean).map(JSON.parse)
+    assert.ok(!archived.find(row=>row.kind==='manifest').tables.some(table=>table.name==='st_payment_connections'),'native archive inventory excludes payment execution authority');
+    assert.ok(!archived.filter(row=>row.kind==='part').flatMap(row=>row.items).some(row=>row.kind==='row'&&row.table==='st_payment_connections'),'native archive payload excludes payment connections');
     assert.ok(!archived.find(row=>row.kind==='manifest').tables.some(table=>table.name==='st_tax_connections'),'native archive inventory excludes tax execution authority');
     assert.ok(!archived.filter(row=>row.kind==='part').flatMap(row=>row.items).some(row=>row.kind==='row'&&row.table==='st_tax_connections'),'native archive payload excludes the tax connection table');
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name.startsWith('st_mfa_')),'native archive inventory excludes all factor, passkey, recovery and challenge tables')
@@ -161,6 +204,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(rows(bytes).length>0);assert.deepEqual(rows(await readFile(again,'utf8')),rows(bytes))
     // Recover access through native sign-in; the old session never travels.
     h=await harness({root:restored,...identity})
+    assert.equal(h.origin,originalOrigin,'origin and provider key stay unchanged: restored methods lose the excluded execution authority');
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0,'native restore leaves stored methods disconnected');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,0,'native restore cannot reactivate excluded tax execution authority');
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
@@ -173,6 +218,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
     assertWaiverDocuments(restoredDownload.value,[signedBefore.value,guardianBefore.value]);
+    assert.deepEqual(assertAgreementDocuments(restoredDownload.value,membershipBefore.value),membershipCopies);
+    assert.deepEqual(restoredDownload.value.manifest.documents.membershipAgreementFiles,portable.manifest.documents.membershipAgreementFiles);
     assert.deepEqual(restoredDownload.value.files,portable.files,'native restore reproduces the exact JSON and readable document bytes');
     assert.deepEqual(restoredDownload.value.manifest.documents.typedAffirmationFiles,portable.manifest.documents.typedAffirmationFiles,'native restore retains stable document relationships and file integrity');
     const restoredReservations=await h.state(restoredOwner)
@@ -188,6 +235,17 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)
     const restoredMember=await h.signIn(member.email),restoredGuardian=await h.signIn(signingGuardian.email);
+    const restoredMembership=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,restoredMember),restoredMembershipHtml=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,restoredMember);
+    assert.equal(restoredMembership.status,200);assert.deepEqual(restoredMembership.value,membershipBefore.value);assert.equal(restoredMembershipHtml.status,200);assert.equal(restoredMembershipHtml.text,membershipHtmlBefore.text);
+    for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAliasCookie)).status,404,'native restore retains membership evidence privacy');
+    const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
+    assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.find(method=>method.id===methodResult.result.id).available,false);
+    assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
+    const providerCalls=paymentEdge.calls.length,financialBefore=await h.state(restoredOwner);
+    const restoredAttempt=await h.cmd('billing.setup.complete',{...methodInput,requestId:'synthetic-strap-archive-billing-restored'},restoredMember,409);
+    assert.equal(restoredAttempt.error,'billing_reconnection_required');
+    assert.equal(paymentEdge.calls.length,providerCalls,'restored provider IDs cannot execute without reviewed reconnection');
+    const financialAfter=await h.state(restoredOwner);assert.deepEqual(financialAfter.payments,financialBefore.payments);assert.deepEqual(financialAfter.charges,financialBefore.charges);
     const adultAfter=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,restoredMember);
     const guardianAfter=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,restoredOwner);
     assert.equal(adultAfter.status,200);assert.deepEqual(adultAfter.value,signedBefore.value,'MEM-005 native restore retains exact adult document, declaration and attribution');
@@ -228,14 +286,14 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(restoredState.bookings.find(b=>b.classId===seat.id&&b.personId===lee.id).status,'booked')
     assert.equal(restoredState.noticeDeliveries.find(d=>d.sourceKind==='confirmation'&&d.sourceId===first.id).status,'paused','new booking confirmations stay paused after restore')
     assert.equal(restoredState.noticeDeliveries.find(d=>d.sourceKind==='confirmation'&&d.personId===lee.id).status,'paused','waitlist confirmations also stay paused after restore')
-    assert.deepEqual(restoredState.noticeDeliveries.filter(d=>d.sourceKind!=='confirmation').map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',introMember.id,'not_configured'],['booking_action',member.id,'paused'],['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'series changes, cancellation and promotion email stay paused after restore')
+    assert.deepEqual(restoredState.noticeDeliveries.filter(d=>d.sourceKind!=='confirmation').map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',introMember.id,'not_configured'],['booking_action',member.id,'not_configured'],['booking_action',member.id,'paused'],['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'series changes, cancellation and promotion email stay paused after restore')
     assert.match((await h.state(lee.cookie)).notices.map(n=>n.subject).join(),/You're booked: Restored Reformer/)
     await h.cmd('mail.connect',{},restoredOwner)
     assert.doesNotMatch((await h.send('/app/studio',undefined,restoredOwner)).text,/Member email paused/)
     const closing=await h.cmd('closure.prepare',{scope:'class',classId:seat.id,reason:'Restored test'},restoredOwner)
     await h.cmd('closure.confirm',{id:closing.id,impact:closing.impact.key},restoredOwner)
     restoredState=await h.state(restoredOwner)
-    assert.deepEqual(restoredState.noticeDeliveries.filter(d=>d.sourceKind!=='confirmation').map(d=>d.status),['not_configured','paused','paused','paused','not_configured'])
+    assert.deepEqual(restoredState.noticeDeliveries.filter(d=>d.sourceKind!=='confirmation').map(d=>d.status),['not_configured','not_configured','paused','paused','paused','not_configured'])
     await h.close();h=null
     await command(restored,['import','--input',old,'--yes','--no-queue'],4)
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})

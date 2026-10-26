@@ -1,0 +1,17 @@
+# Additional membership agreements and test card setup
+
+The Membership agreements panel on Packs and payments supplements an existing member-accepted studio invoice agreement. It does not sell or activate a membership, change its price, authorize staff to sign for a member, or collect a payment. The complete staff sale and renewal target remains PARTIAL under BILL-014.
+
+Configure `STRIPE_BILLING_TEST_KEY` as an installation secret using the studio's Stripe test account. Complete owner MFA, enter the matching test account ID and explicitly review the connection. A changed key or origin disconnects execution. Connection authority is excluded from portable exports and native archives; even a same-origin restore with the same key requires a fresh reviewed connection.
+
+An owner prepares additional immutable membership text against already accepted recurring invoice terms. Preparation records the selling owner, exact original agreement, service period, price, interval, document version and SHA-256. The owner records adult eligibility evidence. Known recorded wards cannot use this adult financial flow; guardian, household, payer and staff status never confer financial signing authority.
+
+The member personally reads the exact text, types their name and separately confirms adulthood, their signature and the recurring-payment permission. The financial permission binds the exact amount, interval, first due date, original service period and revocation path. It grants no miscellaneous charge, fee increase, ACH authority or guardian authority. The member can download exact JSON and a standalone readable copy. This records personal typed evidence without certifying legal enforceability.
+
+Only that member opens Stripe-hosted test card setup. Staff never enter or receive raw payment details. Returning from Stripe alone does not establish authorization: the native completion command verifies a completed test Checkout setup session, a succeeded off-session SetupIntent, matching agreement metadata and a masked card. No payment is collected. Revoking future payment permission takes effect at the next request and preserves the original studio debt and historical consent.
+
+Provider operations reserve an exact native identity before the network request. Replays return retained outcomes without repeating a provider write. Pending or uncertain results are visible and never automatically retried. Restored provider identifiers are historical data and cannot authorize execution without reviewed connection authority.
+
+The public commands are `billing.connect`, `billing.agreement.prepare`, `billing.agreement.accept`, `billing.setup.start`, `billing.setup.complete` and `billing.mandate.revoke` through `/api/strap/command`. Authorized reads use `/api/strap/billing`, `/api/strap/billing/agreement.json` and `/api/strap/billing/agreement.html`, with the agreement ID in the query. The provider test journey is `node tests/billing-sandbox.mjs`; actual hosted test completion is explicitly enabled by `STRAP_BILLING_HOSTED_PROOF=1`. Held keys enter only through the fleet environment helper.
+
+The conservative owner preparation, verified-adult eligibility and personal adult financial-consent defaults await ct approval. Scoped staff sales, conversion and discounts, future starts, Terminal, ACH, locked device signing at sale, activation, first collection, renewals and commissions remain required by their original clauses.

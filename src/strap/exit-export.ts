@@ -1,5 +1,6 @@
 import { humanOwner, insist, type Actor } from './domain/types'
 import { assembleWaiverEvidence, renderWaiverCopy } from './waiver-evidence'
+import { assembleAgreementEvidence, renderAgreementCopy } from './billing'
 
 // Explicit custody allowlist: auth, provider configuration and work queues never enter this bundle.
 const tables = [
@@ -32,6 +33,17 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'manifest.documents.membershipAgreementFiles[].agreementId', to: 'st_records.id', kind: 'billingAgreement' },
+  { from: 'manifest.documents.membershipAgreementFiles[].termsId', to: 'st_records.id', kind: 'recurringTerms' },
+  { from: 'manifest.documents.membershipAgreementFiles[].mandateId', to: 'st_records.id', kind: 'paymentMandate' },
+  { from: 'manifest.documents.membershipAgreementFiles[].personId', to: 'st_people.id' },
+  { from: 'manifest.documents.membershipAgreementFiles[].signerPersonId', to: 'st_people.id' },
+  { from: 'manifest.documents.membershipAgreementFiles[].sellingStaffId', to: 'opaque native actor ID', note: 'Historical attribution only; authentication identities and execution authority are excluded.' },
+  { from: 'manifest.documents.membershipAgreementFiles[].path', to: 'files', note: 'UTF-8 contents keyed by the stable artifact path; bytes and SHA-256 cover those exact contents.' },
+  { from: 'st_records.data.agreementId', to: 'st_records.id', kind: 'billingAgreement', when: 'kind=paymentMandate or kind=billingSetup or kind=storedPaymentMethod or kind=billingOperation or kind=billingConsentEvent' },
+  { from: 'st_records.data.mandateId', to: 'st_records.id', kind: 'paymentMandate', when: 'kind=billingSetup or kind=storedPaymentMethod or kind=billingOperation or kind=billingConsentEvent' },
+  { from: 'st_records.data.setupId', to: 'st_records.id', kind: 'billingSetup', when: 'kind=storedPaymentMethod or kind=billingOperation' },
+  { from: 'st_records.data.methodId', to: 'st_records.id', kind: 'storedPaymentMethod', when: 'kind=paymentMandate or kind=billingSetup' },
   { from: 'manifest.documents.typedAffirmationFiles[].receiptId', to: 'st_records.id', kind: 'acknowledgement' },
   { from: 'manifest.documents.typedAffirmationFiles[].documentId', to: 'st_records.id', kind: 'waiver' },
   { from: 'manifest.documents.typedAffirmationFiles[].personId', to: 'st_people.id' },
@@ -171,6 +183,15 @@ function select(table: string, fields: string, primaryKey: string): string {
   return `SELECT json_object(${entries.join(',')}) AS exported_row FROM "${table}" ORDER BY ${order}`
 }
 
+/** JSON and readable copies share one byte-level integrity convention. */
+async function documentArtifacts(path: string,evidence: unknown,html: string,provenance: Row) {
+  return Promise.all([['json','application/json',JSON.stringify(evidence,null,2)+'\n'],['html','text/html',html]].map(async([extension,mediaType,content])=>{
+    const bytes=new TextEncoder().encode(content);
+    const sha256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+    return {content,manifest:{...provenance,path:`${path}.${extension}`,mediaType,encoding:'UTF-8',bytes:bytes.length,sha256}};
+  }));
+}
+
 /** Called only after the HTTP transport authenticates the native session.
  * This function independently rejects agents and rechecks current owner authority
  * in the same read transaction as the exported data. It performs no writes. */
@@ -197,16 +218,20 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
   const kinds: Record<string, number> = {}
   for (const row of data.st_records) kinds[String(row.kind)] = (kinds[String(row.kind)] ?? 0) + 1
   const records=new Map(data.st_records.map(row=>[String(row.id),{kind:row.kind,data:JSON.parse(String(row.data))}]));
-  const artifacts=(await Promise.all([...records.values()].filter(row=>row.kind==='acknowledgement' && row.data.signature?.method==='typed-affirmation').map(async({data:receipt})=>{
+  const waiverArtifacts=(await Promise.all([...records.values()].filter(row=>row.kind==='acknowledgement' && row.data.signature?.method==='typed-affirmation').map(async({data:receipt})=>{
     const document=records.get(receipt.waiverId);
     insist(document?.kind==='waiver' && receipt.personId && receipt.actorId && receipt.signature.signerPersonId,'exit_export_incomplete_waiver_evidence',500);
     const evidence=assembleWaiverEvidence(receipt,document.data);
-    return Promise.all([['json','application/json',JSON.stringify(evidence,null,2)+'\n'],['html','text/html',renderWaiverCopy(evidence)]].map(async([extension,mediaType,content])=>{
-      const bytes=new TextEncoder().encode(content);
-      const sha256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
-      return {content,manifest:{path:`./documents/waivers/${encodeURIComponent(receipt.id)}.${extension}`,mediaType,encoding:'UTF-8',bytes:bytes.length,sha256,receiptId:receipt.id,documentId:receipt.waiverId,personId:receipt.personId,signerPersonId:receipt.signature.signerPersonId}};
-    }));
+    return documentArtifacts(`./documents/waivers/${encodeURIComponent(receipt.id)}`,evidence,renderWaiverCopy(evidence),{receiptId:receipt.id,documentId:receipt.waiverId,personId:receipt.personId,signerPersonId:receipt.signature.signerPersonId});
   }))).flat();
+  const mandates=new Map([...records.values()].filter(row=>row.kind==='paymentMandate').map(row=>[row.data.agreementId,row.data]));
+  const agreementArtifacts=(await Promise.all([...records.values()].filter(row=>row.kind==='billingAgreement' && row.data.signature?.method==='typed-affirmation').map(async({data:agreement})=>{
+    const mandate=mandates.get(agreement.id);
+    insist(mandate && mandate.personId===agreement.personId && mandate.termsId===agreement.termsId && agreement.signature.signerPersonId && agreement.sellingStaffId,'exit_export_incomplete_billing_evidence',500);
+    const evidence=assembleAgreementEvidence(agreement,mandate);
+    return documentArtifacts(`./documents/membership-agreements/${encodeURIComponent(agreement.id)}`,evidence,renderAgreementCopy(evidence),{agreementId:agreement.id,termsId:agreement.termsId,mandateId:mandate.id,personId:agreement.personId,signerPersonId:agreement.signature.signerPersonId,sellingStaffId:agreement.sellingStaffId});
+  }))).flat();
+  const artifacts=[...waiverArtifacts,...agreementArtifacts];
   const bundle = {
     manifest: {
       format: 'strap-exit', version: 1, generatedAt: new Date().toISOString(),
@@ -216,10 +241,11 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
         sourceIdentities: 'ik_sources', effects: 'ik_provenance', history: 'ik_d1_history', batches: 'ik_batches' },
       actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no native auth identities are exported. Member-record grants travel as attributed studio data only and grant no authority to an independent receiver.',
       documents: { typedAffirmations: 'st_records kind=acknowledgement data.signature retains exact text, SHA-256, signer, authority and tablet provenance; not a legal-enforceability or payment-authorization claim', waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
-        typedAffirmationFiles: artifacts.map(file=>file.manifest),
+        typedAffirmationFiles: waiverArtifacts.map(file=>file.manifest),
+        membershipAgreementFiles: agreementArtifacts.map(file=>file.manifest),
         signedWaivers: { status: 'not_implemented', meaning: 'Full legally executed waivers remain unproved. Portable typed-affirmation copies are separately inventoried and make no legal-enforceability or payment-authorization claim.', files: [] }, media: { status: 'not_implemented', files: [] },
         acknowledgementMeaning: 'Receipt of an exact waiver version; not a signature or signed waiver.' },
-      providers: { connections: [], status: 'Historical provider records travel as data only. Stripe Tax test execution requires reviewed owner reconnection; its installation-local connection table is excluded.',
+      providers: { connections: [], status: 'Historical provider records travel as data only. Stripe Tax and payment method execution require reviewed owner reconnection; installation-local connection tables are excluded. Retained provider and method IDs are historical references, never execution authority.',
         receiver: 'Import records as data only. Configure and review any receiver billing or delivery connections separately before enabling outbound work.' },
       excluded: ['native authentication tables', 'sessions', 'sign-in links', 'agent keys', 'integration keys with their subscriptions and request logs', 'kiosk device tokens', 'secrets and provider credentials',
         'development outbox', 'import leases and transient staging/coordination tables'],

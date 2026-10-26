@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "1684fc61a54865072f3ec3aedd8db8f225dfe7824d92cbcf3d39f7a270c0e9c3",
+      "sha256": "23a6919b8737dc5518786aaa76677463b243709764de49883ca2c8b3bcff797e",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "76a191e46f5b5ddadf98468bd053c8c2d7e65d44ae6844c6bd811523820976f3",
+      "sha256": "e6ecd63f2f051691e261aeee52f49b84cddd91c9048e1b66e6db947ed8d95567",
       "executable": false
     },
     "DEMO.md": {
@@ -398,7 +398,7 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "729a7ba4a987768ca0037da15f178f40000e3a50f86df37b703fd32c22e01079",
+      "sha256": "0420ae882c0971243761c61571069e8c1fb6a580a3e4c6e72196d21f090252ca",
       "executable": false
     },
     "docs/SOURCES.md": {
@@ -579,6 +579,10 @@
     },
     "migrations/core/0037-tax-connection.sql": {
       "sha256": "00a3440110181c2cb02ec85694f1e92e7330a94d92fffe88c845580406b752d2",
+      "executable": false
+    },
+    "migrations/core/0038-payment-connection.sql": {
+      "sha256": "f446a90dbbb3fe2ec6b629cd3a27c10db9a9196fd9644ae57598052cc1cbf07c",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3057,6 +3061,26 @@
       "sha256": "76254140de1c7abd049e9a14d3b6f9a9cb19e2bb60db1db25eb05495d8741916",
       "executable": false
     },
+    "src/strap/billing/agreements.ts": {
+      "sha256": "3af6942fa88b960e1b007a3ffd9d3b931f58e94106886465d304a8bb24c025ec",
+      "executable": false
+    },
+    "src/strap/billing/index.ts": {
+      "sha256": "381e1b332fa955e15cdaba062235eb4b5f2bbf64af2d7cfecce1b9186ba36e06",
+      "executable": false
+    },
+    "src/strap/billing/model.ts": {
+      "sha256": "469ae56d90721f2ba8327e87717eef4ff2f1787b03d4ccd8cd90c3c39331a4b0",
+      "executable": false
+    },
+    "src/strap/billing/operations.ts": {
+      "sha256": "57810b0800a560942ddfe39b9ef805fa9c71aef1fc2a6770497a5b69b594e88d",
+      "executable": false
+    },
+    "src/strap/billing/provider.ts": {
+      "sha256": "bfccace8ba4e9680404ba33764553fc00b6a30f48e660816a133538d1e9cb4d7",
+      "executable": false
+    },
     "src/strap/cancellations.ts": {
       "sha256": "a6acd93272f3102574e2109fe9f6b9f7d039902542d4cd81e6e877f9f6cd8c74",
       "executable": false
@@ -3438,7 +3462,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "5f31f6280c72170a0c034b5a0f5d4cf2013e4dfe948e72d5117707eb03dfa2df",
+      "sha256": "689c0e98dc97c4357c299a22d5dc01337733c06ea1a0245562997c0fd77d083d",
       "executable": false
     },
     "src/strap/finance-refunds.ts": {
@@ -3643,6 +3667,10 @@
     },
     "src/strap/ui/attendance.ts": {
       "sha256": "229b0842185962619ba18491d04090e7f23fb832cea76e73ad3ed46d60f9bb55",
+      "executable": false
+    },
+    "src/strap/ui/billing.ts": {
+      "sha256": "0657723a36e8635a87fad571729f1416846bc755017a379630ed10285f44a4fb",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -3942,7 +3970,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "af8d24bdffd323c58e0abb086e74f7354e6bd56ca7b560b8b62cde8c25681029",
+      "sha256": "6c0f8cf3229dce76d2bafb129f156533e2f7a1556fb0c4412aa088e6502f65b1",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -3951,6 +3979,18 @@
     },
     "tests/attendance.test.mjs": {
       "sha256": "4b3336df0cee308df9c5099542b9f9aeffbee1b161d4b01c97bcbfbf49b95e28",
+      "executable": false
+    },
+    "tests/billing-agreements.test.mjs": {
+      "sha256": "aadad1f4971ddb488d0df5c37ef5da2f079657d87970d0574ef9103e7f197ec9",
+      "executable": false
+    },
+    "tests/billing-browser.mjs": {
+      "sha256": "5368745bc7495d4d1661bca89d355db11d032f44663ff5d28271cab4556dcdf8",
+      "executable": false
+    },
+    "tests/billing-sandbox.mjs": {
+      "sha256": "11675df035d0aa4262dee1cee92cd73e0e1ae8502c6c828162546e383a7753d4",
       "executable": false
     },
     "tests/booking-actions-browser.mjs": {

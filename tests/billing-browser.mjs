@@ -37,6 +37,8 @@ export async function billingBrowser(h,edge) {
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       const section=panel.locator('[data-billing-agreement="'+agreement.id+'"]')
       await section.getByText('Read the exact agreement and payment permission',{exact:true}).click()
+      await capture('member-review')
+      assert.equal(await section.locator('form[action*="name=billing.agreement.accept"]').count(),1,(await section.innerText()).slice(0,1500))
       const accept=section.locator('form[action*="name=billing.agreement.accept"]')
       await accept.getByLabel('Your full name',{exact:true}).fill(seed.member.name)
       for(const checkbox of await accept.getByRole('checkbox').all())await checkbox.check()
