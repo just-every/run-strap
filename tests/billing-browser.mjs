@@ -46,7 +46,7 @@ export async function billingBrowser(h,edge) {
       await accept.getByLabel('Your full name',{exact:true}).fill(seed.member.name)
       for(const checkbox of await accept.getByRole('checkbox').all())await checkbox.check()
       await capture('personal-consent')
-      await accept.getByRole('button',{name:'Sign agreement and grant separate payment permission',exact:true}).click()
+      await accept.getByRole('button',{name:'Sign and authorize',exact:true}).click()
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('signed')
       const [download]=await Promise.all([page.waitForEvent('download'),section.getByRole('link',{name:'Download readable agreement',exact:true}).click()])
       const copy=await readFile(await download.path(),'utf8');assert.ok(copy.includes(seed.member.name));assert.ok(copy.includes(agreement.documentHash))

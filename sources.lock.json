@@ -3469,6 +3469,10 @@
       "sha256": "689c0e98dc97c4357c299a22d5dc01337733c06ea1a0245562997c0fd77d083d",
       "executable": false
     },
+    "src/strap/finance-finite-refunds.ts": {
+      "sha256": "a535681da71751e51281ffc66477602de7634c81e0318fbe80aae2d43323e463",
+      "executable": false
+    },
     "src/strap/finance-refunds.ts": {
       "sha256": "cba37a35bf4e91da620b0ea7ebfcfbdd68d6efbbb7ac6f22406b9fb4eb18839d",
       "executable": false
@@ -3674,7 +3678,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "cb1b0216dffa6461ae49bee4f5aefd011d9b866fdb2594ce0b0453eb0b8179d1",
+      "sha256": "027d29dd0a01ecea4a756d6175823b2d9a6c8a81391dd6a7cd282f24926705f1",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -3990,11 +3994,11 @@
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "aa0abf56da6c496a67ad7429a262b59c72e7f15897dc6a82c28fbc583a434766",
+      "sha256": "78f1923125b092d68e57989956068214014bea44c3f32854e350f4179ae6c713",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {
-      "sha256": "d8e004e135c1a7d10a5340e34618299c13f6a3543ffbfbc177e1842b161c31a8",
+      "sha256": "52cecb982a88c5b302a36c6acf80d6896688270e9a490ec25a7e0d7546d08071",
       "executable": false
     },
     "tests/booking-actions-browser.mjs": {

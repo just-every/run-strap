@@ -24,7 +24,7 @@ export function billingPanel(s: any) {
     const outcome=latest?.status==='incomplete' ? '<p class="notice" role="status">Stripe has not confirmed this card setup yet. Finish the hosted form, then check again.</p>' : latest&&['pending','uncertain','failed'].includes(latest.status) ? `<p class="notice" role="status">Payment setup is ${h(latest.status)}. Ask the studio to review the provider outcome before starting another setup.</p>` : ''
     const signature=mine&&!a.signature ? form('billing.agreement.accept',back,hidden('id',a.id)+hidden('documentHash',a.documentHash)+hidden('financialHash',a.financialHash)
       +field('signerName','Your full name','','text','required maxlength="160" autocomplete="name"')+check('adultConfirmed','I confirm I am an adult signing for myself.')
-      +check('confirm',a.agreementAffirmation)+check('authorizeRecurring',a.mandateAffirmation),'Sign agreement and grant separate payment permission') : ''
+      +check('confirm',a.agreementAffirmation)+check('authorizeRecurring',a.mandateAffirmation),'Sign and authorize') : ''
     const setup=mine&&mandate?.status==='accepted'&&!mandate.methodAuthorized&&b.connected ? (!setups.length ? form('billing.setup.start',back,hidden('id',a.id)+request(),'Authorize a test card with Stripe')
       : setups.filter((v: any)=>v.status!=='completed').map((v: any)=>form('billing.setup.complete',back,hidden('id',a.id)+hidden('setupId',v.id)+request(),'Check Stripe authorization')).join('')) : ''
     const revoke=mine&&mandate?.status==='accepted' ? form('billing.mandate.revoke',back,hidden('id',a.id),'Revoke future payment permission','quiet') : ''

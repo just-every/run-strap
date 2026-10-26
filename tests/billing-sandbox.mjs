@@ -81,6 +81,8 @@ async function actualHostedSetup(h,agreement,member) {
       const country=page.locator('#billingCountry, select[name="billingCountry"]').first();
       if(await country.count() && await country.isVisible())await country.selectOption('US');
       await field('#billingPostalCode, input[name="billingPostalCode"]','98104',false);
+      const link=page.locator('#enableStripePass');
+      if(await link.count() && await link.isVisible() && await link.isChecked())await link.uncheck();
       await page.locator('button[type="submit"]').click();
       let returnNavigationCompleted=true;
       try { await page.waitForURL(url=>url.origin === h.origin,{timeout:45000,waitUntil:'commit'}); }
