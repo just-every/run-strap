@@ -101,7 +101,7 @@ export async function financeTiming() {
     }
     await assertDownloads(h,owner,feb)
     if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2032-02'})
-    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings})
+    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings,publish})
   },{mfa:false})} finally {await writeFile(path+'.new',original);await rename(path+'.new',path)}
 }
 
@@ -120,7 +120,7 @@ async function assertDownloads(h,owner,report) {
   for(const [metric,opening,period,closing] of sheets.find(s=>s.sheet==='Reconciliation').data.slice(1))assert.deepEqual([opening,period,closing],[report.opening[metric],report.period[metric],report.closing[metric]])
 }
 
-async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings}) {
+async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings,publish}) {
   const freezeType=await cmd('freeze.type.save',{name:'Travel',reason:'Agreed leave',feeCents:1234,defaultLengthDays:5,maxLengthDays:30})
   const preview=await cmd('freeze.prepare',{packId:ten.pack.id,freezeTypeId:freezeType.id,startAt:'2032-03-15',endAt:'2032-03-20',requestId:key(),channel:'desk'})
   assert.equal((await read('2032-03')).rows.find(r=>r.id===ten.charge.id).earnedCents,2000,'an unconfirmed freeze never changes recognition')
@@ -131,6 +131,9 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   const change=await cmd('plan.change.prepare',{packId:changed.pack.id,mode:'now',credits:8,amountCents:8000,effectiveAt:'2032-03-10T07:00:00Z',exceptionReason:'Member chooses fewer visits',requestId:key(),channel:'desk'})
   await cmd('plan.change.accept',{id:change.id,key:change.key},member.cookie)
   const refundSale=await buy({personId:refundedMember.id,kind:'credits',credits:10,amountCents:31000,expiresAt:'2032-04-01T07:00:00Z'})
+  const refundClass=await publish('2032-03-08T17:00:00Z','Refunded attended')
+  const refundBooking=await cmd('booking.book',{classId:refundClass.id},refundedMember.cookie)
+  await cmd('attendance.checkin',{id:refundBooking.id},coach.cookie)
   const receipt=await cmd('payment.record',{personId:refundedMember.id,amountCents:31000,reference:key()})
   await cmd('contract.prepayment.record',{packId:refundSale.pack.id,paymentId:receipt.id,chargeId:refundSale.charge.id,amountCents:31000,reference:key()})
   const proposal=await cmd('plan.recurring.prepare',{packId:refundSale.pack.id,intervalMonths:1,requestId:key()})
@@ -150,21 +153,27 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   assert.equal(after.closing.cashCents,before.closing.cashCents-1000)
   assert.equal(after.closing.refundPayableCents,due.amountCents-1000)
   assert.equal(after.closing.refundSettledCents,1000)
+  assert.equal(after.closing.earnedCents,before.closing.earnedCents)
+  assert.equal(after.closing.deferredCents,before.closing.deferredCents)
   assert.equal(after.closing.receivableCents,before.closing.receivableCents,'recorded refund never invents a new invoice receivable')
   assert.equal(after.sources.filter(r=>r.id===settlement.id).length,1)
   assert.equal(after.sources.find(r=>r.id===settlement.id).record.amountCents,1000)
   const frozen=after.rows.find(r=>r.id===ten.charge.id)
   assert.deepEqual([frozen.earnedCents,frozen.deferredCents,frozen.unusedPackCents,frozen.unclassifiedCents],[2000,18001,18001,0],'an access-only finite-pack freeze preserves the original price and quantity; its extension earns nothing')
-  for(const id of [changed.charge.id,refundSale.charge.id]){
+  for(const id of [changed.charge.id]){
     const row=after.rows.find(r=>r.id===id);assert.equal(row.unclassifiedCents,row.amountCents);assert.equal(row.earnedCents,0);assert.equal(row.deferredCents,0)
   }
   for(const charge of (await state()).charges.filter(c=>c.freezeId===preview.id||c.planChangeId===change.id)){
     const row=after.rows.find(r=>r.id===charge.id);assert.equal(row.unclassifiedCents,charge.amountCents);assert.ok(after.sources.some(r=>r.id===charge.id))
   }
+  const refunded=after.rows.find(r=>r.id===refundSale.charge.id),refundRow=after.rows.find(r=>r.id===due.id)
+  assert.deepEqual([refunded.earnedCents,refunded.deferredCents,refunded.unclassifiedCents],[3100,27900,0])
+  assert.deepEqual([refundRow.earnedCents,refundRow.deferredCents,refundRow.unusedPackCents,refundRow.unclassifiedCents],[0,-due.amountCents,-due.amountCents,0],'approved ordinary refund reduces unearned value, never inventing service or reducing original credits')
+  assert.equal(refundRow.serviceEnd,refundSale.draft.expiresAt)
   assert.equal(after.closing.reconciliationDifferenceCents,0)
   assert.equal((await read('2032-01')).rows.find(r=>r.id===ten.charge.id).earnedCents,2000,'later changes do not poison earlier monthly endpoints')
   const remaining=(await state()).packs.find(p=>p.id===refundSale.pack.id)
-  assert.equal(remaining.remaining,10);assert.equal(remaining.expiresAt,cancellation.effectiveAt)
+  assert.equal(remaining.remaining,9);assert.equal(remaining.expiresAt,cancellation.effectiveAt)
   assert.equal(after.rows.find(r=>r.id===refundSale.charge.id).serviceEnd,refundSale.draft.expiresAt,'unsupported recognition retains the original accepted service period')
   await assertDownloads(h,h.owner,after)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})

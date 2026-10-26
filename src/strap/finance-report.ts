@@ -5,6 +5,7 @@ import { halfUp } from './domain/plan-changes'
 import { localDate, localInstant } from './zone'
 import { csv, workbook, type Cell } from './spreadsheet'
 import { financeRefunds } from './finance-refunds'
+import { finiteRefundClassification } from './finance-finite-refunds'
 import { financeTax } from './finance-tax'
 
 export const financeDefinitions = [
@@ -12,7 +13,7 @@ export const financeDefinitions = [
   'Time-based plans recognize the original accepted price over the original accepted service interval, in elapsed milliseconds with cumulative half-up rounding. Finite packs recognize the original price per original credit only after an attended class has ended. Reservations, no-shows, forfeiture, expiry and manual credit reductions do not earn revenue. Attendance corrections restate prior periods; this is not a closed accounting journal.',
   'Deferred revenue includes unpaid invoiced service value; unused-pack liability is its finite-pack subset, never an additional liability. Receipt allocations are not invented. Gift liability follows signed gift entries; redemption is noncash settlement of a separate retail sale. Gift funding refunds reduce cash and gift liability once; returned gift tender restores liability without a cash refund.',
   'Retail sales and returns recognize their signed charge on recording. A finite pack with access-only freezes retains its original accepted price and original quantity; the freeze and its extension earn nothing. Other fees, changed plans, frozen time-based plans, cancellation credits and unsupported records remain unclassified for owner review. Original pack terms remain the recognition basis despite access or expiry adjustments. No automatic breakage recognition, tax calculation, tax exclusion or filing claim. Tax remains unavailable for every charge without retained BILL-012 classification and reversal evidence. Known provider-classified tax is shown separately, with its provider mode; a known zero is never substituted for an unclassified amount. Test provider evidence is not production tax readiness or filing evidence.',
-  'Opening and closing amounts are retained-record projections. Period earned revenue is closing earned less opening earned. Net cash plus the signed receivable balance must equal earned plus deferred plus gift liability plus unclassified value plus refund payable plus separately classified tax liability. Approved cancellation refunds remain distinct from invoice credits: known refund dues reduce unclassified value and establish a payable; recorded external settlements reduce cash and that payable once, using their recording instant. Unknown refund dues remain visible as unavailable, never zero; service-refund recognition remains unclassified. A nonzero reconciliation difference remains visible, including unsupported gift adjustments. No accounting posting, collection, refund or outbound action occurs on report reads.'
+  'Opening and closing amounts are retained-record projections. Period earned revenue is closing earned less opening earned. Net cash plus the signed receivable balance must equal earned plus deferred plus gift liability plus unclassified value plus refund payable plus separately classified tax liability. Approved cancellation refunds remain distinct from invoice credits: known refund dues reduce unclassified value and establish a payable; recorded external settlements reduce cash and that payable once, using their recording instant. Known ordinary finite-pack refunds reduce original unearned value when the approved refund does not exceed it and the pack has no changed consideration or mixed fee charges; completed service remains earned and original entitlements remain the calculation basis. The approved refund establishes a separate payable; settlement never earns value or changes service credits. Cooling-off allocations, mixed fees, changed consideration, refunds exceeding unearned value and unknown refund dues remain explicitly unclassified or unavailable, never assumed zero. A nonzero reconciliation difference remains visible, including unsupported gift adjustments. No accounting posting, collection, refund or outbound action occurs on report reads.'
 ]
 const sum = (rows: RecordData[], field='amountCents') => rows.reduce((n,r)=>n+(r[field] ?? 0),0)
 const rounded = (amount: number, numerator: number, denominator: number) => halfUp(BigInt(amount)*BigInt(numerator),BigInt(denominator))
@@ -30,6 +31,7 @@ export function financeReport(state: State, query: URLSearchParams) {
   const before = (row: RecordData, at: number) => Date.parse(row.createdAt) < at
   const sourceUrl = (id: string) => `/app/revenue?financeMonth=${month}&financeSource=${encodeURIComponent(id)}#finance-source`
   const snapshot = (at: number) => {
+    const supportedRefunds=finiteRefundClassification(state,at)
     const refund = refunds.snapshot(at), invoiceRows=charges.filter(c=>before(c,at)), tax=financeTax(state,at,invoiceRows)
     const rows = invoiceRows.map(charge => {
       const pack = packs.find(p=>p.id===charge.packId), draft = pack ? state.records.get(pack.draftId)?.data : null
@@ -39,7 +41,7 @@ export function financeReport(state: State, query: URLSearchParams) {
       if (tax.classified.has(charge.id)) basis='Retained provider-classified tax liability; separate from service revenue'
       else if (charge.reason === 'gift_card_issue') basis='Gift funding, excluded from service revenue'
       else if (['retail_sale','retail_return'].includes(charge.reason)) { earnedCents=amount; basis='Recorded retail fulfillment or return' }
-      else if (pack && draft?.type==='pack' && !charge.reason && !charge.kind && amount >= 0 && (countsCredits(pack) || !list(state,'freeze').some(f=>f.packId===pack.id && f.confirmedAt && Date.parse(f.confirmedAt)<at && !['withdrawn','declined'].includes(f.status))) && !list(state,'contractCancellation').some(c=>c.packId===pack.id && ['scheduled','applied'].includes(c.status) && Date.parse(c.confirmedAt)<at) && !list(state,'planChange').some(c=>c.packId===pack.id && c.status==='applied' && Date.parse(c.appliedAt)<at)) {
+      else if (pack && draft?.type==='pack' && !charge.reason && !charge.kind && amount >= 0 && (countsCredits(pack) || !list(state,'freeze').some(f=>f.packId===pack.id && f.confirmedAt && Date.parse(f.confirmedAt)<at && !['withdrawn','declined'].includes(f.status))) && (supportedRefunds.has(pack.id) || !list(state,'contractCancellation').some(c=>c.packId===pack.id && ['scheduled','applied'].includes(c.status) && Date.parse(c.confirmedAt)<at)) && !list(state,'planChange').some(c=>c.packId===pack.id && c.status==='applied' && Date.parse(c.appliedAt)<at)) {
         serviceStart=pack.proration?.joinAt ?? pack.createdAt; serviceEnd=draft.expiresAt
         if (countsCredits(pack)) {
           consumedBookingIds=bookings.filter(b=>b.packId===pack.id && b.attendance==='attended' && Date.parse(b.checkedInAt ?? '') < at && classes.some(c=>c.id===b.classId && Date.parse(c.end)<at)).map(b=>b.id)
@@ -54,7 +56,10 @@ export function financeReport(state: State, query: URLSearchParams) {
       } else unclassifiedCents=amount
       return {id:charge.id,personId:charge.personId,packId:pack?.id ?? null,amountCents:amount,earnedCents,deferredCents,unusedPackCents:pack && countsCredits(pack) ? deferredCents : 0,unclassifiedCents,basis,serviceStart,serviceEnd,consumedBookingIds,sourceUrl:sourceUrl(charge.id)}
     })
-    rows.push(...refund.rows.map(row=>({...row,sourceUrl:sourceUrl(row.id)})))
+    rows.push(...refund.rows.map(row=>{
+      const supported=supportedRefunds.get(row.packId),original=supported ? rows.find(r=>r.id===supported.chargeId) : null
+      return {...row,...(supported?.refundIds.has(row.id)&&original?.deferredCents ? {deferredCents:row.amountCents,unusedPackCents:row.amountCents,unclassifiedCents:0,basis:'Approved refund of unearned original finite-pack value; completed service remains earned',serviceStart:original.serviceStart,serviceEnd:original.serviceEnd} : {}),sourceUrl:sourceUrl(row.id)}
+    }))
     const cash=payments.filter(p=>before(p,at) && p.reason!=='gift_card_redemption'), noncash=payments.filter(p=>before(p,at) && p.reason==='gift_card_redemption')
     const giftRows=entries.filter(e=>before(e,at))
     const totals={cashCents:sum(cash)-refund.settledCents,serviceInvoiceCents:sum(invoiceRows.filter(c=>c.reason!=='gift_card_issue' && !tax.classified.has(c.id))),giftFundingCents:sum(invoiceRows.filter(c=>c.reason==='gift_card_issue')),noncashGiftTenderCents:sum(noncash),receivableCents:sum(invoiceRows)-sum(cash)-sum(noncash),earnedCents:sum(rows,'earnedCents'),deferredCents:sum(rows,'deferredCents'),unusedPackCents:sum(rows,'unusedPackCents'),giftLiabilityCents:sum(giftRows),unclassifiedCents:sum(rows,'unclassifiedCents'),taxLiabilityCents:tax.knownTaxCents,refundDueCents:refund.dueCents,refundSettledCents:refund.settledCents,refundPayableCents:refund.payableCents,reconciliationDifferenceCents:0}

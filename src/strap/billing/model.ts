@@ -9,7 +9,7 @@ function sort(value: any): any { return Array.isArray(value) ? value.map(sort) :
 export const digest = (value: any) => sha256Hex(canonical(value));
 export async function keyDigest(env: BillingBindings) {
   insist(env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1','stripe_billing_test_not_configured',409);
-  insist(!/^(?:sk|rk)_live_/.test(env.STRIPE_BILLING_TEST_KEY),'stripe_billing_live_key_refused',409);
+  insist(!/^(?:sk|rk|pk)_/.test(env.STRIPE_BILLING_TEST_KEY) || /^(?:sk|rk)_test_/.test(env.STRIPE_BILLING_TEST_KEY),'stripe_billing_live_key_refused',409);
   return sha256Hex('strap-billing-test\n'+env.AUTH_ORIGIN+'\n'+env.STRIPE_BILLING_TEST_KEY);
 }
 export async function connection(env: BillingBindings): Promise<Connection> {

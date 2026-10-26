@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "bc33292a5902ef4f1d29da0f75bb4bce3bd0fc7b31d74b95d146e9da481ec315",
+      "sha256": "1ac35a57b69b50e2ce32f76df18575bbd5bdbb4e35480324d66208119f5dcbbd",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6ff36b986044c0f3f460517a71a15cbc7b2c6dcd1cc38da7b955ef93887d5d64",
+      "sha256": "e6395d91ba32064d98eb4512c9a31de40edbb86c005ba896df97375f59ec0fbb",
       "executable": false
     },
     "DEMO.md": {
@@ -3074,7 +3074,7 @@
       "executable": false
     },
     "src/strap/billing/model.ts": {
-      "sha256": "469ae56d90721f2ba8327e87717eef4ff2f1787b03d4ccd8cd90c3c39331a4b0",
+      "sha256": "8c31cd3f8a5403785eb0a88d9571de1a412ce3d569cbf2e97baca02e24eec71f",
       "executable": false
     },
     "src/strap/billing/operations.ts": {
@@ -3474,7 +3474,7 @@
       "executable": false
     },
     "src/strap/finance-report.ts": {
-      "sha256": "b1389889dfdc3fe249a2aa2c66d17aa30eb09eab8f89c5ec705af5b405cf0722",
+      "sha256": "88b9da80f54842d68a4914cd6f8def1ed89e0970bc2e74d99d68d46543c8d26c",
       "executable": false
     },
     "src/strap/finance-tax.ts": {
@@ -3674,7 +3674,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "56f707aa6e86b0e70ebfb6c1445c52e8e1eb9469ad3f743b64be656b50622752",
+      "sha256": "cb1b0216dffa6461ae49bee4f5aefd011d9b866fdb2594ce0b0453eb0b8179d1",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -3990,7 +3990,7 @@
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "bea38e6f14793c6a1f82729b72903ceccd4a1fb7258adade5811f4eb5f37be9f",
+      "sha256": "aa0abf56da6c496a67ad7429a262b59c72e7f15897dc6a82c28fbc583a434766",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {
@@ -4122,7 +4122,7 @@
       "executable": false
     },
     "tests/finance-timing.mjs": {
-      "sha256": "0893b365f8e5f84b35274ff473b884173a251711872fcbf7d07391fa27bd7457",
+      "sha256": "32f115965057aceebf67981af42b984cf2deda717548fe091a4ec9c8428bf5ab",
       "executable": false
     },
     "tests/fixtures/members.csv": {

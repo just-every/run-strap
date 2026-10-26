@@ -56,7 +56,7 @@ export async function billingBrowser(h,edge) {
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();await launch
       await page.goto(h.origin+'/app/packs#billing')
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
-      await panel.getByText(/hosted setup incomplete/).waitFor();await capture('incomplete')
+      await section.getByRole('status').filter({hasText:'Stripe has not confirmed'}).waitFor();await capture('incomplete')
       edge.setComplete(true)
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
       await section.getByText(/visa ending 4242/).waitFor();await capture('method-authorized')

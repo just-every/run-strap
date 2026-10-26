@@ -20,6 +20,8 @@ export function billingPanel(s: any) {
   const agreements=b.agreements.map((a: any)=>{
     const mandate=b.mandates.find((m: any)=>m.agreementId===a.id),setups=b.setups.filter((v: any)=>v.agreementId===a.id),methods=b.methods.filter((m: any)=>m.agreementId===a.id)
     const financial=a.financialTerms
+    const latest=b.operations.filter((o: any)=>o.agreementId===a.id).sort((a: any,b: any)=>a.createdAt.localeCompare(b.createdAt)).at(-1)
+    const outcome=latest?.status==='incomplete' ? '<p class="notice" role="status">Stripe has not confirmed this card setup yet. Finish the hosted form, then check again.</p>' : latest&&['pending','uncertain','failed'].includes(latest.status) ? `<p class="notice" role="status">Payment setup is ${h(latest.status)}. Ask the studio to review the provider outcome before starting another setup.</p>` : ''
     const signature=mine&&!a.signature ? form('billing.agreement.accept',back,hidden('id',a.id)+hidden('documentHash',a.documentHash)+hidden('financialHash',a.financialHash)
       +field('signerName','Your full name','','text','required maxlength="160" autocomplete="name"')+check('adultConfirmed','I confirm I am an adult signing for myself.')
       +check('confirm',a.agreementAffirmation)+check('authorizeRecurring',a.mandateAffirmation),'Sign agreement and grant separate payment permission') : ''
@@ -32,7 +34,7 @@ export function billingPanel(s: any) {
       +(a.signature?`<p>Personally affirmed by ${h(a.signature.signerName)} ${when(s,a.signature.completedAt)}.</p>`:'')
       +methods.map((m: any)=>`<p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':mandate?.status==='revoked'?'historical method; future payment permission revoked':'historical method; connection review required'}</p>`).join('')
       +(mandate?.revokedAt?`<p>Future payment permission revoked ${when(s,mandate.revokedAt)}. The original studio agreement and balance remain unchanged.</p>`:'')
-      +signature+setup+revoke+`<p><a href="/api/strap/billing/agreement.json?id=${encodeURIComponent(a.id)}">Download exact agreement evidence</a> · <a href="/api/strap/billing/agreement.html?id=${encodeURIComponent(a.id)}">Download readable agreement</a></p></section>`
+      +outcome+signature+setup+revoke+`<p><a href="/api/strap/billing/agreement.json?id=${encodeURIComponent(a.id)}">Download exact agreement evidence</a> · <a href="/api/strap/billing/agreement.html?id=${encodeURIComponent(a.id)}">Download readable agreement</a></p></section>`
   }).join('')
   const history=b.operations.length?`<details><summary>Payment setup history</summary>${b.operations.map((o: any)=>`<p>${h(o.type)} · ${h(o.status)}${o.errorCode?' · '+h(o.errorCode.replaceAll('_',' ')):''} · ${when(s,o.createdAt)}</p>`).join('')}</details>`:''
   return panel('Membership agreements',body('<p>Personal typed agreements and separate recurring-payment permission. Stripe test card setup collects no payment; automatic collection is not available.</p>'+connect+prepare+(agreements||'<p>No additional membership agreements yet.</p>')+history),{id:'billing'})
