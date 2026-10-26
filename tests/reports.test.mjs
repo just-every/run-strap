@@ -669,6 +669,8 @@ test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and lia
   assert.equal((await read('2021-01')).closing.unusedPackCents,18000,'expired unused credits never become automatic breakage revenue')
   assert.deepEqual(jan.rows.find(r=>r.packId===ten.id).consumedBookingIds,[booking.id])
   assert.equal(jan.sources.find(r=>r.id===retail.paymentId).kind,'gift-tender')
+  await (await import('./finance-downloads.mjs')).assertFinanceDownloads(h,h.owner,jan)
+  await (await import('./finance-downloads.mjs')).assertFinanceDownloads(h,h.owner,feb)
   const version=(await h.state()).version
   for(const month of ['2020-01','2020-02']){
     const report=await read(month)

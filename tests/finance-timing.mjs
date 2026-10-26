@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { run } from './harness.mjs'
 import { totp } from './mfa-helpers.mjs'
-import { parseCsv } from './report-downloads.mjs'
+import { financeExclusions } from './finance-exclusions.mjs'
+import { assertFinanceDownloads as assertDownloads } from './finance-downloads.mjs'
 
 const day=86_400_000
 const halfUp=(amount,n,d)=>Number((2n*BigInt(amount)*BigInt(n)+BigInt(d))/(2n*BigInt(d)))
@@ -105,21 +106,6 @@ export async function financeTiming() {
   },{mfa:false})} finally {await writeFile(path+'.new',original);await rename(path+'.new',path)}
 }
 
-async function assertDownloads(h,owner,report) {
-  const path='/api/strap/reports/finance',query='?financeMonth='+report.month
-  const csv=await h.send(path+'.csv'+query,undefined,owner);assert.equal(csv.status,200)
-  const [columns,...rows]=parseCsv(csv.text),objects=rows.map(row=>Object.fromEntries(columns.map((k,i)=>[k,row[i]??null])))
-  for(const row of objects.filter(r=>r.kind==='metric'))assert.deepEqual([row.openingCents,row.periodCents,row.closingCents],[report.opening[row.id],report.period[row.id],report.closing[row.id]])
-  for(const source of report.sources){
-    assert.ok(objects.some(r=>r.id===source.id&&r.amountCents===source.amountCents))
-    const detail=await h.send(source.sourceUrl,undefined,owner);assert.equal(detail.status,200);assert.ok(detail.text.includes(source.id))
-  }
-  const sheet=await h.mf.dispatchFetch(h.origin+path+'.xlsx'+query,{headers:{cookie:owner}})
-  const readXlsx=(await import('read-excel-file/node')).default
-  const sheets=await readXlsx(Buffer.from(await sheet.arrayBuffer()))
-  for(const [metric,opening,period,closing] of sheets.find(s=>s.sheet==='Reconciliation').data.slice(1))assert.deepEqual([opening,period,closing],[report.opening[metric],report.period[metric],report.closing[metric]])
-}
-
 async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish}) {
   const freezeType=await cmd('freeze.type.save',{name:'Travel',reason:'Agreed leave',feeCents:1234,defaultLengthDays:5,maxLengthDays:30})
   const preview=await cmd('freeze.prepare',{packId:ten.pack.id,freezeTypeId:freezeType.id,startAt:'2032-03-15',endAt:'2032-03-20',requestId:key(),channel:'desk'})
@@ -178,6 +164,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   await assertDownloads(h,h.owner,after)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})
   await timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember})
+  await financeExclusions(h,{cmd,state,read,jump,buy,key,people,coach,publish})
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)
@@ -207,6 +194,7 @@ async function timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember:memb
   assert.deepEqual([refund.earnedCents,refund.deferredCents,refund.unusedPackCents,refund.unclassifiedCents],[0,-due.amountCents,0,0])
   assert.ok(original.deferredCents+refund.deferredCents>0,'partial receipt funding leaves unearned invoiced value deferred')
   for(const row of [original,refund])assert.deepEqual([row.serviceStart,row.serviceEnd,row.serviceStoppedAt],[sale.pack.createdAt,sale.draft.expiresAt,cancellation.effectiveAt])
+  assert.equal((await state()).balances.find(b=>b.personId===member.id).balanceCents,15501,'cancellation preserves the unpaid original invoice debt in cents')
   assert.equal(due.amountCents,halfUp(15500,end-stop,end-start),'native refund policy uses allocated money over unused original access time')
   assert.equal(due.valuationPack.expiresAt,sale.draft.expiresAt)
   assert.deepEqual(due.valuationPack.entitlement,sale.pack.entitlement)
@@ -220,32 +208,14 @@ async function timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember:memb
   assert.equal(after.closing.receivableCents,before.closing.receivableCents)
   assert.equal(after.closing.reconciliationDifferenceCents,0)
   assert.equal(after.sources.filter(r=>r.id===settlement.id).length,1)
+  assert.equal((await state()).balances.find(b=>b.personId===member.id).balanceCents,15501,'refund settlement and replay leave original unpaid dues unchanged')
   const retained=(await state()).packs.find(p=>p.id===sale.pack.id)
   assert.deepEqual(retained.entitlement,sale.pack.entitlement);assert.equal(retained.expiresAt,cancellation.effectiveAt)
   await assertDownloads(h,h.owner,after)
-  await assertStoppedDownloads(h,h.owner,after,[sale.charge.id,due.id])
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-04',prefix:'time-refund',sourceId:due.id})
   await jump('2032-05-02T07:00:00Z')
   const later=await read('2032-05'),laterSale=later.rows.find(r=>r.id===sale.charge.id)
   assert.deepEqual([laterSale.earnedCents,laterSale.deferredCents,laterSale.serviceEnd,laterSale.serviceStoppedAt],[earned,31001-earned,sale.draft.expiresAt,cancellation.effectiveAt],'termination caps earned time permanently without rewriting the accepted interval')
   assert.equal(later.rows.find(r=>r.id===due.id).deferredCents,-due.amountCents)
   assert.equal((await state()).recurring.invoices.filter(r=>r.recurringTermsId===proposal.id).length,0)
-}
-
-async function assertStoppedDownloads(h,owner,report,ids) {
-  const path='/api/strap/reports/finance',query='?financeMonth='+report.month
-  const csv=await h.send(path+'.csv'+query,undefined,owner)
-  const [headers,...records]=parseCsv(csv.text)
-  const rows=records.map(row=>Object.fromEntries(headers.map((key,i)=>[key,row[i]])))
-  const response=await h.mf.dispatchFetch(h.origin+path+'.xlsx'+query,{headers:{cookie:owner}})
-  const readXlsx=(await import('read-excel-file/node')).default
-  const sheets=await readXlsx(Buffer.from(await response.arrayBuffer()))
-  const [columns,...values]=sheets.find(s=>s.sheet==='Recognition').data
-  for(const id of ids) {
-    const row=report.rows.find(r=>r.id===id),csvRow=rows.find(r=>r.kind==='recognition'&&r.id===id)
-    const excelRow=values.find(r=>r[columns.indexOf('chargeId')]===id)
-    for(const key of ['earnedCents','deferredCents','unusedPackCents','serviceStart','serviceEnd','serviceStoppedAt']) {
-      assert.equal(csvRow[key],row[key]);assert.equal(excelRow[columns.indexOf(key)],row[key])
-    }
-  }
 }

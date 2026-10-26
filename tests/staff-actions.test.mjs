@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { run } from './harness.mjs'
+import { acceptance, billingEdge, billingSeed, billingSucceeded } from './billing-sandbox.mjs'
 const minute=60_000, hour=60*minute
 const at = hours => new Date(Math.ceil((Date.now()+hours*hour)/minute)*minute).toISOString()
 const monday = start => {const d=new Date(start);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)}
@@ -26,6 +27,7 @@ async function prepare(h) {
 // The catalogue is the real dispatch registry. Every member-tagged command
 // must have a working staff pair, not just a matching string in a second list.
 test('STAFF-006 / SEC-002: every current member command has a real staff door, identical member outcome and one canonical named-right audit entry; unauthorized users and agents cannot act for members',async()=>{
+  const billing=billingEdge()
   await run(async h=>{
     const {coach,ana,ben,publish}=await prepare(h)
     const future=await publish('Future Flow',26),near=await publish('Open check-in',0.25)
@@ -39,13 +41,14 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':name.startsWith('intro.')?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let emptyDeskOffer,nurtureDeskOffer,winbackDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
+    let billingMember,billingAgreement,billingSetup;
     const actions={
       'intake.submit':async door=>{
         const form=await h.cmd('intake.form.publish',{title:'Phone intake pair',scope:'service',service:'Future intake service',required:false,questions:[{label:'Class preference',required:true,sensitive:false},{label:'Restricted preference',required:true,sensitive:true}],requestId:randomUUID()});
@@ -504,6 +507,55 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.equal(r.result.status,'booked');assert.equal(r.event.personId,member.id);
       await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
     };
+    // Billing uses a separate dispatcher, joined into the same public catalogue.
+    // These owner launches preserve the personal step; they grant no staff signing power.
+    const billingLaunch=async(name,door)=>{
+      const before=(await h.send('/api/strap/billing',undefined,billingMember.cookie)).value,calls=billing.calls.length;
+      const input={id:billingAgreement.id,requestId:randomUUID(),channel:'phone'},r=await checkAudit(door,input);
+      assert.equal(r.result.status,'member_action_required');assert.equal(r.result.memberCommand,name);assert.equal(r.event.personId,billingMember.id);
+      assert.equal(r.event.staffMade,true);assert.equal(r.event.before.documentHash,billingAgreement.documentHash);assert.equal(r.event.before.financialHash,billingAgreement.financialHash);
+      const after=(await h.send('/api/strap/billing',undefined,billingMember.cookie)).value;
+      for(const key of ['agreements','mandates','methods','setups','operations'])assert.deepEqual(after[key],before[key],name+': launch leaves the member act untouched');
+      assert.equal(billing.calls.length,calls,'staff launch calls no payment provider');
+      assert.ok(after.launches.some(l=>l.id===r.result.id));
+      assert.equal((await h.send('/api/strap/billing',undefined,ana.cookie)).value.launches.length,0,'unrelated members cannot read the launch');
+      const target=new URL(r.result.url,h.origin).searchParams.get('returnTo');
+      assert.ok(target.startsWith('/app/packs#billing-'));
+      assert.equal((await h.send(target,undefined,billingMember.cookie)).status,200,'launch points to the real personal screen');
+      assert.deepEqual(await h.cmd(door,input),r.result);assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1);
+      await refused(h,door,{...input,channel:'desk'},h.owner,409);
+      return r;
+    };
+    actions['billing.agreement.accept']=async door=>{
+      const seed=await billingSeed(h,'BillingParity');billingMember=seed.member;
+      billingAgreement=await h.cmd('billing.agreement.prepare',seed.prepare);
+      await billingLaunch('billing.agreement.accept',door);
+      await refused(h,'billing.agreement.accept',acceptance(billingAgreement,billingMember.name),h.owner);
+      const signed=await h.cmd('billing.agreement.accept',acceptance(billingAgreement,billingMember.name),billingMember.cookie);
+      assert.equal(signed.signature.actorId,(await h.state(billingMember.cookie)).actor.id);
+    };
+    actions['billing.setup.start']=async door=>{
+      await billingSucceeded(h,'billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-910'});
+      await billingLaunch('billing.setup.start',door);
+      const input={id:billingAgreement.id,requestId:'synthetic-strap-911'};
+      await refused(h,'billing.setup.start',input,h.owner);
+      billingSetup=(await billingSucceeded(h,'billing.setup.start',input,billingMember.cookie)).result;
+    };
+    actions['billing.setup.complete']=async door=>{
+      await billingLaunch('billing.setup.complete',door);
+      const input={id:billingAgreement.id,setupId:billingSetup.id,requestId:'synthetic-strap-912'};
+      await refused(h,'billing.setup.complete',input,h.owner);
+      billing.setComplete(true);
+      const saved=await billingSucceeded(h,'billing.setup.complete',input,billingMember.cookie);
+      assert.equal(saved.result.authorizedBy,(await h.state(billingMember.cookie)).actor.id);
+    };
+    actions['billing.mandate.revoke']=async door=>{
+      await billingLaunch('billing.mandate.revoke',door);
+      await refused(h,'billing.mandate.revoke',{id:billingAgreement.id},h.owner);
+      const revoked=await h.cmd('billing.mandate.revoke',{id:billingAgreement.id},billingMember.cookie);
+      assert.equal(revoked.revokedBy,(await h.state(billingMember.cookie)).actor.id);
+      assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
+    };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {
       const entry=memberCommands.find(c=>c.name===name)
@@ -518,6 +570,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
+      if(entry.name.startsWith('billing.'))input.id=billingAgreement.id;
       if(entry.name==='lead.referral.record')Object.assign(input,{personId:ben.id,friendEmail:ana.email});
       if(entry.name==='lead.winback.purchase')Object.assign(input,{id:winbackDeskOffer.id,key:winbackDeskOffer.key,confirm:true});
       if(entry.name==='lead.empty.accept')input.id=emptyDeskOffer.id;
@@ -610,7 +663,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const fullExport=JSON.stringify(all)
     assert.ok(!fullExport.includes(rotated.result.code),'check-in credentials do not enter audit downloads')
     if(process.env.STRAP_PROOF_DIR)await(await import('./staff-actions-browser.mjs')).staffActionsBrowser(h,{ana,ben,publish,historyMember})
-  })
+  },{auth:{STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'},outbound:billing.outbound})
 })
 
 test('STAFF-006: invitation launch is an audited request, the new member alone acknowledges, code issuance and reasoned rotation replay once, and uncertain mail is never resent',async()=>{

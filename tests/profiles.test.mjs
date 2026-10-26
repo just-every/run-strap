@@ -566,5 +566,5 @@ test('MEM-005: service-specific replacement and expiring personal and guardian a
   const held=JSON.parse((await h.db.prepare('SELECT data FROM st_records WHERE id=?').bind(terms.id).first()).data);
   assert.equal(held.status,'needs_review');assert.equal(held.failure,'waiver_signature_required');
   assert.deepEqual([afterRenewal.packs.length,afterRenewal.charges.length],[beforeRenewal.packs.length,beforeRenewal.charges.length],'expired service completion holds renewal without a new entitlement or invoice charge');
-  if(process.env.STRAP_PROOF_DIR)await(await import('./signing-browser.mjs')).serviceSigningBrowser(h,{adult,guardian,childId,policy:replacement})
+  if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./signing-browser.mjs')).serviceSigningBrowser(h,{adult,guardian,childId,policy:replacement})
 }))

@@ -1,6 +1,6 @@
 import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
 import { taxCommand, taxState, taxFilingCsv } from './tax'
-import { billingCommand, billingState, agreementEvidence, renderAgreementCopy } from './billing'
+import { billingCommand, billingCommandCatalogue, billingState, agreementEvidence, renderAgreementCopy } from './billing'
 import { timeSnapshot, approvedHours } from './domain/time-clock'
 import { giftSnapshot } from './domain/gift-cards'
 import { inventorySnapshot } from './domain/inventory'
@@ -132,7 +132,7 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (who.role === 'front-desk' && name && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
-  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
+  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 
@@ -279,7 +279,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
       if (pages.has(path)) return renderApp(await appState(env, who, path + url.search), path + url.search)
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
-      if (path === '/api/strap/commands') return json({ commands:commandCatalogue(), preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
+      if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
       const reminderFile = path.match(/^\/api\/strap\/reminders\/([\w-]+)\.txt$/)
       if (reminderFile) {
         if (who.role !== 'owner') fail('Only the owner exports reminders', 403)

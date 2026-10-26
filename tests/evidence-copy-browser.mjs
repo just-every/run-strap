@@ -29,7 +29,8 @@ export async function evidenceCopyBrowser(h,{edge,waiver}) {
       const receipt=(await h.state()).acknowledgements.find(row=>row.personId===member.id),original=await h.send('/api/strap/waiver-evidence.html?id='+receipt.id,undefined,h.owner)
       const downloading=privatePage.waitForEvent('download');downloading.catch(()=>{});const submitted=privatePage.waitForResponse(response=>new URL(response.url()).pathname==='/evidence/copy'&&response.request().method()==='POST');await privatePage.getByRole('button',{name:'Download my document copy',exact:true}).click();const received=await submitted;assert.equal(received.status(),200,'copy confirmation: '+JSON.stringify({origin:received.request().headers().origin,refusal:received.headers()['x-strap-refusal']}));const download=await downloading,file=await download.path();assert.equal(await readFile(file,'utf8'),original.text)
       await download.saveAs(file+'.html');const artifact=await personal.newPage();await artifact.goto(pathToFileURL(file+'.html').href);await capture(artifact,'downloaded-copy');await artifact.close()
-      assert.equal((await personal.request.get(emailLink)).status(),410);assert.equal((await personal.request.get(h.origin+'/api/strap/state')).status(),401)
+      assert.equal((await privatePage.goto(emailLink)).status(),410);assert.equal(await privatePage.getByRole('button',{name:'Download my document copy',exact:true}).count(),0);assert.ok(!(await privatePage.locator('body').innerText()).includes(member.name));assert.ok(!(await privatePage.locator('body').innerText()).includes(waiver.text));await capture(privatePage,'copy-unavailable')
+      assert.equal((await personal.request.get(h.origin+'/api/strap/state')).status(),401)
       assert.equal(await h.db.prepare('SELECT id FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).first(),null)
     }finally{await personal.close();await tablet.close();await owner.close()}
   }}finally{await browser.close()}

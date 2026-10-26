@@ -32,6 +32,7 @@ export async function billingBrowser(h,edge) {
       await prepare.getByLabel('Agreement title',{exact:true}).fill(seed.prepare.title)
       await prepare.getByLabel('Exact additional agreement text',{exact:true}).fill(seed.prepare.documentText)
       await prepare.getByLabel('Adult eligibility evidence reference',{exact:true}).fill(seed.prepare.adultEvidenceReference)
+      assert.equal(await prepare.getByRole('checkbox').isChecked(),false)
       await prepare.getByRole('checkbox').check();await capture('staff-prepare')
       await prepare.getByRole('button',{name:'Prepare for personal signing',exact:true}).click()
       const agreement=(await h.send('/api/strap/billing',undefined,h.owner)).value.agreements.find(a=>a.personId===seed.member.id);assert.ok(agreement)
@@ -44,7 +45,7 @@ export async function billingBrowser(h,edge) {
       assert.equal(await section.locator('form[action*="name=billing.agreement.accept"]').count(),1,(await section.innerText()).slice(0,1500))
       const accept=section.locator('form[action*="name=billing.agreement.accept"]')
       await accept.getByLabel('Your full name',{exact:true}).fill(seed.member.name)
-      for(const checkbox of await accept.getByRole('checkbox').all())await checkbox.check()
+      for(const checkbox of await accept.getByRole('checkbox').all()){assert.equal(await checkbox.isChecked(),false);assert.equal(await checkbox.getAttribute('required'),'');await checkbox.check()}
       await capture('personal-consent')
       await accept.getByRole('button',{name:'Sign and authorize',exact:true}).click()
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('signed')
@@ -66,6 +67,9 @@ export async function billingBrowser(h,edge) {
       await section.getByText(/Future payment permission revoked/).waitFor();await capture('revoked')
       const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
       assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).status,'revoked')
+      assert.equal(state.methods.find(m=>m.agreementId===agreement.id).available,false)
+      assert.equal(await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).count(),0)
+      assert.equal(await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).count(),0)
       edge.setComplete(false)
     } finally {await context.close()}
   }} finally {await browser.close()}
