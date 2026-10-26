@@ -4402,7 +4402,7 @@
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
-      "sha256": "bdcdb9dd4f72a7a285ad50f02c89414f8acd26f15b9f804f533d127bd0b15da6",
+      "sha256": "324098e8b39180d7378f72e6f54b03bcf978e527b3b6fea09aa56fc7fde18889",
       "executable": false
     },
     "tests/staff-actions.test.mjs": {

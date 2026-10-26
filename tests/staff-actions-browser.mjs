@@ -15,7 +15,8 @@ async function assets(context,h) {
 async function linkCookie(h,email) {
   const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r=>JSON.parse(r.message)).find(m=>m.to.includes(email))
   const token=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token')
-  const response=await h.send('/auth/confirm',{token});assert.equal(response.status,303,response.text);return response.cookie
+  // The member follows this link on a personal device, apart from the staff setup client.
+  const response=await h.send('/auth/confirm',{token},'',{'CF-Connecting-IP':'192.0.2.55'});assert.equal(response.status,303,response.text);return response.cookie
 }
 export async function staffActionsBrowser(h,{ana,ben,publish,historyMember}) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
