@@ -63,7 +63,8 @@
       "hosted": false,
       "commands": [
         "pnpm run test:reports",
-        "STRAP_BILLING_BROWSER=1 STRAP_PROOF_DIR=logs/proof/billing node --test --test-concurrency=1 tests/tax.test.mjs tests/billing-agreements.test.mjs"
+        "node --test tests/tax.test.mjs",
+        "STRAP_BILLING_BROWSER=1 STRAP_PROOF_DIR=logs/proof/billing node --test --test-concurrency=1 tests/billing-agreements.test.mjs"
       ]
     }
   ],
