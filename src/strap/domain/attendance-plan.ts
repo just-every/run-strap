@@ -26,7 +26,7 @@ function feasible(state: State, personId: string, entry: RecordData) {
   const available=preference(state,personId),pack=bookingPack(state,personId,entry);
   return state.people.some(p=>p.id===personId&&p.active&&!p.erasedAt) && !!available && available.windows.some((w: any)=>entry.start>=w.start&&entry.end<=w.end)
     && available.locationIds.includes(entry.locationId ?? 'studio') && !entry.privatePersonId
-    && entry.status==='published' && entry.start>now() && acknowledged(state,personId)
+    && entry.status==='published' && entry.start>now() && acknowledged(state,personId,entry)
     && !intakeMissing(state,personId,[entry.service ?? entry.title]).length
     && !!pack && windowOpen(state,entry,pack) && seatCapacity(state,entry).onlineOpen>0
     && !list(state,'booking').some(b=>b.personId===personId&&b.status!=='cancelled'&&

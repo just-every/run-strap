@@ -39,7 +39,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
   if(name === 'waiver.signing.grant')return {personId:input.personId,enabled:input.enabled==='true',memberIds:Object.keys(input).filter(k=>k.startsWith('member_')&&input[k]==='true').map(k=>k.slice(7)),locationIds:Object.keys(input).filter(k=>k.startsWith('location_')&&input[k]==='true').map(k=>k.slice(9))};
-  if(name === 'waiver.publish') return {...input,requiresSignature:input.requiresSignature === 'yes'};
+  if(name === 'waiver.publish') return {...input,validDays:input.validDays ? Number(input.validDays) : undefined,requiresSignature:input.requiresSignature === 'yes'};
   if(name === 'waiver.acknowledge') return {...input,...(input.confirm !== undefined ? {confirm:input.confirm === 'yes'} : {})};
   if(name === 'attendance.availability.save') {
     const convert = (value: unknown) => {const [date,time]=String(value).split('T');return localInstant(date,time,zoneOf(timeZone));};

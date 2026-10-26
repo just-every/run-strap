@@ -27,6 +27,7 @@ function ownerMember(tx: Transaction, personId: unknown) {
 function allocate(tx: Transaction, occurrences: RecordData[], personId: string, reservationId: string, channel: string) {
   checkAllocations(tx,occurrences);
   return occurrences.map((entry,index) => {
+    insist(acknowledged(tx.state,personId,entry),'waiver_acknowledgement_required',409);
     const saved = {...entry,privatePersonId:personId,appointmentReservationId:reservationId,appointmentIndex:index,status:'published'};
     const pack = bookingPack(tx.state,personId,saved);
     insist(pack && countsCredits(pack),'private_session_pack_required',409);

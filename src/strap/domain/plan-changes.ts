@@ -1,3 +1,4 @@
+import { signingMissing } from './bookings';
 import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent } from './pack-credits';
@@ -95,7 +96,7 @@ export function applyDuePlanChanges(tx: Transaction) {
   const at = now();
   for (const change of list(tx.state,'planChange').filter(c => c.status === 'accepted' && c.effectiveAt <= at)) {
     const pack = record(tx.state,change.packId,'pack');
-    const failure = pack.expiresAt !== change.current.expiresAt ? 'term_changed' : change.mode === 'now' && pack.remaining + change.creditsDelta < 0 ? 'allocations_exceed_new_credits' : null;
+    const failure = change.mode !== 'now' && signingMissing(tx.state,pack.personId,pack.eligibleServices ?? []).length ? 'waiver_signature_required' : pack.expiresAt !== change.current.expiresAt ? 'term_changed' : change.mode === 'now' && pack.remaining + change.creditsDelta < 0 ? 'allocations_exceed_new_credits' : null;
     if (failure) { tx.put('planChange',{...change,status:'failed',failure,finishedAt:at}); continue; }
     let target = pack;
     if (change.mode === 'now') {

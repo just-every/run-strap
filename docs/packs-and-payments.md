@@ -136,3 +136,11 @@ The native notice policy and riders were approved by ct on 24 Oct 2026. Provider
 collection remains with BILL-002, BILL-013 and BILL-014; STAFF-001 carries delegated
 staff rights. Installations need a configured, connected mail sender to deliver required
 email. These controls do not claim legal compliance for every jurisdiction.
+
+## Cash and service value
+
+On **Revenue and collections**, the owner opens **Cash, earned revenue and liabilities** and selects a finance month. The provisional report separates recorded external cash, invoiced service dues, earned service value, deferred value and gift-card liability. Unused pack value is already included in deferred value. Every ledger amount has a source link; CSV and XLSX retain the selected month and recognition breakdown.
+
+Time-based plans use original accepted service dates. Finite packs earn value only after an attended class has ended. A reservation, no-show, expired credit or manual reduction does not automatically earn revenue. Gift funding creates liability; gift redemption pays a separate sale without collecting cash again. A recorded funding refund reduces cash and gift liability.
+
+This management projection awaits accounting-policy approval. Unclassified value and reconciliation differences require owner review. Tax remains unavailable pending product tax classifications; no tax-free status or filing is inferred. Recorded receipts are not verified provider settlement.

@@ -85,6 +85,16 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const introOffer=await h.cmd('intro.offer.save',{name:'Archived two-week intro',days:14,credits:2,amountCents:3900,eligibility:'new',limit:'person'});
     const introPreview=await h.cmd('intro.preview',{offerId:introOffer.id,requestId:'synthetic-strap-840'},introMember.cookie);
     const introSale=await h.cmd('intro.purchase',{id:introPreview.id,key:introPreview.key,confirm:true},introMember.cookie);
+    const signingGuardian=await h.person('ArchiveGuardian');
+    let signingFamily=await h.cmd('household.save',{name:'Archived signature family'});
+    signingFamily=await h.cmd('household.guardian.link',{id:signingFamily.id,guardianId:signingGuardian.id,evidenceReference:'synthetic-strap-archive-authority'});
+    signingFamily=await h.cmd('household.participant.add',{id:signingFamily.id,name:'Archived signing child'});
+    const signedPolicy=await h.cmd('waiver.publish',{text:'Archived exact service policy and personal affirmation.',requiresSignature:true,service:'Evidence retention',validDays:365});
+    const adultEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:member.name,confirm:true},member.cookie);
+    const guardianEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:signingGuardian.name,participantId:signingFamily.participantIds[0],confirm:true},signingGuardian.cookie);
+    const signedBefore=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,member.cookie);
+    const guardianBefore=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,h.owner);
+    await h.cmd('household.guardian.remove',{id:signingFamily.id,guardianId:signingGuardian.id,reason:'Authority ended before archive'});
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -131,6 +141,12 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.deepEqual((await h.state(restoredOwner)).people.find(row=>row.id===p.id).emergencyContact,contact.emergencyContact,'APP-003 the restored member keeps their emergency contact')
     assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)
+    const restoredMember=await h.signIn(member.email),restoredGuardian=await h.signIn(signingGuardian.email);
+    const adultAfter=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,restoredMember);
+    const guardianAfter=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,restoredOwner);
+    assert.equal(adultAfter.status,200);assert.deepEqual(adultAfter.value,signedBefore.value,'MEM-005 native restore retains exact adult document, declaration and attribution');
+    assert.equal(guardianAfter.status,200);assert.deepEqual(guardianAfter.value,guardianBefore.value,'MEM-005 native restore retains historical guardian evidence and authority revision');
+    assert.equal((await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'MEM-005 historical guardian provenance never restores ended access');
     reconstructExit(restoredDownload.value,csv)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
@@ -152,6 +168,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const lee=await h.cmd('person.save',{name:'Lee',email:'lee@studio.example',role:'member',active:true},restoredOwner)
     await h.cmd('person.invite',{id:lee.id},restoredOwner);lee.cookie=await h.signIn('lee@studio.example')
     const seat=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Restored Reformer',start:week+'T13:00:00Z',end:week+'T14:00:00Z',capacity:1,instructorId:coach.id}]},restoredOwner)).id},restoredOwner)).classes[0]
+    await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:'Lee',confirm:true},lee.cookie)
     await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:lee.id,credits:2,amountCents:4000,expiresAt:'2099-12-01T00:00:00Z'},restoredOwner)).id},restoredOwner)
     await h.cmd('waiver.acknowledge',{id:waiver.id},lee.cookie)
     const first=await h.cmd('booking.book',{classId:seat.id},await h.signIn('maya@studio.example'))

@@ -1,3 +1,5 @@
+import { serviceDocuments } from './signing-documents'
+import { waiverSigned } from './facts'
 // MEM-002: households. The owner (front desk) sets up a household, links guardians and participants, keeps permissioned
 // contacts and proposes a payer; a member sees only their own household. A guardian books and signs for the participants
 // they are linked to; the payer's own acceptance is the step that makes them the payer.
@@ -44,10 +46,11 @@ function guardianView(s: any, hh: any) {
   const kid = (p: any) => {
     const seats = rows(s, 'bookings').filter(b => b.personId === p.id && b.status !== 'cancelled' && rows(s, 'classes').some(c => c.id === b.classId && c.start > new Date().toISOString()))
     const lines = seats.map(b => { const c = rows(s, 'classes').find(x => x.id === b.classId); return `<tr>${cell('Class', `<strong>${h(classTitle(c))}</strong><small>${when(s, c.start, c.timeZone)}</small>`)}${cell('Status', h(b.status))}${cell('', form('booking.cancel', back, hidden('id', b.id), 'Cancel', 'quiet', 'small'))}</tr>` }).join('')
-    const signed = rows(s, 'acknowledgements').some(a => a.personId === p.id && a.waiverId === s.waiver?.id && (!s.waiver.requiresSignature || a.signature?.documentHash === s.waiver.documentHash))
+    const signed = waiverSigned(s,p.id)
     return `<div data-participant-id="${h(p.id)}"><h3>${h(p.name)}</h3>`
       + rows(s,'acknowledgements').filter(a=>a.personId===p.id).map(a=>`<p><a href="/api/strap/waiver-evidence.json?id=${h(a.id)}">Download ${h(p.name)} document evidence · ${h(a.signature?.documentVersion ?? a.waiverId)}</a></p>`).join('')
       + (s.waiver && !signed ? form('waiver.acknowledge', back, hidden('id', s.waiver.id) + hidden('participantId', p.id) + `<p class="letter">${h(s.waiver.text)}</p>` + (s.waiver.requiresSignature ? hidden('documentHash',s.waiver.documentHash) + field('signerName','Your full name',s.people.find((p: any)=>p.id===s.actor.personId)?.name ?? '', 'text','required maxlength="160"') + '<label class="check"><input type="checkbox" name="confirm" value="yes" required>I personally affirm this document as the recorded guardian. This does not authorize a payment.</label>' : ''), `Sign the waiver for ${p.name}`) : s.waiver ? '<p><span class="pill done">Waiver completed</span></p>' : '')
+      + serviceDocuments(s,p.id,back,true)
       + form('booking.book', back, hidden('participantId', p.id) + select('classId', 'Book a class', [['', 'Choose a class'], ...classes.map((c: any) => [c.id, `${classTitle(c)} · ${when(s, c.start, c.timeZone).replace(/<[^>]+>/g, '')}`] as [string, string])]), `Book ${p.name}`)
       + (lines ? `<div class="table-wrap">${table(['Class', 'Status', ''], lines)}</div>` : emptyLine('No upcoming bookings.')) + '</div>'
   }

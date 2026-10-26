@@ -22,11 +22,15 @@ const launchStatus = (status: string) => ({
 const signingLocation=(s:any)=>select('locationId','Signing location',rows(s,'locations').map(l=>[l.id,l.name]),'studio');
 
 export function waiverLaunch(s: any, p: any, back: string) {
-  if (!s.waiver) return emptyLine('The studio has not published a waiver.')
+  const documents=s.waivers ?? (s.waiver ? [s.waiver] : []);
+  if(!documents.length)return emptyLine('The studio has not published a waiver.');
+  return documents.map((w: any)=>launchDocument({...s,waiver:w},p,back)).join('');
+}
+function launchDocument(s: any,p: any,back: string) {
   const w = s.waiver
   const launches = rows(s, 'waiverLaunches').filter(l => l.personId === p.id && l.waiverId === w.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  return `<p class="meta">Current waiver · Version ${h(w.version)} · ${waiverSigned(s, p.id) ? 'Acknowledged by this member' : 'Awaiting member acknowledgement'}</p><p class="letter">${h(w.text)}</p>`
+  return `<p class="meta">${h(w.service ? w.service+' policy' : 'Current waiver')} · Version ${h(w.version)} · ${waiverSigned(s, p.id) ? 'Acknowledged by this member' : 'Awaiting member acknowledgement'}</p><p class="letter">${h(w.text)}</p>`
     + '<p class="meta">The member opens their own secure sign-in link and acknowledges this exact version. Only the member can complete it. A link request does not confirm delivery or acknowledgement.</p>'
     + (s.memberMail && s.memberMail.origin !== s.origin ? '<p class="notice">Member email is paused after restore. <a href="/app/studio#member-mail">Review and reconnect in Studio</a> before requesting a waiver link.</p>' : p.active ? form('waiver.launch', back, hidden('waiverId', w.id) + signingLocation(s) + staffRequestFields(p.id), 'Request a waiver sign-in link', 'quiet', 'small') : '<p class="meta">Activate this member before requesting a sign-in link.</p>')
     + (w.requiresSignature && p.active ? form('waiver.tablet.launch',back,hidden('waiverId',w.id)+signingLocation(s)+staffRequestFields(p.id),'Launch locked signing tablet','quiet','small') : '')

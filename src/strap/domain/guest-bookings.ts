@@ -17,7 +17,7 @@ function facts(tx: Transaction, input: Record<string,unknown>) {
   insist(pack.personId === sponsor.id,'guest_pack_not_owned',403);
   insist(guest.id !== sponsor.id && guestConsent(tx.state,sponsor.id,guest.id),'guest_consent_required',403);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
-  insist(acknowledged(tx.state,guest.id),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,guest.id,entry),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === guest.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   insistBookingOpen(tx,entry,pack.priorityBooking === true,pack);
   const refusal = guestPassRefusal(tx.state,pack,entry,guest.id);

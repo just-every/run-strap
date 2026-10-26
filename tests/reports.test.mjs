@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
-import { assertReportDownloads, assertCancellationDownload, assertNativeDownloads } from './report-downloads.mjs'
+import { parseCsv, assertReportDownloads, assertCancellationDownload, assertNativeDownloads } from './report-downloads.mjs'
 
 const hour = 3_600_000
 const monday = start => { const d = new Date(start); return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10) }
@@ -611,3 +611,82 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   await assertNativeDownloads(h,path,['','month='+cohort.acquisitionMonth],[member.cookie,coach.cookie,''])
   if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionHistoryBrowser(h,report,original)
 }))
+
+test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and liabilities reconcile through recorded sales, attendance, partial funding refund and source downloads',()=>run(async h=>{
+  await h.confirmSetup(h.owner)
+  for(const ext of ['', '.csv','.xlsx']){const denied=await h.send('/api/strap/reports/finance'+ext,undefined,h.owner);assert.equal(denied.status,403);assert.equal(denied.value.error,'mfa_enrollment_required')}
+  await h.enroll(h.owner)
+  await h.cmd('studio.save',{location:'Finance studio',timeZone:'America/Phoenix'})
+  const member=await h.person('FinanceMember'), coach=await h.person('FinanceCoach','instructor')
+  const buy=async extra=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,amountCents:120000,kind:'unlimited',planName:'Annual studio',expiresAt:'2099-12-31T00:00:00Z',...extra})).id})
+  const annual=await buy({}), ten=await buy({kind:'credits',credits:10,planName:'Ten pack',amountCents:20000})
+  await h.cmd('payment.record',{personId:member.id,amountCents:120000,reference:'synthetic-strap-finance-1'})
+  await h.cmd('payment.record',{personId:member.id,amountCents:20000,reference:'synthetic-strap-finance-2'})
+  const gift=await h.cmd('retail.gift.issue',{personId:member.id,recipientId:member.id,amountCents:10000,tender:'external',reference:'synthetic-strap-finance-3',locationId:'studio',requestId:'synthetic-strap-finance-3'})
+  const supplier=await h.cmd('retail.supplier.add',{name:'Finance supplier',reference:'synthetic-strap-finance-4',requestId:'synthetic-strap-finance-4'})
+  const sku=await h.cmd('retail.sku.add',{supplierId:supplier.id,sku:'FINANCE-MAT',barcode:'synthetic-strap-finance-5',name:'Mat',variant:'Standard',priceCents:2000,lowStock:0,requestId:'synthetic-strap-finance-5'})
+  await h.cmd('retail.receive',{skuId:sku.id,quantity:2,locationId:'studio',reference:'synthetic-strap-finance-6',requestId:'synthetic-strap-finance-6'})
+  const retail=await h.cmd('retail.sell',{personId:member.id,skuId:sku.id,locationId:'studio',quantity:1,expectedCents:2000,tender:'gift',giftCardId:gift.id,reference:'synthetic-strap-finance-7',requestId:'synthetic-strap-finance-7'})
+  const refundInput={giftCardId:gift.id,amountCents:3000,reason:'Partial unused funding returned externally',reference:'synthetic-strap-finance-8',requestId:'synthetic-strap-finance-8'}
+  const refund=await h.cmd('retail.gift.refund',refundInput)
+  assert.deepEqual(await h.cmd('retail.gift.refund',refundInput),refund)
+  const start=new Date(Date.now()+48*hour).toISOString()
+  const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:'Finance attended service',start,end:new Date(Date.parse(start)+hour).toISOString(),capacity:3,instructorId:coach.id}]})).id})).classes[0]
+  // The earlier-expiring finite pack supplies this booking through the real door.
+  const pack=(await h.state()).packs.find(p=>p.id===ten.id)
+  await h.cmd('pack.adjust',{id:ten.id,revision:pack.creditRevision,creditsDelta:0,expiresAt:'2098-12-31T00:00:00Z',reason:'Access correction retains original sale',requestId:'synthetic-strap-finance-9'})
+  const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie)
+  assert.equal(booking.packId,ten.id)
+  await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+  // Only retained historical timestamps move: sales, tender and attendance were all made through HTTP.
+  const rows=(await h.db.prepare('SELECT id,kind,data FROM st_records').all()).results
+  await h.db.batch(rows.map(row=>{
+    const r=JSON.parse(row.data)
+    if(r.createdAt)r.createdAt='2020-01-01T07:00:00.000Z'
+    if(row.kind==='pack'){r.createdAt='2020-01-01T07:00:00.000Z';r.expiresAt='2021-01-01T07:00:00.000Z'}
+    if(row.kind==='draft'&&r.type==='pack')r.expiresAt='2021-01-01T07:00:00.000Z'
+    if(row.kind==='class'){r.start='2020-01-15T10:00:00.000Z';r.end='2020-01-15T11:00:00.000Z'}
+    if(row.kind==='booking')r.checkedInAt='2020-01-15T10:00:00.000Z'
+    if(row.id===refund.chargeId||row.id===refund.paymentId||row.kind==='giftEntry'&&r.kind==='funding_refund')r.createdAt='2020-02-05T00:00:00.000Z'
+    return h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(r),row.id)
+  }))
+  const read=async month=>{const r=await h.send('/api/strap/reports/finance?financeMonth='+month,undefined,h.owner);assert.equal(r.status,200,r.text);return r.value}
+  const jan=await read('2020-01'), feb=await read('2020-02'), earnedAnnual=Math.floor((120000*31+183)/366)
+  assert.deepEqual([jan.closing.cashCents,jan.closing.serviceInvoiceCents,jan.closing.giftFundingCents,jan.closing.noncashGiftTenderCents,jan.closing.receivableCents],[150000,142000,10000,2000,0])
+  assert.deepEqual([jan.closing.earnedCents,jan.closing.deferredCents,jan.closing.unusedPackCents,jan.closing.giftLiabilityCents,jan.closing.unclassifiedCents],[earnedAnnual+4000,120000-earnedAnnual+18000,18000,8000,0])
+  assert.deepEqual([feb.period.cashCents,feb.period.giftFundingCents,feb.closing.giftLiabilityCents],[-3000,-3000,5000])
+  assert.deepEqual(feb.opening,jan.closing)
+  for(const report of [jan,feb,await read('2020-12'),await read('2021-01')]){
+    const t=report.closing
+    assert.equal(t.reconciliationDifferenceCents,0)
+    assert.equal(t.cashCents+t.receivableCents,t.earnedCents+t.deferredCents+t.giftLiabilityCents+t.unclassifiedCents)
+    assert.equal(t.serviceInvoiceCents,t.earnedCents+t.deferredCents+t.unclassifiedCents)
+    assert.equal(report.taxCents,null)
+  }
+  assert.equal((await read('2021-01')).rows.find(r=>r.packId===annual.id).deferredCents,0)
+  assert.equal((await read('2021-01')).closing.unusedPackCents,18000,'expired unused credits never become automatic breakage revenue')
+  assert.deepEqual(jan.rows.find(r=>r.packId===ten.id).consumedBookingIds,[booking.id])
+  assert.equal(jan.sources.find(r=>r.id===retail.paymentId).kind,'gift-tender')
+  const version=(await h.state()).version
+  for(const month of ['2020-01','2020-02']){
+    const report=await read(month)
+    const download=await h.send('/api/strap/reports/finance.csv?financeMonth='+month,undefined,h.owner)
+    assert.equal(download.status,200);assert.match(download.text,/gift-tender/);assert.match(download.headers.get('content-disposition'),/attachment/)
+    const [columns,...csvRecords]=parseCsv(download.text),csvObjects=csvRecords.map(row=>Object.fromEntries(columns.map((key,i)=>[key,row[i] ?? null])))
+    for(const row of csvObjects.filter(r=>r.kind==='metric'))assert.deepEqual([row.openingCents,row.periodCents,row.closingCents],[report.opening[row.id],report.period[row.id],report.closing[row.id]])
+    const sheet=await h.mf.dispatchFetch(h.origin+'/api/strap/reports/finance.xlsx?financeMonth='+month,{headers:{cookie:h.owner}})
+    assert.equal(sheet.status,200)
+    const readXlsx=(await import('read-excel-file/node')).default
+    const totals=(await readXlsx(Buffer.from(await sheet.arrayBuffer()))).find(s=>s.sheet==='Reconciliation').data
+    for(const [metric,opening,period,closing]of totals.slice(1))assert.deepEqual([opening,period,closing],[report.opening[metric],report.period[metric],report.closing[metric]])
+    for(const source of report.sources){const detail=await h.send(source.sourceUrl,undefined,h.owner);assert.equal(detail.status,200);assert.ok(detail.text.includes(source.id))}
+  }
+  for(const invalid of ['2020-00','2020-13','2020-01-01'])assert.equal((await h.send('/api/strap/reports/finance?financeMonth='+invalid,undefined,h.owner)).status,400)
+  for(const cookie of [member.cookie,coach.cookie,''])for(const ext of ['', '.csv','.xlsx'])assert.equal((await h.send('/api/strap/reports/finance'+ext,undefined,cookie)).status,cookie?403:401)
+  const agent=await h.cmd('agent.create',{label:'Finance refusal'})
+  for(const ext of ['', '.csv','.xlsx'])assert.equal((await h.send('/api/strap/reports/finance'+ext,undefined,'',{authorization:'Bearer '+agent.token})).status,401)
+  const afterAgent=(await h.state()).version
+  await read('2020-02');assert.equal((await h.state()).version,afterAgent,'report reads have no business writes')
+  assert.equal(afterAgent,version)
+  if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2020-02'})
+},{mfa:false}))

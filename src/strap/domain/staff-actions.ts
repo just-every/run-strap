@@ -2,7 +2,7 @@ import { requireSigningLaunch } from './signing-access';
 import { feeStatus } from './fees';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { latestWaiver } from './bookings';
+import { latestWaiver, currentWaiver, currentWaiverReceipt } from './bookings';
 import { memberCheckin } from './checkin';
 import { memberMail } from './notices';
 
@@ -17,7 +17,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   if (name === 'intake.submit.staff') return list(tx.state,'intakeResponse').filter(r => r.personId === input.personId && r.formId === input.formId).at(-1) ?? null;
   if (name === 'preferences.save.staff') return tx.state.records.get('member-preference:'+String(input.personId))?.data ?? null;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));
-  if (name === 'waiver.launch') return {waiverId:latestWaiver(tx.state)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
+  if (name === 'waiver.launch') return {waiverId:currentWaiver(tx.state,input.waiverId)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
   if (name === 'plan.disclosure.schedule') return structuredClone(tx.state.records.get(String(input.termsId))?.data ?? null);
   if (name === 'plan.recurring.prepare' || name === 'freeze.prepare') { const pack=tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
   if (name === 'plan.change.prepare') { const pack = tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
@@ -70,7 +70,7 @@ export function launchWaiver(tx: Transaction, input: Record<string,unknown>, con
   requireSigningLaunch(tx.state,tx.who,input.personId,String(input.locationId??'studio'));
   const connection = memberMail(tx.state);
   insist(!connection || connection.origin === context.origin,'member_email_reconnect_required',409);
-  const member = person(tx.state,input.personId), waiver = latestWaiver(tx.state);
+  const member = person(tx.state,input.personId), waiver = currentWaiver(tx.state,input.waiverId);
   insist(member.role === 'member','member_required');
   insist(waiver && input.waiverId === waiver.id,'not_latest_version',409);
   const requestId = text(input.requestId,'requestId',100), channel = staffChannel(input);

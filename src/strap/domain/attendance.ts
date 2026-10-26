@@ -19,7 +19,7 @@ function teaches(who: Actor, entry: RecordData) {
 /** Every check-in door ends here: the seat's reserved credit becomes consumed
  * (no further credit is spent), and a second check-in is refused. */
 export function recordCheckin(tx: Transaction, booking: RecordData, entry: RecordData, how: { channel: string; kioskId?: string }): RecordData {
-  if(latestWaiver(tx.state)?.requiresSignature)insist(acknowledged(tx.state,booking.personId),'waiver_signature_required',409);
+  insist(acknowledged(tx.state,booking.personId,entry),'waiver_signature_required',409);
   const fundingPack = booking.guestPackId ?? booking.packId;
   insist(!fundingPack || !packFreezeBlocks(tx.state,fundingPack,entry.start),'membership_frozen',409);
   insist(booking.status === 'booked','confirmed_booking_required',409);

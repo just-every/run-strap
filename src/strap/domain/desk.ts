@@ -78,7 +78,7 @@ export function deskBook(tx: Transaction, input: Record<string,unknown>) {
   const pay = text(input.pay ?? 'auto','pay',20);
   insist(pays.includes(pay),'invalid_pay');
   const override = input.override === undefined || input.override === '' ? null : text(input.override,'override_reason',500);
-  insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,member.id,entry),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   const bypassed: string[] = [];
   const sold = pay === 'drop-in' || pay === 'sell-pack' ? sell(tx,member.id,entry,pay === 'drop-in',input) : null;

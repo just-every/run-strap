@@ -115,7 +115,7 @@ export function bookMakeup(tx: Transaction, input: Record<string,unknown>) {
   const booking = {id:id(),personId:credit.personId,classId:entry.id,makeupCreditId:credit.id,originalBookingId:credit.originalBookingId,status:'booked',capacityPool:'online',bookingChannel:tx.who.role === 'owner' ? staffChannel(input) : 'online',madeBy:tx.who.id,madeByRole:tx.who.role,makeupRequestId:requestId,makeupRequestBasis:basis,cancelTerms:cancelTerms(tx.state,entry),createdAt:now(),bookedAt:now(),sequence:tx.state.version+1};
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409); tx.future(entry.start);
   assertMakeupTarget(tx,booking,entry,true);
-  insist(acknowledged(tx.state,credit.personId),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,credit.personId,entry),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === credit.personId && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   insistBookingOpen(tx,entry,false); promote(tx,entry);
   insist(seatCapacity(tx.state,entry).onlineOpen > 0,'class_full',409);

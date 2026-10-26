@@ -1,7 +1,7 @@
 import { requireAttendanceBooking } from './attendance-access';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { canManageGuest } from './guest-consent';
-import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
+import { humanOwner, id, insist, integer, list, now, person, record, text, type RecordData, type State } from './types';
 import { cancelTerms, cancellationEffect, insistBookingOpen, priorityOnly, windowOpen } from './booking-policy';
 import type { Transaction } from './store';
 import { chooseSpot, seatCapacity } from './spots';
@@ -12,10 +12,28 @@ import { bookingHistory, staffReason } from './booking-history';
 import { promote, promoteAll } from './waitlist';
 export { promoteAll };
 
-export const latestWaiver = (state: State) => list(state,'waiver').sort((a,b) => a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1) ?? null;
-export function acknowledged(state: State, personId: string) {
-  const waiver = latestWaiver(state);
-  return !waiver || list(state,'acknowledgement').some(a => a.personId === personId && a.waiverId === waiver.id && (!waiver.requiresSignature || a.signature?.documentHash === waiver.documentHash));
+const waiverScope = (service: unknown) => String(service ?? '').trim().replace(/\s+/g,' ').toLowerCase();
+export function currentWaivers(state: State) {
+  const current = new Map<string,RecordData>();
+  for(const w of list(state,'waiver').sort((a,b)=>a.version-b.version || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)))current.set(waiverScope(w.service),w);
+  return [...current.values()];
+}
+export const latestWaiver = (state: State) => currentWaivers(state).find(w=>!w.service) ?? null;
+export const currentWaiver = (state: State, documentId: unknown) => currentWaivers(state).find(w=>w.id===documentId) ?? null;
+export const currentWaiverReceipt = (state: State, personId: string, waiver: RecordData) => list(state,'acknowledgement').some(a=>a.personId===personId && a.waiverId===waiver.id && (!waiver.requiresSignature || a.signature?.documentHash===waiver.documentHash) && (!a.validUntil || a.validUntil>now()));
+export function acknowledged(state: State, personId: string, entry?: RecordData) {
+  const service=waiverScope(entry?.service ?? entry?.title?.split(' · ')[0]);
+  return currentWaivers(state).filter(w=>!w.service || entry && waiverScope(w.service)===service).every(w=>currentWaiverReceipt(state,personId, w));
+}
+/** Required signing policies for a new service enrollment, including renewal. */
+export function signingMissing(state: State, personId: string, eligibleServices: string[]=[]) {
+  const services=eligibleServices.map(waiverScope);
+  return currentWaivers(state).filter(w=>w.requiresSignature && (!w.service || !services.length || services.includes(waiverScope(w.service))))
+    .filter(w=>!currentWaiverReceipt(state,personId,w));
+}
+/** Newly enrolled service plans require the participant's own current completion. */
+export function assertSigningEnrollments(state: State, before: Set<string>) {
+  for(const pack of list(state,'pack').filter(p=>!before.has(p.id)))insist(!signingMissing(state,pack.personId,pack.eligibleServices ?? []).length,'waiver_signature_required',409);
 }
 /** Packs that can seat this member in this class, earliest expiring first: a
  * credit or plan visit (PLAN-002 hours, upcoming cap and period visits), the
@@ -71,7 +89,7 @@ export function book(tx: Transaction, input: Record<string,unknown>, forMember?:
   tx.future(entry.start);
   const pack = bookingPack(tx.state,member.id,entry), refused = pack ? null : planRefused(tx.state,member.id,entry);
   insistBookingOpen(tx,entry,!!pack,pack ?? refused?.pack);
-  insist(acknowledged(tx.state,member.id),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,member.id,entry),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.personId === member.id && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   promote(tx,entry);
   const full = seatCapacity(tx.state,entry).onlineOpen === 0;
@@ -126,15 +144,18 @@ export async function publishWaiver(tx: Transaction, input: Record<string,unknow
   insist(input.requiresSignature === undefined || typeof input.requiresSignature === 'boolean','invalid_signature_requirement');
   const documentText = text(input.text,'text',20_000);
   const documentHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(documentText)))].map(b => b.toString(16).padStart(2,'0')).join('');
-  const waiver = {id:id(),text:documentText,documentHash,requiresSignature:input.requiresSignature === true,createdAt:now(),createdBy:tx.who.id,version:list(tx.state,'waiver').length+1};
+  const service=input.service ? text(input.service,'service',160).trim().replace(/\s+/g,' ') : null;
+  const validDays=input.validDays === undefined || input.validDays === '' ? null : integer(input.validDays,'validDays',1,3650);
+  insist(!service || input.requiresSignature === true,'service_policy_requires_signature');
+  const waiver = {id:id(),service,validDays,text:documentText,documentHash,requiresSignature:input.requiresSignature === true,createdAt:now(),createdBy:tx.who.id,version:list(tx.state,'waiver').length+1};
   tx.put('waiver',waiver); return waiver;
 }
 // Adapted latest-version receipt fence from Willow src/willow/documents.ts,
 // acknowledge(), commit 5b116dba308ab2bad264a7662705c87b29304b1e.
 export function acknowledgeWaiver(tx: Transaction, input: Record<string,unknown>) {
-  const member = actingMember(tx,input.participantId), waiver = latestWaiver(tx.state);
+  const member = actingMember(tx,input.participantId), waiver = currentWaiver(tx.state,input.id);
   insist(waiver && waiver.id === input.id,'not_latest_version',409);
-  insist(!list(tx.state,'acknowledgement').some(a => a.personId === member.id && a.waiverId === waiver.id),'already_acknowledged',409);
+  insist(!currentWaiverReceipt(tx.state,member.id,waiver),'already_acknowledged',409);
   let signature: Record<string,unknown> | null = null;
   if(waiver.requiresSignature) {
     insist(tx.who.role === 'member' && tx.who.personId,'member_signature_required',403);
@@ -145,10 +166,10 @@ export function acknowledgeWaiver(tx: Transaction, input: Record<string,unknown>
     insist(signerName === signer.name,'signer_name_mismatch');
     const household = member.id !== signer.id ? list(tx.state,'household').find(h => h.guardianIds.includes(signer.id) && h.participantIds.includes(member.id)) : null;
     signature = {method:'typed-affirmation',documentHash:waiver.documentHash,documentText:waiver.text,documentVersion:waiver.version,
-      signerPersonId:signer.id,signerName,signerEmail:signer.email,participantName:member.name,confirmed:true,channel:'member-account',
+      signerPersonId:signer.id,signerName,signerEmail:signer.email,participantName:member.name,confirmed:true,channel:'member-account',deviceContext:{kind:'authenticated-browser'},affirmationText:household ? 'I personally affirm this document as the recorded guardian. This does not authorize a payment.' : 'I personally affirm this exact document. This does not authorize a payment.',
       authority:household ? {kind:'recorded-guardian',householdId:household.id,revision:household.revision,evidence:{...household.guardianEvidence[signer.id]}} : {kind:'self'},
       meaning:'Personal affirmation of this exact document; legal enforceability and payment authorization are not asserted.'};
   }
-  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),actorId:tx.who.id,...(signature ? {signature} : {}),...(member.id !== tx.who.personId ? {signedBy:tx.who.personId} : {})};
+  const receipt = {id:id(),personId:member.id,waiverId:waiver.id,createdAt:now(),validUntil:waiver.validDays ? new Date(Date.now()+waiver.validDays*86400000).toISOString() : null,actorId:tx.who.id,...(signature ? {signature} : {}),...(member.id !== tx.who.personId ? {signedBy:tx.who.personId} : {})};
   tx.put('acknowledgement',receipt); promoteAll(tx); return receipt;
 }

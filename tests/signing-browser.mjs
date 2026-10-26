@@ -28,7 +28,7 @@ export async function signingBrowser(h,{adult,guardian,childId,waiver}) {
       await sign(adult.cookie);await page.goto(h.origin+'/app')
       const adultForm=page.locator('#waiver form');await adultForm.getByLabel('Your full name',{exact:true}).fill(adult.name);await adultForm.getByRole('checkbox').check();await capture('adult-signing')
       await adultForm.getByRole('button',{name:'Sign this document',exact:true}).click()
-      await page.getByText('You completed this version. You can book a class.',{exact:true}).waitFor();await capture('adult-completed')
+      await page.getByText('You completed this current version.',{exact:true}).waitFor();await capture('adult-completed')
       const mine=(await h.state(adult.cookie)).acknowledgements.find(a=>a.waiverId===current.id&&a.personId===adult.id);assert.ok(mine.signature)
       const download=await context.request.get(h.origin+'/api/strap/waiver-evidence.json?id='+mine.id);assert.equal(download.status(),200);assert.equal((await download.json()).receipt.signature.signerName,adult.name)
       await sign(guardian.cookie);await page.goto(h.origin+'/app/household')
@@ -65,5 +65,22 @@ export async function tabletSigningBrowser(h,{member,desk,waiver}) {
       assert.equal((await tablet.request.get(h.origin+'/api/strap/state')).status(),403)
       const receipt=(await h.state(member.cookie)).acknowledgements.filter(a=>a.waiverId===current.id&&a.signature?.channel==='desk-tablet').at(-1);assert.equal(receipt.signature.signerPersonId,member.id)
     }finally{await tablet.close();await context.close()}
+  }}finally{await browser.close()}
+}
+
+export async function serviceSigningBrowser(h,{adult,guardian,childId,policy}) {
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox']})
+  try{for(const width of [1440,390]){
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try{
+      await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
+      const page=await context.newPage()
+      const sign=async cookie=>{await context.clearCookies();const i=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,i),value:cookie.slice(i+1),url:h.origin}])}
+      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width);const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(cs=>cs.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));assert.deepEqual(missing,[]);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-005-service-${name}-${width}.png`),fullPage:true})}
+      const current=await h.cmd('waiver.publish',{text:policy.text+' Mobile viewport '+width,requiresSignature:true,service:'Reformer',validDays:1})
+      await sign(h.owner);await page.goto(h.origin+'/app/classes');await page.getByText('Publish a new version',{exact:true}).click();await page.getByLabel('Applies to service (blank for studio waiver)',{exact:true}).fill('Reformer');await page.getByLabel('Completion valid for days (blank for no expiry)',{exact:true}).fill('1');await capture('owner-policy')
+      await sign(adult.cookie);await page.goto(h.origin+'/app');const personal=page.locator('#policy-'+current.id);await personal.getByLabel('Your full name',{exact:true}).fill(adult.name);await personal.getByRole('checkbox').check();await capture('adult-review');await personal.getByRole('button',{name:'Sign Reformer policy',exact:true}).click();await page.getByText('Current document completed.',{exact:true}).waitFor();await capture('adult-completed')
+      await sign(guardian.cookie);await page.goto(h.origin+'/app/household');const child=page.locator('[data-participant-id="'+childId+'"]');const guardianForm=child.locator('#policy-'+current.id);await guardianForm.getByLabel('Your full name',{exact:true}).fill(guardian.name);await guardianForm.getByRole('checkbox').check();await capture('guardian-review');await guardianForm.getByRole('button',{name:'Sign Reformer policy for Policy child',exact:true}).click();await child.getByText('Current document completed.',{exact:true}).waitFor();await capture('guardian-completed')
+    }finally{await context.close()}
   }}finally{await browser.close()}
 }

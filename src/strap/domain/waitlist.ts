@@ -60,7 +60,7 @@ export function promote(tx: Transaction, entry: RecordData) {
   let vacancies = seatCapacity(tx.state,entry,all).onlineOpen;
   for (const candidate of all.filter(b => b.status === 'waitlisted').sort(fifo)) {
     if (vacancies <= 0) break;
-    if (!tx.state.people.some(p => p.id === candidate.personId && p.active && !p.erasedAt) || !acknowledged(tx.state,candidate.personId)) continue;
+    if (!tx.state.people.some(p => p.id === candidate.personId && p.active && !p.erasedAt) || !acknowledged(tx.state,candidate.personId,entry)) continue;
     if(intakeMissing(tx.state,candidate.personId,[String(entry.service ?? entry.title).split(' · ')[0]]).length) continue;
     const source = candidate.moveFromBookingId ? tx.state.records.get(candidate.moveFromBookingId)?.data : null;
     const sourceEntry = source ? tx.state.records.get(source.classId)?.data : null;
@@ -108,7 +108,7 @@ export function acceptOffer(tx: Transaction, input: Record<string,unknown>) {
   insist(current.status === 'offered','no_open_offer',409);
   insist(entry.status === 'published' && entry.start > now(),'class_already_started',409);
   tx.future(current.offer.expiresAt); tx.future(entry.start);
-  insist(acknowledged(tx.state,current.personId),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,current.personId,entry),'waiver_acknowledgement_required',409);
   if (current.moveFromBookingId) return acceptPendingMove(tx,current,input);
   const pack = eligiblePack(tx.state,current.personId,entry);
   insist(pack,planRefused(tx.state,current.personId,entry)?.code ?? 'eligible_credit_required',409);

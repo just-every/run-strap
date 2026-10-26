@@ -19,6 +19,7 @@ import { load } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { reportDownload, nativeReportDownload } from './report-exports'
 import { revenueReport } from './revenue-report'
+import { financeReport, financeDownload } from './finance-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
 import { sendWaiverLaunch, waiverLaunchStatuses } from './waiver-launch'
@@ -74,8 +75,9 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
-  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads'].includes(url.pathname)) return state(env,who)
+  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
+  if (url.pathname === '/app/revenue') return {...await state(env,who),financeReport:financeReport(loaded.state,url.searchParams)}
   if (url.pathname === '/app/leads') return {...await state(env,who),leadReport:leadReport(loaded.state,loaded.who,url.searchParams)}
   const retentionQuery = new URLSearchParams(url.searchParams)
   // Native GET forms submit blank optional fields; API query validation remains strict.
@@ -223,6 +225,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (who.role !== 'owner') fail('owner_required',403)
         const loaded = await load(env.DB,who), report = renewalWorklist(loaded.state,loaded.who,url.searchParams)
         return json(report)
+      }
+      if (/^\/api\/strap\/reports\/finance(?:\.(csv|xlsx))?$/.test(path)) {
+        if (who.role !== 'owner' || !who.isOwner) fail('owner_required',403)
+        const loaded=await load(env.DB,who), report=financeReport(loaded.state,url.searchParams)
+        return path.endsWith('.csv') ? financeDownload(report,'csv') : path.endsWith('.xlsx') ? financeDownload(report,'xlsx') : json(report)
       }
       if (path === '/api/strap/reports/revenue') {
         if (who.role !== 'owner' && !reportStaff(who)) fail('owner_required',403)

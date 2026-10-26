@@ -49,8 +49,8 @@ function editor(s: any, count: number) {
 
 function waiver(s: any) {
   const current = s.waiver
-  const text = current ? `<p><span class="pill done">Version ${h(current.version ?? 1)}</span></p><p class="letter">${h(current.text)}</p>` : emptyLine('No waiver published. Publish one and members acknowledge it before they book.')
-  return panel('Waiver', `<div class="panel-body">${text}</div>${owner(s) ? `<details class="more"><summary>Publish a new version</summary><div class="panel-body"><p class="meta">Members acknowledge the new version before their next booking.</p>${form('waiver.publish', '/app/classes', textarea('text', 'Waiver text', '', 'required') + '<label class="check"><input type="checkbox" name="requiresSignature" value="yes">Require a personal typed signature</label>', 'Publish new waiver version')}</div></details>` : ''}`, { icon: 'report' })
+  const text = (s.waivers ?? []).filter((w: any)=>w.service).map((w: any)=>`<h3>${h(w.service)} policy · Version ${h(w.version)}</h3><p>${w.validDays ? `Completion valid for ${w.validDays} days.` : 'No completion expiry set.'}</p><p class="letter">${h(w.text)}</p>`).join('') + (current ? `<p><span class="pill done">Version ${h(current.version ?? 1)}</span></p><p class="letter">${h(current.text)}</p>` : emptyLine('No waiver published. Publish one and members acknowledge it before they book.'))
+  return panel('Waiver', `<div class="panel-body">${text}</div>${owner(s) ? `<details class="more"><summary>Publish a new version</summary><div class="panel-body"><p class="meta">Members acknowledge the new version before their next booking.</p>${form('waiver.publish', '/app/classes', textarea('text', 'Waiver text', '', 'required') + field('service','Applies to service (blank for studio waiver)','','text','maxlength="160"') + field('validDays','Completion valid for days (blank for no expiry)','','number','min="1" max="3650"') + '<label class="check"><input type="checkbox" name="requiresSignature" value="yes">Require a personal typed signature</label>', 'Publish new waiver version')}</div></details>` : ''}`, { icon: 'report' })
 }
 
 export function classesPage(s: any, query: URLSearchParams) {

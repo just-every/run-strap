@@ -1,3 +1,4 @@
+import { signingMissing } from './bookings';
 import { intakeMissing } from './intake';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -132,6 +133,7 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
     if (!member?.active || member.erasedAt || pack.expiresAt !== due || JSON.stringify(packTerms(pack)) !== JSON.stringify({credits:terms.credits,amountCents:terms.amountCents,entitlement:terms.entitlement,eligibleServices:terms.eligibleServices,priorityBooking:terms.priorityBooking,guestTerms:terms.guestTerms})) {
       tx.put('recurringTerms',{...terms,status:'needs_review',failure:'source_terms_changed',failedAt:at}); continue;
     }
+    if(signingMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'waiver_signature_required',failedAt:at});continue;}
     if(intakeMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'intake_completion_required',failedAt:at});continue;}
     const amendment=list(tx.state,'renewalDisclosure').find(d=>d.termsId===terms.id&&d.acceptedAtPrice&&!d.appliedAtPrice&&d.status==='delivered');
     if(amendment&&(amendment.packId!==pack.id||amendment.dueAt!==due||amendment.currentAmountCents!==terms.amountCents||amendment.acceptedTermsKey!==terms.key||amendment.acceptanceKey!==amendment.key||!Number.isInteger(amendment.requiredNoticeDays)||amendment.requiredNoticeDays!==terms.noticeLeadDays||!amendment.deliveredAt||Date.parse(amendment.deliveredAt)+amendment.requiredNoticeDays*86400000>Date.parse(due)||amendment.acceptByAt!==due||amendment.acceptedAtPrice>=amendment.acceptByAt||(terms.currentPriceDisclosureId ?? null)!==amendment.priorPriceDisclosureId)){tx.put('recurringTerms',{...terms,status:'needs_review',failure:'accepted_price_source_changed',failedAt:at});continue;}

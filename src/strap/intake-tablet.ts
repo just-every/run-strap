@@ -1,5 +1,5 @@
 import { requireTabletSigningAuthority, completeTabletSignature } from './signing-tablet';
-import { latestWaiver } from './domain/bookings';
+import { latestWaiver, currentWaiver, currentWaiverReceipt } from './domain/bookings';
 import { fontHead } from '../base/font-head';
 import { operatorAuth, type Bindings } from '../auth.server';
 import { loadSystem, Transaction } from './domain/store';
@@ -79,7 +79,7 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
 }
 
 async function signingResponse(tx: Transaction,row: RecordData,path: string,method: string,input: Record<string,unknown>,secret: string,url: URL) {
-  const launch=record(tx.state,row.id,'waiverTabletLaunch'),member=person(tx.state,launch.personId),waiver=latestWaiver(tx.state);
+  const launch=record(tx.state,row.id,'waiverTabletLaunch'),member=person(tx.state,launch.personId),waiver=currentWaiver(tx.state,launch.waiverId);
   insist(waiver && waiver.id===launch.waiverId && waiver.documentHash===launch.documentHash,'document_changed',409);
   requireTabletSigningAuthority(tx,launch);
   await nativeCreatorActive(tx,launch);

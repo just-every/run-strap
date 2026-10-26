@@ -40,4 +40,12 @@ document is shown, with no previous answers or other member records. The member 
 invalidates an issued handoff. The tablet records self-affirmed identity, not independent identity verification. Never pass a staff
 session to the member. Return the device to staff after completion.
 
-Service-specific documents, document expiry, account-less guest signing and membership payment authorization remain unavailable.
+## Service policies and expiry
+
+On the same publication form, enter **Applies to service** to publish a policy for a named service. Leave it blank for the studio-wide waiver. Service policies require personal typed signing. Publishing another version for that service replaces only its current document; other services remain unchanged.
+
+Set **Completion valid for days** from 1 to 3650, or leave it blank for no automatic expiry. Each completion retains its own expiry. Expired completion blocks the affected booking and check-in, including an existing booking. Re-signing creates a new receipt and preserves earlier evidence. Newly sold plans require current completion for their eligible services; a plan permitting every service requires every current signing policy.
+
+Members complete service policies on **Classes**; current recorded guardians use **My household**. Staff launch the assigned service document from the member profile using the same scoped signing rights. Downloaded evidence preserves the displayed affirmation, document hash, signer channel, authority reference and device context. A tablet's device context remains self-affirmed.
+
+Account-less guest signing, membership payment authorization, legal sufficiency, broader staff roles and used-record erasure remain incomplete.

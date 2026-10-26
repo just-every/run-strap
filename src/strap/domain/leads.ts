@@ -248,7 +248,7 @@ export function recoveryEvidence(state: State) {
       }
       if(opportunities.length < rule.missedWeeks) continue;
       const alternatives = classes.filter(c=>c.status === 'published' && c.start > at && c.start < new Date(Date.parse(at)+14*86400000).toISOString()
-        && serviceOf(c) === serviceOf(last.c) && !frozenAt(state,member.id,c.start) && acknowledged(state,member.id)
+        && serviceOf(c) === serviceOf(last.c) && !frozenAt(state,member.id,c.start) && acknowledged(state,member.id,c)
         && seatCapacity(state,c).onlineOpen > 0 && !bookings.some(b=>b.personId === member.id && b.classId === c.id && b.status !== 'cancelled'))
         .filter(c=>{const pack=bookingPack(state,member.id,c);return pack && windowOpen(state,c,pack);})
         .sort((a,b)=>a.start.localeCompare(b.start)).slice(0,5).map(c=>({classId:c.id,start:c.start,title:c.title}));
@@ -286,7 +286,7 @@ export function completeRecovery(tx: Transaction, input: Record<string,unknown>)
 export function emptyPlaceRefusal(state: State, personId: string, entry: RecordData) {
   const denied = marketingPermission(state,personId,'inApp');
   if(denied) return denied;
-  if(!acknowledged(state,personId)) return 'waiver_acknowledgement_required';
+  if(!acknowledged(state,personId,entry)) return 'waiver_acknowledgement_required';
   if(list(state,'booking').some(b=>b.personId === personId && b.classId === entry.id && b.status !== 'cancelled')) return 'already_booked_or_waiting';
   const preferences = preferencesOf(state,personId);
   if(preferences.preferredClasses && !String(preferences.preferredClasses).toLowerCase().split(/[,\n]/).map(s=>s.trim()).includes(serviceOf(entry))) return 'class_preference_mismatch';

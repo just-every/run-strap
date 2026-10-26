@@ -483,3 +483,59 @@ test('MEM-005: scoped desk launches a one-use signed-out signing tablet, locks p
   await h.db.prepare("UPDATE st_intake_tablets SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(expiring.id).run()
   assert.equal((await h.send(expiring.url)).status,410)
 }))
+
+test('MEM-005: service-specific replacement and expiring personal and guardian affirmations fence only affected enrollments, bookings and existing check-in',()=>run(async h=>{
+  await h.confirmSetup(h.owner)
+  const adult=await h.person('PolicyAdult'),guardian=await h.person('PolicyGuardian'),coach=await h.person('PolicyCoach','instructor')
+  let family=await h.cmd('household.save',{name:'Policy family'})
+  family=await h.cmd('household.guardian.link',{id:family.id,guardianId:guardian.id,evidenceReference:'synthetic-strap-policy-authority'})
+  family=await h.cmd('household.participant.add',{id:family.id,name:'Policy child'})
+  const childId=family.participantIds[0]
+  const buy=async personId=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId,credits:10,amountCents:20000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await buy(adult.id);await buy(childId)
+  const publish=async(service,offset)=>{const start=at(offset);return(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:monday(start),classes:[{title:service,service,start,end:new Date(Date.parse(start)+hour).toISOString(),capacity:5,instructorId:coach.id,room:service+offset}]})).id})).classes[0]}
+  const reformer=await publish('Reformer',48),mat=await publish('Mat',49),later=await publish('Reformer',72)
+  const policy=await h.cmd('waiver.publish',{text:'Reformer service-specific personal affirmation.',requiresSignature:true,service:'Reformer',validDays:30})
+  await refused(h,'booking.book',{classId:reformer.id},adult.cookie,409,'waiver_acknowledgement_required')
+  const matSeat=await h.cmd('booking.book',{classId:mat.id},adult.cookie)
+  const prepared=await h.cmd('pack.prepare',{personId:adult.id,credits:3,amountCents:6000,eligibleServices:['Reformer'],expiresAt:'2099-12-31T00:00:00Z'})
+  await refused(h,'pack.approve',{id:prepared.id},h.owner,409,'waiver_signature_required')
+  const sign=(who,document,participantId)=>({id:document.id,documentHash:document.documentHash,signerName:who.name,confirm:true,...(participantId?{participantId}:{})})
+  const personal=await h.cmd('waiver.acknowledge',sign(adult,policy),adult.cookie)
+  const child=await h.cmd('waiver.acknowledge',sign(guardian,policy,childId),guardian.cookie)
+  assert.equal(Date.parse(personal.validUntil)-Date.parse(personal.createdAt),30*86400000)
+  assert.equal(child.signature.authority.evidence.evidenceReference,'synthetic-strap-policy-authority')
+  assert.match(personal.signature.affirmationText,/personally affirm/)
+  const enrolled=await h.cmd('pack.approve',{id:prepared.id})
+  const seat=await h.cmd('booking.book',{classId:reformer.id},adult.cookie)
+  await h.cmd('booking.book',{classId:reformer.id,participantId:childId},guardian.cookie)
+  const replacement=await h.cmd('waiver.publish',{text:'Replacement Reformer policy.',requiresSignature:true,service:' reformer ',validDays:1})
+  await refused(h,'waiver.acknowledge',sign(adult,policy),adult.cookie,409,'not_latest_version')
+  await refused(h,'attendance.checkin',{id:seat.id},coach.cookie,409,'waiver_signature_required')
+  await h.cmd('attendance.checkin',{id:matSeat.id},coach.cookie)
+  const renewed=await h.cmd('waiver.acknowledge',sign(adult,replacement),adult.cookie)
+  // Pin the expired business record, independent of wall-clock date and time boundaries.
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify({...renewed,validUntil:'2000-01-01T00:00:00.000Z'}),renewed.id).run()
+  await refused(h,'booking.book',{classId:later.id},adult.cookie,409,'waiver_acknowledgement_required')
+  await refused(h,'attendance.checkin',{id:seat.id},coach.cookie,409,'waiver_signature_required')
+  const completed=await h.cmd('waiver.acknowledge',sign(adult,replacement),adult.cookie)
+  assert.notEqual(completed.id,renewed.id,'expired completion renews with a new immutable receipt')
+  await h.cmd('attendance.checkin',{id:seat.id},coach.cookie)
+  await h.cmd('booking.book',{classId:later.id},adult.cookie)
+  const original=await h.send('/api/strap/waiver-evidence.json?id='+personal.id,undefined,adult.cookie)
+  assert.equal(original.value.document.text,policy.text);assert.equal(original.value.receipt.signature.documentHash,policy.documentHash)
+  const download=await h.send('/api/strap/waiver-evidence.json?id='+child.id,undefined,guardian.cookie)
+  assert.equal(download.status,200)
+  const proposal=await h.cmd('plan.recurring.prepare',{packId:enrolled.id,intervalMonths:1,requestId:'synthetic-strap-policy-renewal'});
+  const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},adult.cookie);
+  const due=new Date(Date.now()-1000).toISOString();
+  const records=(await h.db.prepare('SELECT id,kind,data FROM st_records WHERE id IN (?,?,?)').bind(enrolled.id,terms.id,completed.id).all()).results;
+  await h.db.batch(records.map(row=>{const value=JSON.parse(row.data);if(row.kind==='pack')value.expiresAt=due;else if(row.kind==='recurringTerms')value.nextRenewalAt=due;else value.validUntil='2000-01-02T00:00:00.000Z';return h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(value),row.id)}));
+  const beforeRenewal=await h.state();
+  await(await h.mf.getWorker()).scheduled();
+  const afterRenewal=await h.state();
+  const held=JSON.parse((await h.db.prepare('SELECT data FROM st_records WHERE id=?').bind(terms.id).first()).data);
+  assert.equal(held.status,'needs_review');assert.equal(held.failure,'waiver_signature_required');
+  assert.deepEqual([afterRenewal.packs.length,afterRenewal.charges.length],[beforeRenewal.packs.length,beforeRenewal.charges.length],'expired service completion holds renewal without a new entitlement or invoice charge');
+  if(process.env.STRAP_PROOF_DIR)await(await import('./signing-browser.mjs')).serviceSigningBrowser(h,{adult,guardian,childId,policy:replacement})
+}))

@@ -34,7 +34,7 @@ function availablePack(tx: Transaction, booking: RecordData, entry: RecordData, 
 /** A target must meet every ordinary eligibility fence; only capacity can be overridden. */
 function target(tx: Transaction, booking: RecordData, entry: RecordData, input: Record<string,unknown>, needsAvailable: boolean, heldOffer = false) {
   person(tx.state,booking.personId);
-  insist(acknowledged(tx.state,booking.personId),'waiver_acknowledgement_required',409);
+  insist(acknowledged(tx.state,booking.personId,entry),'waiver_acknowledgement_required',409);
   insist(!list(tx.state,'booking').some(b => b.id !== booking.id && b.personId === booking.personId && b.classId === entry.id && b.status !== 'cancelled'),'already_booked',409);
   const pack = availablePack(tx,booking,entry,needsAvailable);
   insistBookingOpen(tx,entry,pack?.priorityBooking === true,pack);
