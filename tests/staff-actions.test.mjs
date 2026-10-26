@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { run } from './harness.mjs'
-import { acceptance, billingEdge, billingSeed, billingSucceeded } from './billing-sandbox.mjs'
+import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
 const minute=60_000, hour=60*minute
 const at = hours => new Date(Math.ceil((Date.now()+hours*hour)/minute)*minute).toISOString()
 const monday = start => {const d=new Date(start);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)}
@@ -30,6 +30,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
   const billing=billingEdge()
   await run(async h=>{
     const {coach,ana,ben,publish}=await prepare(h)
+    const historyMember=await h.person('HistoryOne'),otherHistoryMember=await h.person('HistoryTwo')
     const future=await publish('Future Flow',26),near=await publish('Open check-in',0.25)
     await h.cmd('spots.save',{room:'Future Flow',spots:['Mat 1','Mat 2'],disabled:[]})
     // First get a code by the member door; staff reading it preserves its bytes and revision.
@@ -527,8 +528,12 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       return r;
     };
     actions['billing.agreement.accept']=async door=>{
-      const seed=await billingSeed(h,'BillingParity');billingMember=seed.member;
-      billingAgreement=await h.cmd('billing.agreement.prepare',seed.prepare);
+      billingMember=historyMember;
+      const draft=await h.cmd('pack.prepare',{personId:billingMember.id,credits:4,amountCents:8000,expiresAt:new Date(Date.now()+30*86400000).toISOString(),eligibleServices:['Fitness']});
+      const pack=await h.cmd('pack.approve',{id:draft.id});
+      const preview=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
+      const terms=await h.cmd('plan.recurring.accept',{id:preview.id,key:preview.key},billingMember.cookie);
+      billingAgreement=await h.cmd('billing.agreement.prepare',{termsId:terms.id,requestId:randomUUID(),adultVerified:true,adultEvidenceReference:'synthetic-strap-913',title:'Personal membership agreement',documentText:'Four Fitness classes each calendar-month term, with separately authorized recurring payment.'});
       await billingLaunch('billing.agreement.accept',door);
       await refused(h,'billing.agreement.accept',acceptance(billingAgreement,billingMember.name),h.owner);
       const signed=await h.cmd('billing.agreement.accept',acceptance(billingAgreement,billingMember.name),billingMember.cookie);
@@ -609,7 +614,6 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const rotated=await checkAudit('checkin.rotate',{personId:ana.id,reason:'Lost key tag',channel:'phone',requestId:randomUUID()})
     assert.notEqual(rotated.result.code,codeBefore.code);assert.equal(rotated.result.codeRevision,codeBefore.codeRevision+1)
     // SEC-002: search and download actual staff-made changes, without broadening access or rewriting history.
-    const historyMember=await h.person('HistoryOne'),otherHistoryMember=await h.person('HistoryTwo')
     const edit={personId:historyMember.id,phone:'6155550197',channel:'phone',revision:0,requestId:randomUUID()}
     await h.cmd('profile.save.staff',edit)
     await h.cmd('profile.save.staff',edit) // a replay remains one change in search and export

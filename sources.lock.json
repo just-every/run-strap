@@ -4406,7 +4406,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "47715e30f9f7bf1240dda37fb87e698e426df025e99dd1ed7ad58d280ebf2846",
+      "sha256": "1f9fb953d96a28add0fdd2a56404550187fb2e4d77b3a9122ad943fbdab71d92",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
