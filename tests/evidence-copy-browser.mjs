@@ -11,7 +11,7 @@ export async function evidenceCopyBrowser(h,{edge,waiver}) {
     const owner=await browser.newContext({viewport:{width,height:1000}}),tablet=await browser.newContext({viewport:{width,height:1000}}),personal=await browser.newContext({viewport:{width,height:1000},acceptDownloads:true})
     try{
       const assets=async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()}
-      await owner.route(h.origin+'/**',assets);await tablet.route(h.origin+'/**',assets)
+      await owner.route(h.origin+'/**',assets);await tablet.route(h.origin+'/**',assets);await personal.route(h.origin+'/**',assets)
       const at=h.owner.indexOf('=');await owner.addCookies([{name:h.owner.slice(0,at),value:h.owner.slice(at+1),url:h.origin}])
       const page=await owner.newPage(),shared=await tablet.newPage(),privatePage=await personal.newPage()
       const capture=async(p,name)=>{await p.evaluate(()=>document.fonts.ready);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width);if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await p.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-005-copy-${name}-${width}.png`),fullPage:true})}}

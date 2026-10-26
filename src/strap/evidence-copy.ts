@@ -1,4 +1,5 @@
 import type { Bindings } from '../auth.server';
+import { fontHead } from '../base/font-head';
 // @ts-ignore The pinned Base mail module is JavaScript without declarations here.
 import { createMailSender } from '../modules/mail/index.mjs';
 import { memberMail } from './domain/notices';
@@ -108,8 +109,8 @@ async function dispatchCopy(env: Bindings,row: CopyRow,secret: string): Promise<
   return status;
 }
 
-const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
-const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="same-origin"><title>Private document copy</title><style>body{max-width:640px;margin:48px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif}button{font:inherit;padding:12px 20px}</style></head><body><main>${body}</main></body></html>`,{status,headers:{...headers,'referrer-policy':'same-origin'}});
+const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
+const page=(body: string,status=200)=>new Response(`<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin"><title>Private document copy · Strap</title><link rel="stylesheet" href="/rer-theme.css">${fontHead}<link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/pages.css"><link rel="stylesheet" href="/brand/app/intake-tablet.css"></head><body><main class="intake-tablet page single"><section class="panel"><div class="panel-body">${body}</div></section></main></body></html>`,{status,headers});
 /** A capability door independent of native accounts; it never grants private navigation. */
 export async function evidenceCopyResponse(request: Request,env: Bindings): Promise<Response> {
   try {
@@ -126,7 +127,7 @@ export async function evidenceCopyResponse(request: Request,env: Bindings): Prom
     insist(row?.origin===env.AUTH_ORIGIN,'copy_unavailable',410);
     const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who),source=await checkedSource(tx.state,row),review=await reviewedMail(env,tx.state);
     insist(review?.connection_id===row.connection_id,'copy_unavailable',410);
-    if(request.method==='GET')return page(`<h1>Your private document copy</h1><p>Download the exact copy requested after tablet completion. This link downloads once and grants no studio account access.</p><form method="post" action="${evidenceCopyPath}"><input type="hidden" name="token" value="${secret}"><button type="submit">Download my document copy</button></form>`);
+    if(request.method==='GET')return page(`<h1>Your private document copy</h1><p>Download the exact copy requested after tablet completion. This link downloads once and grants no studio account access.</p><form method="post" action="${evidenceCopyPath}"><input type="hidden" name="token" value="${secret}"><button class="btn" type="submit">Download my document copy</button></form>`);
     sourceFence(tx,source,row);mailFence(tx,review);
     tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_evidence_copies WHERE id=? AND token_hash=? AND consumed_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND delivery_status IN ('sending','accepted','uncertain')) THEN 1 ELSE 0 END",row.id,row.token_hash));
     tx.sql.push(tx.statement('UPDATE st_evidence_copies SET consumed_at=? WHERE id=? AND consumed_at IS NULL',now(),row.id));
