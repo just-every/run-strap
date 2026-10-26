@@ -1,3 +1,4 @@
+import { evidenceCopyAvailable, prepareEvidenceCopy } from './evidence-copy';
 import { requireTabletSigningAuthority, completeTabletSignature } from './signing-tablet';
 import { latestWaiver, currentWaiver, currentWaiverReceipt } from './domain/bookings';
 import { fontHead } from '../base/font-head';
@@ -57,7 +58,7 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
     const row=await env.DB.prepare("SELECT * FROM st_intake_tablets WHERE token_hash=? AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND consumed_at IS NULL").bind(await hash(secret)).first<RecordData>();
     insist(row,'tablet_unavailable',410);
     const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who);
-    if(tx.state.records.get(row.id)?.kind === 'waiverTabletLaunch')return await signingResponse(tx,row,path,request.method,input,secret,url);
+    if(tx.state.records.get(row.id)?.kind === 'waiverTabletLaunch')return await signingResponse(tx,row,path,request.method,input,secret,url,env);
     const {launch,member,form}=liveLaunch(tx,row);
     await nativeCreatorActive(tx,launch);
     if(path === '/intake/tablet/start') {
@@ -78,7 +79,7 @@ export async function intakeTabletResponse(request: Request,env: Bindings) {
   }catch(error){const response=page('<h1>Tablet locked</h1><p>This form is unavailable or could not be saved. Ask studio staff for a new handoff. No member records are available here.</p>',Number((error as any).status)||500);response.headers.set('x-strap-refusal',(error as any).code ?? 'tablet_unavailable');return response;}
 }
 
-async function signingResponse(tx: Transaction,row: RecordData,path: string,method: string,input: Record<string,unknown>,secret: string,url: URL) {
+async function signingResponse(tx: Transaction,row: RecordData,path: string,method: string,input: Record<string,unknown>,secret: string,url: URL,env: Bindings) {
   const launch=record(tx.state,row.id,'waiverTabletLaunch'),member=person(tx.state,launch.personId),waiver=currentWaiver(tx.state,launch.waiverId);
   insist(waiver && waiver.id===launch.waiverId && waiver.documentHash===launch.documentHash,'document_changed',409);
   requireTabletSigningAuthority(tx,launch);
@@ -91,10 +92,13 @@ async function signingResponse(tx: Transaction,row: RecordData,path: string,meth
     return new Response(null,{status:303,headers:{location:'/intake/tablet','cache-control':'no-store','referrer-policy':'strict-origin','set-cookie':`${tabletCookie}=${secret}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900${url.protocol==='https:'?'; Secure':''}`}});
   }
   insist(row.paired_at,'tablet_unavailable',410);
-  if(method==='GET')return page(`<h1>Review your document</h1><p>For ${h(member.name)} · Version ${h(waiver.version)}</p><p class="letter">${h(waiver.text)}</p><p>This records your personal affirmation. It makes no claim of legal enforceability and does not authorize payment.</p><form class="form" method="post" action="/intake/tablet">${field('signerName','Your full name','','text','required maxlength="160"')}<label class="check"><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and personally affirm this exact document.</label><button class="btn" type="submit">Sign and lock tablet</button></form>`);
-  completeTabletSignature(tx,launch,input);
+  const copyAvailable=await evidenceCopyAvailable(env,tx.state,member.id);
+  if(method==='GET')return page(`<h1>Review your document</h1><p>For ${h(member.name)} · Version ${h(waiver.version)}</p><p class="letter">${h(waiver.text)}</p><p>This records your personal affirmation. It makes no claim of legal enforceability and does not authorize payment.</p><form class="form" method="post" action="/intake/tablet">${field('signerName','Your full name','','text','required maxlength="160"')}<label class="check"><input type="checkbox" name="confirm" value="yes" required>I am ${h(member.name)} and personally affirm this exact document.</label>${copyAvailable ? '<label class="check"><input type="checkbox" name="adultConfirmed" value="yes">I am an adult acting for myself.</label><label class="check"><input type="checkbox" name="emailCopy" value="yes">Email a private copy link to my personal email already held by this studio. The link expires in 15 minutes and downloads once. I confirm that email belongs to me.</label>' : ''}<button class="btn" type="submit">Sign and lock tablet</button></form>`);
+  const receipt=completeTabletSignature(tx,launch,input);
+  const copy=await prepareEvidenceCopy(tx,env,receipt.id,input);
   tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN consumed_at IS NULL AND expires_at>? THEN 1 ELSE 0 END FROM st_intake_tablets WHERE id=?',now(),row.id));
   tx.sql.push(tx.statement('UPDATE st_intake_tablets SET consumed_at=? WHERE id=?',now(),row.id));
   tx.put('waiverTabletLaunch',{...launch,status:'completed',completedAt:now()});await tx.commit();
-  return page('<h1>Document saved · tablet locked</h1><p>Your affirmation was saved. No member records are available here. Hand the tablet back to studio staff.</p>');
+  const delivery=copy ? await copy.dispatch() : null;
+  return page('<h1>Document saved · tablet locked</h1><p>Your affirmation was saved. No member records are available here. Hand the tablet back to studio staff.</p>'+(delivery==='accepted' ? '<p>Your copy link was submitted for delivery. Check your personal email.</p>' : delivery ? '<p>Copy delivery was not confirmed. It will not be sent again automatically.</p>' : ''));
 }

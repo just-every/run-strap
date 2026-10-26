@@ -6,6 +6,7 @@ import { giftSnapshot } from './domain/gift-cards'
 import { inventorySnapshot } from './domain/inventory'
 import { drawerSnapshot, tenderDay } from './domain/drawer'
 import { intakeTabletResponse } from './intake-tablet'
+import { evidenceCopyPath, evidenceCopyResponse, evidenceCopyMailStatus, reviewEvidenceCopyMail } from './evidence-copy'
 import { smsConsentWebhook } from './consent-webhook'
 import { smsTestCommand, smsTestState } from './twilio/test-transport'
 import { smsTestWebhook } from './twilio/webhooks'
@@ -17,7 +18,7 @@ import { leadReport } from './lead-report'
 import { renewalWorklist } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
-import { load } from './domain/store'
+import { load, Transaction } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { reportDownload, nativeReportDownload } from './report-exports'
 import { revenueReport } from './revenue-report'
@@ -77,6 +78,10 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if (url.pathname === '/app/classes' && who.role==='owner') {
+    const loaded=await load(env.DB,who)
+    return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
+  }
   if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) return {...await state(env,who),billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null}
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
@@ -90,6 +95,10 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name==='waiver.copy.mail.review') {
+    const loaded=await load(env.DB,who),tx=new Transaction(env.DB,loaded.state,loaded.who)
+    const result=await reviewEvidenceCopyMail(tx,env,input);await tx.commit();return {result}
+  }
   if (name.startsWith('billing.')) return {result:await billingCommand(env,who,name,input)}
   if (name.startsWith('tax.')) return {result:await taxCommand(env,who,name,input)}
   if (name.startsWith('sms.test.')) return smsTestCommand(env, who, name, input)
@@ -149,6 +158,7 @@ export async function strapScheduled(original: Bindings) {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if (path===evidenceCopyPath) return evidenceCopyResponse(request,runtimeBindings(original))
   if (path === '/intake/tablet' || path === '/intake/tablet/start') return intakeTabletResponse(request,runtimeBindings(original))
   if (path === '/api/strap/sms/test/status' || path === '/api/strap/sms/test/inbound') return smsTestWebhook(request,runtimeBindings(original))
   if (path === '/api/strap/consent/twilio') return smsConsentWebhook(request,runtimeBindings(original))
