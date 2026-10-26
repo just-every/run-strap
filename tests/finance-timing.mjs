@@ -153,7 +153,9 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   assert.equal(after.closing.receivableCents,before.closing.receivableCents,'recorded refund never invents a new invoice receivable')
   assert.equal(after.sources.filter(r=>r.id===settlement.id).length,1)
   assert.equal(after.sources.find(r=>r.id===settlement.id).record.amountCents,1000)
-  for(const id of [ten.charge.id,changed.charge.id,refundSale.charge.id]){
+  const frozen=after.rows.find(r=>r.id===ten.charge.id)
+  assert.deepEqual([frozen.earnedCents,frozen.deferredCents,frozen.unusedPackCents,frozen.unclassifiedCents],[2000,18001,18001,0],'an access-only finite-pack freeze preserves the original price and quantity; its extension earns nothing')
+  for(const id of [changed.charge.id,refundSale.charge.id]){
     const row=after.rows.find(r=>r.id===id);assert.equal(row.unclassifiedCents,row.amountCents);assert.equal(row.earnedCents,0);assert.equal(row.deferredCents,0)
   }
   for(const charge of (await state()).charges.filter(c=>c.freezeId===preview.id||c.planChangeId===change.id)){
@@ -169,6 +171,8 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)
+  const frozenExpired=expired.rows.find(r=>r.id===ten.charge.id)
+  assert.deepEqual([frozenExpired.earnedCents,frozenExpired.deferredCents,frozenExpired.unusedPackCents],[2000,18001,18001],'unused frozen finite-pack value remains deferred after extended expiry')
   const unused=expired.rows.find(r=>r.id===expirySale.charge.id)
   assert.deepEqual([unused.earnedCents,unused.deferredCents,unused.unusedPackCents],[0,10003,10003],'expiry never automatically earns unused pack value')
   const version=(await state()).version;await read('2032-03');assert.equal((await state()).version,version)
