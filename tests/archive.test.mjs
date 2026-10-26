@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -25,6 +26,31 @@ async function checkout(root) {
   await mkdir(root)
   for (const name of ['package.json','pnpm-lock.yaml','OPERATIONS.json','RUN-LOCALLY.md','ACCEPTANCE.md','SEED-COMMAND-CONTRACT.md','OPERATIONS.md','.node-version','wrangler.jsonc','deploy.json','rer-setup.json','scripts','src','migrations']) await cp(name, join(root,name), { recursive: true })
   await symlink(resolve('node_modules'), join(root,'node_modules'), 'dir')
+}
+// Read the public bundle as an independent receiver: every typed receipt has
+// exact machine-readable evidence and an inert readable copy with verified bytes.
+function assertWaiverDocuments(bundle,packages) {
+  const records=bundle.tables.st_records.filter(row=>row.kind==='acknowledgement').map(row=>JSON.parse(row.data)).filter(receipt=>receipt.signature?.method==='typed-affirmation');
+  const files=bundle.manifest.documents.typedAffirmationFiles;
+  assert.equal(files.length,records.length*2);
+  assert.deepEqual(Object.keys(bundle.files).sort(),files.map(file=>file.path).sort());
+  for(const file of files) {
+    assert.ok(file.path.startsWith('./documents/waivers/'),'artifact paths are explicit relative file paths');
+    const content=bundle.files[file.path],bytes=Buffer.from(content,'utf8'),receipt=records.find(record=>record.id===file.receiptId);
+    assert.ok(receipt,'document artifact resolves to its original receipt');
+    assert.equal(file.documentId,receipt.waiverId);assert.equal(file.personId,receipt.personId);assert.equal(file.signerPersonId,receipt.signature.signerPersonId);
+    assert.equal(file.bytes,bytes.length);assert.equal(file.sha256,createHash('sha256').update(bytes).digest('hex'));
+  }
+  for(const evidence of packages) {
+    const copies=files.filter(file=>file.receiptId===evidence.receipt.id);
+    const machine=copies.find(file=>file.mediaType==='application/json'),readable=copies.find(file=>file.mediaType==='text/html');
+    assert.ok(machine);assert.ok(readable);assert.deepEqual(JSON.parse(bundle.files[machine.path]),evidence);
+    const html=bundle.files[readable.path],escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    for(const value of [evidence.document.text,evidence.document.id,evidence.document.version,evidence.document.sha256,evidence.receipt.id,evidence.receipt.personId,evidence.receipt.actorId,evidence.receipt.at,evidence.receipt.validUntil,evidence.receipt.signature.signerName,evidence.receipt.signature.participantName,evidence.receipt.signature.signerPersonId,evidence.receipt.signature.affirmationText,evidence.receipt.signature.channel,evidence.meaning]) if(value!==undefined && value!==null) assert.ok(html.includes(escape(value)),'readable copy retains exact evidence value');
+    for(const value of [evidence.receipt.signature.authority,evidence.receipt.signature.deviceContext])assert.ok(html.includes(escape(JSON.stringify(value,null,2))),'authority and device context remain complete');
+    assert.ok(!/<script\b|<iframe\b|<form\b|<link\b|\s(?:src|href|onclick)=/i.test(html),'download is self-contained and inert, including document text');
+    assert.ok(!html.includes(evidence.document.text),'document markup is escaped, never executed');
+  }
 }
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
@@ -89,18 +115,31 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     let signingFamily=await h.cmd('household.save',{name:'Archived signature family'});
     signingFamily=await h.cmd('household.guardian.link',{id:signingFamily.id,guardianId:signingGuardian.id,evidenceReference:'synthetic-strap-archive-authority'});
     signingFamily=await h.cmd('household.participant.add',{id:signingFamily.id,name:'Archived signing child'});
-    const signedPolicy=await h.cmd('waiver.publish',{text:'Archived exact service policy and personal affirmation.',requiresSignature:true,service:'Evidence retention',validDays:365});
+    const signedPolicy=await h.cmd('waiver.publish',{text:'Archived exact service policy and personal affirmation.\n<studio-policy source="synthetic-strap-1">Care & consent.</studio-policy><script>throw new Error("synthetic document")</script>',requiresSignature:true,service:'Evidence retention',validDays:365});
     const adultEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:member.name,confirm:true},member.cookie);
     const guardianEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:signingGuardian.name,participantId:signingFamily.participantIds[0],confirm:true},signingGuardian.cookie);
     const signedBefore=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,member.cookie);
     const guardianBefore=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,h.owner);
     await h.cmd('household.guardian.remove',{id:signingFamily.id,guardianId:signingGuardian.id,reason:'Authority ended before archive'});
+    // Installation-local provider authority is a credential edge, never portable studio data.
+    const taxConnectionMarker='synthetic-strap-archive-tax-connection';
+    await h.db.prepare('INSERT INTO st_tax_connections(id,connection_hash,connected_by,connected_at) VALUES(?,?,?,?)').bind('tax',taxConnectionMarker,(await h.state()).actor.id,new Date().toISOString()).run();
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,1);
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
     assert.equal(download.headers.get('cache-control'),'no-store')
     const portable=download.value
+    assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(taxConnectionMarker),'portable exit excludes installation-local tax execution authority');
     reconstructExit(portable,csv)
+    assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value]);
+    const adultCopy=portable.manifest.documents.typedAffirmationFiles.find(file=>file.receiptId===adultEvidence.id&&file.mediaType==='text/html');
+    const guardianCopy=portable.manifest.documents.typedAffirmationFiles.find(file=>file.receiptId===guardianEvidence.id&&file.mediaType==='text/html');
+    const adultHtmlBefore=await h.send('/api/strap/waiver-evidence.html?id='+adultEvidence.id,undefined,member.cookie);
+    assert.equal(adultHtmlBefore.status,200);assert.match(adultHtmlBefore.headers.get('content-disposition'),/attachment/);assert.equal(adultHtmlBefore.text,portable.files[adultCopy.path]);
+    const guardianHtmlBefore=await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,h.owner);
+    assert.equal(guardianHtmlBefore.status,200);assert.equal(guardianHtmlBefore.text,portable.files[guardianCopy.path]);
+    assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,signingGuardian.cookie)).status,404,'ended guardians cannot download historical human-readable copies');
     for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner,...(h.mfaOwner ? [h.mfaOwner.secret,h.mfaOwner.recoveryCodes[0]] : [])]) assert.ok(!download.text.includes(value))
     assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
@@ -110,7 +149,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await command(source,['export','--output',old,'--no-queue'])
     const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'));assert.ok(!bytes.includes('Excluded integration'),'API-002 integration keys never travel in the native archive')
     for (const value of [identity.factor.secret,...identity.factor.recoveryCodes,...factorMaterial]) assert.ok(!bytes.includes(value),'native archive excludes factor secrets and recovery codes')
+    assert.ok(!bytes.includes(taxConnectionMarker),'native archive excludes the tax connection credential');
     const archived = bytes.split('\n').filter(Boolean).map(JSON.parse)
+    assert.ok(!archived.find(row=>row.kind==='manifest').tables.some(table=>table.name==='st_tax_connections'),'native archive inventory excludes tax execution authority');
+    assert.ok(!archived.filter(row=>row.kind==='part').flatMap(row=>row.items).some(row=>row.kind==='row'&&row.table==='st_tax_connections'),'native archive payload excludes the tax connection table');
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name.startsWith('st_mfa_')),'native archive inventory excludes all factor, passkey, recovery and challenge tables')
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row' && r.table.startsWith('st_mfa_')),'native archive payload excludes all factor tables')
     await command(restored,['import','--input',old,'--yes','--no-queue'])
@@ -119,6 +161,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(rows(bytes).length>0);assert.deepEqual(rows(await readFile(again,'utf8')),rows(bytes))
     // Recover access through native sign-in; the old session never travels.
     h=await harness({root:restored,...identity})
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,0,'native restore cannot reactivate excluded tax execution authority');
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
@@ -129,6 +172,9 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
+    assertWaiverDocuments(restoredDownload.value,[signedBefore.value,guardianBefore.value]);
+    assert.deepEqual(restoredDownload.value.files,portable.files,'native restore reproduces the exact JSON and readable document bytes');
+    assert.deepEqual(restoredDownload.value.manifest.documents.typedAffirmationFiles,portable.manifest.documents.typedAffirmationFiles,'native restore retains stable document relationships and file integrity');
     const restoredReservations=await h.state(restoredOwner)
     assert.deepEqual(restoredReservations.intros.sales.find(r=>r.id===introSale.id),{...introSale,exceptionReason:null,eligibilityFailure:null,exceptionApprovedBy:null});
     const introAliasCookie=await h.signIn(introAlias.email);
@@ -147,6 +193,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(adultAfter.status,200);assert.deepEqual(adultAfter.value,signedBefore.value,'MEM-005 native restore retains exact adult document, declaration and attribution');
     assert.equal(guardianAfter.status,200);assert.deepEqual(guardianAfter.value,guardianBefore.value,'MEM-005 native restore retains historical guardian evidence and authority revision');
     assert.equal((await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'MEM-005 historical guardian provenance never restores ended access');
+    const adultHtmlAfter=await h.send('/api/strap/waiver-evidence.html?id='+adultEvidence.id,undefined,restoredMember),guardianHtmlAfter=await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredOwner);
+    assert.equal(adultHtmlAfter.status,200);assert.equal(adultHtmlAfter.text,adultHtmlBefore.text,'restored member downloads the identical readable signed evidence');
+    assert.equal(guardianHtmlAfter.status,200);assert.equal(guardianHtmlAfter.text,guardianHtmlBefore.text,'owner retains identical historical guardian evidence');
+    assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'native restore cannot revive historical guardian HTML-download access');
     reconstructExit(restoredDownload.value,csv)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')

@@ -9,9 +9,9 @@ import type { Actor } from '../domain'
 import { selfService, standing } from './mfa'
 
 const pages = new Set(['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent'])
-const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|waiver-evidence\.json|preferences\.json|staff-history|teaching-pay|reports\/(?:revenue|finance))$/
-export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path)
-export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['sms.test.connect', 'sms.test.send', 'attendance.booking.grant','appointment.booking.grant', 'intake.sensitive.grant', 'intake.form.publish', 'mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch','waiver.tablet.launch','waiver.signing.grant'].includes(name)
+const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|waiver-evidence\.(?:json|html)|preferences\.json|staff-history|teaching-pay|reports\/(?:revenue|finance))$/
+export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path) || path.startsWith('/api/strap/tax')
+export const privilegedCommand = (name: string) => /^(tax|agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['sms.test.connect', 'sms.test.send', 'attendance.booking.grant','appointment.booking.grant', 'intake.sensitive.grant', 'intake.form.publish', 'mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch','waiver.tablet.launch','waiver.signing.grant'].includes(name)
 
 /** What a finance user may open: the revenue and collections report, its downloads and their own security page. */
 export const financeRoute = (path: string) => ['/app', '/app/revenue', '/app/security', '/api/strap/mfa', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/revenue.xlsx'].includes(path)

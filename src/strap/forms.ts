@@ -38,6 +38,23 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name === 'tax.config.save') {
+    const products=JSON.parse(String(input.products ?? '[]')),exemptions=JSON.parse(String(input.exemptions ?? '[]'))
+    const address=input.originAddress ? JSON.parse(String(input.originAddress)) : {line1:input.originLine1,line2:input.originLine2,city:input.originCity,state:input.originState,postalCode:input.originPostalCode,country:'US'}
+    if(input.productSource){const [kind,sourceId]=String(input.productSource).split(':');const id=kind+':'+sourceId;const next={id,kind,sourceId,label:input.productLabel,taxCode:input.taxCode};const i=products.findIndex((p: any)=>p.id===id);if(i<0)products.push(next);else products[i]=next}
+    if(input.exemptionPersonId){const id='exemption:'+input.exemptionPersonId;const next={id,personId:input.exemptionPersonId,reference:input.exemptionReference,reason:input.exemptionReason};const i=exemptions.findIndex((e: any)=>e.id===id);if(i<0)exemptions.push(next);else exemptions[i]=next}
+    return {requestId:input.requestId,consent:input.consent==='yes',originAddress:address,registeredStates:String(input.registeredStates).split(',').map(v=>v.trim().toUpperCase()).filter(Boolean),products,exemptions}
+  }
+  if(name === 'tax.calculate') {
+    const [chargeId,productId]=JSON.parse(String(input.taxSale))
+    return {requestId:input.requestId,chargeId,productId,address:{line1:input.customerLine1,line2:input.customerLine2,city:input.customerCity,state:input.customerState,postalCode:input.customerPostalCode,country:'US'},...(input.exemptionId ? {exemptionId:input.exemptionId} : {})}
+  }
+  if(name === 'tax.confirm')return {...input,expectedTaxCents:Number(input.expectedTaxCents)}
+  if(name === 'tax.refund') {
+    const [invoiceId,retailReturnId]=JSON.parse(String(input.taxReturn))
+    return {requestId:input.requestId,invoiceId,retailReturnId,expectedTaxCents:cents(input.expectedTaxCents,'the expected tax credit'),reference:input.reference,reason:input.reason}
+  }
+
   if(name === 'waiver.signing.grant')return {personId:input.personId,enabled:input.enabled==='true',memberIds:Object.keys(input).filter(k=>k.startsWith('member_')&&input[k]==='true').map(k=>k.slice(7)),locationIds:Object.keys(input).filter(k=>k.startsWith('location_')&&input[k]==='true').map(k=>k.slice(9))};
   if(name === 'waiver.publish') return {...input,validDays:input.validDays ? Number(input.validDays) : undefined,requiresSignature:input.requiresSignature === 'yes'};
   if(name === 'waiver.acknowledge') return {...input,...(input.confirm !== undefined ? {confirm:input.confirm === 'yes'} : {})};

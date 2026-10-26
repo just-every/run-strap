@@ -1,4 +1,5 @@
-import { waiverEvidence } from './waiver-evidence'
+import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
+import { taxCommand, taxState, taxFilingCsv } from './tax'
 import { timeSnapshot, approvedHours } from './domain/time-clock'
 import { giftSnapshot } from './domain/gift-cards'
 import { inventorySnapshot } from './domain/inventory'
@@ -75,6 +76,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null}
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
   if (url.pathname === '/app/revenue') return {...await state(env,who),financeReport:financeReport(loaded.state,url.searchParams)}
@@ -86,6 +88,7 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name.startsWith('tax.')) return taxCommand(env,who,name,input)
   if (name.startsWith('sms.test.')) return smsTestCommand(env, who, name, input)
   if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
   if (name.startsWith('finance.')) return financeCommand(env, who, name, input)
@@ -161,6 +164,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(path==='/api/strap/tax' || path==='/api/strap/tax/filing.csv') {
+        if(who.role!=='owner' || !who.isOwner)fail('owner_required',403)
+        if(path.endsWith('.csv')) {const loaded=await load(env.DB,who);return new Response(taxFilingCsv(loaded.state,url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-tax-evidence.csv'}})}
+        return json(await taxState(env,who))
+      }
       if(path==='/api/strap/time-clock' || path==='/api/strap/time-clock.csv') {
         if(path.endsWith('.csv') && who.role!=='owner') fail('owner_required',403)
         if(!['owner','instructor','manager'].includes(who.role)) fail('staff_clock_required',403)
@@ -181,7 +189,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         }
       }
       if (reportStaff(who) && path === '/app') return new Response(null, { status: 303, headers: { ...headers, location: '/app/revenue' } })
-      if (path === '/api/strap/waiver-evidence.json') {const loaded=await load(env.DB,who);return Response.json(waiverEvidence(loaded.state,loaded.who,url.searchParams.get('id')),{headers:{...headers,'content-disposition':'attachment; filename=strap-waiver-evidence.json'}});}
+      if (path === '/api/strap/waiver-evidence.json' || path === '/api/strap/waiver-evidence.html') {
+        const loaded=await load(env.DB,who), evidence=waiverEvidence(loaded.state,loaded.who,url.searchParams.get('id'))
+        if(path.endsWith('.html'))return new Response(renderWaiverCopy(evidence),{headers:{...headers,'content-type':'text/html; charset=utf-8','content-disposition':'attachment; filename=strap-waiver-evidence.html','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"}})
+        return Response.json(evidence,{headers:{...headers,'content-disposition':'attachment; filename=strap-waiver-evidence.json'}})
+      }
       if (path === '/api/strap/preferences.json') {const loaded=await load(env.DB,who);return Response.json(preferenceExport(loaded.state,loaded.who,url.searchParams.get('personId') ?? who.personId ?? ''),{headers:{...headers,'content-disposition':'attachment; filename=strap-preferences.json'}});}
       if (path === '/api/strap/member-history') {
         const loaded = await load(env.DB,who);return json(memberHistory(loaded.state,loaded.who,url.searchParams.get('personId') ?? ''));

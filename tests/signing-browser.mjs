@@ -25,6 +25,11 @@ export async function signingBrowser(h,{adult,guardian,childId,waiver}) {
       await sign(h.owner);await page.goto(h.origin+'/app/classes');await page.getByText('Publish a new version',{exact:true}).click();await capture('owner-version')
       // Each width gets its own replacement so both forms execute the real current-version door.
       const current=width===1440?waiver:await h.cmd('waiver.publish',{text:'Fresh mobile document for second viewport.',requiresSignature:true})
+      await page.goto(h.origin+'/app/people?person='+adult.id);await page.getByText('Member waiver link',{exact:true}).click()
+      const launchesBefore=(await h.state()).staffActions.filter(a=>a.command==='waiver.launch').length
+      await page.getByRole('button',{name:'Request a waiver sign-in link',exact:true}).click();await page.getByText('Member waiver link',{exact:true}).click();await capture('profile-resend')
+      const launchAudit=(await h.state()).staffActions.filter(a=>a.command==='waiver.launch');assert.equal(launchAudit.length,launchesBefore+1);assert.equal(launchAudit[0].personId,adult.id);assert.equal(launchAudit[0].staffMade,true)
+      assert.ok(!(await h.state()).acknowledgements.some(a=>a.personId===adult.id&&a.waiverId===current.id),'profile resend never signs')
       await sign(adult.cookie);await page.goto(h.origin+'/app')
       const adultForm=page.locator('#waiver form');await adultForm.getByLabel('Your full name',{exact:true}).fill(adult.name);await adultForm.getByRole('checkbox').check();await capture('adult-signing')
       await adultForm.getByRole('button',{name:'Sign this document',exact:true}).click()
@@ -41,8 +46,8 @@ export async function signingBrowser(h,{adult,guardian,childId,waiver}) {
   }}finally{await browser.close()}
 }
 
-export async function tabletSigningBrowser(h,{member,desk,waiver}) {
-  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM_PATH?{executablePath:process.env.STRAP_CHROMIUM_PATH}:{}),args:['--no-sandbox']})
+export async function tabletSigningBrowser(h,{member,desk,waiver,coach}) {
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM_PATH?{executablePath:process.env.STRAP_CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try{for(const width of [1440,390]) {
     const context=await browser.newContext({viewport:{width,height:1000}}),tablet=await browser.newContext({viewport:{width,height:1000}})
     const staticAssets=async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()}
@@ -55,7 +60,7 @@ export async function tabletSigningBrowser(h,{member,desk,waiver}) {
       const current=await h.cmd('waiver.publish',{text:waiver.text+' Viewport '+width,requiresSignature:true});
       await page.goto(h.origin+'/app/people?person='+member.id);await page.getByText('Member waiver link',{exact:true}).click()
       await capture(page,'desk-launch')
-      await page.getByRole('button',{name:'Launch locked signing tablet',exact:true}).click()
+      await page.locator('form').filter({has:page.locator('input[name=waiverId][value="'+current.id+'"]')}).getByRole('button',{name:'Launch locked signing tablet',exact:true}).click()
       const link=await page.getByRole('link',{name:'Open private signing handoff',exact:true}).getAttribute('href');assert.ok(link)
       await capture(page,'desk-handoff')
       await tabletPage.goto(h.origin+link);await tabletPage.getByRole('button',{name:'Open this document',exact:true}).click()
@@ -63,13 +68,25 @@ export async function tabletSigningBrowser(h,{member,desk,waiver}) {
       await tabletPage.getByRole('button',{name:'Sign and lock tablet',exact:true}).click();assert.match(await tabletPage.locator('body').innerText(),/Document saved · tablet locked/,JSON.stringify(tabletResponses));await capture(tabletPage,'tablet-locked')
       assert.equal((await tablet.request.get(h.origin+'/auth/magic-link')).status(),403)
       assert.equal((await tablet.request.get(h.origin+'/api/strap/state')).status(),403)
-      const receipt=(await h.state(member.cookie)).acknowledgements.filter(a=>a.waiverId===current.id&&a.signature?.channel==='desk-tablet').at(-1);assert.equal(receipt.signature.signerPersonId,member.id)
+      const receipt=(await h.state()).acknowledgements.filter(a=>a.personId===member.id&&a.waiverId===current.id&&a.signature?.channel==='desk-tablet').at(-1);assert.equal(receipt.signature.signerPersonId,member.id)
+      const evidence=await h.send('/api/strap/waiver-evidence.json?id='+receipt.id,undefined,h.owner);assert.equal(evidence.status,200);assert.equal(evidence.value.receipt.signature.signerName,member.name)
+      // The uninvited walk-in has no member session: desk staff finish through their own doors.
+      const start=new Date(Date.now()+(width===1440?52:53)*3600000).toISOString(),date=new Date(start),week=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate()-(date.getUTCDay()+6)%7)).toISOString().slice(0,10)
+      const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Walk-in signing '+width,service:'Walk-in',room:'Walk-in '+width,start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity:2,instructorId:coach.id}]})).id})).classes[0]
+      await context.clearCookies();await context.addCookies([{name:h.owner.slice(0,ownerAt),value:h.owner.slice(ownerAt+1),url:h.origin}])
+      const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago'}).format(new Date(entry.start));await page.goto(h.origin+'/app?day='+day+'&class='+entry.id+'#roster')
+      const booking=page.locator('#roster form[action*="name=booking.desk"]').filter({has:page.locator('select[name=pay]')})
+      await booking.getByLabel('Member or walk-in profile',{exact:true}).selectOption(member.id);await booking.getByLabel('Pays with',{exact:true}).selectOption('drop-in');await booking.getByLabel('Sale price (drop-in or pack)',{exact:true}).fill('25.00');await capture(page,'walkin-desk-booking')
+      await booking.getByRole('button',{name:'Book at desk',exact:true}).click();await page.locator('#roster').getByRole('button',{name:'Check in',exact:true}).click();await page.locator('#roster').getByText('Checked in',{exact:true}).waitFor();await capture(page,'walkin-checked-in')
+      const saved=(await h.state()).bookings.find(b=>b.personId===member.id&&b.classId===entry.id);assert.equal(saved.attendance,'attended')
+      assert.equal(await h.db.prepare('SELECT id FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).first(),null,'tablet and desk visit never create a walk-in account')
+      assert.equal((await tablet.request.get(h.origin+'/app/people')).status(),403);assert.equal((await tablet.request.get(h.origin+'/intake/tablet')).status(),410)
     }finally{await tablet.close();await context.close()}
   }}finally{await browser.close()}
 }
 
 export async function serviceSigningBrowser(h,{adult,guardian,childId,policy}) {
-  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try{for(const width of [1440,390]){
     const context=await browser.newContext({viewport:{width,height:1000}})
     try{

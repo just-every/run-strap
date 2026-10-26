@@ -72,6 +72,7 @@ export function launchWaiver(tx: Transaction, input: Record<string,unknown>, con
   insist(!connection || connection.origin === context.origin,'member_email_reconnect_required',409);
   const member = person(tx.state,input.personId), waiver = currentWaiver(tx.state,input.waiverId);
   insist(member.role === 'member','member_required');
+  insist(member.email,'member_email_required',409);
   insist(waiver && input.waiverId === waiver.id,'not_latest_version',409);
   const requestId = text(input.requestId,'requestId',100), channel = staffChannel(input);
   if (!connection && context.origin) tx.put('mailConnection',{id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:'first-use'});

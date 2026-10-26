@@ -1,4 +1,5 @@
 import { humanOwner, insist, type Actor } from './domain/types'
+import { assembleWaiverEvidence, renderWaiverCopy } from './waiver-evidence'
 
 // Explicit custody allowlist: auth, provider configuration and work queues never enter this bundle.
 const tables = [
@@ -31,6 +32,11 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'manifest.documents.typedAffirmationFiles[].receiptId', to: 'st_records.id', kind: 'acknowledgement' },
+  { from: 'manifest.documents.typedAffirmationFiles[].documentId', to: 'st_records.id', kind: 'waiver' },
+  { from: 'manifest.documents.typedAffirmationFiles[].personId', to: 'st_people.id' },
+  { from: 'manifest.documents.typedAffirmationFiles[].signerPersonId', to: 'st_people.id' },
+  { from: 'manifest.documents.typedAffirmationFiles[].path', to: 'files', note: 'UTF-8 contents keyed by the stable artifact path; bytes and SHA-256 cover those exact contents.' },
   { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'appointmentReservation', when: 'kind=appointmentPreview' },
   { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=appointmentBookingGrant' },
   { from: 'st_records.data.memberIds[]', to: 'st_people.id', when: 'kind=attendanceBookingGrant' },
@@ -190,6 +196,17 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
   })
   const kinds: Record<string, number> = {}
   for (const row of data.st_records) kinds[String(row.kind)] = (kinds[String(row.kind)] ?? 0) + 1
+  const records=new Map(data.st_records.map(row=>[String(row.id),{kind:row.kind,data:JSON.parse(String(row.data))}]));
+  const artifacts=(await Promise.all([...records.values()].filter(row=>row.kind==='acknowledgement' && row.data.signature?.method==='typed-affirmation').map(async({data:receipt})=>{
+    const document=records.get(receipt.waiverId);
+    insist(document?.kind==='waiver' && receipt.personId && receipt.actorId && receipt.signature.signerPersonId,'exit_export_incomplete_waiver_evidence',500);
+    const evidence=assembleWaiverEvidence(receipt,document.data);
+    return Promise.all([['json','application/json',JSON.stringify(evidence,null,2)+'\n'],['html','text/html',renderWaiverCopy(evidence)]].map(async([extension,mediaType,content])=>{
+      const bytes=new TextEncoder().encode(content);
+      const sha256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+      return {content,manifest:{path:`./documents/waivers/${encodeURIComponent(receipt.id)}.${extension}`,mediaType,encoding:'UTF-8',bytes:bytes.length,sha256,receiptId:receipt.id,documentId:receipt.waiverId,personId:receipt.personId,signerPersonId:receipt.signature.signerPersonId}};
+    }));
+  }))).flat();
   const bundle = {
     manifest: {
       format: 'strap-exit', version: 1, generatedAt: new Date().toISOString(),
@@ -199,7 +216,8 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
         sourceIdentities: 'ik_sources', effects: 'ik_provenance', history: 'ik_d1_history', batches: 'ik_batches' },
       actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no native auth identities are exported. Member-record grants travel as attributed studio data only and grant no authority to an independent receiver.',
       documents: { typedAffirmations: 'st_records kind=acknowledgement data.signature retains exact text, SHA-256, signer, authority and tablet provenance; not a legal-enforceability or payment-authorization claim', waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
-        signedWaivers: { status: 'not_implemented', files: [] }, media: { status: 'not_implemented', files: [] },
+        typedAffirmationFiles: artifacts.map(file=>file.manifest),
+        signedWaivers: { status: 'not_implemented', meaning: 'Full legally executed waivers remain unproved. Portable typed-affirmation copies are separately inventoried and make no legal-enforceability or payment-authorization claim.', files: [] }, media: { status: 'not_implemented', files: [] },
         acknowledgementMeaning: 'Receipt of an exact waiver version; not a signature or signed waiver.' },
       providers: { connections: [], status: 'No studio billing or message-delivery connections exist in the current schema.',
         receiver: 'Import records as data only. Configure and review any receiver billing or delivery connections separately before enabling outbound work.' },
@@ -209,6 +227,7 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
     },
     tables: data,
     csv: csvFiles,
+    files: Object.fromEntries(artifacts.map(file=>[file.manifest.path,file.content])),
   }
   return new Response(JSON.stringify(bundle, null, 2) + '\n', { headers: {
     'content-type': 'application/json; charset=utf-8',

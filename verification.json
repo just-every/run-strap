@@ -62,7 +62,8 @@
       "browser": true,
       "hosted": false,
       "commands": [
-        "pnpm run test:reports"
+        "pnpm run test:reports",
+        "node --test tests/tax.test.mjs"
       ]
     }
   ],

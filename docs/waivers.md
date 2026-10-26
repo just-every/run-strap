@@ -25,7 +25,7 @@ A currently recorded guardian can complete it for a linked participant on **My h
 Strap does not assert legal enforceability or payment authorization. A replacement signing-required version needs fresh completion before another booking or check-in.
 
 Members and current guardians can download the original version’s evidence from the completion screen. The JSON package
-retains the exact text, its SHA-256 digest, version, signer, authority and completion time. Removing a guardian ends their download
+retains the exact text, its SHA-256 digest, version, signer, authority and completion time. The readable copy is a self-contained HTML document containing the same original evidence, without external assets or active content. Removing a guardian ends their download
 access immediately. Earlier versions remain intact.
 
 ## Desk signing
@@ -49,3 +49,9 @@ Set **Completion valid for days** from 1 to 3650, or leave it blank for no autom
 Members complete service policies on **Classes**; current recorded guardians use **My household**. Staff launch the assigned service document from the member profile using the same scoped signing rights. Downloaded evidence preserves the displayed affirmation, document hash, signer channel, authority reference and device context. A tablet's device context remains self-affirmed.
 
 Account-less guest signing, membership payment authorization, legal sufficiency, broader staff roles and used-record erasure remain incomplete.
+
+## Portable copies
+
+The portable exit includes exact JSON and readable HTML copies of every retained typed affirmation, with stable receipt and participant references, byte counts and SHA-256 integrity hashes. Native restore preserves those same copies and historical guardian attribution; ending guardian authority still refuses their next evidence download. These files do not certify legal execution or payment authorization.
+
+A walk-in can complete the scoped tablet, desk booking and check-in without a native sign-in account. The locked tablet never becomes an evidence-reading door. Account-less personal copy delivery, guest-owned authorization, the full signed-agreement and recurring-payment flow, and broader legal authority and retention rules remain incomplete.

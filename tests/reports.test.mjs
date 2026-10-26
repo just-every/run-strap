@@ -612,7 +612,9 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionHistoryBrowser(h,report,original)
 }))
 
-test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and liabilities reconcile through recorded sales, attendance, partial funding refund and source downloads',()=>run(async h=>{
+test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and liabilities reconcile through recorded sales, attendance, partial funding refund and source downloads',async()=>{
+  if(process.env.STRAP_FINANCE_TIMING==='1'){await(await import('./finance-timing.mjs')).financeTiming();return}
+  await run(async h=>{
   await h.confirmSetup(h.owner)
   for(const ext of ['', '.csv','.xlsx']){const denied=await h.send('/api/strap/reports/finance'+ext,undefined,h.owner);assert.equal(denied.status,403);assert.equal(denied.value.error,'mfa_enrollment_required')}
   await h.enroll(h.owner)
@@ -689,4 +691,4 @@ test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and lia
   await read('2020-02');assert.equal((await h.state()).version,afterAgent,'report reads have no business writes')
   assert.equal(afterAgent,version)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2020-02'})
-},{mfa:false}))
+},{mfa:false})})

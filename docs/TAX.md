@@ -1,0 +1,17 @@
+# Stripe Tax test records
+
+Studio settings has a Sales tax panel for an explicit Stripe Tax test connection. The owner must complete SEC-004 MFA before changing tax settings, calculating tax, approving a tax invoice, reversing tax or downloading evidence. Finance grants keep their existing revenue-report scope; this feature grants no new staff rights.
+
+Configure the installation secret `STRIPE_TAX_TEST_KEY` using a Stripe test secret. Keys never appear in the application state, evidence downloads, portable exit or native archive. The application reads the test account's active settings and registrations; it never changes account registrations or the account's tax settings.
+
+In Studio settings, review the US origin address and registered states, select a recorded retail product or service sale and explicitly assign its Stripe product tax code. Record exemption evidence separately when applicable. Product codes and exemption claims are owner choices; the application does not infer taxability from a plan name or substitute zero for missing classification.
+
+Record the original base-price sale through the existing retail or pack door. Calculate tax against that exact retained charge, inspect the original price, tax and total, then explicitly approve the tax invoice. The original price stays unchanged; a separate tax line joins its original charge and provider transaction. This does not collect payment. The current integration supports USD exclusive tax in test mode and does not claim production readiness.
+
+For a partial retail return, first use the existing retail return door, then choose that returned sale in Sales tax and approve the expected tax credit. The provider reversal and separate signed tax credit retain their original transaction, original charge and return references. The price refund and tax credit remain separate; no second price refund or invented payment is created.
+
+Each outbound operation first reserves its exact approved request. Replaying it reads its retained outcome. A pending or uncertain provider result is visible and is never automatically resent. Stale prices or settings, missing classification, unsupported provider tax treatment and a disconnected installation refuse execution. The evidence CSV retains signed prices and tax, product codes, original charge identities and provider calculation, transaction and reversal references. It is evidence for the studio and tax service, not a submitted filing.
+
+The finance report shows known classified tax liability separately from earned service revenue. Tax stays unavailable for unclassified sources, even when some known tax is zero. It labels provider modes so test records cannot be mistaken for production tax readiness. Tax records, original prices and provider evidence travel as historical studio data. Installation-local connection authority is excluded from both export paths; restore requires reviewed owner reconnection before another provider operation, including a restore to the same origin with the same configured key.
+
+Public doors are `tax.config.save`, `tax.calculate`, `tax.confirm` and `tax.refund` through `/api/strap/command`, with `/api/strap/tax` and `/api/strap/tax/filing.csv` for owner reads. Browser forms use those same commands. The controlled provider journey is `node tests/tax-sandbox.mjs`; held credentials enter only through the fleet environment helper. No provider keys or account details belong in source fixtures.

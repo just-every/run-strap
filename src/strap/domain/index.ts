@@ -431,9 +431,10 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
     const grant = memberRecordGrant(state,who);
     const members = grant?.enabled ? state.people.filter(p => !p.erasedAt && grant.memberIds.includes(p.id)) : [];
     const appointmentGrant = appointmentBookingGrant(state,who);
-    const signingGrant=state.records.get('signing-checkin-grant:'+who.personId)?.data;
+    const savedSigningGrant=state.records.get('signing-checkin-grant:'+who.personId)?.data;
+    const signingGrant=grant?.enabled && savedSigningGrant?.enabled && savedSigningGrant.recordGrantVersion===grant.version && savedSigningGrant.memberIds.some((id: string)=>grant.memberIds.includes(id)) && savedSigningGrant.locationIds.length ? savedSigningGrant : null;
     return {attendancePlans:attendancePlanSnapshot(state,who),...deskRetailSnapshot(state,who),...appointmentSnapshot(state,who),appointmentGrant,appointmentInstructors:appointmentGrant?.enabled ? state.people.filter(p=>p.role === 'instructor' && p.active).map(p=>({id:p.id,name:p.name})) : [],signingGrant,locations:locations(state).filter(l=>appointmentGrant?.enabled && appointmentGrant.locationIds.includes(l.id) || signingGrant?.enabled && signingGrant.locationIds.includes(l.id)),winback:winbackSnapshot(state,who),intake:intakeSnapshot(state,who),actor:who,version:state.version,studio:studioSettings(state),classes:[],people:members.map(p => ({...p,...profileOfForDesk(state,p)})),
-      memberRecords:members.map(p => memberHistory(state,who,p.id)),recordGrant:grant,bookingActions:[],staffActions:[],waiver:signingGrant?.enabled?latestWaiver(state):null,drafts:[],profileChanges:[],bookings:[],packs:[],charges:[],payments:[],waiverLaunches:[]};
+      memberRecords:members.map(p => memberHistory(state,who,p.id)),recordGrant:grant,bookingActions:[],staffActions:[],waiver:signingGrant?latestWaiver(state):null,waivers:signingGrant?currentWaivers(state):[],drafts:[],profileChanges:[],bookings:[],packs:[],charges:[],payments:[],waiverLaunches:[]};
   }
   const owner = who.role === 'owner' || who.role === 'agent';
   const allClasses = list(state,'class');
