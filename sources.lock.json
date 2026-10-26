@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "1d2d6a235deaf2099746712c4d57da70d790522ae637f4bccc0b7fd69612d58e",
+      "sha256": "c0ab6a4ca8f61e6b33fbd6567642241d6daf725205ff7e276847197377c62891",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "bad473a82fcb39c57eeeb78f777f711443d5daf41b89f74df9c3b4ab305315f4",
+      "sha256": "6490a1bb41d06baabaaf267eb9064ce2f1c6cab0002180206755dce91247f9cd",
       "executable": false
     },
     "DEMO.md": {
@@ -3490,7 +3490,7 @@
       "executable": false
     },
     "src/strap/finance-report.ts": {
-      "sha256": "d868cd2caacfec4f41241a2f581326b5f1ab684e5f5043b3f98a7dfa0d1ac6b2",
+      "sha256": "c6d8efd93275a73bc2760bcc0409cda49775adeb3bfce636666b4d5a4bada728",
       "executable": false
     },
     "src/strap/finance-tax.ts": {
