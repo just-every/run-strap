@@ -4370,7 +4370,7 @@
       "executable": false
     },
     "tests/signing-browser.mjs": {
-      "sha256": "d2fd333d506acb513f827c416f6a0e3d645640a253c2c029e1e11a50d2adf97e",
+      "sha256": "13abc52b3501ac18829d9696dae2a1e7232b997fe289b5256f9cfad900e44c96",
       "executable": false
     },
     "tests/site/browser-journey.mjs": {

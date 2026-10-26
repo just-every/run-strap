@@ -88,6 +88,8 @@ export async function tabletSigningBrowser(h,{member,desk,waiver,coach}) {
 }
 
 export async function serviceSigningBrowser(h,{adult,guardian,childId,policy}) {
+  const proofDir=process.env.STRAP_PROOF_DIR ?? (process.env.CI ? 'logs/proof/signing' : null)
+  if(proofDir)await mkdir(proofDir,{recursive:true})
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try{for(const width of [1440,390]){
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -95,7 +97,7 @@ export async function serviceSigningBrowser(h,{adult,guardian,childId,policy}) {
       await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
       const page=await context.newPage()
       const sign=async cookie=>{await context.clearCookies();const i=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,i),value:cookie.slice(i+1),url:h.origin}])}
-      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width);const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(cs=>cs.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));assert.deepEqual(missing,[]);await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-005-service-${name}-${width}.png`),fullPage:true})}
+      const capture=async name=>{await page.evaluate(()=>document.fonts.ready);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width);const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(cs=>cs.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));assert.deepEqual(missing,[]);if(proofDir)await page.screenshot({path:join(proofDir,`MEM-005-service-${name}-${width}.png`),fullPage:true})}
       const current=await h.cmd('waiver.publish',{text:policy.text+' Mobile viewport '+width,requiresSignature:true,service:'Reformer',validDays:1})
       await sign(h.owner);await page.goto(h.origin+'/app/classes');await page.getByText('Publish a new version',{exact:true}).click();await page.getByLabel('Applies to service (blank for studio waiver)',{exact:true}).fill('Reformer');await page.getByLabel('Completion valid for days (blank for no expiry)',{exact:true}).fill('1');await capture('owner-policy')
       await sign(adult.cookie);await page.goto(h.origin+'/app');const personal=page.locator('#policy-'+current.id);await personal.getByLabel('Your full name',{exact:true}).fill(adult.name);await personal.getByRole('checkbox').check();await capture('adult-review');await personal.getByRole('button',{name:'Sign Reformer policy',exact:true}).click();await page.getByText('Current document completed.',{exact:true}).waitFor();await capture('adult-completed')
