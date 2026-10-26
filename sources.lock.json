@@ -4154,7 +4154,7 @@
       "executable": false
     },
     "tests/finance-downloads.mjs": {
-      "sha256": "b41abefa60c2a156530a4f1878972f44c85df1249b6c67e5f3b9b9606528e542",
+      "sha256": "68a7924289f0a0fcebac95ddf2f8e0eea4e479de950cbab5f24af801664920f3",
       "executable": false
     },
     "tests/finance-exclusions.mjs": {
@@ -4326,7 +4326,7 @@
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "c2829ee632f36e5b36c1eb4ae91755168a964d93361007172d64e20ce77728f7",
+      "sha256": "388a3ca349db5fcadc671f28acf5c050426f7d5c2d5cbc13f7edc77a668e8f68",
       "executable": false
     },
     "tests/reservations-browser.mjs": {

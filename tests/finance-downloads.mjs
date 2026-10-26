@@ -7,10 +7,13 @@ export async function assertFinanceDownloads(h, owner, report) {
   const path='/api/strap/reports/finance',query='?financeMonth='+report.month
   const csv=await h.send(path+'.csv'+query,undefined,owner)
   assert.equal(csv.status,200)
+  assert.match(csv.headers.get('content-type'),/text\/csv/)
+  assert.match(csv.headers.get('content-disposition'),/attachment/)
   const [columns,...records]=parseCsv(csv.text)
   const objects=records.map(row=>Object.fromEntries(columns.map((key,i)=>[key,row[i]??null])))
   const response=await h.mf.dispatchFetch(h.origin+path+'.xlsx'+query,{headers:{cookie:owner}})
   assert.equal(response.status,200)
+  assert.match(response.headers.get('content-disposition'),/attachment/)
   const sheets=await readXlsx(Buffer.from(await response.arrayBuffer()))
   const [headers,...values]=sheets.find(s=>s.sheet==='Recognition').data
   const excel=values.map(row=>Object.fromEntries(headers.map((key,i)=>[key,row[i]??null])))

@@ -669,22 +669,8 @@ test('RPT-004: monthly annual-plan, ten-pack and gift cash, earned value and lia
   assert.equal((await read('2021-01')).closing.unusedPackCents,18000,'expired unused credits never become automatic breakage revenue')
   assert.deepEqual(jan.rows.find(r=>r.packId===ten.id).consumedBookingIds,[booking.id])
   assert.equal(jan.sources.find(r=>r.id===retail.paymentId).kind,'gift-tender')
-  await (await import('./finance-downloads.mjs')).assertFinanceDownloads(h,h.owner,jan)
-  await (await import('./finance-downloads.mjs')).assertFinanceDownloads(h,h.owner,feb)
   const version=(await h.state()).version
-  for(const month of ['2020-01','2020-02']){
-    const report=await read(month)
-    const download=await h.send('/api/strap/reports/finance.csv?financeMonth='+month,undefined,h.owner)
-    assert.equal(download.status,200);assert.match(download.text,/gift-tender/);assert.match(download.headers.get('content-disposition'),/attachment/)
-    const [columns,...csvRecords]=parseCsv(download.text),csvObjects=csvRecords.map(row=>Object.fromEntries(columns.map((key,i)=>[key,row[i] ?? null])))
-    for(const row of csvObjects.filter(r=>r.kind==='metric'))assert.deepEqual([row.openingCents,row.periodCents,row.closingCents],[report.opening[row.id],report.period[row.id],report.closing[row.id]])
-    const sheet=await h.mf.dispatchFetch(h.origin+'/api/strap/reports/finance.xlsx?financeMonth='+month,{headers:{cookie:h.owner}})
-    assert.equal(sheet.status,200)
-    const readXlsx=(await import('read-excel-file/node')).default
-    const totals=(await readXlsx(Buffer.from(await sheet.arrayBuffer()))).find(s=>s.sheet==='Reconciliation').data
-    for(const [metric,opening,period,closing]of totals.slice(1))assert.deepEqual([opening,period,closing],[report.opening[metric],report.period[metric],report.closing[metric]])
-    for(const source of report.sources){const detail=await h.send(source.sourceUrl,undefined,h.owner);assert.equal(detail.status,200);assert.ok(detail.text.includes(source.id))}
-  }
+  for(const report of [jan,feb])await (await import('./finance-downloads.mjs')).assertFinanceDownloads(h,h.owner,report)
   for(const invalid of ['2020-00','2020-13','2020-01-01'])assert.equal((await h.send('/api/strap/reports/finance?financeMonth='+invalid,undefined,h.owner)).status,400)
   for(const cookie of [member.cookie,coach.cookie,''])for(const ext of ['', '.csv','.xlsx'])assert.equal((await h.send('/api/strap/reports/finance'+ext,undefined,cookie)).status,cookie?403:401)
   const agent=await h.cmd('agent.create',{label:'Finance refusal'})
