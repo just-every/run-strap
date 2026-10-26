@@ -8,7 +8,7 @@ export function timeRefundClassification(state: State, at: number) {
   const dues=list(state,'cancellationRefund').filter(before),charges=list(state,'charge').filter(before)
   for(const pack of list(state,'pack')) {
     const refunds=dues.filter(r=>r.packId===pack.id),draft=state.records.get(pack.draftId)?.data
-    if(!refunds.length||!draft||draft.type!=='pack'||draft.status!=='approved'||draft.kind!=='unlimited'||pack.kind!=='unlimited')continue
+    if(!refunds.length||!draft||draft.type!=='pack'||draft.status!=='approved'||draft.entitlement?.kind!=='unlimited'||pack.entitlement?.kind!=='unlimited')continue
     if(pack.initiationFeeCents>0||draft.initiationFeeCents>0||refunds.some(r=>!Number.isSafeInteger(r.amountCents)||r.amountCents<0||r.coolingOptions))continue
     if(list(state,'planChange').some(c=>c.packId===pack.id&&c.status==='applied'&&Date.parse(c.appliedAt)<at))continue
     if(list(state,'freeze').some(f=>f.packId===pack.id&&f.confirmedAt&&Date.parse(f.confirmedAt)<at))continue
