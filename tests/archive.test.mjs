@@ -71,6 +71,22 @@ function assertAgreementDocuments(bundle,evidence) {
   assert.ok(!copy.includes(evidence.agreement.documentText));
   return {json:bundle.files[json.path],html:copy};
 }
+async function archiveMembership(h,member,terms,edge) {
+    const membership=await h.cmd('billing.agreement.prepare',{termsId:terms.id,title:'Archived membership agreement',documentText:'Original agreed studio service.\n<agreement source="synthetic-strap-1">Care & separate consent.</agreement><script>throw new Error("synthetic agreement")</script>',adultVerified:true,adultEvidenceReference:'synthetic-strap-archive-adult-eligibility',requestId:'synthetic-strap-archive-billing-agreement'});
+    await h.cmd('billing.agreement.accept',acceptance(membership,member.name),member.cookie);
+    // Only the paid network edge is simulated; no collection or real provider completion is claimed.
+    await billingSucceeded(h,'billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-archive-billing-connect'});
+    const methodSetup=await billingSucceeded(h,'billing.setup.start',{id:membership.id,requestId:'synthetic-strap-archive-billing-setup'},member.cookie);
+    edge.setComplete(true);
+    const methodInput={id:membership.id,setupId:methodSetup.result.id,requestId:'synthetic-strap-archive-billing-complete'};
+    const methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
+    const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
+    assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
+    const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
+    assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
+    return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore};
+}
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
@@ -144,20 +160,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const billingPack=(await h.state()).packs.find(pack=>pack.personId===member.id);
     const billingPreview=await h.cmd('plan.recurring.prepare',{packId:billingPack.id,intervalMonths:1,requestId:'synthetic-strap-archive-billing-terms'});
     const billingTerms=await h.cmd('plan.recurring.accept',{id:billingPreview.id,key:billingPreview.key},member.cookie);
-    const membership=await h.cmd('billing.agreement.prepare',{termsId:billingTerms.id,title:'Archived membership agreement',documentText:'Original agreed studio service.\n<agreement source="synthetic-strap-1">Care & separate consent.</agreement><script>throw new Error("synthetic agreement")</script>',adultVerified:true,adultEvidenceReference:'synthetic-strap-archive-adult-eligibility',requestId:'synthetic-strap-archive-billing-agreement'});
-    await h.cmd('billing.agreement.accept',acceptance(membership,member.name),member.cookie);
-    // Only the paid network edge is simulated; no collection or real provider completion is claimed.
-    await billingSucceeded(h,'billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-archive-billing-connect'});
-    const methodSetup=await billingSucceeded(h,'billing.setup.start',{id:membership.id,requestId:'synthetic-strap-archive-billing-setup'},member.cookie);
-    paymentEdge.setComplete(true);
-    const methodInput={id:membership.id,setupId:methodSetup.result.id,requestId:'synthetic-strap-archive-billing-complete'};
-    const methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
-    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
-    const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
-    assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
+    const {membership,membershipBefore,membershipHtmlBefore}=await archiveMembership(h,member,billingTerms,paymentEdge);
     for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAlias.cookie)).status,404,'another member cannot download a membership agreement');
-    const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
-    assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
     // Installation-local provider authority is a credential edge, never portable studio data.
     const taxConnectionMarker='synthetic-strap-archive-tax-connection';
     await h.db.prepare('INSERT INTO st_tax_connections(id,connection_hash,connected_by,connected_at) VALUES(?,?,?,?)').bind('tax',taxConnectionMarker,(await h.state()).actor.id,new Date().toISOString()).run();
@@ -183,7 +187,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner,...(h.mfaOwner ? [h.mfaOwner.secret,h.mfaOwner.recoveryCodes[0]] : [])]) assert.ok(!download.text.includes(value))
     assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
-    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner,port:Number(new URL(h.origin).port),outbound:paymentEdge.outbound},originalOrigin=h.origin;
+    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner,outbound:paymentEdge.outbound};
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
@@ -204,7 +208,6 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(rows(bytes).length>0);assert.deepEqual(rows(await readFile(again,'utf8')),rows(bytes))
     // Recover access through native sign-in; the old session never travels.
     h=await harness({root:restored,...identity})
-    assert.equal(h.origin,originalOrigin,'origin and provider key stay unchanged: restored methods lose the excluded execution authority');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0,'native restore leaves stored methods disconnected');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,0,'native restore cannot reactivate excluded tax execution authority');
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
@@ -238,14 +241,6 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredMembership=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,restoredMember),restoredMembershipHtml=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,restoredMember);
     assert.equal(restoredMembership.status,200);assert.deepEqual(restoredMembership.value,membershipBefore.value);assert.equal(restoredMembershipHtml.status,200);assert.equal(restoredMembershipHtml.text,membershipHtmlBefore.text);
     for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAliasCookie)).status,404,'native restore retains membership evidence privacy');
-    const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
-    assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.find(method=>method.id===methodResult.result.id).available,false);
-    assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
-    const providerCalls=paymentEdge.calls.length,financialBefore=await h.state(restoredOwner);
-    const restoredAttempt=await h.cmd('billing.setup.complete',{...methodInput,requestId:'synthetic-strap-archive-billing-restored'},restoredMember,409);
-    assert.equal(restoredAttempt.error,'billing_reconnection_required');
-    assert.equal(paymentEdge.calls.length,providerCalls,'restored provider IDs cannot execute without reviewed reconnection');
-    const financialAfter=await h.state(restoredOwner);assert.deepEqual(financialAfter.payments,financialBefore.payments);assert.deepEqual(financialAfter.charges,financialBefore.charges);
     const adultAfter=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,restoredMember);
     const guardianAfter=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,restoredOwner);
     assert.equal(adultAfter.status,200);assert.deepEqual(adultAfter.value,signedBefore.value,'MEM-005 native restore retains exact adult document, declaration and attribution');
@@ -324,10 +319,11 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
+  const paymentEdge=billingEdge(),billingAuth={STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'};
   try {
     for(const path of [source,restored])await checkout(path)
     await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6})
-    h=await harness({root:source})
+    h=await harness({root:source,auth:billingAuth,outbound:paymentEdge.outbound})
     await h.confirmSetup(h.owner)
     await h.cmd('studio.save',{location:'synthetic-strap-1',timeZone:'America/New_York'})
     const member=await h.person('synthetic-strap-2')
@@ -335,6 +331,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
     const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    const {membership,methodInput,methodResult,membershipBefore}=await archiveMembership(h,member,agreed,paymentEdge);
     const expiryPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
     const expiryDisclosure=await h.cmd('plan.disclosure.schedule',{packId:expiryPack.id,leadDays:7,requestId:'synthetic-strap-expiry-archive'});
     const deliveredPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
@@ -348,7 +345,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.db.prepare("UPDATE st_notice_deliveries SET status='queued' WHERE source_id=?").bind('renewal-disclosure:'+deliveredDisclosure.id).run();
     assert.equal((await h.state()).renewalDisclosures.find(d=>d.id===deliveredDisclosure.id).delivery.status,'queued');
 
-    const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port)}
+    const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:paymentEdge.outbound}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
     assert.equal(before.recurring.invoices.length,0)
@@ -361,12 +358,16 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_contract_connections'))
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_contract_connections'))
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_disclosure_connections'));
+    assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_payment_connections'));
+    assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_payment_connections'));
     await command(restored,['import','--input',archive,'--yes','--no-queue'])
     h=await harness({root:restored,...identity})
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     await h.confirmSetup(restoredOwner);await h.enroll(restoredOwner)
     // Reuse the actual listening origin, not a rewritten request URL.
     assert.equal(h.origin,sourceOrigin)
+    assert.equal(h.auth.STRIPE_BILLING_TEST_KEY,billingAuth.STRIPE_BILLING_TEST_KEY,'provider key is unchanged while local payment execution authority is excluded');
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0);
     const state=()=>h.state(restoredOwner)
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_disclosure_connections').first()).count,0);
     assert.equal((await state()).renewalDisclosures.find(d=>d.id===expiryDisclosure.id).status,'scheduled');
@@ -375,6 +376,15 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(restoredDisclosure.delivery.status,'paused','old delivery intent never claims a live dispatch queue');
     assert.equal(restoredDisclosure.canAccept,false,'a restored price proposal cannot revive excluded dispatch authority');
     const restoredMember=await h.signIn(member.email);
+    const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
+    assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.find(method=>method.id===methodResult.result.id).available,false);
+    assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
+    const providerCalls=paymentEdge.calls.length,financialBefore=await h.state(restoredOwner);
+    const restoredAttempt=await h.cmd('billing.setup.complete',{...methodInput,requestId:'synthetic-strap-archive-billing-restored'},restoredMember,409);
+    assert.equal(restoredAttempt.error,'billing_reconnection_required');
+    assert.equal(paymentEdge.calls.length,providerCalls,'restored provider IDs cannot execute without reviewed reconnection');
+    const financialAfter=await h.state(restoredOwner);assert.deepEqual(financialAfter.payments,financialBefore.payments);assert.deepEqual(financialAfter.charges,financialBefore.charges);
+
     await h.cmd('plan.disclosure.accept',{id:deliveredDisclosure.id,key:deliveredDisclosure.key},restoredMember,409);
     if(process.env.STRAP_PROOF_DIR)await(await import('./renewal-disclosures-browser.mjs')).restoredDisclosureBrowser(h,{owner:restoredOwner,member:restoredMember,disclosure:restoredDisclosure});
 

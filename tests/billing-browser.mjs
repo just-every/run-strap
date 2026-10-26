@@ -21,7 +21,8 @@ export async function billingBrowser(h,edge) {
         await page.evaluate(()=>document.fonts.ready)
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width)
         const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(cs=>cs.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));assert.deepEqual(missing,[])
-        await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`)})
+        if(name==='stripe-handoff')await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`),fullPage:true})
+        else await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`)})
         for(const tip of await page.locator('.has-tooltip:visible').all()){await tip.focus();await tip.locator('[role=tooltip]').waitFor({state:'visible'});await tip.hover();await page.waitForTimeout(350);await tip.locator('[role=tooltip]').waitFor({state:'visible'})}
       }
       await sign(h.owner);await page.goto(h.origin+'/app/packs#billing')
@@ -50,7 +51,9 @@ export async function billingBrowser(h,edge) {
       const [download]=await Promise.all([page.waitForEvent('download'),section.getByRole('link',{name:'Download readable agreement',exact:true}).click()])
       const copy=await readFile(await download.path(),'utf8');assert.ok(copy.includes(seed.member.name));assert.ok(copy.includes(agreement.documentHash))
       const launch=page.waitForRequest(r=>r.url().startsWith('https://checkout.stripe.com/'))
-      await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click();await launch
+      await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
+      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor();await capture('stripe-handoff')
+      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();await launch
       await page.goto(h.origin+'/app/packs#billing')
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
       await panel.getByText(/hosted setup incomplete/).waitFor();await capture('incomplete')

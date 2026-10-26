@@ -53,10 +53,12 @@ async function actualHostedSetup(h,agreement,member) {
       await page.goto(h.origin+'/app/packs#billing');
       const section=page.locator('[data-billing-agreement="'+agreement.id+'"]');
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click();
-      await page.waitForURL(url=>url.hostname === 'checkout.stripe.com');
+      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();
       const snapshot=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
-      const setup=snapshot.setups.find(s=>s.agreementId === agreement.id);assert.ok(setup);
+      const setup=snapshot.setups.find(s=>s.agreementId === agreement.id);
+      assert.ok(setup,JSON.stringify({stage:'native-hosted-launch',operations:snapshot.operations.map(o=>({type:o.type,status:o.status,errorCode:o.errorCode,providerReceipt:o.providerReceipt}))}));
       const start=snapshot.operations.find(o=>o.resultId === setup.id);assert.ok(start);
+      await page.waitForURL(url=>url.hostname === 'checkout.stripe.com',{waitUntil:'commit'});
       // The synthetic authenticated member enters Stripe's published TEST card in
       // Stripe-hosted fields. Neither Strap nor its staff receives those fields.
       const field=async(selector,value,required=true)=>{
@@ -64,7 +66,10 @@ async function actualHostedSetup(h,agreement,member) {
           const input=frame.locator(selector).first();
           if(await input.count() && await input.isVisible()) {await input.fill(value);return;}
         }
-        if(required)throw new Error('Hosted test field unavailable: '+selector);
+        if(required) {
+          const inputs=await Promise.all(page.frames().map(frame=>frame.locator('input,select').evaluateAll(elements=>elements.map(el=>({tag:el.tagName,id:el.id,name:el.getAttribute('name'),type:el.getAttribute('type'),label:el.getAttribute('aria-label'),placeholder:el.getAttribute('placeholder')})))));
+          throw new Error(JSON.stringify({stage:'hosted-field-unavailable',selector,inputs}));
+        }
       };
       await page.locator('#email, input[name="email"]').first().waitFor({state:'visible'});
       await field('#email, input[name="email"]',member.email);
