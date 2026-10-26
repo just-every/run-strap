@@ -177,6 +177,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   assert.equal(after.rows.find(r=>r.id===refundSale.charge.id).serviceEnd,refundSale.draft.expiresAt,'unsupported recognition retains the original accepted service period')
   await assertDownloads(h,h.owner,after)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})
+  await timeRefund(h,{cmd,state,read,jump,buy,key,people})
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)
@@ -186,4 +187,66 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   assert.deepEqual([unused.earnedCents,unused.deferredCents,unused.unusedPackCents],[0,10003,10003],'expiry never automatically earns unused pack value')
   const version=(await state()).version;await read('2032-03');assert.equal((await state()).version,version)
   console.log('RPT-004 elapsed-time journey: original annual interval, cumulative cents, completed finite service, gift liability and once-only refunds, unclassified changes, retained refund payable and source downloads passed.')
+}
+
+async function timeRefund(h,{cmd,state,read,jump,buy,key,people}) {
+  const member=await h.person('Tess');people.push(member)
+  const sale=await buy({personId:member.id,kind:'unlimited',planName:'Recorded time service',amountCents:31001,expiresAt:'2032-05-01T07:00:00Z'})
+  const receipt=await cmd('payment.record',{personId:member.id,amountCents:15500,reference:key()})
+  await cmd('contract.prepayment.record',{packId:sale.pack.id,paymentId:receipt.id,chargeId:sale.charge.id,amountCents:15500,reference:key()})
+  const proposal=await cmd('plan.recurring.prepare',{packId:sale.pack.id,intervalMonths:1,requestId:key()})
+  await cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+  const cancellation=await cmd('plan.cancellation.prepare',{packId:sale.pack.id,effectiveAt:'2032-04-10T07:00:00Z',reason:'Leave the studio early',exceptionReason:'Return unused allocated prepaid value',requestId:key(),channel:'desk'})
+  await cmd('plan.cancellation.confirm',{id:cancellation.id,key:cancellation.key,requestId:key(),channel:'desk'})
+  await jump('2032-04-11T07:00:00Z');await(await h.mf.getWorker()).scheduled()
+  const due=(await state()).cancellations.refunds.find(r=>r.packId===sale.pack.id)
+  assert.ok(due.amountCents>700&&due.amountCents<15500)
+  const start=Date.parse(sale.pack.createdAt),end=Date.parse(sale.draft.expiresAt),stop=Date.parse(cancellation.effectiveAt)
+  const earned=halfUp(31001,stop-start,end-start),before=await read('2032-04')
+  const original=before.rows.find(r=>r.id===sale.charge.id),refund=before.rows.find(r=>r.id===due.id)
+  assert.deepEqual([original.earnedCents,original.deferredCents,original.unusedPackCents,original.unclassifiedCents],[earned,31001-earned,0,0])
+  assert.deepEqual([refund.earnedCents,refund.deferredCents,refund.unusedPackCents,refund.unclassifiedCents],[0,-due.amountCents,0,0])
+  assert.ok(original.deferredCents+refund.deferredCents>0,'partial receipt funding leaves unearned invoiced value deferred')
+  for(const row of [original,refund])assert.deepEqual([row.serviceStart,row.serviceEnd,row.serviceStoppedAt],[sale.pack.createdAt,sale.draft.expiresAt,cancellation.effectiveAt])
+  assert.equal(due.amountCents,halfUp(15500,end-stop,end-start),'native refund policy uses allocated money over unused original access time')
+  assert.equal(due.valuationPack.expiresAt,sale.draft.expiresAt)
+  assert.deepEqual(due.valuationPack.entitlement,sale.pack.entitlement)
+  const input={id:due.id,payerId:member.id,amountCents:700,reference:key(),settledAt:new Date(Date.now()-1000).toISOString()}
+  const settlement=await cmd('plan.cancellation.refund.settle',input);assert.deepEqual(await cmd('plan.cancellation.refund.settle',input),settlement)
+  const after=await read('2032-04')
+  assert.equal(after.closing.cashCents,before.closing.cashCents-700)
+  assert.equal(after.closing.refundPayableCents,before.closing.refundPayableCents-700)
+  assert.equal(after.closing.earnedCents,before.closing.earnedCents)
+  assert.equal(after.closing.deferredCents,before.closing.deferredCents)
+  assert.equal(after.closing.receivableCents,before.closing.receivableCents)
+  assert.equal(after.closing.reconciliationDifferenceCents,0)
+  assert.equal(after.sources.filter(r=>r.id===settlement.id).length,1)
+  const retained=(await state()).packs.find(p=>p.id===sale.pack.id)
+  assert.deepEqual(retained.entitlement,sale.pack.entitlement);assert.equal(retained.expiresAt,cancellation.effectiveAt)
+  await assertDownloads(h,h.owner,after)
+  await assertStoppedDownloads(h,h.owner,after,[sale.charge.id,due.id])
+  if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-04',prefix:'time-refund'})
+  await jump('2032-05-02T07:00:00Z')
+  const later=await read('2032-05'),laterSale=later.rows.find(r=>r.id===sale.charge.id)
+  assert.deepEqual([laterSale.earnedCents,laterSale.deferredCents,laterSale.serviceEnd,laterSale.serviceStoppedAt],[earned,31001-earned,sale.draft.expiresAt,cancellation.effectiveAt],'termination caps earned time permanently without rewriting the accepted interval')
+  assert.equal(later.rows.find(r=>r.id===due.id).deferredCents,-due.amountCents)
+  assert.equal((await state()).recurring.invoices.filter(r=>r.recurringTermsId===proposal.id).length,0)
+}
+
+async function assertStoppedDownloads(h,owner,report,ids) {
+  const path='/api/strap/reports/finance',query='?financeMonth='+report.month
+  const csv=await h.send(path+'.csv'+query,undefined,owner)
+  const [headers,...records]=parseCsv(csv.text)
+  const rows=records.map(row=>Object.fromEntries(headers.map((key,i)=>[key,row[i]])))
+  const response=await h.mf.dispatchFetch(h.origin+path+'.xlsx'+query,{headers:{cookie:owner}})
+  const readXlsx=(await import('read-excel-file/node')).default
+  const sheets=await readXlsx(Buffer.from(await response.arrayBuffer()))
+  const [columns,...values]=sheets.find(s=>s.sheet==='Recognition').data
+  for(const id of ids) {
+    const row=report.rows.find(r=>r.id===id),csvRow=rows.find(r=>r.kind==='recognition'&&r.id===id)
+    const excelRow=values.find(r=>r[columns.indexOf('chargeId')]===id)
+    for(const key of ['earnedCents','deferredCents','unusedPackCents','serviceStart','serviceEnd','serviceStoppedAt']) {
+      assert.equal(csvRow[key],row[key]);assert.equal(excelRow[columns.indexOf(key)],row[key])
+    }
+  }
 }

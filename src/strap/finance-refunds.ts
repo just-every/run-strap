@@ -15,7 +15,7 @@ export function financeRefunds(state: State) {
     // Refund approval and settlement never invent a negative invoice or alter entitlements.
     // Until service-refund classification exists, the approved amount reduces unclassified
     // value and becomes an explicit payable. Settlement reduces cash and that payable once.
-    const rows = known.map(r=>({id:r.id,personId:r.personId,packId:r.packId,amountCents:-r.amountCents,earnedCents:0,deferredCents:0,unusedPackCents:0,unclassifiedCents:-r.amountCents,basis:'Approved refund due; service classification unavailable',serviceStart:r.valuationPack?.termStartAt ?? r.valuationPack?.createdAt ?? null,serviceEnd:r.valuationPack?.expiresAt ?? null,consumedBookingIds:[] as string[]}))
+    const rows = known.map(r=>({id:r.id,personId:r.personId,packId:r.packId,amountCents:-r.amountCents,earnedCents:0,deferredCents:0,unusedPackCents:0,unclassifiedCents:-r.amountCents,basis:'Approved refund due; service classification unavailable',serviceStart:r.valuationPack?.termStartAt ?? r.valuationPack?.createdAt ?? null,serviceEnd:r.valuationPack?.expiresAt ?? null,serviceStoppedAt:null as string|null,consumedBookingIds:[] as string[]}))
     return {rows,dueCents,settledCents,payableCents:dueCents-settledCents,unavailableIds:dues.filter(before).filter(r=>r.amountCents===null).map(r=>r.id)}
   }
   return {sources,snapshot}
