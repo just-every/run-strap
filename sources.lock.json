@@ -3510,7 +3510,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "947158b41259a3a19f16a7c5c806b5f5e8bfebc06de30c028ea69f039a65161e",
+      "sha256": "ca968c9c5669380dcff7574b3527a926042170d1d31f2bb11d8affd69dab3b83",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4014,7 +4014,7 @@
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "6d7956b130628c1039090cfcf60940e9e22b2de466229675d4defcc61cdef4f5",
+      "sha256": "a74929634b5567b74544cc3850596d96d09b8e07fd77bb156ff3aa49ed1173ff",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {

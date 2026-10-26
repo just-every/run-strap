@@ -42,7 +42,9 @@ export async function billingBrowser(h,edge) {
         const before=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value,calls=edge.calls.length,history=(await h.state()).staffActions
         await sign(h.owner);await page.goto(h.origin+'/app/packs#billing')
         await section.getByText('Member personal steps',{exact:true}).click()
+        const posted=page.waitForResponse(response=>new URL(response.url()).pathname==='/app/action'&&response.request().method()==='POST')
         await section.getByRole('button',{name:label,exact:true}).click()
+        assert.equal((await posted).status(),200,'staff launch renders the personal handoff instead of discarding it on redirect')
         const link=page.getByRole('link',{name:'Open member personal step',exact:true});await link.waitFor()
         const target=new URL(await link.getAttribute('href'),h.origin)
         assert.equal(target.pathname,'/signin');assert.equal(target.searchParams.get('returnTo'),'/app/packs#billing-'+agreement.id)
