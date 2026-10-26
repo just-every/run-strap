@@ -21,7 +21,7 @@ export async function billingBrowser(h,edge) {
         await page.evaluate(()=>document.fonts.ready)
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width)
         const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(cs=>cs.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));assert.deepEqual(missing,[])
-        if(name==='stripe-handoff')await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`),fullPage:true})
+        if(name==='stripe-handoff'||name.startsWith('staff-')&&name!=='staff-prepare')await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`),fullPage:true})
         else await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-${name}-${width}.png`)})
         for(const tip of await page.locator('.has-tooltip:visible').all()){await tip.focus();await tip.locator('[role=tooltip]').waitFor({state:'visible'});await tip.hover();await page.waitForTimeout(350);await tip.locator('[role=tooltip]').waitFor({state:'visible'})}
       }
@@ -37,9 +37,27 @@ export async function billingBrowser(h,edge) {
       await prepare.getByRole('button',{name:'Prepare for personal signing',exact:true}).click()
       const agreement=(await h.send('/api/strap/billing',undefined,h.owner)).value.agreements.find(a=>a.personId===seed.member.id);assert.ok(agreement)
       await panel.locator('[data-billing-agreement="'+agreement.id+'"]').waitFor()
+      const section=panel.locator('[data-billing-agreement="'+agreement.id+'"]')
+      const staffLaunch=async(command,label,name)=>{
+        const before=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value,calls=edge.calls.length,history=(await h.state()).staffActions
+        await sign(h.owner);await page.goto(h.origin+'/app/packs#billing')
+        await section.getByText('Member personal steps',{exact:true}).click()
+        await section.getByRole('button',{name:label,exact:true}).click()
+        const link=page.getByRole('link',{name:'Open member personal step',exact:true});await link.waitFor()
+        const target=new URL(await link.getAttribute('href'),h.origin)
+        assert.equal(target.pathname,'/signin');assert.equal(target.searchParams.get('returnTo'),'/app/packs#billing-'+agreement.id)
+        await section.getByText('Member personal steps',{exact:true}).click();await capture('staff-'+name+'-launch')
+        const after=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
+        for(const key of ['agreements','mandates','methods','setups','operations'])assert.deepEqual(after[key],before[key],'the staff form preserves the personal act')
+        assert.equal(edge.calls.length,calls)
+        const fresh=(await h.state()).staffActions.filter(a=>!history.some(old=>old.id===a.id))
+        assert.equal(fresh.length,1);assert.equal(fresh[0].command,command+'.launch');assert.equal(fresh[0].personId,seed.member.id)
+        assert.equal(fresh[0].right,command==='billing.agreement.accept'?'membership-sale':'collection');assert.equal(fresh[0].channel,'desk')
+        await sign(seed.member.cookie);await page.goto(h.origin+target.searchParams.get('returnTo'))
+      }
+      await staffLaunch('billing.agreement.accept','Open personal signing','signing')
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       await page.getByRole('heading',{name:'My packs',exact:true}).waitFor()
-      const section=panel.locator('[data-billing-agreement="'+agreement.id+'"]')
       await section.getByText('Read the exact agreement and payment permission',{exact:true}).click()
       await capture('member-review')
       assert.equal(await section.locator('form[action*="name=billing.agreement.accept"]').count(),1,(await section.innerText()).slice(0,1500))
@@ -53,16 +71,19 @@ export async function billingBrowser(h,edge) {
       const copy=await readFile(await download.path(),'utf8');assert.ok(copy.includes(seed.member.name));assert.ok(copy.includes(agreement.documentHash))
       const readable=await context.newPage()
       try {await readable.setContent(copy);assert.equal(await readable.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await readable.screenshot({path:join(process.env.STRAP_PROOF_DIR,`BILL-014-readable-copy-${width}.png`),fullPage:true})}finally{await readable.close()}
+      await staffLaunch('billing.setup.start','Open method authorization','method')
       const launch=page.waitForRequest(r=>r.url().startsWith('https://checkout.stripe.com/'))
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor();await capture('stripe-handoff')
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();await launch
       await page.goto(h.origin+'/app/packs#billing')
+      await staffLaunch('billing.setup.complete','Open authorization status','status')
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
       await section.getByRole('status').filter({hasText:'Stripe has not confirmed'}).waitFor();await capture('incomplete')
       edge.setComplete(true)
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
       await section.getByText(/visa ending 4242/).waitFor();await capture('method-authorized')
+      await staffLaunch('billing.mandate.revoke','Open payment revocation','revocation')
       await section.getByRole('button',{name:'Revoke future payment permission',exact:true}).click()
       await section.getByText(/Future payment permission revoked/).waitFor();await capture('revoked')
       const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
@@ -70,6 +91,11 @@ export async function billingBrowser(h,edge) {
       assert.equal(state.methods.find(m=>m.agreementId===agreement.id).available,false)
       assert.equal(await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).count(),0)
       assert.equal(await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).count(),0)
+      await sign(h.owner);await page.goto(h.origin+'/app/people?person='+seed.member.id+'#staff-actions')
+      const audit=page.locator('#staff-actions')
+      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1)
+      for(const details of await audit.locator('details').all())await details.locator('summary').click()
+      await capture('staff-history')
       edge.setComplete(false)
     } finally {await context.close()}
   }} finally {await browser.close()}
