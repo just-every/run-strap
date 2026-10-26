@@ -17,7 +17,7 @@ function edge() {
       const amount = Number(form.get('line_items[0][amount]')), taxCode = form.get('line_items[0][tax_code]');
       assert.equal(form.get('currency'),'usd'); assert.equal(form.get('line_items[0][tax_behavior]'),'exclusive');
       const tax = form.get('customer_details[taxability_override]') === 'customer_exempt' || taxCode === 'txcd_50021003' ? 0 : amount/10;
-      const body = {id:'synthetic-strap-calculation-'+sequence,object:'tax.calculation',livemode:false,currency:'usd',customer_details:{address:{country:'US',state:form.get('customer_details[address][state]')}},amount_total:amount+tax,tax_amount_exclusive:tax,tax_amount_inclusive:0,tax_breakdown:[{amount:tax,taxability_reason:tax > 0 ? 'standard_rated' : form.get('customer_details[taxability_override]') === 'customer_exempt' ? 'customer_exempt' : 'product_exempt'}],expires_at:Math.floor(Date.now()/1000)+3600,
+      const body = {id:'synthetic-strap-calculation-'+sequence,object:'tax.calculation',livemode:false,currency:'usd',tax_date:Number(form.get('tax_date')),customer_details:{address:{country:'US',state:form.get('customer_details[address][state]')}},amount_total:amount+tax,tax_amount_exclusive:tax,tax_amount_inclusive:0,tax_breakdown:[{amount:tax,taxability_reason:tax > 0 ? 'standard_rated' : form.get('customer_details[taxability_override]') === 'customer_exempt' ? 'customer_exempt' : 'product_exempt'}],expires_at:Math.floor(Date.now()/1000)+3600,
         line_items:{has_more:false,data:[{id:'synthetic-strap-line-'+sequence,amount,amount_tax:tax,tax_code:taxCode,tax_behavior:'exclusive',livemode:false,reference}]}};
       calculations.set(body.id,body); return json(body);
     }

@@ -13,8 +13,10 @@ export async function calculationRequest(tx: Transaction, config: RecordData, in
   insist(config.registeredStates.includes(customerAddress.state),'tax_registration_not_configured',409);
   const exemption = input.exemptionId ? config.exemptions.find((e: Json)=>e.id === input.exemptionId && e.personId === charge.personId) : null;
   insist(!input.exemptionId || exemption,'tax_exemption_not_configured',409);
-  const facts = {originalCharge:charge,originalChargeFingerprint:await fingerprint(charge),originalSource:source,product,customerAddress,exemption:exemption ?? null,originAddress:config.originAddress,configFingerprint:await fingerprint(config),connectionHash:config.connectionHash};
-  const form = new URLSearchParams({currency:'usd','customer_details[address_source]':'shipping','customer_details[taxability_override]':exemption ? 'customer_exempt' : 'none',
+  const taxDate = Math.floor(Date.parse(charge.createdAt)/1000);
+  insist(Number.isSafeInteger(taxDate) && taxDate <= Math.floor(Date.now()/1000) && Date.now()/1000-taxDate < 31*86400,'tax_original_date_outside_provider_window',409);
+  const facts = {taxDate,originalCharge:charge,originalChargeFingerprint:await fingerprint(charge),originalSource:source,product,customerAddress,exemption:exemption ?? null,originAddress:config.originAddress,configFingerprint:await fingerprint(config),connectionHash:config.connectionHash};
+  const form = new URLSearchParams({currency:'usd',tax_date:String(taxDate),'customer_details[address_source]':'shipping','customer_details[taxability_override]':exemption ? 'customer_exempt' : 'none',
     'line_items[0][amount]':String(charge.amountCents),'line_items[0][reference]':charge.id,'line_items[0][tax_code]':product.taxCode,'line_items[0][tax_behavior]':'exclusive','expand[0]':'line_items'});
   addressForm(form,'customer_details[address]',customerAddress);
   addressForm(form,'ship_from_details[address]',config.originAddress);
@@ -25,6 +27,7 @@ function sameLine(line: Json, facts: Json) {
 }
 export function saveCalculation(tx: Transaction, operation: RecordData, facts: Json, body: Json) {
   const line = providerLine(body,'calculation'); sameLine(line,facts);
+  insist(body.tax_date === facts.taxDate,'tax_provider_sale_date_mismatch',502);
   insist(body.customer_details?.address?.country === 'US' && body.customer_details.address.state === facts.customerAddress.state,'tax_provider_address_mismatch',502);
   insist(!facts.exemption || line.amount_tax === 0,'tax_provider_exemption_mismatch',502);
   const breakdown = body.tax_breakdown;

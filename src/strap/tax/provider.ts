@@ -5,7 +5,8 @@ import { object, retainedResult, type Json, type TaxBindings } from './model';
 /** One request only. No redirects, retries, alternate provider or assumed zero tax. */
 export async function stripe(env: TaxBindings, path: string, form?: URLSearchParams, requestId?: string) {
   const response = await fetch('https://api.stripe.com/v1' + path, {
-    method:form ? 'POST' : 'GET',redirect:'error',
+    // Workerd implements manual redirects; every non-2xx response is rejected below.
+    method:form ? 'POST' : 'GET',redirect:'manual',
     headers:{authorization:'Bearer ' + env.STRIPE_TAX_TEST_KEY,'Stripe-Version':'2025-06-30.basil',...(form ? {'content-type':'application/x-www-form-urlencoded','Idempotency-Key':requestId!} : {})},
     ...(form ? {body:form} : {}),signal:AbortSignal.timeout(20_000),
   });

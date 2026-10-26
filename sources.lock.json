@@ -3438,7 +3438,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "214bc433139bab8de29a395ba1cc3decf83c7c6468a5bff75791d69cdeefbcb3",
+      "sha256": "5f31f6280c72170a0c034b5a0f5d4cf2013e4dfe948e72d5117707eb03dfa2df",
       "executable": false
     },
     "src/strap/finance-refunds.ts": {
@@ -3578,7 +3578,7 @@
       "executable": false
     },
     "src/strap/tax/calculations.ts": {
-      "sha256": "76b5eb67ab17d58194934b841cd25976b6cc5532d694c261134e06e53b037512",
+      "sha256": "0cd7264284edacc135498acb771a5cf04370e4c7b2701b61553b177394e5d26a",
       "executable": false
     },
     "src/strap/tax/config.ts": {
@@ -3594,7 +3594,7 @@
       "executable": false
     },
     "src/strap/tax/provider.ts": {
-      "sha256": "4171e4749183998776788d0bf47cf2b68aa0005afe84aa33173a130001b7de92",
+      "sha256": "e807634206b9695cc289bd3db8ed7bfba4a71a6b2d593c8a470ae2dbd83962eb",
       "executable": false
     },
     "src/strap/tax/reports.ts": {
@@ -4282,7 +4282,7 @@
       "executable": false
     },
     "tests/signing-browser.mjs": {
-      "sha256": "413c3c0eb5a0e9c43b7682de6f473c1ba4968cbd7c4513e20e4a51fffa415fdb",
+      "sha256": "d2fd333d506acb513f827c416f6a0e3d645640a253c2c029e1e11a50d2adf97e",
       "executable": false
     },
     "tests/site/browser-journey.mjs": {
@@ -4350,11 +4350,11 @@
       "executable": false
     },
     "tests/tax-sandbox.mjs": {
-      "sha256": "0d9cefcd66dfd94949b0b19d053fa46be59d17702563849a5205a382afbef044",
+      "sha256": "a6505da7635fc214a558c2a95b616a4e694cfaa5b204a3832933150f00427d66",
       "executable": false
     },
     "tests/tax.test.mjs": {
-      "sha256": "97fa60b74ade1f22d45506f1dff7ffe83123c8520baa971625d8147f62794ddf",
+      "sha256": "b08e68cd367c1f3a297fede82ff7f5b874f2e1aff6ac80a1721a3ab670c5e3b2",
       "executable": false
     },
     "tests/teaching-pay-browser.mjs": {

@@ -36,12 +36,14 @@ export async function signingBrowser(h,{adult,guardian,childId,waiver}) {
       await page.getByText('You completed this current version.',{exact:true}).waitFor();await capture('adult-completed')
       const mine=(await h.state(adult.cookie)).acknowledgements.find(a=>a.waiverId===current.id&&a.personId===adult.id);assert.ok(mine.signature)
       const download=await context.request.get(h.origin+'/api/strap/waiver-evidence.json?id='+mine.id);assert.equal(download.status(),200);assert.equal((await download.json()).receipt.signature.signerName,adult.name)
+      await readableCopy(page,context,mine.id,adult.name,width,'adult')
       await sign(guardian.cookie);await page.goto(h.origin+'/app/household')
       const guardianForm=page.locator('form').filter({has:page.getByRole('button',{name:'Sign the waiver for Signing child',exact:true})})
       await guardianForm.getByLabel('Your full name',{exact:true}).fill(guardian.name);await guardianForm.getByRole('checkbox').check();await capture('guardian-signing')
       await guardianForm.getByRole('button',{name:'Sign the waiver for Signing child',exact:true}).click()
       await page.getByRole('link',{name:/Download Signing child document evidence/}).first().waitFor();await capture('guardian-completed')
       const r=(await h.state(guardian.cookie)).acknowledgements.find(a=>a.waiverId===current.id&&a.personId===childId);assert.equal(r.signature.signerPersonId,guardian.id)
+      await readableCopy(page,context,r.id,guardian.name,width,'guardian')
     }finally{await context.close()}
   }}finally{await browser.close()}
 }
@@ -100,4 +102,11 @@ export async function serviceSigningBrowser(h,{adult,guardian,childId,policy}) {
       await sign(guardian.cookie);await page.goto(h.origin+'/app/household');const child=page.locator('[data-participant-id="'+childId+'"]');const guardianForm=child.locator('#policy-'+current.id);await guardianForm.getByLabel('Your full name',{exact:true}).fill(guardian.name);await guardianForm.getByRole('checkbox').check();await capture('guardian-review');await guardianForm.getByRole('button',{name:'Sign Reformer policy for Policy child',exact:true}).click();await child.getByText('Current document completed.',{exact:true}).waitFor();await capture('guardian-completed')
     }finally{await context.close()}
   }}finally{await browser.close()}
+}
+
+async function readableCopy(page,context,id,name,width,kind) {
+  const [download]=await Promise.all([page.waitForEvent('download'),page.locator('a[href="/api/strap/waiver-evidence.html?id='+id+'"]').click()])
+  const content=await readFile(await download.path(),'utf8');assert.ok(content.includes(name));assert.ok(content.includes(id))
+  const copy=await context.newPage()
+  try {await copy.setContent(content);assert.equal(await copy.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'readable copy fits '+width);assert.equal(await copy.locator('script,iframe,form').count(),0);if(process.env.STRAP_PROOF_DIR)await copy.screenshot({path:join(process.env.STRAP_PROOF_DIR,`MEM-005-${kind}-copy-${width}.png`),fullPage:true})}finally{await copy.close()}
 }

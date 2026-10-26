@@ -64,7 +64,11 @@ async function sandbox() {
     const url = new URL(request.url);
     assert.equal(url.origin,'https://api.stripe.com');
     assert.ok((request.method === 'GET' && ['/v1/tax/settings','/v1/tax/registrations'].includes(url.pathname)) || (request.method === 'POST' && ['/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/transactions/create_reversal'].includes(url.pathname)),'Only approved tax records and read-only readiness endpoints');
-    const response = await fetch(request.url,{method:request.method,headers:{authorization:request.headers.get('authorization'),'content-type':request.headers.get('content-type') ?? 'application/x-www-form-urlencoded','Stripe-Version':request.headers.get('stripe-version'),...(request.headers.get('idempotency-key') ? {'Idempotency-Key':request.headers.get('idempotency-key')} : {})},...(request.method === 'POST' ? {body:await request.text()} : {}),redirect:'error'});
+    let response;
+    try { response = await fetch(request.url,{method:request.method,headers:{authorization:request.headers.get('authorization'),'content-type':request.headers.get('content-type') ?? 'application/x-www-form-urlencoded','Stripe-Version':request.headers.get('stripe-version'),...(request.headers.get('idempotency-key') ? {'Idempotency-Key':request.headers.get('idempotency-key')} : {})},...(request.method === 'POST' ? {body:await request.text()} : {}),redirect:'error'}); } catch(error) {
+      console.log(JSON.stringify({edgeErrorName:error.name,edgeErrorCode:error.cause?.code ?? error.code ?? null,path:url.pathname}));
+      throw error;
+    }
     edge.push({path:url.pathname,method:request.method,status:response.status,requestId:response.headers.get('request-id')});
     return new Response(await response.text(),{status:response.status,headers:{'content-type':'application/json','request-id':response.headers.get('request-id') ?? ''}});
   }});
