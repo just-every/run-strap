@@ -91,7 +91,7 @@ test('Owner tax treatment preserves real sale prices, exact retail and service p
   },{auth:{STRIPE_TAX_TEST_KEY:'synthetic-strap-999'},outbound:e.outbound});
 });
 
-test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized actors, stale previews and automatic replay after uncertain provider or restore',{timeout:120000},async()=>{
+test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized actors, stale previews and automatic replay after uncertain provider or credential change',{timeout:120000},async()=>{
   const e = edge();
   await run(async h=>{
     await h.confirmSetup(h.owner);
@@ -133,11 +133,11 @@ test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized a
     assert.equal((await h.send('/api/strap/command',{name:'tax.confirm',input:{...uncertainInput,requestId:'retry-forbidden',reference:'synthetic-strap-221'}},h.owner)).status,409);
     assert.equal((await h.state()).charges.filter(c=>c.reason === 'sales_tax').length,0);
     assert.equal((await h.state()).version,state.version);
-    await h.db.prepare("DELETE FROM st_tax_connections WHERE id='tax'").run();
+    await h.setAuth({STRIPE_TAX_TEST_KEY:'synthetic-strap-998'});
     assert.equal((await h.send('/api/strap/tax',undefined,h.owner)).value.connected,false);
-    assert.equal((await h.send('/api/strap/command',{name:'tax.calculate',input:{...base,requestId:'restored'}},h.owner)).status,409);
+    assert.equal((await h.send('/api/strap/command',{name:'tax.calculate',input:{...base,requestId:'rotated-connection'}},h.owner)).status,409);
     assert.equal(e.calls.length,calls);
-    await succeeded(h,'tax.config.save',{...seed.config,requestId:'restored-reconnect'});
+    await succeeded(h,'tax.config.save',{...seed.config,requestId:'rotated-reconnect'});
     assert.equal((await h.send('/api/strap/tax',undefined,h.owner)).value.connected,true);
   },{mfa:false,auth:{STRIPE_TAX_TEST_KEY:'synthetic-strap-999'},outbound:e.outbound});
 });

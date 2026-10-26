@@ -88,7 +88,7 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
-  if (name.startsWith('tax.')) return taxCommand(env,who,name,input)
+  if (name.startsWith('tax.')) return {result:await taxCommand(env,who,name,input)}
   if (name.startsWith('sms.test.')) return smsTestCommand(env, who, name, input)
   if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
   if (name.startsWith('finance.')) return financeCommand(env, who, name, input)

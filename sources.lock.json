@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "9a9e0a4e9bb8b520368bd3aedcea6b041fec54631918fa80c9b78107036db0e1",
+      "sha256": "1684fc61a54865072f3ec3aedd8db8f225dfe7824d92cbcf3d39f7a270c0e9c3",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "757d6543b12a2d1c354c0138b6f28eb7e10162116b5a32e9d32f2ab313e537c6",
+      "sha256": "302558131024e8059b3a02f5b6752b5cef933d4be8264241bd20a83f493ce135",
       "executable": false
     },
     "DEMO.md": {
@@ -3458,7 +3458,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "a41e095e137b6b95f41d464b2d9abf399d3638808a5912d1fb113a4f3cb5ff50",
+      "sha256": "248a311e4bfdac300aedf5761a70bbc67d0b7744253d67f2c10499005d423685",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4354,7 +4354,7 @@
       "executable": false
     },
     "tests/tax.test.mjs": {
-      "sha256": "b08e68cd367c1f3a297fede82ff7f5b874f2e1aff6ac80a1721a3ab670c5e3b2",
+      "sha256": "8d00a5142e7108be111b9e3b165d321126942c7dc7c06374774a51410191b830",
       "executable": false
     },
     "tests/teaching-pay-browser.mjs": {
