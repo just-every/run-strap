@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "6f571c5eb3ae62fac1f1fcc87cffbd42d1f62eb71dcb5be6163cc07b4a96e1e4",
+      "sha256": "7a64f009a825c1a879b1b48ecfa58eba2ac3fb3536d01ba8f45419d57d3940bd",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "c3b159be0e3c6d5b3eb9227bbbc9f781320f6f60f4c2075017ba3df95c17c522",
+      "sha256": "6538f0d99f6ce41505c3acc45c017cb92d3a3485bb16786cd30614c9e0612965",
       "executable": false
     },
     "DEMO.md": {
@@ -3722,7 +3722,7 @@
       "executable": false
     },
     "src/strap/ui/receipts.ts": {
-      "sha256": "ddb799b357850efa8c55f2326f1293fdcad601716ede7df7d116ee59f42ef1d0",
+      "sha256": "34b11297829b8061345d0cbef5d0bd4a2c7952ded1c3abf6d502839f34113d92",
       "executable": false
     },
     "src/strap/ui/recognition.ts": {
@@ -3858,7 +3858,7 @@
       "executable": false
     },
     "tests/campaign-browser.mjs": {
-      "sha256": "e6a498d63b51680a7a8f5d3db632bd40f09b4b5f4648d7664490962567ddf911",
+      "sha256": "e3cded2dbbe5c44cb4b33cb3ed5ac2e43c818da851552961f4438a0cd5e8ce39",
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
@@ -4054,7 +4054,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "d245b42f2b234f62d12d1657aa26f27ee11d6a647bddd05f2f48fdebb48f7de0",
+      "sha256": "9b7dec8dfa90e83d7999c98726c6787cb516bb0d10865cefa4ce1c63a56d796f",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {

@@ -482,7 +482,9 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
 })
 
 
-test('First-term join preview retains exact prorated debt and original receipt after later price changes',()=>run(async h=>{
+test('First-term join preview retains exact prorated debt and original receipt after later price changes',async()=>{
+  if(process.env.STRAP_PRORATION_TIMING==='1'){await combinedProration();return;}
+  await run(async h=>{
   await h.confirmSetup(h.owner);
   await h.cmd('studio.save',{location:'Synthetic studio',timeZone:'America/New_York'});
   const member=await h.person('Prorated'),other=await h.person('ProrationOther');
@@ -516,4 +518,75 @@ test('First-term join preview retains exact prorated debt and original receipt a
   const rounded=await h.cmd('pack.prepare',{...input,amountCents:1,cycleStartAt:'2099-01-01T00:00:00Z',joinAt:'2099-01-02T00:00:00Z',expiresAt:'2099-01-03T00:00:00Z'});
   assert.equal(rounded.amountCents,1,'half a cent rounds up');
   if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).prorationBrowser(h,{member});
-}));
+});
+});
+
+// Exact-date public-door journey. Run with the existing process clock helper,
+// STRAP_PRORATION_TIMING=1 and a private STRAP_RECOVERY_CLOCK offset file.
+async function combinedProration(){
+  const {readFile,writeFile,rename}=await import('node:fs/promises'),{totp}=await import('./mfa-helpers.mjs');
+  const path=process.env.STRAP_RECOVERY_CLOCK,original=await readFile(path,'utf8');let offset=Number(original);
+  try{await run(async h=>{
+    let owner=h.owner,member;
+    const originalState=h.state;h.state=(cookie=owner,...rest)=>originalState(cookie,...rest);
+    const cmd=(name,input,cookie=owner,status=200)=>h.cmd(name,input,cookie,status);
+    const jump=async target=>{
+      offset=Math.ceil((Date.parse(target)-(Date.now()-offset*1000))/1000);
+      await writeFile(path+'.new',String(offset));await rename(path+'.new',path);
+      await new Promise(resolve=>setTimeout(resolve,50));
+      owner=await h.signIn('owner@studio.example');h.owner=owner;
+      await cmd('mfa.verify',{code:totp(h.mfaOwner.secret)});
+      if(member)member.cookie=await h.signIn(member.email);
+    };
+    await h.confirmSetup(owner);
+    await cmd('studio.save',{location:'Synthetic studio',timeZone:'America/New_York'});
+    member=await h.person('CombinedProration');
+    await jump('2099-01-16T12:00:00Z');
+    const draft=await cmd('pack.prepare',{personId:member.id,credits:10,amountCents:31000,cycleStartAt:'2099-01-01T00:00:00Z',joinAt:'2099-01-16T00:00:00Z',expiresAt:'2099-02-01T00:00:00Z'});
+    assert.equal(draft.amountCents,16000);
+    if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).prorationStageBrowser(h,{cookie:owner,selector:'#draft-'+draft.id,name:'join-preview',amount:'$160.00'});
+    const pack=await cmd('pack.approve',{id:draft.id});
+    const prepare=requestId=>cmd('plan.change.prepare',{packId:pack.id,mode:'now',credits:20,amountCents:32001,effectiveAt:'2099-01-20T00:00:00Z',requestId,channel:'desk'});
+    const stale=await prepare('synthetic-strap-stale-combined');
+    const upgrade=await cmd('plan.change.prepare',{packId:pack.id,mode:'now',credits:15,amountCents:24001,effectiveAt:'2099-01-18T00:00:00Z',requestId:'synthetic-strap-combined-upgrade',channel:'desk'});
+    assert.equal(upgrade.chargeCents,7001,'8001 cents times 14 of 16 days rounds half-up');
+    if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).prorationStageBrowser(h,{cookie:member.cookie,selector:'[data-plan-change="'+upgrade.id+'"]',name:'upgrade-preview',amount:'$70.01'});
+    await cmd('plan.change.accept',{id:upgrade.id,key:upgrade.key},member.cookie);
+    await jump('2099-01-18T00:01:00Z');
+    for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled();
+    const before=await h.state(owner);
+    const denied=await cmd('plan.change.accept',{id:stale.id,key:stale.key},member.cookie,409);
+    assert.equal(denied.error,'plan_changed');
+    const after=await h.state(owner);
+    assert.equal(after.version,before.version,'stale approval makes no writes');
+    for(const key of ['packs','charges','payments','balances','packCreditEvents','planChanges','staffActions'])assert.deepEqual(after[key],before[key],key+' unchanged');
+    const type=await cmd('freeze.type.save',{name:'Medical',reason:'Agreed absence',feeCents:1000,defaultLengthDays:3,maxLengthDays:30});
+    const freeze=await cmd('freeze.prepare',{packId:pack.id,freezeTypeId:type.id,startAt:'2099-01-22',endAt:'2099-01-25',requestId:'synthetic-strap-combined-freeze',channel:'desk'});
+    assert.equal(freeze.feeCents,1000);assert.equal(freeze.effects.durationDays,3);
+    assert.equal(freeze.effects.revisedExpiresAt,'2099-02-04T00:00:00.000Z');
+    if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).prorationStageBrowser(h,{cookie:member.cookie,selector:'[data-freeze="'+freeze.id+'"]',name:'freeze-preview',amount:'$10.00'});
+    await cmd('freeze.accept',{id:freeze.id,key:freeze.key},member.cookie);
+    const confirm={id:freeze.id,key:freeze.key,requestId:'synthetic-strap-combined-confirm',channel:'desk'};
+    await cmd('freeze.confirm',confirm);await cmd('freeze.confirm',confirm);
+    await jump('2099-01-25T06:01:00Z');
+    for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled();
+    const state=await h.state(owner),charges=state.charges.filter(c=>c.packId===pack.id);
+    assert.equal(charges.length,3);
+    assert.deepEqual(charges.map(c=>c.amountCents).sort((a,b)=>a-b),[1000,7001,16000]);
+    assert.equal(charges.find(c=>c.planChangeId===upgrade.id).amountCents,upgrade.chargeCents);
+    assert.equal(charges.find(c=>c.freezeId===freeze.id).amountCents,freeze.feeCents);
+    assert.equal(state.balances.find(b=>b.personId===member.id).balanceCents,24001);
+    const current=state.packs.find(p=>p.id===pack.id);
+    assert.equal(current.purchaseAmountCents,draft.amountCents);assert.equal(current.amountCents,24001);
+    assert.equal(current.expiresAt,freeze.effects.revisedExpiresAt);
+    assert.equal(state.freezes.freezes.find(f=>f.id===freeze.id).resumptionCount,1);
+    for(const cookie of [owner,member.cookie]){
+      const page=await h.send('/app/packs',undefined,cookie);
+      const receipt=page.text.split('id="receipt-'+pack.id+'"')[1].split('</article>')[0];
+      for(const value of ['160.00','70.01','10.00','Itemized adjustments'])assert.ok(receipt.includes(value),value);
+      for(const charge of charges.filter(c=>c.planChangeId||c.freezeId))assert.ok(receipt.includes('data-charge-id="'+charge.id+'"'));
+    }
+    if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).combinedProrationBrowser(h,{member,pack,upgrade,freeze});
+    console.log('BILL-006 exact dates: join Jan 16 16000 cents; upgrade Jan 18 7001 cents; freeze Jan 22–25 1000 cents; total 24001 cents; stale approval no writes; replay once.');
+  })}finally{await writeFile(path+'.new',original);await rename(path+'.new',path);}
+}

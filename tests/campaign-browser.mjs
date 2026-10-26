@@ -5,7 +5,7 @@ import {chromium} from '@playwright/test'
 
 async function proof(h,run) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {for(const width of [1440,390]) {
     const contexts=[]
     const pageFor=async cookie=>{
@@ -91,4 +91,29 @@ export async function attendancePlanBrowser(h,{member,other,publish}) {
     assert.equal((await h.state()).staffActions.filter(a=>a.command==='attendance.plan.accept.staff'&&a.after?.classId===deskClass.id).length,1)
     await owner.locator('#attendance-plan > summary').click();await owner.locator('#attendance-plan').scrollIntoViewIfNeeded();await shot(owner,'SUCCESS-002-staff-booked')
   })
+}
+
+export async function combinedProrationBrowser(h,{member,pack,upgrade,freeze}) {
+  await proof(h,async({pageFor,shot})=>{
+    for(const [cookie,role] of [[h.owner,'owner'],[member.cookie,'member']]){
+      const page=await pageFor(cookie);await page.goto(h.origin+'/app/packs');
+      const receipt=page.locator('#receipt-'+pack.id);await receipt.scrollIntoViewIfNeeded();
+      const text=await receipt.innerText();
+      for(const value of ['$160.00','$70.01','$10.00','$80.01','Itemized adjustments'])assert.ok(text.includes(value),value);
+      assert.equal(await receipt.locator('[data-charge-id]').count(),2);
+      await shot(page,'BILL-006-combined-'+role+'-invoice');
+      const change=page.locator('[data-plan-change="'+upgrade.id+'"]');await change.scrollIntoViewIfNeeded();
+      assert.ok((await change.innerText()).includes('$70.01'));await shot(page,'BILL-006-combined-'+role+'-upgrade');
+      const frozen=page.locator('[data-freeze="'+freeze.id+'"]');await frozen.scrollIntoViewIfNeeded();
+      assert.ok((await frozen.innerText()).includes('$10.00'));await shot(page,'BILL-006-combined-'+role+'-freeze');
+    }
+  });
+}
+
+export async function prorationStageBrowser(h,{cookie,selector,name,amount}) {
+  await proof(h,async({pageFor,shot})=>{
+    const page=await pageFor(cookie);await page.goto(h.origin+'/app/packs');
+    const preview=page.locator(selector);await preview.scrollIntoViewIfNeeded();
+    assert.ok((await preview.innerText()).includes(amount));await shot(page,'BILL-006-combined-'+name);
+  });
 }
