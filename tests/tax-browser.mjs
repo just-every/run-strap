@@ -51,6 +51,7 @@ export async function taxBrowser(h,seed) {
       await refund.getByRole('button',{name:'Record test tax reversal',exact:true}).click()
       const tax=(await h.send('/api/strap/tax',undefined,h.owner)).value,reversal=tax.reversals.find(r=>r.retailReturnId===returned.id)
       assert.equal(reversal?.taxCents,-200);assert.equal(reversal?.priceCents,-2000)
+      const recorded=panel.locator('[data-tax-reversal="'+reversal.id+'"]');await recorded.waitFor();assert.match(await recorded.innerText(),/\$2\.00/)
       await panel.getByText('Tax operation history',{exact:true}).click();await capture('reversal')
       const [download]=await Promise.all([page.waitForEvent('download'),panel.getByRole('link',{name:'Download tax evidence CSV',exact:true}).click()])
       const csv=await readFile(await download.path(),'utf8');assert.ok(csv.includes(reversal.providerTransactionId));assert.ok(csv.includes(invoice.providerTransactionId))

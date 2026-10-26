@@ -1,5 +1,6 @@
 import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
 import { taxCommand, taxState, taxFilingCsv } from './tax'
+import { billingCommand, billingState, agreementEvidence, renderAgreementCopy } from './billing'
 import { timeSnapshot, approvedHours } from './domain/time-clock'
 import { giftSnapshot } from './domain/gift-cards'
 import { inventorySnapshot } from './domain/inventory'
@@ -76,6 +77,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) return {...await state(env,who),billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null}
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
@@ -88,6 +90,7 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name.startsWith('billing.')) return {result:await billingCommand(env,who,name,input)}
   if (name.startsWith('tax.')) return {result:await taxCommand(env,who,name,input)}
   if (name.startsWith('sms.test.')) return smsTestCommand(env, who, name, input)
   if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
@@ -164,6 +167,13 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(path==='/api/strap/billing')return json(await billingState(env,who))
+      if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
+        const loaded=await load(env.DB,who)
+        const evidence=agreementEvidence(loaded.state,loaded.who,url.searchParams.get('id'))
+        if(path.endsWith('.html'))return new Response(renderAgreementCopy(evidence),{headers:{...headers,'content-type':'text/html; charset=utf-8','content-disposition':'attachment; filename=strap-membership-agreement.html','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"}})
+        return Response.json(evidence,{headers:{...headers,'content-disposition':'attachment; filename=strap-membership-agreement.json'}})
+      }
       if(path==='/api/strap/tax' || path==='/api/strap/tax/filing.csv') {
         if(who.role!=='owner' || !who.isOwner)fail('owner_required',403)
         if(path.endsWith('.csv')) {const loaded=await load(env.DB,who);return new Response(taxFilingCsv(loaded.state,url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-tax-evidence.csv'}})}
@@ -282,6 +292,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
+        if(name==='billing.setup.start' && (result as any)?.result?.launchURL) return new Response(null,{status:303,headers:{...headers,location:(result as any).result.launchURL}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).

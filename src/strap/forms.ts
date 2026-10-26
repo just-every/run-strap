@@ -38,6 +38,10 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('billing.')) {
+    for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring'])if(key in input)input[key]=input[key]==='yes'
+    return input
+  }
   if(name === 'tax.config.save') {
     const products=JSON.parse(String(input.products ?? '[]')),exemptions=JSON.parse(String(input.exemptions ?? '[]'))
     const address=input.originAddress ? JSON.parse(String(input.originAddress)) : {line1:input.originLine1,line2:input.originLine2,city:input.originCity,state:input.originState,postalCode:input.originPostalCode,country:'US'}

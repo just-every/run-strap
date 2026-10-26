@@ -50,7 +50,7 @@ test('Owner tax treatment preserves real sale prices, exact retail and service p
     assert.deepEqual((await h.state()).charges.find(c=>c.id === original.id),original);
     const paymentsBefore = (await h.state()).payments.length;
     const returned = await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:false,reason:'Damaged mat partial return',requestId:'partial-return'});
-    const refund = {requestId:'partial-tax',invoiceId:retail.invoice.result.id,retailReturnId:returned.id,expectedTaxCents:200,reference:'synthetic-strap-211',reason:'Tax follows partial original-price return'};
+    const refund = {requestId:'partial-tax',invoiceId:retail.invoice.result.id,retailReturnId:returned.id,expectedTaxCents:200,reference:'-1+2',reason:'Tax follows partial original-price return'};
     const reverse = await succeeded(h,'tax.refund',refund), count = e.calls.length;
     assert.equal(reverse.result.priceCents,-2000); assert.equal(reverse.result.taxCents,-200);
     assert.deepEqual(await h.cmd('tax.refund',refund),reverse); assert.equal(e.calls.length,count);
@@ -64,6 +64,7 @@ test('Owner tax treatment preserves real sale prices, exact retail and service p
     assert.equal(filing.status,200);
     for (const op of [retail.invoice,service.invoice,reverse]) assert.ok(filing.text.includes(op.result.providerTransactionId));
     assert.ok(filing.text.includes('"-2000","-200"'));
+    assert.ok(filing.text.includes("\"'-1+2\""),'spreadsheet formula references remain inert while signed money stays numeric');
     const tax = (await h.send('/api/strap/tax',undefined,h.owner)).value;
     assert.equal(tax.invoices.length,2); assert.equal(tax.reversals.length,1); assert.equal(tax.connected,true);
     assert.ok(!JSON.stringify(tax).includes('synthetic-strap-999'));
