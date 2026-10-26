@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import { assertFinanceDownloads } from './finance-downloads.mjs'
 
 /** Unsupported cancellation allocations remain signed source facts, never ordinary deferred refunds. */
-export async function financeExclusions(h,{cmd,state,read,jump,buy,key,people,coach,publish}) {
+export async function financeExclusions(h,{cmd,state,read,jump,buy,key,members,coach,publish}) {
   const cases=[]
-  for(const [name,initiationFeeCents] of [['Mixed consideration',0],['Initiation fee',500],['Excess refund',0],['Cooling off',0]]) {
-    const member=await h.person(name.replaceAll(' ',''));people.push(member)
+  for(const [index,[name,initiationFeeCents]] of [['Mixed consideration',0],['Initiation fee',500],['Excess refund',0],['Cooling off',0]].entries()) {
+    const member=members[index]
     const sale=await buy({personId:member.id,kind:'credits',credits:10,amountCents:31000,initiationFeeCents,expiresAt:'2032-06-01T07:00:00Z',planName:name})
     const receipt=await cmd('payment.record',{personId:member.id,amountCents:31000+initiationFeeCents,reference:key()})
     for(const charge of (await state()).charges.filter(c=>c.packId===sale.pack.id))await cmd('contract.prepayment.record',{packId:sale.pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:charge.amountCents,reference:key()})

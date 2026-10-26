@@ -33,6 +33,9 @@ export async function financeTiming() {
     h.mfaOwner=await h.enroll(owner)
     await cmd('studio.save',{location:'Desert studio',timeZone:'America/Phoenix'})
     const member=await h.person('Nora'),coach=await h.person('Maya','instructor'),refundedMember=await h.person('Ruby'),timeRefundedMember=await h.person('Tess');people.push(member,coach,refundedMember,timeRefundedMember)
+    const exclusionMembers=[]
+    for(const name of ['MixedConsideration','InitiationFee','ExcessRefund','CoolingOff'])exclusionMembers.push(await h.person(name))
+    const restatementMember=await h.person('FinanceRestatement');people.push(...exclusionMembers,restatementMember)
     const buy=async extra=>{
       const draft=await cmd('pack.prepare',{personId:member.id,amountCents:120001,kind:'unlimited',planName:'Annual studio',expiresAt:'2033-01-01T07:00:00Z',...extra})
       const approved=await cmd('pack.approve',{id:draft.id})
@@ -103,11 +106,11 @@ export async function financeTiming() {
     }
     await assertDownloads(h,owner,feb)
     if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2032-02'})
-    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift})
+    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift,exclusionMembers,restatementMember})
   },{mfa:false})} finally {await writeFile(path+'.new',original);await rename(path+'.new',path)}
 }
 
-async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift}) {
+async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish,retail,gift,exclusionMembers,restatementMember}) {
   const freezeType=await cmd('freeze.type.save',{name:'Travel',reason:'Agreed leave',feeCents:1234,defaultLengthDays:5,maxLengthDays:30})
   const preview=await cmd('freeze.prepare',{packId:ten.pack.id,freezeTypeId:freezeType.id,startAt:'2032-03-15',endAt:'2032-03-20',requestId:key(),channel:'desk'})
   assert.equal((await read('2032-03')).rows.find(r=>r.id===ten.charge.id).earnedCents,2000,'an unconfirmed freeze never changes recognition')
@@ -165,8 +168,8 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   await assertDownloads(h,h.owner,after)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})
   await timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember})
-  await financeExclusions(h,{cmd,state,read,jump,buy,key,people,coach,publish})
-  await financeRestatement(h,{cmd,state,read,jump,buy,key,people,coach,publish,retail,gift})
+  await financeExclusions(h,{cmd,state,read,jump,buy,key,members:exclusionMembers,coach,publish})
+  await financeRestatement(h,{cmd,state,read,jump,buy,key,member:restatementMember,coach,publish,retail,gift})
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)

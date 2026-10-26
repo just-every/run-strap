@@ -2,8 +2,7 @@ import assert from 'node:assert/strict'
 import { assertFinanceDownloads } from './finance-downloads.mjs'
 
 /** Corrections, returned tender and unsupported gift changes stay visible in monthly projections. */
-export async function financeRestatement(h,{cmd,state,read,jump,buy,key,people,coach,publish,retail,gift}) {
-  const member=await h.person('FinanceRestatement');people.push(member)
+export async function financeRestatement(h,{cmd,state,read,jump,buy,key,member,coach,publish,retail,gift}) {
   const sale=await buy({personId:member.id,kind:'credits',credits:2,amountCents:10001,expiresAt:'2032-07-01T07:00:00Z',planName:'Two visits with half-cent value'})
   const first=await publish('2032-05-22T17:00:00Z','Corrected finite service'),second=await publish('2032-06-02T17:00:00Z','Cumulative finite service')
   const bookings=[]

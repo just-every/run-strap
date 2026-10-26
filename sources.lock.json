@@ -4158,15 +4158,15 @@
       "executable": false
     },
     "tests/finance-exclusions.mjs": {
-      "sha256": "95ebeeb77538c0a1baf7102075eed42f6f7c14e579c2c0f0bdaaeaf2c43168f6",
+      "sha256": "0291a44de91317f6497f1cce32dec3a964f3dd0a6a7b940006f2794d8a87a614",
       "executable": false
     },
     "tests/finance-restatement.mjs": {
-      "sha256": "73796f8313ad23b006410c60b02265fec7878f88b33ac647a6d79fe9297add37",
+      "sha256": "28a17acfac640023a27881914348905eb90a049d89ef40fed8d72361dd3a178a",
       "executable": false
     },
     "tests/finance-timing.mjs": {
-      "sha256": "1388e697a833c2fcf5be027cb9083d35b5e8db481de4c75638df17a7aad0c7ef",
+      "sha256": "f159f2b3f9c1a6c27e7a3db592c1387cc1c145eebf202ec959d3d95dd49bfdc8",
       "executable": false
     },
     "tests/fixtures/members.csv": {
