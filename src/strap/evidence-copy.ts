@@ -124,9 +124,10 @@ export async function evidenceCopyResponse(request: Request,env: Bindings): Prom
     insist(/^[0-9a-f]{64}$/.test(secret),'copy_unavailable',410);
     const row=await env.DB.prepare("SELECT * FROM st_evidence_copies WHERE token_hash=? AND consumed_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND delivery_status IN ('sending','accepted','uncertain')").bind(await sha256Hex(secret)).first<CopyRow>();
     insist(row?.origin===env.AUTH_ORIGIN,'copy_unavailable',410);
-    const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who),source=await checkedSource(tx.state,row);
+    const loaded=await loadSystem(env.DB),tx=new Transaction(env.DB,loaded.state,loaded.who),source=await checkedSource(tx.state,row),review=await reviewedMail(env,tx.state);
+    insist(review?.connection_id===row.connection_id,'copy_unavailable',410);
     if(request.method==='GET')return page(`<h1>Your private document copy</h1><p>Download the exact copy requested after tablet completion. This link downloads once and grants no studio account access.</p><form method="post" action="${evidenceCopyPath}"><input type="hidden" name="token" value="${secret}"><button type="submit">Download my document copy</button></form>`);
-    sourceFence(tx,source,row);
+    sourceFence(tx,source,row);mailFence(tx,review);
     tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_evidence_copies WHERE id=? AND token_hash=? AND consumed_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND delivery_status IN ('sending','accepted','uncertain')) THEN 1 ELSE 0 END",row.id,row.token_hash));
     tx.sql.push(tx.statement('UPDATE st_evidence_copies SET consumed_at=? WHERE id=? AND consumed_at IS NULL',now(),row.id));
     await tx.commit();

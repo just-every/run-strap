@@ -433,7 +433,9 @@ test('MEM-005: personal and recorded-guardian typed signing retains exact downlo
   assert.ok(launch.id)
 }))
 
-test('MEM-005: scoped desk launches a one-use signed-out signing tablet for an account-less walk-in, locks private and auth doors, records participant-only completion and loses launch authority immediately on revocation',()=>run(async h=>{
+test('MEM-005: scoped desk launches a one-use signed-out signing tablet for an account-less walk-in, locks private and auth doors, records participant-only completion and loses launch authority immediately on revocation',async()=>{
+  const {evidenceCopyJourney,evidenceCopyMailEdge}=await import('./evidence-copy-journey.mjs'),edge=evidenceCopyMailEdge()
+  return run(async h=>{
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
   const member=await h.cmd('member.record.create',{name:'Tablet walk-in',email:'synthetic-strap-walkin@studio.example',channel:'desk',requestId:'synthetic-strap-walkin-create'}),other=await h.person('TabletOther'),desk=await h.person('TabletDesk')
   const noAccount=async()=>assert.equal(await h.db.prepare('SELECT id FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).first(),null,'the walk-in never receives a native account or session')
@@ -507,7 +509,9 @@ test('MEM-005: scoped desk launches a one-use signed-out signing tablet for an a
   const expiring=await h.cmd('waiver.tablet.launch',{...input,waiverId:finalWaiver.id,requestId:'synthetic-strap-expired-tablet'})
   await h.db.prepare("UPDATE st_intake_tablets SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(expiring.id).run()
   assert.equal((await h.send(expiring.url)).status,410)
-}))
+  await evidenceCopyJourney(h,{edge,guardian:other})
+  },{outbound:edge.outbound})
+})
 
 test('MEM-005: service-specific replacement and expiring personal and guardian affirmations fence only affected enrollments, bookings and existing check-in',()=>run(async h=>{
   await h.confirmSetup(h.owner)
