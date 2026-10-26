@@ -28,7 +28,7 @@ export async function evidenceCopyBrowser(h,{edge,waiver}) {
       await privatePage.goto(emailLink);assert.ok(!(await privatePage.locator('body').innerText()).includes(member.name));assert.ok(!(await privatePage.locator('body').innerText()).includes(waiver.text));await capture(privatePage,'private-confirmation')
       const receipt=(await h.state()).acknowledgements.find(row=>row.personId===member.id),original=await h.send('/api/strap/waiver-evidence.html?id='+receipt.id,undefined,h.owner)
       const [download]=await Promise.all([privatePage.waitForEvent('download'),privatePage.getByRole('button',{name:'Download my document copy',exact:true}).click()]);const file=await download.path();assert.equal(await readFile(file,'utf8'),original.text)
-      const artifact=await personal.newPage();await artifact.goto(pathToFileURL(file).href);await capture(artifact,'downloaded-copy');await artifact.close()
+      await download.saveAs(file+'.html');const artifact=await personal.newPage();await artifact.goto(pathToFileURL(file+'.html').href);await capture(artifact,'downloaded-copy');await artifact.close()
       assert.equal((await personal.request.get(emailLink)).status(),410);assert.equal((await personal.request.get(h.origin+'/api/strap/state')).status(),401)
       assert.equal(await h.db.prepare('SELECT id FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).first(),null)
     }finally{await personal.close();await tablet.close();await owner.close()}
