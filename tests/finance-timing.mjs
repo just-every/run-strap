@@ -30,7 +30,7 @@ export async function financeTiming() {
     for(const ext of ['', '.csv','.xlsx'])assert.equal((await h.send('/api/strap/reports/finance'+ext,undefined,owner)).status,403)
     h.mfaOwner=await h.enroll(owner)
     await cmd('studio.save',{location:'Desert studio',timeZone:'America/Phoenix'})
-    const member=await h.person('Nora'),coach=await h.person('Maya','instructor'),refundedMember=await h.person('Ruby');people.push(member,coach,refundedMember)
+    const member=await h.person('Nora'),coach=await h.person('Maya','instructor'),refundedMember=await h.person('Ruby'),timeRefundedMember=await h.person('Tess');people.push(member,coach,refundedMember,timeRefundedMember)
     const buy=async extra=>{
       const draft=await cmd('pack.prepare',{personId:member.id,amountCents:120001,kind:'unlimited',planName:'Annual studio',expiresAt:'2033-01-01T07:00:00Z',...extra})
       const approved=await cmd('pack.approve',{id:draft.id})
@@ -101,7 +101,7 @@ export async function financeTiming() {
     }
     await assertDownloads(h,owner,feb)
     if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:feb,month:'2032-02'})
-    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings,publish})
+    await adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish})
   },{mfa:false})} finally {await writeFile(path+'.new',original);await rename(path+'.new',path)}
 }
 
@@ -120,7 +120,7 @@ async function assertDownloads(h,owner,report) {
   for(const [metric,opening,period,closing] of sheets.find(s=>s.sheet==='Reconciliation').data.slice(1))assert.deepEqual([opening,period,closing],[report.opening[metric],report.period[metric],report.closing[metric]])
 }
 
-async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,people,ten,annual,bookings,publish}) {
+async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedMember,timeRefundedMember,people,ten,annual,bookings,publish}) {
   const freezeType=await cmd('freeze.type.save',{name:'Travel',reason:'Agreed leave',feeCents:1234,defaultLengthDays:5,maxLengthDays:30})
   const preview=await cmd('freeze.prepare',{packId:ten.pack.id,freezeTypeId:freezeType.id,startAt:'2032-03-15',endAt:'2032-03-20',requestId:key(),channel:'desk'})
   assert.equal((await read('2032-03')).rows.find(r=>r.id===ten.charge.id).earnedCents,2000,'an unconfirmed freeze never changes recognition')
@@ -177,7 +177,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   assert.equal(after.rows.find(r=>r.id===refundSale.charge.id).serviceEnd,refundSale.draft.expiresAt,'unsupported recognition retains the original accepted service period')
   await assertDownloads(h,h.owner,after)
   if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-03',prefix:'adjustments'})
-  await timeRefund(h,{cmd,state,read,jump,buy,key,people})
+  await timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember})
   await jump('2033-01-02T07:00:00Z')
   const expired=await read('2033-01'),annualRow=expired.rows.find(r=>r.id===annual.charge.id)
   assert.equal(annualRow.earnedCents,120001);assert.equal(annualRow.deferredCents,0)
@@ -189,8 +189,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   console.log('RPT-004 elapsed-time journey: original annual interval, cumulative cents, completed finite service, gift liability and once-only refunds, unclassified changes, retained refund payable and source downloads passed.')
 }
 
-async function timeRefund(h,{cmd,state,read,jump,buy,key,people}) {
-  const member=await h.person('Tess');people.push(member)
+async function timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember:member}) {
   const sale=await buy({personId:member.id,kind:'unlimited',planName:'Recorded time service',amountCents:31001,expiresAt:'2032-05-01T07:00:00Z'})
   const receipt=await cmd('payment.record',{personId:member.id,amountCents:15500,reference:key()})
   await cmd('contract.prepayment.record',{packId:sale.pack.id,paymentId:receipt.id,chargeId:sale.charge.id,amountCents:15500,reference:key()})
