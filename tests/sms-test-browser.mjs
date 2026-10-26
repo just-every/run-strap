@@ -32,8 +32,17 @@ export async function smsTestBrowser(h, stage = 'outcomes') {
         return box.width > 0 && box.height > 0 && el.querySelector('svg') && !el.textContent.trim() && !el.querySelector('.control-tooltip')
       }).map(el => el.outerHTML)), [])
       await page.locator('#sms-test').screenshot({ path: join(process.env.STRAP_PROOF_DIR, `MSG-005-${name}-${width}.png`) })
+      if (name === 'submitted') {
+        await page.locator('#sms-test').scrollIntoViewIfNeeded()
+        await page.screenshot({ path: join(process.env.STRAP_PROOF_DIR, `MSG-005-studio-context-${width}.png`) })
+      }
     }
-    if (stage === 'connect') {
+    if (stage === 'unconfigured') {
+      for (const view of views) {
+        assert.equal(await view.page.locator('#sms-test form').count(), 0)
+        await capture(view, 'unconfigured')
+      }
+    } else if (stage === 'connect') {
       for (const view of views) await capture(view, 'connection-review')
       await views[1].page.getByRole('button', { name: 'Review and connect TEST account', exact: true }).click()
       assert.equal((await h.state()).smsTest.connected, true)

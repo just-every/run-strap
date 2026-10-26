@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "045ed58e7e27ad488fcc8b9a6609abb05149e522a46d79ab8bcf406c8c25fa80",
+      "sha256": "55eb52e8053fe33cc20eeda596198418195272d8ee2cd87b1cd9013f02f740cb",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "99b8be3e68d456300a10a61851b67cf3b1f5222783e1c0432aff0f4367f82908",
+      "sha256": "a7374a75b07e7579aa4e17e43b4b1c2a579ed7e83793390f96dcd1b6d6c75beb",
       "executable": false
     },
     "DEMO.md": {
@@ -398,11 +398,15 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "bc46f9112b7f11aecfd8838dc1d1af283e5d39376efcd3778ca90fdfbbc57308",
+      "sha256": "2af47c3a2d69fcb279ffb8ae67498abdc205498800f3f856a7cf94d326670d6d",
       "executable": false
     },
     "docs/SOURCES.md": {
       "sha256": "565eb5e1cb93d8031573d87a635842b926d843f4577b9b5c5006070a1e99acb8",
+      "executable": false
+    },
+    "docs/TWILIO-SMS.md": {
+      "sha256": "c01759cad332c95200e1d8272effc2cf7e6d4ff7c1036f736c90c43db2fed8cb",
       "executable": false
     },
     "docs/waivers.md": {
@@ -598,7 +602,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "0ef27619ff33c385c196df8d21583d8ef2b2eaa2a6cdf3862d751c2e797f186d",
+      "sha256": "f781749a6faa5db6380135c79726c6bec46f8332a97d5a92765da49dc932e56f",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -3426,7 +3430,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "9c3829ca377901bae5905c3716f310af42b3c840b0890277b5f84dca70bffd3e",
+      "sha256": "a1d5ea0dffae953796a3f3c15b5993faffb3971750a1bd1e64e5ad2a1bd149ef",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3806,7 +3810,7 @@
       "executable": false
     },
     "src/strap/ui/sms-test.ts": {
-      "sha256": "c1b29e3b557524e705e86ba98ee1b4e4f975eca8258605149317e6eeb01c2f61",
+      "sha256": "170c9303427a608714e398f660f78ed1e0e80b25be9f79441705a52c2aca3463",
       "executable": false
     },
     "src/strap/ui/spots.ts": {
@@ -3938,7 +3942,7 @@
       "executable": false
     },
     "tests/consent-queue-cases.mjs": {
-      "sha256": "386281c4686ca9d51b7800620f1c8678f8d615a62f513fa7bfa842491cf8977c",
+      "sha256": "41b917d30f8cee476286885800d6b031e8de6bc3f1c6bbb0123019a8e173165c",
       "executable": false
     },
     "tests/contract-authority-cases.mjs": {
@@ -4210,11 +4214,11 @@
       "executable": false
     },
     "tests/sms-test-browser.mjs": {
-      "sha256": "a39e70c9b5e6adf5c9f7b56262e65e65fee248e63abe32354aa62cc7072307ef",
+      "sha256": "9cb025481ce44771bd7ddd555627492d9c5668e900fa499150059d981e677e4a",
       "executable": false
     },
     "tests/sms-test-cases.mjs": {
-      "sha256": "ef604d65520441b00f0ebcfc98e2d5c7488258989dbc3dcd6589bbebae26f1e8",
+      "sha256": "3fb5f614191949cddc3f59a99cb79ed5f0368270615df53af2ca90b073c9a0ff",
       "executable": false
     },
     "tests/spots-browser.mjs": {
@@ -4274,7 +4278,7 @@
       "executable": false
     },
     "tests/twilio-test-sandbox.mjs": {
-      "sha256": "ecc5a5d9a93f5dd075a532aa0bc8ce25d5c19bbc80550fc41664e294da9d40b5",
+      "sha256": "af7f7ceaff5dad3a6b279e45160a3d7d8eeaeaa6976d89ad6c0fa209d1bcd69b",
       "executable": false
     },
     "tests/waitlist-browser.mjs": {

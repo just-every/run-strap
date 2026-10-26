@@ -41,6 +41,11 @@ export async function smsTestCases() {
     assert.equal(submitted.priceUnit, 'USD')
     assert.deepEqual(await h.cmd('sms.test.send', input), submitted)
     assert.equal(sent.length, 1)
+    const racingInput = { requestId: 'synthetic-strap-race', body: 'Concurrent connection check.' }, countBeforeRace = sent.length
+    const raced = await Promise.all([h.send('/api/strap/command', { name: 'sms.test.send', input: racingInput }, h.owner), h.send('/api/strap/command', { name: 'sms.test.send', input: racingInput }, h.owner)])
+    assert.ok(raced.some(result => result.status === 200))
+    assert.ok(raced.every(result => result.status === 200 || result.status === 409))
+    assert.equal(sent.length, countBeforeRace + 1, 'concurrent claims submit at most once')
     await refuse('sms.test.send', { ...input, body: 'Changed message' }, h.owner, 409)
     const callback = (path, fields, options) => signedSmsCallback(h, '/api/strap/sms/test/' + path, { AccountSid: h.auth.TWILIO_TEST_ACCOUNT_SID, ...fields }, options)
     const status = { MessageSid: submitted.providerMessageId, MessageStatus: 'delivered', NumSegments: '2', FutureField: 'signed extra value', Price: '-999.00' }
@@ -70,14 +75,14 @@ export async function smsTestCases() {
     assert.equal((await callback('inbound', { ...inbound, Body: 'Changed reply' })).status, 409)
     assert.equal((await h.state()).version, inboundVersion)
     assert.equal((await h.state()).smsTest.inbound[0].provenance, 'synthetic-signed-callback')
-    for (const [body, expected] of [['synthetic-strap-refuse', 'rejected'], ['synthetic-strap-uncertain', 'uncertain'], ['synthetic-strap-no-price', 'submitted']]) {
+    for (const [body, expected] of [['Your booking details are ready.', 'rejected'], ['Your class time has changed.', 'uncertain'], ['Your studio update is ready.', 'submitted']]) {
       const value = { requestId: body, body }, result = await h.cmd('sms.test.send', value), count = sent.length
       assert.equal(result.status, expected)
       assert.deepEqual(await h.cmd('sms.test.send', value), result)
       assert.equal(sent.length, count, 'failures and ambiguous outcomes are never retried')
-      if (body === 'synthetic-strap-no-price') { assert.equal(result.price, null); assert.equal(result.segments, null) }
+      if (body === 'Your studio update is ready.') { assert.equal(result.price, null); assert.equal(result.segments, null) }
     }
-    const failed = (await h.state()).smsTest.submissions.find(row => row.sourceId === 'synthetic-strap-no-price')
+    const failed = (await h.state()).smsTest.submissions.find(row => row.sourceId === 'Your studio update is ready.')
     assert.equal((await callback('status', { MessageSid: failed.providerMessageId, MessageStatus: 'undelivered', ErrorCode: '30003' })).status, 200)
     assert.equal((await h.state()).smsTest.submissions.find(row => row.id === failed.id).errorCode, '30003')
     const portable = (await h.send('/api/strap/exit.json', undefined, h.owner)).value
@@ -90,6 +95,9 @@ export async function smsTestCases() {
     const before = (await h.state()).version
     assert.equal((await callback('status', status)).status, 409)
     assert.equal((await h.state()).version, before)
+    await h.setAuth({ TWILIO_TEST_ACCOUNT_SID: '', TWILIO_TEST_AUTH_TOKEN: '' })
+    assert.equal((await h.state()).smsTest.configured, false)
+    if (process.env.STRAP_PROOF_DIR) await (await import('./sms-test-browser.mjs')).smsTestBrowser(h, 'unconfigured')
   }, { auth: { TWILIO_TEST_ACCOUNT_SID: 'synthetic-strap-1', TWILIO_TEST_AUTH_TOKEN: 'synthetic-strap-2' }, outbound: async request => {
     assert.equal(request.url, 'https://api.twilio.com/2010-04-01/Accounts/synthetic-strap-1/Messages.json')
     assert.equal(request.method, 'POST')
@@ -97,12 +105,15 @@ export async function smsTestCases() {
     const form = new URLSearchParams(await request.text())
     assert.equal(form.get('From'), '+15005550006'); assert.equal(form.get('To'), '+15005550006')
     sent.push(form.get('Body'))
-    if (form.get('Body') === 'synthetic-strap-refuse') return Response.json({ code: 21608 }, { status: 400 })
-    if (form.get('Body') === 'synthetic-strap-uncertain') throw new Error('synthetic-strap-edge')
+    if (form.get('Body') === 'Your booking details are ready.') return Response.json({ code: 21608 }, { status: 400 })
+    if (form.get('Body') === 'Your class time has changed.') throw new Error('synthetic-strap-edge')
     return Response.json({ sid: 'synthetic-strap-message-' + sent.length, status: 'queued', num_segments: sent.length === 1 ? '2' : null, price: sent.length === 1 ? '-0.01500' : null, price_unit: 'usd' }, { status: 201 })
   } })
   await run(async h => {
     await h.confirmSetup(h.owner)
+    assert.equal((await h.state()).smsTest, null, 'connection data stays hidden before factor enrollment')
+    const studio = await h.send('/app/studio', undefined, h.owner)
+    assert.equal(studio.status, 200, 'ordinary studio settings remain available before factor enrollment')
     const result = await h.send('/api/strap/command', { name: 'sms.test.connect', input: { confirm: true } }, h.owner)
     assert.equal(result.status, 403); assert.equal(result.value.error, 'mfa_enrollment_required')
   }, { mfa: false, auth: { TWILIO_TEST_ACCOUNT_SID: 'synthetic-strap-1', TWILIO_TEST_AUTH_TOKEN: 'synthetic-strap-2' } })

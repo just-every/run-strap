@@ -5,7 +5,7 @@ export function smsTestPanel(s: any) {
   const test = s.smsTest;
   const submissions = test.submissions.map((row: any) => '<tr>'
     + cell('Message', h(row.body))
-    + cell('Outcome', h(row.status === 'submitted' ? 'Submitted to Twilio TEST; no handset delivery' : row.status === 'sending' ? 'Submission claimed; outcome unknown' : row.status)
+    + cell('Outcome', h(row.status === 'submitted' ? 'Submitted to Twilio TEST; no handset delivery' : row.status === 'sending' ? 'Submission claimed; outcome unknown' : ['delivered', 'undelivered', 'failed'].includes(row.status) ? 'Synthetic callback: ' + row.status + '; no handset delivery' : row.status)
       + (row.providerStatus ? `<small>Provider state: ${h(row.providerStatus)} (test)</small>` : '')
       + (row.errorCode ? `<small>Error: ${h(row.errorCode)}</small>` : ''))
     + cell('Segments and price', `${h(row.segments ?? 'Unknown')} segments<small>${row.price !== null && row.priceUnit ? `Provider price: ${h(row.price)} ${h(row.priceUnit)}` : 'Provider price unavailable'}</small>`)

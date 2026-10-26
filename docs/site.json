@@ -27,6 +27,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "TWILIO-SMS.md", "reason": "Twilio TEST runtime bindings, explicit owner diagnostic and the boundary between synthetic callbacks and real provider delivery" },
     { "file": "LEAD-FUNNEL.md", "reason": "Native inquiry-source and attendance funnel definitions and HTTP report for maintainers and API users" },
     { "file": "RETENTION-REPORT.md", "reason": "Native owner HTTP/CSV retention report schema and metric definitions for maintainers and API users" },
     { "file": "EXIT-EXPORT.md", "reason": "Portable exit schema and reconstruction instructions for independent receivers and maintainers" },

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 export async function consentQueueCases(h) {
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'})
-  const member=await h.person('ConsentQueue'),day=86400000,expiresAt=new Date(Date.now()+20*day).toISOString()
+  const member=await h.person('Elena'),day=86400000,expiresAt=new Date(Date.now()+20*day).toISOString()
   await h.cmd('profile.save',{phone:'5125550130',requestId:'synthetic-strap-phone'},member.cookie)
   const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:6000,expiresAt})).id})
   const preference=async()=> (await h.send('/api/strap/preferences.json',undefined,member.cookie)).value.preference
@@ -22,13 +22,25 @@ export async function consentQueueCases(h) {
   const before=(await h.state()).version;assert.equal(await callback('YES','synthetic-strap-yes',false),403);assert.equal((await h.state()).version,before)
   assert.equal(await callback('YES','synthetic-strap-yes'),200);assert.equal((await preference()).marketing.sms,'confirmed')
   const queued=await enroll(sms);assert.equal(queued.status,'queued')
+  const shared=await h.person('SharedPhone')
+  await h.cmd('profile.save',{phone:'5125550130',requestId:'synthetic-strap-shared-phone'},shared.cookie)
+  const sharedPreference=async()=> (await h.send('/api/strap/preferences.json',undefined,shared.cookie)).value.preference
+  const sharedChoose=async()=>h.cmd('preferences.save.staff',{personId:shared.id,channel:'phone',sourceReference:'Member phoned the studio',revision:(await sharedPreference()).revision,requestId:'synthetic-strap-'+crypto.randomUUID(),marketingSms:true,consentStatement:'Fresh SMS permission from the shared-phone member'},h.owner)
+  await sharedChoose()
   assert.equal(await callback('STOP','synthetic-strap-stop'),200)
+  assert.equal((await sharedPreference()).marketing.sms,'denied','STOP suppresses every member of a shared phone')
   const stopped=(await h.state()).marketingMessages.find(m=>m.id===queued.id);assert.equal(stopped.status,'suppressed');assert.equal(stopped.suppressionReason,'provider_stop')
   const version=(await h.state()).version;assert.equal(await callback('STOP','synthetic-strap-stop'),200);assert.equal((await h.state()).version,version)
   assert.equal(await callback('START','synthetic-strap-unsolicited-start'),200);assert.equal((await preference()).marketing.sms,'denied')
   const nextSms=await sequence('sms');await enroll(nextSms,409)
   await choose({marketingSms:true,consentStatement:'New SMS permission after STOP'},true);await enroll(nextSms,409)
+  await sharedChoose()
+  assert.equal(await callback('START','synthetic-strap-ambiguous-start'),200)
+  assert.equal((await preference()).marketing.sms,'pending','a shared-phone reply confirms nobody')
+  assert.equal((await sharedPreference()).marketing.sms,'pending')
+  await h.cmd('profile.save',{phone:'5125550132',requestId:'synthetic-strap-distinct-phone'},shared.cookie)
   assert.equal(await callback('YES','synthetic-strap-reconfirm'),200);const smsMessage=await enroll(nextSms)
+  assert.equal((await sharedPreference()).marketing.sms,'pending','the other member cannot inherit the unique reply')
   const exportRecord=(await h.send('/api/strap/preferences.json',undefined,member.cookie)).value
   assert.ok(exportRecord.history.some(e=>e.source==='twilio-signed-webhook'&&e.sourceReference==='synthetic-strap-stop'))
   assert.ok((await h.send('/api/strap/exit.json',undefined,h.owner)).text.includes('pending_external_sync'),'external synchronization is explicitly pending, never reported complete')

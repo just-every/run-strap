@@ -25,7 +25,7 @@ await run(async h => {
   const current = (await h.state()).smsTest
   assert.equal(current.statuses[0].provenance, 'synthetic-signed-callback')
   assert.equal(current.inbound[0].provenance, 'synthetic-signed-callback')
-  console.log(JSON.stringify({ provider: 'Twilio TEST', actualPostStatus: 201, submissions: requests, replaySubmissions: 0,
+  console.log(JSON.stringify({ at: new Date().toISOString(), provider: 'Twilio TEST', actualPostStatus: 201, submissions: requests, replaySubmissions: 0,
     segments: value.segments, price: value.price, priceUnit: value.priceUnit, forgedStatusRejected: true,
     statusAndInbound: 'synthetic signed callbacks only', realHandsetDelivery: false, realReply: false }))
 }, { auth: { TWILIO_TEST_ACCOUNT_SID: account, TWILIO_TEST_AUTH_TOKEN: token }, outbound: async request => {
@@ -34,5 +34,12 @@ await run(async h => {
   const form = new URLSearchParams(await request.clone().text())
   assert.ok(form.get('From') === '+15005550006' && form.get('To') === '+15005550006', 'Only the magic test phone is allowed')
   requests++
-  return fetch(request.url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.text() })
+  try {
+    const response = await fetch(request.url, { method: request.method, headers: { authorization: request.headers.get('authorization'), 'content-type': request.headers.get('content-type') }, body: await request.text() })
+    console.log(JSON.stringify({ edgeHttpStatus: response.status }))
+    return new Response(await response.text(), { status: response.status, headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' } })
+  } catch (error) {
+    console.log(JSON.stringify({ edgeErrorName: error.name, edgeErrorCode: error.cause?.code ?? error.code ?? null }))
+    throw error
+  }
 } })
