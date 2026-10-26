@@ -224,7 +224,7 @@ async function timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember:memb
   assert.deepEqual(retained.entitlement,sale.pack.entitlement);assert.equal(retained.expiresAt,cancellation.effectiveAt)
   await assertDownloads(h,h.owner,after)
   await assertStoppedDownloads(h,h.owner,after,[sale.charge.id,due.id])
-  if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-04',prefix:'time-refund'})
+  if(process.env.STRAP_PROOF_DIR)await(await import('./finance-browser.mjs')).financeBrowser(h,{report:after,month:'2032-04',prefix:'time-refund',sourceId:due.id})
   await jump('2032-05-02T07:00:00Z')
   const later=await read('2032-05'),laterSale=later.rows.find(r=>r.id===sale.charge.id)
   assert.deepEqual([laterSale.earnedCents,laterSale.deferredCents,laterSale.serviceEnd,laterSale.serviceStoppedAt],[earned,31001-earned,sale.draft.expiresAt,cancellation.effectiveAt],'termination caps earned time permanently without rewriting the accepted interval')

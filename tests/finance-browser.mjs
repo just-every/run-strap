@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 import readXlsx from 'read-excel-file/node'
 import { parseCsv } from './report-downloads.mjs'
 
-export async function financeBrowser(h,{report,month,prefix='reconciliation'}) {
+export async function financeBrowser(h,{report,month,prefix='reconciliation',sourceId}) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {for(const width of [1440,390]){
@@ -27,7 +27,7 @@ export async function financeBrowser(h,{report,month,prefix='reconciliation'}) {
         else assert.equal((await readXlsx(bytes)).find(s=>s.sheet==='Reconciliation').data.find(r=>r[0]==='cashCents')[3],report.closing.cashCents)
       }
       const tip=page.locator('.has-tooltip').first();if(await tip.count()){await tip.focus();await tip.locator('[role=tooltip]').waitFor({state:'visible'});await tip.hover();await page.waitForTimeout(350);await tip.locator('[role=tooltip]').waitFor({state:'visible'})}
-      const source=report.sources.find(r=>r.kind==='refund-cash') ?? report.sources[0]
+      const source=(sourceId ? report.sources.find(r=>r.id===sourceId) : report.sources.find(r=>r.kind==='refund-cash')) ?? report.sources[0]
       await page.goto(h.origin+source.sourceUrl)
       const record=JSON.parse(await page.getByLabel('Retained finance source',{exact:true}).inputValue());assert.equal(record.id,source.id)
       await capture('source')
