@@ -403,6 +403,7 @@ test('MEM-005: personal and recorded-guardian typed signing retains exact downlo
   const replacement=await h.cmd('waiver.publish',{text:'Replacement policy requires fresh personal confirmation.',requiresSignature:true})
   await refused(h,'waiver.acknowledge',sign(adult),adult.cookie,409,'not_latest_version')
   await refused(h,'booking.book',{classId:entry.id},adult.cookie,409,'waiver_acknowledgement_required')
+  await refused(h,'attendance.checkin',{id:booked.id},coach.cookie,409,'waiver_signature_required')
   // Staff initiate the member-owned act; the canonical launch never becomes a signer.
   const launchInput={personId:adult.id,waiverId:replacement.id,channel:'phone',requestId:'synthetic-strap-signing-resend'}
   const launch=await h.cmd('waiver.launch',launchInput)

@@ -22,7 +22,7 @@ Strap records which person acknowledged which exact version, and when. That is a
 When publishing a version, choose **Require a personal typed signature** to require the member’s own recorded name and
 explicit confirmation of that exact text. On **Classes**, the member reviews the document and chooses **Sign this document**.
 A currently recorded guardian can complete it for a linked participant on **My household**. This records personal affirmation;
-Strap does not assert legal enforceability or payment authorization. A replacement version needs fresh completion before another booking.
+Strap does not assert legal enforceability or payment authorization. A replacement signing-required version needs fresh completion before another booking or check-in.
 
 Members and current guardians can download the original version’s evidence from the completion screen. The JSON package
 retains the exact text, its SHA-256 digest, version, signer, authority and completion time. Removing a guardian ends their download
