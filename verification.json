@@ -33,11 +33,19 @@
       ]
     },
     {
-      "name": "domain",
+      "name": "domain-scheduling",
       "browser": true,
       "hosted": false,
       "commands": [
-        "pnpm run test:strap",
+        "pnpm run test:strap:scheduling"
+      ]
+    },
+    {
+      "name": "domain-studio",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "pnpm run test:strap:studio",
         "node --test tests/demo.test.mjs"
       ]
     },
