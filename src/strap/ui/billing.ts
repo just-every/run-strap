@@ -30,7 +30,7 @@ export function billingPanel(s: any) {
     const revoke=mine&&mandate?.status==='accepted' ? form('billing.mandate.revoke',back,hidden('id',a.id),'Revoke future payment permission','quiet') : ''
     return `<section id="billing-${h(a.id)}" data-billing-agreement="${h(a.id)}"><h3>${h(a.title)}${mine?'':' · '+h(person(s,a.personId))}</h3><p>${h(a.status.replaceAll('-',' '))}</p>`
       +`<p><strong>${money(financial.amountCents)} USD every ${h(financial.intervalMonths)} month(s)</strong> · first due ${when(s,financial.firstDueAt)}</p><p>Original service period: ${when(s,financial.servicePeriod.startAt)} to ${when(s,financial.servicePeriod.endAt)}.</p>`
-      +`<details><summary>Read the exact agreement and payment permission</summary><p class="letter">${h(a.documentText)}</p><p>Document version ${h(a.documentVersion)} · SHA-256 <code>${h(a.documentHash)}</code></p></details>`
+      +`<details><summary>Read the exact agreement and payment permission</summary><div class="record"><div class="record-body"><p class="letter">${h(a.documentText)}</p></div></div><p>Document version ${h(a.documentVersion)} · SHA-256 <code>${h(a.documentHash)}</code></p></details>`
       +(a.signature?`<p>Personally affirmed by ${h(a.signature.signerName)} ${when(s,a.signature.completedAt)}.</p>`:'')
       +methods.map((m: any)=>`<p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':mandate?.status==='revoked'?'historical method; future payment permission revoked':'historical method; connection review required'}</p>`).join('')
       +(mandate?.revokedAt?`<p>Future payment permission revoked ${when(s,mandate.revokedAt)}. The original studio agreement and balance remain unchanged.</p>`:'')
