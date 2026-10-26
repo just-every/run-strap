@@ -45,6 +45,8 @@ async function sandbox() {
     const seed = await taxSeed(h);
     await succeeded(h,'tax.config.save',seed.config);
     const retail = await taxInvoice(h,seed.sale.chargeId,'mat',taxAddress,'retail');
+    assert.equal(retail.calculation.result.providerCalculation.line_items.data[0].quantity,seed.sale.quantity);
+    assert.equal(retail.invoice.result.providerTransaction.line_items.data[0].quantity,seed.sale.quantity);
     assert.ok(retail.invoice.result.taxCents > 0,'The synthetic retail sale must be taxable');
     const service = await taxInvoice(h,seed.serviceCharge.id,'fitness-class',serviceAddress,'class');
     assert.notEqual(retail.calculation.result.product.taxCode,service.calculation.result.product.taxCode);
