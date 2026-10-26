@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "d6d7cee935865a728f2bcdeb29d5fffbe4925be8ecd836c036d66e944844c641",
+      "sha256": "e44c0e9961bcef84321eb0cf433bff6b87c4589e2c13c10e7b1d4226b5fa3acc",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "16cad6b20cf89642f65aeca790364c747ea76f1e76817078ce50f7c3ca219e44",
+      "sha256": "db462e9da71b4ca7b5c0d0565c4f4939fa3d52f768c5fe47b3b22a06a4a5ed85",
       "executable": false
     },
     "DEMO.md": {
@@ -4159,6 +4159,10 @@
     },
     "tests/finance-exclusions.mjs": {
       "sha256": "95ebeeb77538c0a1baf7102075eed42f6f7c14e579c2c0f0bdaaeaf2c43168f6",
+      "executable": false
+    },
+    "tests/finance-restatement.mjs": {
+      "sha256": "73796f8313ad23b006410c60b02265fec7878f88b33ac647a6d79fe9297add37",
       "executable": false
     },
     "tests/finance-timing.mjs": {
