@@ -72,6 +72,7 @@ async function actualHostedSetup(h,agreement,member) {
         }
       };
       await page.locator('#email, input[name="email"]').first().waitFor({state:'visible'});
+      if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-empty-390.png'),fullPage:true});}
       await field('#email, input[name="email"]',member.email);
       await field('#cardNumber, input[name="cardNumber"]','4242424242424242');
       await field('#cardExpiry, input[name="cardExpiry"]','12/34');
@@ -81,13 +82,21 @@ async function actualHostedSetup(h,agreement,member) {
       if(await country.count() && await country.isVisible())await country.selectOption('US');
       await field('#billingPostalCode, input[name="billingPostalCode"]','98104',false);
       await page.locator('button[type="submit"]').click();
-      await page.waitForURL(url=>url.origin === h.origin,{timeout:90000});
+      let returnNavigationCompleted=true;
+      try { await page.waitForURL(url=>url.origin === h.origin,{timeout:45000,waitUntil:'commit'}); }
+      catch {
+        returnNavigationCompleted=false;
+        const at=new URL(page.url());
+        const fields=await Promise.all(page.frames().map(frame=>frame.locator('input,select').evaluateAll(elements=>elements.map(el=>({id:el.id,name:el.getAttribute('name'),required:el.required === true,missing:!el.value,valid:el.validity?.valid !== false})))));
+        console.log(JSON.stringify({stage:'hosted-post-submit',atNative:at.origin === h.origin,atStripe:at.hostname === 'checkout.stripe.com',captchaPresent:page.frames().some(f=>/hcaptcha|recaptcha/.test(f.url())),fields}));
+        if(process.env.STRAP_PROOF_DIR)await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-post-submit-390.png'),fullPage:true});
+      }
       const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete'},member.cookie);
       assert.equal(verified.result.last4,'4242');assert.equal(verified.result.livemode,false);
       await page.goto(h.origin+'/app/packs#billing');
       await section.getByText(/visa ending 4242/).waitFor();
       if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await section.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-method-390.png')});}
-      return {setup,start,method:verified.result};
+      return {setup,start,method:verified.result,returnNavigationCompleted};
     } finally {await context.close();}
   } finally {await browser.close();}
 }

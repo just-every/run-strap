@@ -46,7 +46,7 @@ export function chargeSource(state: State, chargeId: unknown, product: Json) {
     return {charge,source:sale};
   }
   const pack = record(state,charge.packId,'pack');
-  insist(product.kind === 'service' && product.sourceId === pack.id && charge.reason === undefined && !charge.recurringInvoiceId && charge.amountCents === pack.purchaseAmountCents,'tax_original_service_charge_required',409);
+  insist(product.kind === 'service' && product.sourceId === pack.id && charge.reason === undefined && charge.kind === undefined && !charge.recurringInvoiceId && charge.amountCents === pack.purchaseAmountCents,'tax_original_service_charge_required',409);
   return {charge,source:pack};
 }
 export function unlockedCharge(state: State, chargeId: string) {

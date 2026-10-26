@@ -3474,7 +3474,7 @@
       "executable": false
     },
     "src/strap/finance-report.ts": {
-      "sha256": "7aaabd94274a68ae625a1c6ed3149228f8544b04c91e40853d1d882ba68df8a3",
+      "sha256": "b1389889dfdc3fe249a2aa2c66d17aa30eb09eab8f89c5ec705af5b405cf0722",
       "executable": false
     },
     "src/strap/finance-tax.ts": {
@@ -3618,7 +3618,7 @@
       "executable": false
     },
     "src/strap/tax/model.ts": {
-      "sha256": "4a33e6b661fb2c8e99b9773bdb3f389585f05c3300cab97ad870da1287b6568b",
+      "sha256": "2978b9548ed496edcf574c9f6ef11625a4662ba30ebece01cafa0507ce182501",
       "executable": false
     },
     "src/strap/tax/provider.ts": {
@@ -3934,7 +3934,7 @@
       "executable": false
     },
     "src/strap/ui/tax-operations.ts": {
-      "sha256": "cdbf139fa0c0ae2381df61fb7b7bd2347446ca15b92e1de4451bcf8ef6652b8a",
+      "sha256": "6785d2a5a6ff77d96e5791bbe4cf90f7beb95be32fc68b920ec9e885262c4f73",
       "executable": false
     },
     "src/strap/ui/tax-settings.ts": {
@@ -3994,7 +3994,7 @@
       "executable": false
     },
     "tests/billing-sandbox.mjs": {
-      "sha256": "968200e563c32a4b828c650fc426bc7de3f5803d06413cde9a83152b4cdc4568",
+      "sha256": "d8e004e135c1a7d10a5340e34618299c13f6a3543ffbfbc177e1842b161c31a8",
       "executable": false
     },
     "tests/booking-actions-browser.mjs": {

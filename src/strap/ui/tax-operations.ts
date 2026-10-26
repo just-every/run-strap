@@ -7,7 +7,7 @@ export function taxOperations(s: any,tax: any) {
   if(!config)return ''
   const products=config.products
   const candidates=s.charges.flatMap((charge: any)=>products.filter((product: any)=>charge.amountCents>0&&!charge.taxInvoiceId&&!charge.reversesChargeId
-    &&(product.kind==='service' ? charge.packId===product.sourceId&&!charge.reason : s.retail?.sales.some((sale: any)=>sale.id===charge.retailSaleId&&sale.skuId===product.sourceId)))
+    &&(product.kind==='service' ? charge.packId===product.sourceId&&!charge.reason&&!charge.kind : s.retail?.sales.some((sale: any)=>sale.id===charge.retailSaleId&&sale.skuId===product.sourceId)))
     .filter(()=>!tax.invoices.some((invoice: any)=>invoice.originalChargeId===charge.id))
     .map((product: any)=>[JSON.stringify([charge.id,product.id]),product.label+' · '+money(charge.amountCents)]))
   const calculate=tax.connected&&candidates.length ? `<details><summary>Calculate tax on a recorded sale</summary>${form('tax.calculate','/app/studio#tax',hidden('requestId',crypto.randomUUID())
