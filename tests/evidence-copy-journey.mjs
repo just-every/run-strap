@@ -55,7 +55,7 @@ export async function evidenceCopyJourney(h,{edge,guardian}) {
   response=await copyPost(h,'/evidence/copy',{token:secret});assert.equal(response.status,200);assert.match(response.headers.get('content-disposition'),/attachment/);assert.equal(await response.text(),original.text);assert.ok(!response.headers.has('set-cookie'))
   assert.equal((await h.send(path)).status,410);assert.equal((await copyPost(h,'/evidence/copy',{token:secret})).status,410)
   assert.equal((await h.send('/api/strap/state')).status,401);assert.equal((await h.send('/api/strap/state',undefined,'',{authorization:'Bearer '+secret})).status,401)
-  assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+receipt.id,undefined,guardian.cookie)).status,403)
+  assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+receipt.id,undefined,guardian.cookie)).status,404,'unrelated member receives no evidence or existence confirmation')
   const complete=async(suffix,options={})=>{const person=await copyParticipant(h,suffix),device=await copyTablet(h,person,waiver,suffix),before=edge.calls.length;const result=await copyPost(h,'/intake/tablet',{signerName:person.name,confirm:'yes',adultConfirmed:'yes',...options},device.cookie);assert.equal(result.status,200);return {person,device,before,text:await result.text()}}
   const unchecked=await complete('Unchecked');assert.equal(edge.calls.length,unchecked.before,'no outbound without separate request')
   const changed=await complete('Changed',{emailCopy:'yes'}),changedLink=edge.linkFor(changed.person.email)
