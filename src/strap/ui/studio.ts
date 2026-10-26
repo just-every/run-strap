@@ -1,3 +1,4 @@
+import { smsTestPanel } from './sms-test'
 import { studioProfileFields } from './studio-profile'
 import { classRemindersPanel, reminderTasksPanel } from './class-reminders'
 import { messageTemplatesPanel } from './message-settings'
@@ -25,6 +26,7 @@ export function studioPage(s: any, notice: any = {}) {
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)
     + memberMailPanel(s)
+    + smsTestPanel(s)
     + rulesPanel(s)
     + waitlistPanel(s)
     + spotsPanel(s)

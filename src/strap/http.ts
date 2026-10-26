@@ -5,6 +5,8 @@ import { inventorySnapshot } from './domain/inventory'
 import { drawerSnapshot, tenderDay } from './domain/drawer'
 import { intakeTabletResponse } from './intake-tablet'
 import { smsConsentWebhook } from './consent-webhook'
+import { smsTestCommand, smsTestState } from './twilio/test-transport'
+import { smsTestWebhook } from './twilio/webhooks'
 import { preferenceExport } from './domain/preferences'
 import { memberHistory, requireMemberRecord } from './domain/member-records'
 import { historyExport, historyCsv } from './staff-history'
@@ -67,7 +69,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
   const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers','gifts','timeClock'].map(key => [key, key === 'teachingPay' || key === 'memberMail' ? null : []])) : {}
-  return { ...current, mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
+  return { ...current, smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
 async function appState(env: Bindings, who: Actor, target: string) {
@@ -82,6 +84,7 @@ async function appState(env: Bindings, who: Actor, target: string) {
 }
 
 async function execute(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
+  if (name.startsWith('sms.test.')) return smsTestCommand(env, who, name, input)
   if (name.startsWith('mfa.')) return mfaCommand(request, env, who, name, input)
   if (name.startsWith('finance.')) return financeCommand(env, who, name, input)
   if (name.startsWith('manager.')) return managerCommand(env, who, name, input)
@@ -139,6 +142,7 @@ export async function strapScheduled(original: Bindings) {
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
   if (path === '/intake/tablet' || path === '/intake/tablet/start') return intakeTabletResponse(request,runtimeBindings(original))
+  if (path === '/api/strap/sms/test/status' || path === '/api/strap/sms/test/inbound') return smsTestWebhook(request,runtimeBindings(original))
   if (path === '/api/strap/consent/twilio') return smsConsentWebhook(request,runtimeBindings(original))
   if (path === '/kiosk' || path.startsWith('/kiosk/')) return kioskResponse(request, runtimeBindings(original))
   if (path.startsWith('/api/strap/integration/')) return integrationResponse(request, runtimeBindings(original))

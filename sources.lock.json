@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/EXIT-EXPORT.md": {
-      "sha256": "37430cb9d9c419700cf1ea922595bc0e661d35cd2621671213b03afe707d0928",
+      "sha256": "b0b5d05d73778f3c835b362ad13906d1cc5ddc7c9a40cfa37e5dc2977ce50843",
       "executable": false
     },
     "docs/getting-started.md": {
@@ -3026,7 +3026,7 @@
       "executable": false
     },
     "src/strap/archive-policy.mjs": {
-      "sha256": "10558d387148e0a16206adf48fdee9c67e09ccf8a4b7bb5aa36669fa18bb1b2e",
+      "sha256": "dcc4ed75f4ef4edf72cdf76f727dc2a5dc3c28834e87eb77eba3d6eba5450583",
       "executable": false
     },
     "src/strap/attendance-report.ts": {
@@ -3038,7 +3038,7 @@
       "executable": false
     },
     "src/strap/consent-webhook.ts": {
-      "sha256": "c44acb9cec9ca25b8fe88b996224f87fbccaab688269361a2dc6f63de994ecf7",
+      "sha256": "0c014609e10a510519db0001e719cfa4d026dfbf74281edf70bd421443978f6d",
       "executable": false
     },
     "src/strap/credentials.ts": {
@@ -3422,7 +3422,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "d9b8f9b9f5ca28c41545f3ee4efac85f9197efab475f43bbbd998943ba7d3bc6",
+      "sha256": "9c3829ca377901bae5905c3716f310af42b3c840b0890277b5f84dca70bffd3e",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3514,7 +3514,7 @@
       "executable": false
     },
     "src/strap/security/gate.ts": {
-      "sha256": "4ec81c88ddb641d5c2607020bf973fd468ad7faf75618b0c32ff55754fae3573",
+      "sha256": "912fd87b309e11f2bc6917f99d86180a67e1bcc2e334c3ea39d34850e25f95f8",
       "executable": false
     },
     "src/strap/security/manager.ts": {
@@ -3798,7 +3798,7 @@
       "executable": false
     },
     "src/strap/ui/studio.ts": {
-      "sha256": "d9ad8778605c46ea7fbcebd02067f890ef8414a4914f738b19130de94c538924",
+      "sha256": "e84df212f2257ed5b7fec060fd1183cd9ebbbe7cd3064207822eaba94a36dc67",
       "executable": false
     },
     "src/strap/ui/substitutions.ts": {
@@ -3894,7 +3894,7 @@
       "executable": false
     },
     "tests/class-reminders-archive.test.mjs": {
-      "sha256": "21ba1b6a3b5848ae9d8da22d77a61ffc799554c98c4d267603d1648cae4f5bfe",
+      "sha256": "ffeb86ef5bf3b16b3900fd85b459fb17d4656b21f05dec151cf2e8a76672c149",
       "executable": false
     },
     "tests/class-reminders-browser.mjs": {
@@ -4054,7 +4054,7 @@
       "executable": false
     },
     "tests/notices.test.mjs": {
-      "sha256": "17118afbde7df710cbb671a468dd27c703862cde2290989457e617a68e302f41",
+      "sha256": "68d327236e0792ec5deec6d1263f22fc19171dfd07fbb78ccb6c34809a714162",
       "executable": false
     },
     "tests/pack-credits.test.mjs": {

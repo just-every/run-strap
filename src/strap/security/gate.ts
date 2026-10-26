@@ -11,7 +11,7 @@ import { selfService, standing } from './mfa'
 const pages = new Set(['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent'])
 const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|waiver-evidence\.json|preferences\.json|staff-history|teaching-pay|reports\/revenue)$/
 export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path)
-export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['attendance.booking.grant','appointment.booking.grant', 'intake.sensitive.grant', 'intake.form.publish', 'mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch','waiver.tablet.launch','waiver.signing.grant'].includes(name)
+export const privilegedCommand = (name: string) => /^(agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['sms.test.connect', 'sms.test.send', 'attendance.booking.grant','appointment.booking.grant', 'intake.sensitive.grant', 'intake.form.publish', 'mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch','waiver.tablet.launch','waiver.signing.grant'].includes(name)
 
 /** What a finance user may open: the revenue and collections report, its downloads and their own security page. */
 export const financeRoute = (path: string) => ['/app', '/app/revenue', '/app/security', '/api/strap/mfa', '/api/strap/reports/revenue', '/api/strap/reports/revenue.csv', '/api/strap/reports/revenue.xlsx'].includes(path)
@@ -22,7 +22,7 @@ export const managerRoute = (path: string) => ['/app', '/app/revenue', '/app/rep
 export const reportStaff = (who: Actor) => who.role === 'finance' || who.role === 'manager'
 
 /** Keys no door may return until a covered person is cleared: pay, provider connections and staff access. */
-export const privilegedState = ['teachingPay', 'payRules', 'integrations', 'agentKeys', 'kiosks', 'memberMail']
+export const privilegedState = ['teachingPay', 'payRules', 'integrations', 'agentKeys', 'kiosks', 'memberMail', 'smsTest']
 
 export interface Hold { code: 'mfa_required' | 'mfa_enrollment_required'; reason: string | null }
 const person = (who: Actor) => ['owner', 'finance', 'manager', 'front-desk', 'member', 'instructor'].includes(who.role) && !(who.role === 'owner' && !who.isOwner)

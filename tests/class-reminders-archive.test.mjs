@@ -35,7 +35,7 @@ async function records(h, owner) {
   const response = await h.send('/api/strap/exit.json', undefined, owner)
   assert.equal(response.status, 200, response.text)
   return response.value.tables.st_records
-    .filter(row => ['classReminderRule','classReminderRuleEvent','classReminder','reminderTask','reminderTaskEvent'].includes(row.kind) || row.kind.startsWith('message'))
+    .filter(row => ['classReminderRule','classReminderRuleEvent','classReminder','reminderTask','reminderTaskEvent'].includes(row.kind) || row.kind.startsWith('message') || row.kind.startsWith('smsTest'))
     .map(row => ({ kind: row.kind, data: JSON.parse(row.data) })).sort((a, b) => a.data.id.localeCompare(b.data.id))
 }
 async function publish(h, owner, coach, title, minutes) {
@@ -46,7 +46,7 @@ async function publish(h, owner, coach, title, minutes) {
   return (await h.cmd('classes.publish', { id: draft.id }, owner)).classes[0]
 }
 
-test('MSG-003 / MOVE-011: native restore retains reminder identities and follow-up, never replays dispatch and pauses new reminders until explicit owner reconnection', { timeout: 240_000 }, async () => {
+test('MSG-003 / MSG-005 / MOVE-011: native restore retains reminder identities and follow-up, never replays dispatch and pauses new reminders until explicit owner reconnection', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'strap-reminder-restore-'))
   const source = join(temporary, 'source'), restored = join(temporary, 'restored'), file = join(temporary, 'studio.rer')
   let h
@@ -56,9 +56,20 @@ test('MSG-003 / MOVE-011: native restore retains reminder identities and follow-
     await exec(process.execPath, [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'migrations', 'apply', 'foundation', '--local'], {
       cwd: source, env: { ...process.env, CI: 'true', WRANGLER_SEND_METRICS: 'false' }, maxBuffer: 2e6,
     })
-    h = await harness({ root: source })
+    const smsAuth = { TWILIO_TEST_ACCOUNT_SID: 'synthetic-strap-1', TWILIO_TEST_AUTH_TOKEN: 'synthetic-strap-2' }
+    let smsSubmissions = 0
+    const outbound = async request => {
+      assert.equal(new URL(request.url).hostname, 'api.twilio.com')
+      smsSubmissions++
+      return Response.json({ sid: 'synthetic-strap-restore-' + smsSubmissions, status: 'queued', num_segments: '1', price: null, price_unit: 'USD' }, { status: 201 })
+    }
+    h = await harness({ root: source, auth: smsAuth, outbound })
     await setup(h, h.owner)
     await h.cmd('studio.save', { location: 'Brooklyn Studio', timeZone: 'America/New_York' })
+    await h.cmd('sms.test.connect', { confirm: true })
+    const testSend = { requestId: 'synthetic-strap-restore', body: 'Studio connection check.' }
+    await h.cmd('sms.test.send', testSend)
+    assert.equal(smsSubmissions, 1)
     const member = await h.person('Ana'), quiet = await h.person('Ben'), coach = await h.person('Maya', 'instructor')
     await h.cmd('pack.approve', { id: (await h.cmd('pack.prepare', { personId: member.id, credits: 5, amountCents: 10000, expiresAt: '2099-12-31T00:00:00Z' })).id })
     await h.cmd('mail.templates.save', { prefix: 'Brooklyn class day.', suffix: 'Contact the studio for help.', requestId: 'restore-reminder-template' })
@@ -80,11 +91,14 @@ test('MSG-003 / MOVE-011: native restore retains reminder identities and follow-
     await h.close(); h = null
     await archive(source, ['export', '--output', file])
     await archive(restored, ['import', '--input', file, '--yes'])
-    h = await harness({ root: restored, ...identity })
+    h = await harness({ root: restored, ...identity, outbound })
     assert.equal((await h.send('/api/strap/state', undefined, identity.owner)).status, 401)
     assert.equal((await h.send('/api/strap/state', undefined, oldMemberCookie)).status, 401, 'member sessions do not travel')
     const owner = await h.signIn(h.auth.OWNER_EMAIL)
     await setup(h, owner); await h.enroll(owner)
+    assert.equal((await h.state(owner)).smsTest.connected, false, 'restored credentials never imply connection approval')
+    assert.equal((await h.send('/api/strap/command', { name: 'sms.test.send', input: { ...testSend, requestId: 'synthetic-strap-new-restore' } }, owner)).status, 409)
+    assert.equal(smsSubmissions, 1, 'restore and refused sends never dispatch')
     const memberCookie = await h.signIn(member.email)
     assert.equal((await h.send('/app', undefined, memberCookie)).status, 200, 'member recovers only through native sign-in')
     assert.equal((await h.state(memberCookie)).messagePreference.optedOut, false)
@@ -108,6 +122,11 @@ test('MSG-003 / MOVE-011: native restore retains reminder identities and follow-
     assert.equal(pausedState.reminderTasks.filter(task => task.deliveryId === paused.id && task.deliveryStatus === 'paused').length, 1)
     assert.equal((await h.state(memberCookie)).notices.filter(n => n.reminderId && n.bookingId === pausedBooking.id).length, 1, 'paused email keeps the member in-app reminder')
 
+    await h.cmd('sms.test.connect', { confirm: true }, owner)
+    await h.cmd('sms.test.send', testSend, owner)
+    assert.equal(smsSubmissions, 1, 'fresh connection review never retries a retained claim')
+    await h.cmd('sms.test.send', { ...testSend, requestId: 'synthetic-strap-fresh-restore' }, owner)
+    assert.equal(smsSubmissions, 2, 'only fresh owner action submits after reconnection')
     await h.cmd('mail.connect', {}, owner)
     const reconnectedClass = await publish(h, owner, coach, 'Reconnected Mat', 150)
     await h.cmd('booking.book', { classId: reconnectedClass.id }, memberCookie)

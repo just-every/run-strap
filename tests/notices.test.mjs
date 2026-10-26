@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
+import { smsTestCases } from './sms-test-cases.mjs'
 
 const weekOf = at => {const d=new Date(at);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)}
 const publish = async(h,coach,title,start,room=title,capacity=8)=>(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title,service:'Mat',start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity,room,instructorId:coach.id}]})).id})).classes[0]
@@ -10,6 +11,8 @@ async function refused(h,name,input,cookie,status=403) {
   assert.equal(r.status,status,r.text);assert.equal((await h.state()).version,version,'refusal has no writes');return r
 }
 const proof = async(h,stage,ana,extra={}) => {if(process.env.STRAP_PROOF_DIR) await(await import('./notices-browser.mjs')).noticesBrowser(h,{stage,ana,...extra})}
+
+test('Twilio TEST connection submits once, keeps segment and price observations distinct, rejects forged callbacks and records synthetic status and reply checks', smsTestCases)
 
 test('MSG-002: native member and desk booking, reschedule, cancellation, restore, substitution and grouped closure use local facts, studio text and once-only provider notices; courtesy suppression is audited',async()=>{
   const sent=[]
