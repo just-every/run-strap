@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "e6ecd63f2f051691e261aeee52f49b84cddd91c9048e1b66e6db947ed8d95567",
+      "sha256": "38fac127ab22afa4fa1a6071760b1c5ef60b4a84eefa46a942f22b2c2befc2e7",
       "executable": false
     },
     "DEMO.md": {
@@ -355,6 +355,10 @@
     },
     "docs/backup-and-restore.md": {
       "sha256": "21ab5223a3420cefc5551abce020dd687540ce0ad58e8347ccdf03bb316d0228",
+      "executable": false
+    },
+    "docs/BILLING-AGREEMENTS.md": {
+      "sha256": "b193828b491797b6b7062fc712eda07e6631dd7e989da1b9b937c3a57faae0ef",
       "executable": false
     },
     "docs/classes.md": {
@@ -3066,7 +3070,7 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "381e1b332fa955e15cdaba062235eb4b5f2bbf64af2d7cfecce1b9186ba36e06",
+      "sha256": "bd4c6f175e0b55ec564a518c1b4b32310f781a9daaa50a84d783489a9bd40159",
       "executable": false
     },
     "src/strap/billing/model.ts": {
@@ -3610,7 +3614,7 @@
       "executable": false
     },
     "src/strap/tax/index.ts": {
-      "sha256": "352b4c9adc4413731a2310de1863c5f6ff89cec5f2b804fe34bf078392a7bbfc",
+      "sha256": "9c8fe60f4d01996e0f52339a22cf6430ca472dd442229410af9eee133bbad293",
       "executable": false
     },
     "src/strap/tax/model.ts": {
@@ -3670,7 +3674,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "0657723a36e8635a87fad571729f1416846bc755017a379630ed10285f44a4fb",
+      "sha256": "9cdb78a2a4c5eb7f7447cea84d311e3fa03e799cae7c30a1e778dd66c8d12060",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -3986,7 +3990,7 @@
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "5368745bc7495d4d1661bca89d355db11d032f44663ff5d28271cab4556dcdf8",
+      "sha256": "c301e891fb61a6f7c2078b88abf80c3a70353b878fcf8cf5a747331bb42496a6",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {

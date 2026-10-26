@@ -16,7 +16,7 @@ export async function billingBrowser(h,edge) {
       // Hosted provider UI is an external paid edge; this proves only the native launch.
       await context.route('https://checkout.stripe.com/**',route=>route.abort())
       const page=await context.newPage(),panel=page.locator('#billing')
-      const sign=async cookie=>{await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
+      const sign=async cookie=>{await page.goto('about:blank');await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
       const capture=async name=>{
         await page.evaluate(()=>document.fonts.ready)
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits '+width)
@@ -34,7 +34,9 @@ export async function billingBrowser(h,edge) {
       await prepare.getByRole('checkbox').check();await capture('staff-prepare')
       await prepare.getByRole('button',{name:'Prepare for personal signing',exact:true}).click()
       const agreement=(await h.send('/api/strap/billing',undefined,h.owner)).value.agreements.find(a=>a.personId===seed.member.id);assert.ok(agreement)
+      await panel.locator('[data-billing-agreement="'+agreement.id+'"]').waitFor()
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
+      await page.getByRole('heading',{name:'My packs',exact:true}).waitFor()
       const section=panel.locator('[data-billing-agreement="'+agreement.id+'"]')
       await section.getByText('Read the exact agreement and payment permission',{exact:true}).click()
       await capture('member-review')

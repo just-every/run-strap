@@ -1,5 +1,5 @@
 import { load, Transaction } from '../domain/store';
-import { humanOwner, insist, list, now, text, type Actor, type RecordData } from '../domain/types';
+import { DomainError, humanOwner, insist, list, now, text, type Actor, type RecordData } from '../domain/types';
 import { connected, fingerprint, identity, object, retainedResult, type Json, type TaxBindings } from './model';
 import { calculationRequest, confirmationRequest, saveCalculation, saveInvoice } from './calculations';
 import { parseConfig, readiness, saveConfig } from './config';
@@ -60,7 +60,9 @@ export async function taxState(env: TaxBindings, who: Actor) {
   const loaded = await load(env.DB,who); humanOwner(loaded.who);
   let isConnected = false;
   if (env.STRIPE_TAX_TEST_KEY && env.RER_DEMO !== '1') {
-    try { await connected(env,loaded.state); isConnected = true; } catch { /* Explicitly disconnected until owner review. */ }
+    try { await connected(env,loaded.state); isConnected = true; } catch (error) {
+      if (!(error instanceof DomainError) || !['taxConfig_not_found','tax_connection_review_required','stripe_tax_test_not_configured'].includes(error.code)) throw error;
+    }
   }
   return {...taxSnapshot(loaded.state),configured:!!env.STRIPE_TAX_TEST_KEY && env.RER_DEMO !== '1',connected:isConnected};
 }

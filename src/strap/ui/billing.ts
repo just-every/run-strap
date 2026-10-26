@@ -30,7 +30,7 @@ export function billingPanel(s: any) {
       +`<p><strong>${money(financial.amountCents)} USD every ${h(financial.intervalMonths)} month(s)</strong> · first due ${when(s,financial.firstDueAt)}</p><p>Original service period: ${when(s,financial.servicePeriod.startAt)} to ${when(s,financial.servicePeriod.endAt)}.</p>`
       +`<details><summary>Read the exact agreement and payment permission</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">${h(a.documentText)}</div><p>Document version ${h(a.documentVersion)} · SHA-256 <span style="overflow-wrap:anywhere">${h(a.documentHash)}</span></p></details>`
       +(a.signature?`<p>Personally affirmed by ${h(a.signature.signerName)} ${when(s,a.signature.completedAt)}.</p>`:'')
-      +methods.map((m: any)=>`<p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':'historical method; connection review required'}</p>`).join('')
+      +methods.map((m: any)=>`<p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':mandate?.status==='revoked'?'historical method; future payment permission revoked':'historical method; connection review required'}</p>`).join('')
       +(mandate?.revokedAt?`<p>Future payment permission revoked ${when(s,mandate.revokedAt)}. The original studio agreement and balance remain unchanged.</p>`:'')
       +signature+setup+revoke+`<p><a href="/api/strap/billing/agreement.json?id=${encodeURIComponent(a.id)}">Download exact agreement evidence</a> · <a href="/api/strap/billing/agreement.html?id=${encodeURIComponent(a.id)}">Download readable agreement</a></p></section>`
   }).join('')
