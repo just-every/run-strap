@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "f4c0071a576ec219d1ead372fe34ea8395bce25be6658d01dbfb572db488631e",
+      "sha256": "1d2d6a235deaf2099746712c4d57da70d790522ae637f4bccc0b7fd69612d58e",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0bfde39499c228595fbc410fd73ecb577e6bfeb89b38d362e4a2169f04a538fe",
+      "sha256": "bad473a82fcb39c57eeeb78f777f711443d5daf41b89f74df9c3b4ab305315f4",
       "executable": false
     },
     "DEMO.md": {
@@ -3486,15 +3486,19 @@
       "executable": false
     },
     "src/strap/finance-refunds.ts": {
-      "sha256": "cba37a35bf4e91da620b0ea7ebfcfbdd68d6efbbb7ac6f22406b9fb4eb18839d",
+      "sha256": "99949926324f2111c3dc5ce22160dc1addbe963f2f8318af522630fb2356353f",
       "executable": false
     },
     "src/strap/finance-report.ts": {
-      "sha256": "88b9da80f54842d68a4914cd6f8def1ed89e0970bc2e74d99d68d46543c8d26c",
+      "sha256": "d868cd2caacfec4f41241a2f581326b5f1ab684e5f5043b3f98a7dfa0d1ac6b2",
       "executable": false
     },
     "src/strap/finance-tax.ts": {
       "sha256": "e0abe9507dcef24518d8fa854b9092b1970c9fb2661e1b741c6e76ffd3633905",
+      "executable": false
+    },
+    "src/strap/finance-time-refunds.ts": {
+      "sha256": "831828a0ed74bce0467adac164b4135059cd3a7ebb6070948afc0f1ab00f02d7",
       "executable": false
     },
     "src/strap/forms.ts": {
@@ -4142,11 +4146,11 @@
       "executable": false
     },
     "tests/finance-browser.mjs": {
-      "sha256": "7c572cd5f88ebed3a2c50b77467361c2342b2869b898f9a18c5fe417f77dedac",
+      "sha256": "e2e0905a7fe8d382e6a9e0ba28c78dcbde47aec6f9b14c2d8fdefbc7f0f27770",
       "executable": false
     },
     "tests/finance-timing.mjs": {
-      "sha256": "32f115965057aceebf67981af42b984cf2deda717548fe091a4ec9c8428bf5ab",
+      "sha256": "202f9cc1b434ea1a7470639c168a90d988d2e20e1685c1036dd85e2076e9b875",
       "executable": false
     },
     "tests/fixtures/members.csv": {
