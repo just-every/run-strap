@@ -3474,7 +3474,7 @@
       "executable": false
     },
     "src/strap/evidence-copy.ts": {
-      "sha256": "2ae8361c2e717bca15a219afa772c786034fa011b288b70aec9493ec07a489c7",
+      "sha256": "5c2db43f4a576633e47f4e5dfacea277264eee16d7bf30623f3cf80197015e22",
       "executable": false
     },
     "src/strap/exit-export.ts": {
@@ -4122,7 +4122,7 @@
       "executable": false
     },
     "tests/evidence-copy-browser.mjs": {
-      "sha256": "f91ba0161b4fce923603e239e75b660db1666cf21352cf7922e223a3b270e862",
+      "sha256": "ab61c22e603bbac7f382f480439f559a75c9b81fe9caff17bedfbe1857b35d86",
       "executable": false
     },
     "tests/evidence-copy-journey.mjs": {
