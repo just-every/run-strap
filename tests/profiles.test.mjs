@@ -444,6 +444,7 @@ test('MEM-005: scoped desk launches a one-use signed-out signing tablet, locks p
   await refused(h,'waiver.tablet.launch',{...input,locationId:'ungranted'},desk.cookie,403,'checkin_right_required')
   const launch=await h.cmd('waiver.tablet.launch',input,desk.cookie)
   const audit=(await h.state()).staffActions.find(a=>a.command==='waiver.tablet.launch'&&a.after.id===launch.id)
+  assert.equal((await h.send('/app/people',undefined,h.owner)).status,200,'owner audit screen renders the tablet launch')
   assert.equal(audit.actorRole,'front-desk');assert.equal(audit.right,'check-in');assert.ok(!JSON.stringify(audit).includes(new URL(h.origin+launch.url).searchParams.get('token')),'handoff secret stays out of retained audit')
   const post=async(path,fields,cookie='')=>h.mf.dispatchFetch(h.origin+path,{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields),redirect:'manual'})
   assert.equal((await h.send(launch.url,undefined,desk.cookie)).status,403,'native sessions cannot use tablet handoffs')

@@ -3790,7 +3790,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "0775a0f2c90ac3c9caa5a9f986de58a8feba3be200c7732a16ceca8516bef0d4",
+      "sha256": "21099876f41969c294114c0341f2954b495f3321c5eff3ef799963c83ce95e43",
       "executable": false
     },
     "src/strap/ui/studio-profile.ts": {
@@ -4086,7 +4086,7 @@
       "executable": false
     },
     "tests/profiles.test.mjs": {
-      "sha256": "58a0de284d4024026e0aa889597fd706f925fb5a2395712a7f67439e32cfa77f",
+      "sha256": "45fa32971b242ff843b91795a4ed955c72059988dccf64a7377073705ea5c191",
       "executable": false
     },
     "tests/recognition-browser.mjs": {
@@ -4174,7 +4174,7 @@
       "executable": false
     },
     "tests/signing-browser.mjs": {
-      "sha256": "d75595a086ea423432cce6b715808b56ac61e9f789229b963ac814ef4dc4d38e",
+      "sha256": "270d2df7fce9e693c441400993a390f527cc6548fcbb805f3499c7bf1d8bf484",
       "executable": false
     },
     "tests/site/browser-journey.mjs": {
