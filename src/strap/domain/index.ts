@@ -1,4 +1,4 @@
-import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse, confirmEnrollment, recordCoursePayment, prepareWithdrawal, confirmWithdrawal, courseAttendance, coursesSnapshot } from './courses';
+import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse, confirmEnrollment, recordCoursePayment, prepareWithdrawal, confirmWithdrawal, courseAttendance, coursesSnapshot, coursePublicResult } from './courses';
 import { saveAppointmentPrice } from './appointment-funding';
 import { staffDeskSnapshot } from './staff-snapshot';
 import { grantStaffAccess, staffAccess, legacyStaffGrants, legacyStaffGrant, hasStaffRight } from './staff-rights';
@@ -375,7 +375,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if(tx.who.role==='front-desk' && name.startsWith('attendance.') && !delegatedStaff) {const offer=tx.state.records.get(String(input.id))?.data,personId=String(input.personId ?? offer?.personId ?? '');const grant=legacyStaffGrant(tx.state,tx.who,'attendance-plan');const entry=tx.state.records.get(String(input.classId))?.data;requireAttendanceBooking(tx,personId,entry?[entry.locationId ?? 'studio']:grant?.locationIds ?? []);}
   if(name === 'waiver.launch' || name === 'waiver.tablet.launch') requireSigningLaunch(tx.state,tx.who,input.personId,String(input.locationId??'studio'));
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
-  if (replay) return replay;
+  if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
   const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // A private offer must not execute unrelated due billing, notices or entitlements.
@@ -390,7 +390,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
   if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); }
-  await tx.commit(); return result;
+  await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
