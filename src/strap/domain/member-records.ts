@@ -1,3 +1,5 @@
+import { ledgerLocation } from '../location-scope';
+import { extendStaffMemberScope, hasStaffRight, staffAccess, legacyStaffGrant, staffIdentity, staffMemberIds, updateLegacyStaffAccess } from './staff-rights';
 import { visiblePreferences } from './preferences';
 import { humanOwner, id, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -6,44 +8,34 @@ import { saveDeskPerson } from './people';
 import { staffChannel } from './staff-actions';
 
 export function memberRecordGrant(state: State, who: Actor) {
-  return who.personId ? state.records.get(`member-record-grant:${who.personId}`)?.data : null;
+  return legacyStaffGrant(state,who,'member-record');
 }
-export function requireMemberRecord(state: State, who: Actor, personId?: unknown) {
-  if (who.role === 'owner' && who.isOwner) return;
-  const grant = memberRecordGrant(state,who);
-  insist(who.role === 'front-desk' && grant?.enabled && (!personId || grant.memberIds.includes(personId)),'member_record_right_required',403);
+export function memberRecordVisible(state: State, who: Actor, personId?: unknown, locationId?: unknown) {
+  return hasStaffRight(state,who,'member-record',personId,locationId)
+    || hasStaffRight(state,who,'member-record',personId,undefined,'member-record')
+      && !!staffAccess(state,who)?.rights['member-record']?.scopes.some(scope => scope.doors.includes('member-record')
+        && (personId === undefined || scope.memberIds.includes(personId as string)));
+}
+export function requireMemberRecord(state: State, who: Actor, personId?: unknown, locationId?: unknown) {
+  insist(memberRecordVisible(state,who,personId,locationId),'member_record_right_required',403);
 }
 export async function grantMemberRecord(tx: Transaction,input: Record<string,unknown>) {
   humanOwner(tx.who);
-  const staff = person(tx.state,input.personId);
-  insist(staff.role === 'member' && staff.email,'member_staff_identity_required');
-  insist(!await tx.db.prepare("SELECT 1 FROM oa_operators WHERE lower(email)=lower(?) AND role='owner'").bind(staff.email).first(),'owner_identity_cannot_be_front_desk',409);
+  const staff = await staffIdentity(tx,input.personId,'front-desk');
   insist(typeof input.enabled === 'boolean' && typeof input.canCreate === 'boolean','invalid_staff_grant');
-  insist(Array.isArray(input.memberIds) && input.memberIds.length <= 500,'invalid_member_scope');
-  const memberIds = [...new Set(input.memberIds.map(value => person(tx.state,value,false).id))].sort();
-  for (const memberId of memberIds) insist(person(tx.state,memberId,false).role === 'member','member_required');
-  const prior = tx.state.records.get(`member-record-grant:${staff.id}`)?.data;
-  const saved = {id:`member-record-grant:${staff.id}`,personId:staff.id,enabled:input.enabled,canCreate:input.canCreate,memberIds,
-    version:(prior?.version ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id};
-  tx.put('memberRecordGrant',saved);
-  // Grant changes also invalidate in-flight native invitations and previous staff sessions.
+  const memberIds = staffMemberIds(tx.state,input.memberIds);
   tx.sql.push(tx.statement('UPDATE oa_operators SET version=version+1 WHERE lower(email)=lower(?)',staff.email));
-  tx.put('memberRecordGrantEvent',{id:id(),personId:staff.id,before:prior ?? null,after:saved,at:saved.updatedAt,actorId:tx.who.id});
-  return saved;
+  return updateLegacyStaffAccess(tx,'member-record',{id:`member-record-grant:${staff.id}`,personId:staff.id,enabled:input.enabled,canCreate:input.canCreate,memberIds});
 }
 export async function createDeskMember(tx: Transaction,input: Record<string,unknown>) {
   requireMemberRecord(tx.state,tx.who);
-  if (tx.who.role === 'front-desk') insist(memberRecordGrant(tx.state,tx.who)?.canCreate,'member_record_create_right_required',403);
+  if (tx.who.role !== 'owner') insist(memberRecordGrant(tx.state,tx.who)?.canCreate,'member_record_create_right_required',403);
   insist(!input.id && (input.role === undefined || input.role === 'member') && input.active !== false,'desk_member_creation_only',403);
   const result = await saveDeskPerson(tx,{...input,role:'member',active:true});
-  if (tx.who.role === 'front-desk') {
-    const grant = memberRecordGrant(tx.state,tx.who)!;
-    tx.put('memberRecordGrant',{...grant,memberIds:[...grant.memberIds,result.id],version:grant.version+1});
-  }
+  if (tx.who.role !== 'owner') extendStaffMemberScope(tx,result.id);
   return {...result,personId:result.id};
 }
 export function addMemberNote(tx: Transaction,input: Record<string,unknown>) {
-  // Restricted notes have no delegated reading policy yet: owner only, including check-in alerts.
   humanOwner(tx.who); const member = person(tx.state,input.personId,false);
   insist(member.role === 'member','member_required');
   insist(typeof input.alert === 'boolean','invalid_alert');
@@ -90,7 +82,7 @@ const deskBooking = (r: RecordData) => ({id:r.id,personId:r.personId,classId:r.c
 export function memberHistory(state: State,who: Actor,personId: string) {
   requireMemberRecord(state,who,personId);
   const member = person(state,personId,false); insist(member.role === 'member','member_required');
-  const ids = who.role === 'owner' ? linkedMemberIds(state,personId) : [personId], own = (kind: string) => list(state,kind).filter(r => ids.includes(r.personId));
+  const ids = who.role === 'owner' ? linkedMemberIds(state,personId) : [personId], ledger={classes:list(state,'class'),bookings:list(state,'booking'),packs:list(state,'pack'),charges:list(state,'charge')}, own = (kind: string) => list(state,kind).filter(r => ids.includes(r.personId) && (who.role === 'owner' || !['pack','packCreditEvent','booking','notice'].includes(kind) || memberRecordVisible(state,who,r.personId,ledgerLocation(r,ledger))));
   const kinds = ['pack','packCreditEvent','booking','charge','payment','acknowledgement','profileChange','staffAction','memberMessage','memberInvitation','memberMerge','memberPreferenceEvent','notice','waiverLaunch','messagePreferenceEvent','familyInvoice','familyTuitionWithdrawal'];
   const timeline = kinds.flatMap(kind => own(kind).map(r => ({kind,id:r.id,personId:r.personId,at:r.at ?? r.createdAt ?? r.acknowledgedAt ?? r.confirmedAt ?? '',
       // Canonical audits retain before/after in staff history. A timeline links their

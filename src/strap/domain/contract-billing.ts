@@ -1,3 +1,4 @@
+import { requireStaffRight } from './staff-rights';
 import { signingMissing } from './bookings';
 import { intakeMissing } from './intake';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
@@ -44,8 +45,9 @@ function nextInvoiceAt(at: string, months: number, day: number, timeZone: string
   return new Date(wall-offset*60_000).toISOString();
 }
 export async function prepareRecurringTerms(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who); text(input.requestId,'requestId',100);
-  const pack = record(tx.state,input.packId,'pack'); person(tx.state,pack.personId);
+  text(input.requestId,'requestId',100);
+  const pack = record(tx.state,input.packId,'pack');
+  requireStaffRight(tx.state,tx.who,'membership-sale',pack.personId,pack.locationId ?? 'studio'); person(tx.state,pack.personId);
   insist(pack.expiresAt > now(),'pack_expired',409);
   insist(!recurringForPack(tx.state,pack.id),'recurring_terms_exist',409);
   insist(!list(tx.state,'planChange').some(c => c.packId === pack.id && c.status === 'accepted'),'plan_change_pending',409);

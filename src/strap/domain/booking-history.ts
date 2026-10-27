@@ -23,7 +23,7 @@ export function actionChannel(input: Record<string,unknown>) {
 }
 /** Retained action identity doubles as the once-only notice identity. */
 export function bookingHistory(tx: Transaction, action: string, before: RecordData, after: RecordData, input: Record<string,unknown>, details: Record<string,unknown> = {}) {
-  const staff = tx.who.role === 'owner', entry = tx.state.records.get(after.classId)!.data;
+  const staff = ['owner','front-desk','manager'].includes(tx.who.role), entry = tx.state.records.get(after.classId)!.data;
   const suppressed = input.suppressNotice === true;
   insist(!suppressed || (staff && action === 'cancel' && after.cancellation !== 'late'),'suppression_requires_courtesy_cancel',403);
   const suppressionReason = suppressed ? text(input.suppressionReason,'suppression_reason',500) : null;

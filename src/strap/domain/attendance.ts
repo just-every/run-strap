@@ -1,3 +1,4 @@
+import { requireClassRight, staffIdentity } from './staff-command-access';
 import { acknowledged, latestWaiver } from './bookings';
 import { debtorOf } from './households';
 import { packFreezeBlocks } from './freezes';
@@ -31,7 +32,7 @@ export function recordCheckin(tx: Transaction, booking: RecordData, entry: Recor
 }
 export function checkin(tx: Transaction, input: Record<string,unknown>) {
   const booking = record(tx.state,input.id,'booking'), entry = record(tx.state,booking.classId,'class');
-  teaches(tx.who,entry);
+  if (['front-desk','manager'].includes(tx.who.role)) requireClassRight(tx,'check-in',booking.personId,entry); else teaches(tx.who,entry);
   return recordCheckin(tx,booking,entry,{channel:'roster'});
 }
 /** Once the class has started, a seat nobody checked in is a no-show: the credit

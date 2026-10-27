@@ -4,11 +4,14 @@ import type { NoticeContext } from './notices';
 type Native = State['operator'];
 type PersonRow = Omit<Person, 'active' | 'erasedAt'> & { active: number; erased_at: number | null };
 const asPerson = (p: PersonRow): Person => ({ id:p.id,name:p.name,email:p.email,role:p.role,active:!!p.active,version:p.version,erasedAt:p.erased_at });
-function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = [], managers: Map<string,string[]> = new Map(), recordStaff: string[] = []): Actor {
+function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = [], managers: Map<string,string[]> = new Map(), recordStaff: string[] = [], staff: RecordData[] = []): Actor {
   insist(native?.status === 'active', 'signed_in_required', 401);
   const linked = people.find(p => p.active && !p.erasedAt && p.email?.toLowerCase() === native.email.toLowerCase());
   if (native.role === 'owner') return {id:native.id,email:native.email,role:requestedAgent?'agent':'owner',isOwner:true,...(linked && !requestedAgent ? {personId:linked.id}: {})};
   insist(!requestedAgent && linked, 'active_person_required', 403);
+  const access = staff.find(r => r.personId === linked.id);
+  if (access?.enabled && ['manager','front-desk','finance','instructor'].includes(access.role) && linked.role === (access.role === 'instructor' ? 'instructor' : 'member')) return {id:native.id,email:native.email,role:access.role,personId:linked.id,isOwner:false,staffAccess:true,locationIds:[...new Set<string>(Object.values(access.rights ?? {}).flatMap((right: any) => right.enabled ? right.scopes.flatMap((scope: any) => scope.locationIds) : []))].sort()};
+  if (access) return {id:native.id,email:native.email,role:linked.role,personId:linked.id,isOwner:false};
   if (recordStaff.includes(linked.id) && !finance.includes(linked.id) && !managers.has(linked.id)) return {id:native.id,email:native.email,role:'front-desk',personId:linked.id,isOwner:false};
   if (!finance.includes(linked.id) && managers.has(linked.id)) return {id:native.id,email:native.email,role:'manager',personId:linked.id,isOwner:false,locationIds:managers.get(linked.id)};
   return {id:native.id,email:native.email,role:finance.includes(linked.id) ? 'finance' : linked.role,personId:linked.id,isOwner:false};
@@ -18,18 +21,18 @@ const managerScopes = (rows: unknown[]) => new Map((rows as {person_id:string;lo
 export async function actor(db: D1Database, input: { userId: string; email: string; isOwner: boolean }): Promise<Actor> {
   const results = await db.batch([
     db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(input.userId),
-    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"),
+    db.prepare('SELECT * FROM st_people'), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"), db.prepare("SELECT data FROM st_records WHERE kind='staffAccess'"),
   ]);
-  return resolve(results[0].results[0] as Native | undefined, (results[1].results as unknown as PersonRow[]).map(asPerson), false, financeIds(results[2].results), managerScopes(results[3].results), financeIds(results[4].results));
+  return resolve(results[0].results[0] as Native | undefined, (results[1].results as unknown as PersonRow[]).map(asPerson), false, financeIds(results[2].results), managerScopes(results[3].results), financeIds(results[4].results), results[5].results.map((r: any) => JSON.parse(r.data)));
 }
 export async function load(db: D1Database, who: Actor): Promise<{ state: State; who: Actor }> {
   const rows = await db.batch([
     db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
     db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
-    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"),
+    db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT json_extract(data,'$.personId') AS person_id FROM st_records WHERE kind IN ('memberRecordGrant','retailStaffGrant') AND json_extract(data,'$.enabled')=1"), db.prepare("SELECT data FROM st_records WHERE kind='staffAccess'"),
   ]);
   const people = (rows[1].results as unknown as PersonRow[]).map(asPerson);
-  const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results), managerScopes(rows[5].results), financeIds(rows[6].results));
+  const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results), managerScopes(rows[5].results), financeIds(rows[6].results), rows[7].results.map((r: any) => JSON.parse(r.data)));
   insist(current.role === who.role && current.personId === who.personId && current.email === who.email && JSON.stringify(current.locationIds) === JSON.stringify(who.locationIds), 'actor_changed', 403);
   current.sessionId = who.sessionId;
   const meta = rows[0].results[0] as {version:number};
@@ -83,7 +86,7 @@ export class Transaction {
       ? this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_kiosks WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL) THEN 1 ELSE 0 END',who.kioskId)
       : who.isOwner
       ? this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",who.id,who.email,state.operator.version)
-      : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,['front-desk','manager'].includes(who.role) ? 'member' : who.role,p?.version);
+      : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,p?.role,p?.version);
     try {
       await this.db.batch([
         this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN version=? THEN 1 ELSE 0 END FROM st_meta WHERE id=1',state.version),

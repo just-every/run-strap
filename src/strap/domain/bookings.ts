@@ -1,3 +1,4 @@
+import { requireClassRight, staffIdentity } from './staff-command-access';
 import { requireAttendanceBooking } from './attendance-access';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
 import { canManageGuest } from './guest-consent';
@@ -81,7 +82,7 @@ export function seat(tx: Transaction, booking: RecordData, entry: RecordData, pa
   tx.put('booking',updated); return updated;
 }
 export function book(tx: Transaction, input: Record<string,unknown>, forMember?: string) {
-  if (forMember) {if(tx.who.role==='front-desk')requireAttendanceBooking(tx,forMember,[record(tx.state,input.classId,'class').locationId ?? 'studio']);else humanOwner(tx.who);}
+  if (forMember) {if(tx.who.role==='front-desk') requireAttendanceBooking(tx,forMember,[record(tx.state,input.classId,'class').locationId ?? 'studio']); else requireClassRight(tx,'booking',forMember,record(tx.state,input.classId,'class'));}
   const member = forMember ? person(tx.state,forMember) : actingMember(tx,input.participantId), entry = record(tx.state,input.classId,'class');
   insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.status !== 'cancelled','class_cancelled',409);
@@ -102,13 +103,15 @@ export function book(tx: Transaction, input: Record<string,unknown>, forMember?:
  * owner acts for front desk with the fee-waiver right until STAFF-001. */
 export function cancel(tx: Transaction, input: Record<string,unknown>, parentActionId?: string) {
   const booking = record(tx.state,input.id,'booking');
-  insist(tx.who.role !== 'agent' && (tx.who.role === 'owner' || tx.who.personId === booking.personId || (tx.who.role === 'member' && guardianOf(tx.state,tx.who.personId,booking.personId)) || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))),'forbidden',403);
+  const delegated = staffIdentity(tx.state,tx.who) && tx.who.role !== 'instructor';
+  if (delegated) requireClassRight(tx,'booking',booking.personId,record(tx.state,booking.classId,'class'));
+  insist(tx.who.role !== 'agent' && (delegated || tx.who.role === 'owner' || tx.who.personId === booking.personId || (tx.who.role === 'member' && guardianOf(tx.state,tx.who.personId,booking.personId)) || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))),'forbidden',403);
   const entry = record(tx.state,booking.classId,'class');
   insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(entry.start > now(),'cancellation_closed',409);
   tx.future(entry.start);
   insist(booking.status !== 'cancelled','already_cancelled',409);
-  const effect = cancellationEffect(booking,entry), staff = tx.who.role === 'owner';
+  const effect = cancellationEffect(booking,entry), staff = delegated || tx.who.role === 'owner';
   if (booking.makeupCreditId) authorizeMakeup(tx,booking.personId);
   if (staff && booking.guestPackId) {
     text(input.reason,'guest_cancel_reason',500);
@@ -122,6 +125,7 @@ export function cancel(tx: Transaction, input: Record<string,unknown>, parentAct
     const mode = text(input.mode,'cancel_choice',10);
     insist(mode === 'late' || mode === 'early','invalid_cancel_choice');
     if (mode === 'early') {
+      requireClassRight(tx,'fee-waiver',booking.personId,entry);
       choice = 'early';
       waiver = {reason:text(input.reason,'waiver_reason',500),by:tx.who.id,right:'fee-waiver',waivedFeeCents:effect.feeCents,creditReturnedByWaiver:!effect.creditReturned,at:now()};
     }

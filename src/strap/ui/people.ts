@@ -46,7 +46,7 @@ function card(s: any, p: any, back: string) {
 }
 
 export function peoplePage(s: any, query: URLSearchParams) {
-  if (s.actor.role === 'front-desk') return memberRecordDesk(s,query)
+  if (s.actor.role === 'front-desk' || s.actor.staffAccess) return memberRecordDesk(s,query)
   const q = (query.get('q') ?? '').trim().toLowerCase()
   const all = rows(s, 'people').sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
   const list = q ? all.filter(p => p.name.toLowerCase().includes(q) || String(p.email).toLowerCase().includes(q)) : all

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
+if(process.env.STRAP_RESERVATIONS_PROOF_DIR)process.env.STRAP_PROOF_DIR=process.env.STRAP_RESERVATIONS_PROOF_DIR
 const day = 86_400_000, plus = (date,n) => new Date(Date.parse(date+'T12:00:00Z')+n*day).toISOString().slice(0,10)
 const local = at => new Intl.DateTimeFormat('en-GB',{timeZone:'America/New_York',hourCycle:'h23',hour:'2-digit',minute:'2-digit'}).format(new Date(at))
 function dstDates() {
@@ -281,6 +282,87 @@ test('Private desk reservations atomically hold resources and sessions, preview 
   assert.equal(report.rows.length,1);assert.equal(report.rows[0].classId,first.id);assert.equal(report.totalCents,4500);
   state=await h.state();assert.deepEqual([state.packs.find(p=>p.id===funded.id).summary.remaining,state.packs.find(p=>p.id===funded.id).summary.reserved,state.packs.find(p=>p.id===funded.id).summary.consumed],[5,4,1]);
   assert.equal(state.packs.find(p=>p.id===other.id).remaining,10);
+
+  {
+  // A following move enters the next occurrences' old slots as one batch.
+  // Civil dates and the local hour survive the DST boundary; identities stay put.
+  const mover=await h.person('Followingprivatemember'),dates=dstDates();
+  const movingPack=await pack(h,mover,{credits:4,eligibleServices:['Private Flow']});
+  const movingSource={personId:mover.id,service:'Private Flow',instructorId:coach.id,room:'Following private room',startDate:dates.start,endDate:plus(dates.start,21),time:'09:00',minutes:50,channel:'phone'};
+  const commit=async draft=>h.cmd(draft.operation==='save'?'appointment.reservation.confirm':'appointment.change.confirm',{id:draft.id,key:draft.key,channel:draft.channel,requestId:'synthetic-strap-change-'+draft.id});
+  let moving=await commit(await h.cmd('appointment.reservation.prepare',movingSource));
+  const originals=moving.occurrences,identity=originals.map(o=>[o.id,o.bookingId,o.packId]);
+  const moveInput={reservationId:moving.id,classId:originals[0].id,scope:'future',startDate:plus(dates.start,7),time:'09:00',channel:'phone'};
+  const stale=await h.cmd('appointment.move.prepare',{...moveInput,startDate:plus(dates.start,1)});
+  const finalDestination=stale.occurrences.at(-1),destinationBlock=await h.cmd('scheduling.unavailable.save',{resourceKind:'instructor',resourceId:coach.id,start:finalDestination.start,end:finalDestination.end,reason:'Later destination is unavailable'});
+  await refused(h,'appointment.change.confirm',{id:stale.id,key:stale.key,channel:'phone'},h.owner,'appointment_facts_changed');
+  await refused(h,'appointment.move.prepare',{...moveInput,startDate:plus(dates.start,1)},h.owner,null,409);
+  await h.cmd('scheduling.unavailable.remove',{id:destinationBlock.id});
+  const following=await h.cmd('appointment.move.prepare',moveInput);
+  assert.equal(following.occurrences.length,4);
+  assert.ok(following.occurrences.every((o,i)=>o.localDate===plus(originals[i].localDate,7)&&local(o.start)==='09:00'));
+  assert.equal(Date.parse(following.occurrences[0].start)-Date.parse(originals[0].start),7*day+3_600_000,'following move crosses DST by local dates');
+  moving=await commit(following);await commit(following);
+  assert.deepEqual(moving.occurrences.map(o=>[o.id,o.bookingId,o.packId]),identity);
+  assert.equal((await h.state()).packs.find(p=>p.id===movingPack.id).remaining,0);
+  assert.equal((await h.state(mover.cookie)).notices.length,2,'one grouped move notice despite replay');
+
+  const release=await h.cmd('appointment.cancel.prepare',{reservationId:moving.id,classId:moving.occurrences[2].id,scope:'future',reason:'Travel',channel:'phone'});
+  moving=await commit(release);
+  const released=moving.occurrences.slice(2),lastReleased=released.at(-1);
+  const collision=await series(h,coach,{start:lastReleased.localDate,end:lastReleased.localDate},movingSource.room,'09:00',1);
+  const restoreInput={reservationId:moving.id,classId:released[0].id,scope:'future',reason:'Travel canceled',channel:'phone'};
+  await refused(h,'appointment.restore.prepare',restoreInput,h.owner,null,409);
+  assert.equal((await h.state()).packs.find(p=>p.id===movingPack.id).remaining,2,'later restore conflict reserves no earlier credit');
+  const clear=await h.cmd('series.cancel.prepare',{classId:collision.classes[0].id,scope:'this',reason:'Release competing slot'});
+  await h.cmd('series.cancel.confirm',{id:clear.id,impact:clear.impact.key});
+  await refused(h,'appointment.restore.prepare',restoreInput,mover.cookie,null,403);
+  const restore=await h.cmd('appointment.restore.prepare',restoreInput),restoreBefore=await h.state();
+  assert.equal(restore.occurrences.length,2);
+  assert.equal(restoreBefore.packs.find(p=>p.id===movingPack.id).remaining,2,'restore preview does not reserve');
+  moving=await commit(restore);const restored=await h.state();await commit(restore);
+  assert.deepEqual(moving.occurrences.map(o=>[o.id,o.bookingId,o.packId]),identity);
+  assert.ok(moving.occurrences.every(o=>o.status==='booked'));
+  assert.equal(restored.packs.find(p=>p.id===movingPack.id).remaining,0);
+  assert.deepEqual((await h.state()).packCreditEvents,restored.packCreditEvents,'restore replay reserves each original allocation once');
+  assert.equal((await h.state(mover.cookie)).notices.length,4,'save, following move, grouped cancellation and grouped restore');
+  assert.equal(restored.bookings.find(b=>b.id===released[0].bookingId).appointmentRestorations[0].cancellation.cancellation,'early');
+
+  // An explicit skipped date retains its reason, creates no class or booking,
+  // and leaves a membership's own allowance as the funding authority.
+  const subscriber=await h.person('Privateallowancemember');
+  const membership=await pack(h,subscriber,{kind:'visits',credits:undefined,planName:'Two private visits',visits:2,period:'month',rollover:0,eligibleServices:['Private allowance']});
+  const allowanceMonth=plus(dates.end,40).slice(0,8),skippedDate=allowanceMonth+'15';
+  const allowanceSource={personId:subscriber.id,service:'Private allowance',instructorId:coach.id,room:'Allowance room',startDate:allowanceMonth+'08',endDate:allowanceMonth+'22',time:'11:00',minutes:50,channel:'desk'};
+  await refused(h,'appointment.reservation.prepare',allowanceSource,h.owner,'plan_visits_used');
+  await refused(h,'appointment.reservation.prepare',{...allowanceSource,choices:[{date:skippedDate,skip:true,reason:''}]},h.owner,null,400);
+  const allowancePreview=await h.cmd('appointment.reservation.prepare',{...allowanceSource,choices:[{date:skippedDate,skip:true,reason:'Member away'}]});
+  assert.deepEqual(allowancePreview.occurrences.map(o=>o.status),['booked','skipped','booked']);
+  let allowance=await commit(allowancePreview);state=await h.state();
+  const skipped=allowance.occurrences[1];
+  assert.equal(skipped.reason,'Member away');assert.ok(!skipped.bookingId&&!skipped.packId);
+  assert.ok(!state.classes.some(c=>c.id===skipped.id));
+  assert.equal(state.bookings.filter(b=>b.appointmentReservationId===allowance.id).length,2);
+  assert.equal(state.packs.find(p=>p.id===membership.id).remaining,0,'membership holds visits without a credit balance');
+  assert.equal(state.packs.find(p=>p.id===membership.id).summary.reserved,2);
+  assert.ok(state.packCreditEvents.filter(e=>e.packId===membership.id).every(e=>e.credits===0));
+  allowance=await commit(await h.cmd('appointment.move.prepare',{reservationId:allowance.id,classId:allowance.occurrences[0].id,scope:'future',startDate:allowanceMonth+'09',time:'11:00'}));
+  assert.equal(allowance.occurrences[1].reason,'Member away','following move preserves the explicit skipped date');
+  const allowanceCancel=await h.cmd('appointment.cancel.prepare',{reservationId:allowance.id,classId:allowance.occurrences[0].id,scope:'this',reason:'Availability changed'});
+  allowance=await commit(allowanceCancel);
+  const extraSource={...allowanceSource,startDate:allowanceMonth+'16',endDate:allowanceMonth+'16'};
+  const extra=await commit(await h.cmd('appointment.reservation.prepare',extraSource));
+  const allowanceRestore={reservationId:allowance.id,classId:allowance.occurrences[0].id,reason:'Return to original visit'};
+  await refused(h,'appointment.restore.prepare',allowanceRestore,h.owner,'appointment_pack_not_eligible');
+  await commit(await h.cmd('appointment.cancel.prepare',{reservationId:extra.id,classId:extra.occurrences[0].id,scope:'this',reason:'Keep original visit'}));
+  allowance=await commit(await h.cmd('appointment.restore.prepare',allowanceRestore));
+  state=await h.state();assert.equal(state.packs.find(p=>p.id===membership.id).summary.reserved,2);
+  assert.equal((await h.state(subscriber.cookie)).appointments.find(r=>r.id===allowance.id).occurrences[1].reason,'Member away');
+  assert.ok((await h.state(subscriber.cookie)).notices.some(n=>n.body.includes('Member away')));
+  const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records.map(r=>({kind:r.kind,...JSON.parse(r.data)}));
+  assert.equal(portable.find(r=>r.id===allowance.id).occurrences[1].reason,'Member away');
+  assert.equal(portable.find(r=>r.id===released[0].bookingId).appointmentRestorations.length,1);
+  }
 }));
 
 test('Scoped front desk books private sessions with checked alternatives, denies other members and locations, and revokes preview and replay authority',()=>run(async h=>{

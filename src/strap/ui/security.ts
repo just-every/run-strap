@@ -1,3 +1,4 @@
+import { staffRightsPanel } from './staff-rights';
 // Security (SEC-004): a second factor for the signed-in person, and the owner's access controls.
 // Owners and finance staff must enroll before the privileged doors open; members and instructors may opt in.
 import { when } from './format'
@@ -64,6 +65,6 @@ export function securityPage(s: any, query: URLSearchParams, notice: any) {
   const reason = m.reasonText ? `<div class="notice" role="alert">${h(m.reasonText)}</div>` : ''
   const sent = result(notice)?.status === 'accepted' ? '<p class="notice" role="status">Confirmation link sent. Open it in this browser, confirm, then return to Security.</p>' : ''
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Security</h1></div>${intro}${reason}${sent}${recovery ? codes(recovery) : ''}`
-    + (held ? verify(m, query) : enroll(m, notice, query) + factors(s, m) + (s.access ? people(s) : ''))
+    + (held ? verify(m, query) : enroll(m, notice, query) + factors(s, m) + (s.access ? people(s)+staffRightsPanel(s) : ''))
     + `</div></div><script src="/brand/app/security.js" defer></script>`
 }

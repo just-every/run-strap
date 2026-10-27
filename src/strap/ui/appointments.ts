@@ -12,26 +12,33 @@ const localTime = (s: any, occurrence: any) => new Intl.DateTimeFormat('en-GB',{
 
 const appointmentTable = (heads: string[],content: string) => table(heads,content).replace(/<th>/g,'<th style="font-size:13px">')
 function occurrenceCells(s: any, occurrence: any) {
-  return cell('Appointment',`<strong>${h(occurrence.service)}</strong><small>${when(s,occurrence.start,occurrence.timeZone)}</small><small>${h(occurrence.instructorName)} · ${h(occurrence.room)}</small>`)
+  return cell('Appointment',`<strong>${h(occurrence.service)}</strong>${occurrence.before ? `<small>From ${when(s,occurrence.before.start,occurrence.timeZone)}</small><small>To ${when(s,occurrence.start,occurrence.timeZone)}</small>` : `<small>${when(s,occurrence.start,occurrence.timeZone)}</small>`}<small>${h(occurrence.instructorName)} · ${h(occurrence.room)}</small>`)
     + cell('Pack',h(occurrence.packLabel ?? (occurrence.packId ? 'Session pack' : 'Not reserved')))
-    + cell('Status',statusPill(occurrence.status))
+    + cell('Status',statusPill(occurrence.status)+(occurrence.status === 'skipped' ? `<small>${h(occurrence.reason)}</small>` : ''))
 }
 
 function preview(s: any, personId: string, back: string, entry: any) {
   const saving = entry.operation === 'save'
-  const title = saving ? 'Review appointment reservation' : entry.operation === 'move' ? 'Review appointment move' : 'Review appointment cancellation'
+  const title = saving ? 'Review appointment reservation' : entry.operation === 'move' ? 'Review appointment move' : entry.operation === 'restore' ? 'Review appointment restoration' : 'Review appointment cancellation'
   const confirmation = entry.available === false ? alternativeForm(s,personId,back,entry) : form(saving ? 'appointment.reservation.confirm' : 'appointment.change.confirm',back,
     hidden('id',entry.id) + hidden('key',entry.key) + memberIdentity(personId) + channel(entry.channel),
-    saving ? 'Confirm appointment reservation' : entry.operation === 'move' ? 'Confirm appointment move' : 'Confirm appointment cancellation')
+    saving ? 'Confirm appointment reservation' : entry.operation === 'move' ? 'Confirm appointment move' : entry.operation === 'restore' ? 'Confirm appointment restoration' : 'Confirm appointment cancellation')
   return `<details class="more" open data-appointment-preview="${h(entry.id)}"><summary>${title}</summary><div class="panel-body">`
+    + (entry.scope === 'future' ? '<p>This change covers the following unused occurrences in their original series order.</p>' : '')
     + `<div class="table-wrap">${appointmentTable(['Appointment','Pack','Status'],entry.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}</tr>`).join(''))}</div>`
+    + (entry.reason ? `<p>Reason: ${h(entry.reason)}</p>` : '')
     + confirmation + '</div></details>'
 }
 
 function occurrenceActions(s: any, personId: string, back: string, reservation: any, occurrence: any) {
-  if (occurrence.status !== 'booked' || Date.parse(occurrence.start) <= Date.now()) return ''
+  if (!occurrence.bookingId || Date.parse(occurrence.start) <= Date.now()) return ''
   const identity = () => hidden('reservationId',reservation.id) + hidden('classId',occurrence.classId ?? occurrence.id) + memberIdentity(personId)
+  if (occurrence.status === 'cancelled') return `<details class="more"><summary>Restore appointment</summary>`+form('appointment.restore.prepare',back,identity()
+    + select('scope','Restoration scope',[['this','This occurrence'],['future','This and following cancelled occurrences']],'this')
+    + textarea('reason','Restoration reason','','required maxlength="500" rows="2"')+channel(),'Preview appointment restoration','quiet','small')+'</details>'
+  if (occurrence.status !== 'booked') return ''
   const move = form('appointment.move.prepare',back,identity()
+    + select('scope','Move scope',[['this','This occurrence'],['future','This and following occurrences']],'this')
     + `<div class="row2">${field('startDate','New appointment date',dayOf(s,occurrence.start,occurrence.timeZone),'date','required')}${field('time','New local start time',localTime(s,occurrence),'time','required')}</div>`
     + channel(),'Preview appointment move','quiet','small')
   const cancel = form('appointment.cancel.prepare',back,identity()
@@ -44,14 +51,14 @@ function occurrenceActions(s: any, personId: string, back: string, reservation: 
 
 function savedReservation(s: any, personId: string, back: string, reservation: any) {
   const occurrences = reservation.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}${cell('Manage',occurrenceActions(s,personId,back,reservation,occurrence))}</tr>`).join('')
-  const funding = (reservation.funding ?? []).map((p: any)=>`<p>${h(p.label)}: <strong>${h(p.remaining)} available</strong> · ${h(p.reserved)} reserved · ${h(p.consumed)} used</p>`).join('')
+  const funding = (reservation.funding ?? []).map((p: any)=>`<p>${h(p.label)}: ${p.plan ? '' : `<strong>${h(p.remaining)} available</strong> · `}${h(p.reserved)} reserved · ${h(p.consumed)} used</p>`).join('')
   return `<details class="more" open data-appointment-reservation="${h(reservation.id)}"><summary>Appointment reservation · ${h(reservation.status)}</summary><div class="panel-body">${funding}<div class="table-wrap">`
     + appointmentTable(['Appointment','Pack','Status','Manage'],occurrences) + '</div></div></details>'
 }
 
 /** Owner tools live within the selected member's card. Offers remain immutable. */
 export function appointmentsPanel(s: any, personId: string, back: string) {
-  if ((!owner(s) && !(s.actor.role === 'front-desk' && s.appointmentGrant?.enabled)) || !personId) return ''
+  if (!personId || !owner(s) && !(['front-desk','manager','instructor'].includes(s.actor.role) && s.appointmentGrant?.enabled && s.appointmentGrant.memberIds.includes(personId))) return ''
   const usedOffers = new Set(rows(s,'appointments').map(r=>r.offerId))
   const offers = rows(s,'appointmentSeriesOffers').filter(o=>!usedOffers.has(o.id))
   const choices: [unknown,unknown][] = [['','Choose an offered appointment series'],...offers.map(offer => {
@@ -83,6 +90,7 @@ function alternativeForm(s: any,personId: string,back: string,entry: any) {
   if (!entry.source) return '<p>Resolve the conflicts in a new owner offer before saving.</p>'
   const conflicts = entry.occurrences.filter((o: any)=>!o.available).map((o: any)=>
     `<p>${when(s,o.start,o.timeZone)} · ${o.blockers.map((b: any)=>h(b.reason ?? 'Resource unavailable')).join('; ')}</p>`
-    +select('alt_'+o.occurrenceDate,'Alternative for '+o.occurrenceDate,[['','Choose a checked alternative'],...o.alternatives.map((a: any)=>[a.start,whenLabel(s,a.start,o.timeZone)])])).join('')
+    +select('alt_'+o.occurrenceDate,'Alternative for '+o.occurrenceDate,[['','Choose a checked alternative'],['skip','Skip this date'],...o.alternatives.map((a: any)=>[a.start,whenLabel(s,a.start,o.timeZone)])])
+    +field('skipReason_'+o.occurrenceDate,'Reason if skipping '+o.occurrenceDate,'','text','maxlength="500"')).join('')
   return form('appointment.reservation.prepare',back,memberIdentity(personId)+hidden('proposal',JSON.stringify(entry.source))+channel(entry.channel)+conflicts,'Review chosen alternatives')
 }

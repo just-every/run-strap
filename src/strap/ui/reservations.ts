@@ -17,15 +17,15 @@ function outcomeTable(s: any, r: any, cancelling = false) {
   }).join(''))}</div>`;
 }
 export function reservationsPanel(s: any, personId: string, back: string) {
-  if (!personId || !['member','owner'].includes(s.actor.role)) return '';
-  const memberFields = owner(s) ? hidden('personId',personId) + actionChannel() : '';
+  if (!personId || !['member','owner','front-desk','manager'].includes(s.actor.role)) return '';
+  const memberFields = s.actor.role !== 'member' ? hidden('personId',personId) + actionChannel() : '';
   const classes = rows(s,'classes').filter(c => c.seriesId && c.status === 'published' && Date.parse(c.start) > Date.now()).sort((a,b) => a.start.localeCompare(b.start));
   const choices: [unknown,unknown][] = [['','Choose a recurring class'],...classes.map(c => [c.id,`${c.title} · ${when(s, c.start, c.timeZone).replace(/<[^>]*>/g,'')}`] as [unknown,unknown])];
   const editor = classes.length ? form('reservation.prepare',back,memberFields + hidden('requestId',crypto.randomUUID()) + select('classId','First class',choices) + field('throughDate','Reserve through (inclusive)','','date','required'), 'Preview recurring reservation') : emptyLine('The studio has no published recurring classes.');
   const previews = rows(s,'reservationPreviews').filter(r => r.personId === personId && r.status === 'preview').slice(-5).reverse().map(r => {
     const cancelling = r.operation === 'cancel';
-    const previewMemberFields = owner(s) ? hidden('personId',personId) + actionChannel(r.channel ?? 'desk') : '';
-    const fields = previewMemberFields + hidden('id',r.id) + hidden('key',r.key) + hidden('requestId',crypto.randomUUID()) + (owner(s) && cancelling ? cancellationReason(s) : '');
+    const previewMemberFields = s.actor.role !== 'member' ? hidden('personId',personId) + actionChannel(r.channel ?? 'desk') : '';
+    const fields = previewMemberFields + hidden('id',r.id) + hidden('key',r.key) + hidden('requestId',crypto.randomUUID()) + (s.actor.role !== 'member' && cancelling ? cancellationReason(s) : '');
     return `<details class="more" open data-reservation-preview="${h(r.id)}"><summary>${cancelling ? 'Review future cancellations' : 'Review recurring reservation'}</summary><div class="panel-body">${outcomeTable(s,r,cancelling)}${form(cancelling ? 'reservation.cancel.confirm' : 'reservation.confirm',back,fields,cancelling ? 'Confirm future cancellations' : 'Confirm recurring reservation')}</div></details>`;
   }).join('');
   const saved = rows(s,'reservations').filter(r => r.personId === personId).slice().reverse().map(r => `<details class="more" open data-reservation="${h(r.id)}"><summary>Recurring reservation · ${h(r.status)}</summary><div class="panel-body">${outcomeTable(s,r)}${r.status === 'active' ? form('reservation.cancel.prepare',back,memberFields + hidden('reservationId',r.id) + hidden('requestId',crypto.randomUUID()),'Review future cancellations','quiet') : '<p class="meta">Future cancellations recorded. Past and started visits were kept.</p>'}</div></details>`).join('');

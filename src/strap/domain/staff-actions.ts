@@ -34,7 +34,7 @@ export function staffAfter(name: string, result: RecordData) {
   return structuredClone(result);
 }
 export function priorStaffRequest(tx: Transaction, name: string, input: Record<string,unknown>) {
-  if (!['owner','front-desk'].includes(tx.who.role) || !input.requestId) return null;
+  if (!['owner','front-desk','manager','finance','instructor'].includes(tx.who.role) || !input.requestId) return null;
   const requestId = text(input.requestId,'requestId',100), basis = requestBasis(input);
   const prior = staffActions(tx.state).find(a => a.actorId === tx.who.id && a.requestId === requestId);
   if (!prior) return null;

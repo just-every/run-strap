@@ -1,3 +1,4 @@
+import { requireClassRight } from './staff-command-access';
 import { debtorOf } from './households';
 import { humanOwner, id, instant, insist, integer, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
@@ -66,8 +67,11 @@ export function settleUnpaid(tx: Transaction, pack: RecordData) {
 }
 
 export function deskBook(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
+  if (!['owner','front-desk','manager'].includes(tx.who.role)) humanOwner(tx.who);
   const member = person(tx.state,input.personId), entry = record(tx.state,input.classId,'class');
+  requireClassRight(tx,'booking',member.id,entry);
+  if (input.override) requireClassRight(tx,'override',member.id,entry);
+  if (['drop-in','sell-pack'].includes(String(input.pay))) { requireClassRight(tx,'sale',member.id,entry); requireClassRight(tx,'price',member.id,entry); }
   insist(!entry.privatePersonId,'private_appointment_desk_review_required',403);
   insist(member.role === 'member','member_required');
   insist(entry.status !== 'cancelled','class_cancelled',409);

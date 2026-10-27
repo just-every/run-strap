@@ -1,3 +1,4 @@
+import { requireClassRight, classRightVisible, staffIdentity } from './staff-command-access';
 // SCHED-005: review and commit a finite set of existing class occurrences.
 // The real single-booking and cancellation doors remain the policy authority.
 import { book, bookingPack, cancel, planRefused } from './bookings';
@@ -10,10 +11,10 @@ import { Transaction } from './store';
 import { DomainError, humanOwner, id, insist, list, now, person, record, type RecordData, type State } from './types';
 
 function member(tx: Transaction, input: Record<string,unknown>) {
-  insist(tx.who.role === 'member' || tx.who.role === 'owner','member_or_owner_required',403);
-  if (tx.who.role === 'owner') humanOwner(tx.who);
-  else insist(!input.personId || input.personId === tx.who.personId,'forbidden',403);
-  const found = person(tx.state,tx.who.role === 'owner' ? input.personId : tx.who.personId);
+  const staff = staffIdentity(tx.state,tx.who);
+  insist(tx.who.role === 'member' || staff,'member_or_owner_required',403);
+  if (!staff) insist(!input.personId || input.personId === tx.who.personId,'forbidden',403);
+  const found = person(tx.state,staff ? input.personId : tx.who.personId);
   insist(found.role === 'member','member_required',403); return found;
 }
 async function basis(state: State, tx: Transaction) {
@@ -48,8 +49,8 @@ function attempt(tx: Transaction, entry: RecordData, personId: string, channel =
   if (!pack && refused?.code === 'outside_plan_hours') return {...outcome,status:'skipped',reason:refused.code};
 
   try {
-    let b: RecordData = book(tx,{classId:entry.id},tx.who.role === 'owner' ? personId : undefined);
-    if (tx.who.role === 'owner') { b = {...b,bookingChannel:channel,madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking'}; tx.put('booking',b); }
+    let b: RecordData = book(tx,{classId:entry.id},staffIdentity(tx.state,tx.who) ? personId : undefined);
+    if (staffIdentity(tx.state,tx.who)) { b = {...b,bookingChannel:channel,madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking'}; tx.put('booking',b); }
     return {...outcome,status:b.status,reason:null,packId:b.packId ?? null,cancelTerms:b.cancelTerms,bookingId:b.id};
   } catch (error) {
     if (error instanceof DomainError && ['eligible_credit_required','plan_visits_used','plan_upcoming_limit_reached'].includes(error.code)) throw new DomainError('series_would_overdraw_entitlement',409);
@@ -68,7 +69,7 @@ export async function prepareReservations(tx: Transaction, input: Record<string,
   const who = member(tx,input), {series,classes,throughDate} = selection(tx.state,input);
   const outcomes = review(tx,classes,who.id).map(({bookingId,...outcome}) => outcome);
   const draft = {id:id(),personId:who.id,status:'preview',operation:'reserve',classId:input.classId,seriesId:series.id,throughDate,timeZone:series.timeZone,outcomes,
-    key:id(),basis:await basis(tx.state,tx),channel:tx.who.role === 'owner' ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
+    key:id(),basis:await basis(tx.state,tx),channel:staffIdentity(tx.state,tx.who) ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
   tx.put('reservationPreview',draft); return draft;
 }
 function ownPreview(tx: Transaction, input: Record<string,unknown>, operation: string) {
@@ -83,14 +84,14 @@ export async function confirmReservations(tx: Transaction, input: Record<string,
   const {classes} = selection(tx.state,draft), checked = review(tx,classes,draft.personId);
   insist(signature(checked) === signature(draft.outcomes),'reservation_facts_changed',409);
   const reservationId = id(), outcomes = classes.map(entry => {
-    const outcome = attempt(tx,entry,draft.personId,tx.who.role === 'owner' ? staffChannel(input) : 'online');
+    const outcome = attempt(tx,entry,draft.personId,staffIdentity(tx.state,tx.who) ? staffChannel(input) : 'online');
     if (outcome.bookingId) {
       const booking = {...record(tx.state,outcome.bookingId,'booking'),reservationId};
       tx.put('booking',booking); confirmBooking(tx,booking);
     }
     return outcome;
   });
-  const saved = {id:reservationId,personId:draft.personId,seriesId:draft.seriesId,throughDate:draft.throughDate,timeZone:draft.timeZone,outcomes,status:'active',createdAt:now(),createdBy:tx.who.id,staffActionId:tx.who.role === 'owner' ? id() : null};
+  const saved = {id:reservationId,personId:draft.personId,seriesId:draft.seriesId,throughDate:draft.throughDate,timeZone:draft.timeZone,outcomes,status:'active',createdAt:now(),createdBy:tx.who.id,staffActionId:staffIdentity(tx.state,tx.who) ? id() : null};
   tx.put('reservation',saved); tx.put('reservationPreview',{...draft,status:'confirmed',reservationId}); return saved;
 }
 function cancellationOutcomes(state: State, reservation: RecordData) {
@@ -103,7 +104,7 @@ function cancellationOutcomes(state: State, reservation: RecordData) {
 export async function prepareReservationCancellation(tx: Transaction, input: Record<string,unknown>) {
   const reservation = record(tx.state,input.reservationId,'reservation'); member(tx,{...input,personId:reservation.personId});
   const outcomes = cancellationOutcomes(tx.state,reservation);
-  const draft = {id:id(),personId:reservation.personId,reservationId:reservation.id,status:'preview',operation:'cancel',timeZone:reservation.timeZone,outcomes,key:id(),basis:await basis(tx.state,tx),channel:tx.who.role === 'owner' ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
+  const draft = {id:id(),personId:reservation.personId,reservationId:reservation.id,status:'preview',operation:'cancel',timeZone:reservation.timeZone,outcomes,key:id(),basis:await basis(tx.state,tx),channel:staffIdentity(tx.state,tx.who) ? staffChannel(input) : 'online',createdAt:now(),createdBy:tx.who.id};
   tx.put('reservationPreview',draft); return draft;
 }
 export async function confirmReservationCancellation(tx: Transaction, input: Record<string,unknown>) {
@@ -111,12 +112,12 @@ export async function confirmReservationCancellation(tx: Transaction, input: Rec
   if (draft.status === 'confirmed') return reservation;
   const outcomes = cancellationOutcomes(tx.state,reservation);
   insist(draft.basis === await basis(tx.state,tx) && JSON.stringify(outcomes) === JSON.stringify(draft.outcomes),'reservation_facts_changed',409);
-  const staffActionId = tx.who.role === 'owner' ? id() : undefined;
+  const staffActionId = staffIdentity(tx.state,tx.who) ? id() : undefined;
   for (const o of outcomes) cancel(tx,{...input,id:o.id,terms:o.effect.key,mode:'late'},staffActionId);
   const saved = {...reservation,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledBookingIds:outcomes.map((o: RecordData) => o.id),cancellationEffects:outcomes,staffActionId:staffActionId ?? null};
   tx.put('reservation',saved); tx.put('reservationPreview',{...draft,status:'confirmed'}); return saved;
 }
-export function reservationSnapshot(state: State, who: {role:string;personId?:string}) {
-  const visible = (kind: string) => list(state,kind).filter(r => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId));
+export function reservationSnapshot(state: State, who: import('./types').Actor) {
+  const visible = (kind: string) => list(state,kind).filter(r => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId) || (staffIdentity(state,who) && r.outcomes.length > 0 && r.outcomes.every((o: RecordData) => {const c=state.records.get(o.classId)?.data;return c && classRightVisible(state,who,'booking',r.personId,c);})));
   return {reservations:visible('reservation'),reservationPreviews:visible('reservationPreview')};
 }

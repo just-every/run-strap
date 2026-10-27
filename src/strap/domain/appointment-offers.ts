@@ -83,7 +83,9 @@ export function previewAppointmentSeriesOffer(tx: Transaction, input: Record<str
   humanOwner(tx.who);
   const offer = record(tx.state,input.id,'appointmentSeriesOffer');
   const occurrences = offer.occurrences.map((entry: RecordData) => {
-    const checked = appointmentAvailability(tx,entry,offer.occurrences), alternatives: RecordData[] = [];
+    if (entry.status === 'skipped') return {...entry,available:true,blockers:[],alternatives:[],reserved:false,paymentCollected:false,bookingAvailable:false};
+    const live = offer.occurrences.filter((o: RecordData)=>o.status !== 'skipped');
+    const checked = appointmentAvailability(tx,entry,live), alternatives: RecordData[] = [];
     if (!checked.available) for (let day = 1; day <= Math.min(6,offer.rule.intervalWeeks*7-1); day++) {
       const date = addDays(entry.occurrenceDate,day);
       let start: string;
@@ -93,7 +95,7 @@ export function previewAppointmentSeriesOffer(tx: Transaction, input: Record<str
         throw error;
       }
       const candidate = {...entry,start,end:new Date(Date.parse(start)+offer.rule.minutes*60_000).toISOString(),localDate:date};
-      if (appointmentAvailability(tx,candidate,offer.occurrences).available) alternatives.push(candidate);
+      if (appointmentAvailability(tx,candidate,live).available) alternatives.push(candidate);
     }
     return {...entry,...checked,alternatives};
   });
@@ -106,11 +108,18 @@ export function appointmentSeriesFields(tx: Transaction,input: Record<string,unk
   const rule = recurrence(tx.state,input);
   const choices = input.choices ?? [];
   insist(Array.isArray(choices) && choices.length <= rule.dates.length,'invalid_appointment_choices');
-  const byDate = new Map<string,{date:string;start:string}>();
+  const byDate = new Map<string,{date:string;start?:string;skip?:true;reason?:string}>();
   for (const raw of choices) {
     insist(raw && typeof raw === 'object' && !Array.isArray(raw),'invalid_appointment_choice');
-    const date = text(raw.date,'date',10), start = instant(raw.start,'start');
+    const date = text(raw.date,'date',10);
     insist(rule.dates.includes(date) && !byDate.has(date),'invalid_appointment_choice');
+    if (raw.skip === true) {
+      insist(raw.start === undefined,'invalid_appointment_choice');
+      byDate.set(date,{date,skip:true,reason:text(raw.reason,'skip_reason',500)});
+      continue;
+    }
+    insist(raw.skip === undefined,'invalid_appointment_choice');
+    const start = instant(raw.start,'start');
     const chosenDate = localDate(start,rule.timeZone);
     insist(chosenDate >= date && chosenDate < addDays(date,rule.intervalWeeks*7),'choice_outside_occurrence');
     byDate.set(date,{date,start});
@@ -118,10 +127,12 @@ export function appointmentSeriesFields(tx: Transaction,input: Record<string,unk
   const occurrences = rule.dates.map(date => {
     const originalStart = instant(wallStart(date,rule.time,rule.timeZone),'start'), choice = byDate.get(date);
     const offer = appointmentFields(tx,{...input,start:choice?.start ?? originalStart,durationMinutes:rule.minutes});
-    return {...offer,occurrenceDate:date,originalStart,chosenAlternative:!!choice};
+    return {...offer,occurrenceDate:date,originalStart,chosenAlternative:!!choice && !choice.skip,
+      ...(choice?.skip ? {status:'skipped',reason:choice.reason} : {})};
   });
   const checkedOccurrences = occurrences.map(entry => {
-    const checked = appointmentAvailability(tx,entry,occurrences);
+    const checked = entry.status === 'skipped' ? {available:true,blockers:[],reserved:false,paymentCollected:false,bookingAvailable:false}
+      : appointmentAvailability(tx,entry,occurrences.filter(o=>o.status !== 'skipped'));
     if (entry.chosenAlternative) insist(checked.available,'appointment_choice_unavailable',409);
     return {...entry,availabilityAtCreation:checked};
   });

@@ -1,3 +1,4 @@
+import { requireClassRight, staffIdentity } from './staff-command-access';
 import { debtorOf } from './households';
 import { assertMakeupTarget, reserveMakeupCredit, restoreAbsence } from './makeups';
 import { canManageMakeup, authorizeMakeup } from './makeup-authority';
@@ -40,9 +41,10 @@ function target(tx: Transaction, booking: RecordData, entry: RecordData, input: 
   insistBookingOpen(tx,entry,pack?.priorityBooking === true,pack);
   if (!heldOffer) promote(tx,entry);
   const capacity = seatCapacity(tx.state,entry), override = input.override === undefined || input.override === '' ? null : text(input.override,'override_reason',500);
-  const full = (tx.who.role === 'owner' ? capacity.totalOpen : capacity.onlineOpen) === 0;
+  if (override) requireClassRight(tx,'override',booking.personId,entry);
+  const full = (staffIdentity(tx.state,tx.who) ? capacity.totalOpen : capacity.onlineOpen) === 0;
   const spot = !full ? chooseSpot(tx.state,entry,input.spot) : override && input.spot ? chooseSpot(tx.state,entry,input.spot) : null;
-  return {pack,full,spot,capacityPool:tx.who.role === 'owner' && (capacity.heldOpen > 0 || full) ? 'held' : 'online',override:full && override ? {by:tx.who.id,role:tx.who.role,right:'override',reason:override,bypassed:[`class full (${capacity.booked} of ${capacity.total})`],at:now()} : null};
+  return {pack,full,spot,capacityPool:staffIdentity(tx.state,tx.who) && (capacity.heldOpen > 0 || full) ? 'held' : 'online',override:full && override ? {by:tx.who.id,role:tx.who.role,right:'override',reason:override,bypassed:[`class full (${capacity.booked} of ${capacity.total})`],at:now()} : null};
 }
 /** The late/early choice uses the same terms key as cancellation. A move always
  * carries the reserved credit; an assessed monetary penalty is separate. */
@@ -50,17 +52,18 @@ function movePenalty(tx: Transaction, booking: RecordData, entry: RecordData, in
   const effect = cancellationEffect(booking,entry);
   if (input.terms !== undefined) insist(input.terms === effect.key,'cancellation_terms_changed',409);
   if (effect.timing === 'early') tx.future(effect.cutoffAt); else tx.reached(effect.cutoffAt);
-  const staff = tx.who.role === 'owner';
+  const staff = staffIdentity(tx.state,tx.who) && tx.who.role !== 'instructor';
   if (!staff) insist(input.mode === undefined || input.mode === 'late','fee_waiver_right_required',403);
   const mode = effect.waivable && staff ? text(input.mode,'cancel_choice',10) : effect.timing;
   insist(mode === 'early' || mode === 'late','invalid_cancel_choice');
+  if (effect.waivable && mode === 'early') requireClassRight(tx,'fee-waiver',booking.personId,entry);
   const waiver = effect.waivable && mode === 'early' ? {reason:text(input.reason,'waiver_reason',500),by:tx.who.id,right:'fee-waiver',waivedFeeCents:effect.feeCents,creditCarried:true,at:now()} : null;
   return {mode,feeCents:mode === 'late' ? effect.feeCents : 0,waiver};
 }
 export function moveBooking(tx: Transaction, input: Record<string,unknown>) {
-  insist(['owner','member','instructor'].includes(tx.who.role),'forbidden',403);
-  if (tx.who.role !== 'owner') insist(!input.override && !input.suppressNotice,'override_right_required',403);
-  if (tx.who.role !== 'owner' && input.requestId) {
+  insist(['owner','member','instructor','front-desk','manager'].includes(tx.who.role),'forbidden',403);
+  if (!staffIdentity(tx.state,tx.who)) insist(!input.override && !input.suppressNotice,'override_right_required',403);
+  if (!staffIdentity(tx.state,tx.who) && input.requestId) {
     const basis = JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
     const prior = list(tx.state,'bookingAction').find(a => a.actorId === tx.who.id && a.requestId === input.requestId);
     if (prior) {
@@ -74,12 +77,12 @@ export function moveBooking(tx: Transaction, input: Record<string,unknown>) {
   return performMove(tx,input);
 }
 function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer = false) {
-  const staff = tx.who.role === 'owner';
+  const staff = staffIdentity(tx.state,tx.who) && tx.who.role !== 'instructor';
   const booking = record(tx.state,input.id,'booking'), source = futureClass(tx,booking.classId), entry = futureClass(tx,input.classId);
   if (booking.makeupCreditId) authorizeMakeup(tx,booking.personId);
   insist(booking.status === 'booked' && !booking.attendance && !booking.checkedInAt,'unstarted_confirmed_booking_required',409);
   insist(source.id !== entry.id,'different_class_required');
-  if (staff) { staffReason(tx,input); actionChannel(input); }
+  if (staff) { requireClassRight(tx,'booking',booking.personId,source); requireClassRight(tx,'booking',booking.personId,entry); staffReason(tx,input); actionChannel(input); }
   else insist((tx.who.personId === booking.personId || (booking.guestPackId && canManageGuest(tx.state,tx.who,booking)) || (booking.makeupCreditId && canManageMakeup(tx.state,tx.who,booking.personId))) && ['member','instructor'].includes(tx.who.role),'forbidden',403);
   const to = target(tx,booking,entry,input,false,heldOffer);
   if (to.full && !to.override) {
@@ -104,8 +107,8 @@ function performMove(tx: Transaction, input: Record<string,unknown>, heldOffer =
   promote(tx,source); return moved;
 }
 export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
   const booking = record(tx.state,input.id,'booking'), entry = futureClass(tx,booking.classId);
+  requireClassRight(tx,'booking',booking.personId,entry);
   if (booking.status === 'cancelled' && booking.cancellation === 'absence') {
     const to = target(tx,booking,entry,input,false); insist(!to.full || to.override,'class_full',409);
     return restoreAbsence(tx,booking,entry,to,input);
@@ -126,8 +129,8 @@ export function restoreBooking(tx: Transaction, input: Record<string,unknown>) {
 }
 /** Chosen position is an explicit owner override; stable ordering survives all later joins. */
 export function positionWaiter(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
-  const booking = record(tx.state,input.id,'booking'); futureClass(tx,booking.classId);
+  const booking = record(tx.state,input.id,'booking'); const entry = futureClass(tx,booking.classId);
+  requireClassRight(tx,'booking',booking.personId,entry); requireClassRight(tx,'override',booking.personId,entry);
   insist(booking.status === 'waitlisted','waitlisted_booking_required',409);
   const reason = text(input.reason,'override_reason',500), waiters = list(tx.state,'booking').filter(b => b.classId === booking.classId && b.status === 'waitlisted' && b.id !== booking.id).sort((a,b) => a.sequence-b.sequence || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const position = integer(input.position,'position',1,waiters.length+1);

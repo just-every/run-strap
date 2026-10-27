@@ -1,3 +1,4 @@
+import { delegatedCommandRight } from './domain/staff-command-access';
 import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
 import { taxCommand, taxState, taxFilingCsv } from './tax'
 import { billingCommand, billingCommandCatalogue, billingState, agreementEvidence, renderAgreementCopy } from './billing'
@@ -54,10 +55,10 @@ async function access(env: Bindings) {
   return { operators: operators.map(o => ({ ...o, factors: counts[o.id] ?? 0 })), finance: await financeUsers(env), managers: await managers(env) }
 }
 
-async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
+async function state(env: Bindings, who: Actor, report = false): Promise<Record<string, any>> {
   const human = ['owner', 'finance', 'manager', 'front-desk', 'member', 'instructor'].includes(who.role)
   const mfa = human ? await mfaView(env, who) : null
-  if (who.role === 'front-desk') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? '',mfa};
+  if (who.role === 'front-desk' || !report && who.staffAccess && ['manager','instructor'].includes(who.role)) return {...await snapshot(env.DB,who,env.AUTH_ORIGIN),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? '',mfa};
   if (who.role === 'finance') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
     return { ...await financeSnapshot(env.DB, who), classes: [], displayName: operator?.name ?? '', mfa }
@@ -78,6 +79,7 @@ async function state(env: Bindings, who: Actor): Promise<Record<string, any>> {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if (who.role === 'manager' && ['/app/revenue','/app/reports'].includes(url.pathname)) return state(env,who,true)
   if (url.pathname === '/app/classes' && who.role==='owner') {
     const loaded=await load(env.DB,who)
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
@@ -128,11 +130,11 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if (who.role === 'front-desk' && !['/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
-  if (who.role === 'front-desk' && name && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
+  if ((who.role === 'front-desk' || who.staffAccess && ['manager','instructor'].includes(who.role)) && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
-  if (who.role === 'manager' && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
-  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
+  if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
+  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || who.staffAccess === true || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 
@@ -230,7 +232,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       const exportPath = path.match(/^\/api\/strap\/reports\/(revenue|attendance)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(cancellations)\.(xlsx)$/)
       if (exportPath) {
         if (who.role !== 'owner' && !(reportStaff(who) && (exportPath[1] === 'revenue' || (who.role === 'manager' && exportPath[1] === 'attendance')))) fail('owner_required',403)
-        return reportDownload(await state(env,who),exportPath[1],exportPath[2],url.searchParams)
+        return reportDownload(await state(env,who,true),exportPath[1],exportPath[2],url.searchParams)
       }
       const nativeExport = path.match(/^\/api\/strap\/reports\/(retention|renewals)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(teaching-pay)\.(csv|xlsx)$/)
       if (nativeExport) {
@@ -265,11 +267,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
       if (path === '/api/strap/reports/revenue') {
         if (who.role !== 'owner' && !reportStaff(who)) fail('owner_required',403)
-        return json(revenueReport(await state(env,who),url.searchParams))
+        return json(revenueReport(await state(env,who,true),url.searchParams))
       }
       if (path === '/api/strap/reports/attendance') {
         if (who.role !== 'owner' && who.role !== 'manager') fail('owner_required',403)
-        return json(attendanceReport(await state(env,who),url.searchParams))
+        return json(attendanceReport(await state(env,who,true),url.searchParams))
       }
       if (path === '/api/strap/cancellations.csv') {
         if (who.role !== 'owner') fail('owner_required',403)

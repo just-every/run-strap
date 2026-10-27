@@ -419,3 +419,11 @@ test('Private appointment offers retain overlapping alternatives and recheck liv
   assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries').first()).n,0);
 
 }));
+
+test('Scoped staff booking rights enforce capacity, waivers, check-in, member and location boundaries, private downloads and immediate revocation',()=>run(async h=>{
+  await (await import('./staff-rights-cases.mjs')).staffBookingRights(h);
+}));
+
+test('Separate membership-sale and contract-change rights preserve personal acceptance and refuse revoked termination previews',()=>run(async h=>{
+  await (await import('./staff-rights-cases.mjs')).staffContractRights(h);
+}));

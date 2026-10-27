@@ -60,7 +60,7 @@ export function operatorAuth(env: Bindings) {
    // authMfaResponse unconditionally refuses every generic management route for front desk.
    // The product service checks MFA, exact member scope and explicit request provenance before invite().
    // Base confirmation also uses this live grant check; revocation invalidates the issuer's version.
-   return !!await env.DB.prepare("SELECT 1 FROM st_people p JOIN st_records r ON r.id='member-record-grant:'||p.id WHERE lower(p.email)=lower(?) AND p.active=1 AND p.erased_at IS NULL AND json_extract(r.data,'$.enabled')=1").bind(input.actor.email).first();
+   return !!await env.DB.prepare("SELECT 1 FROM st_people p JOIN st_records r ON r.id='staff-access:'||p.id WHERE lower(p.email)=lower(?) AND p.active=1 AND p.erased_at IS NULL AND json_extract(r.data,'$.enabled')=1 AND json_extract(r.data,'$.rights.member-record.enabled')=1").bind(input.actor.email).first();
  }, clientIp: request => request.headers.get('CF-Connecting-IP') ?? '' })
 }
 

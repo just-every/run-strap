@@ -1,3 +1,4 @@
+import { legacyStaffGrant } from './staff-rights';
 import { attendanceBookingVisible, requireAttendanceBooking } from './attendance-access';
 import { acknowledged, book, bookingPack } from './bookings';
 import { windowOpen } from './booking-policy';
@@ -70,7 +71,7 @@ export function attendancePlanSnapshot(state: State, who: Actor) {
 
 /** Staff starts the member-owned preference step without inventing availability. */
 export function launchAttendanceAvailability(tx: Transaction, input: Record<string,unknown>) {
-  const member=person(tx.state,input.personId);if(tx.who.role==='front-desk'){const g=tx.state.records.get('attendance-booking-grant:'+tx.who.personId)?.data;requireAttendanceBooking(tx,member.id,g?.locationIds ?? []);}else humanOwner(tx.who);
+  const member=person(tx.state,input.personId);if(tx.who.role==='front-desk'){const g=legacyStaffGrant(tx.state,tx.who,'attendance-plan');requireAttendanceBooking(tx,member.id,g?.locationIds ?? []);}else humanOwner(tx.who);
   return {id:member.id,personId:member.id,status:'member_action_required',path:'/app#attendance-plan'};
 }
 export function acceptAttendancePlanForMember(tx: Transaction, input: Record<string,unknown>) {

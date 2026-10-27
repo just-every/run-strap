@@ -77,7 +77,8 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     if (input.proposal) { const source = JSON.parse(String(input.proposal)); delete input.proposal; Object.assign(input,{...source,...input}) }
     input.minutes = Number(input.minutes)
     const choices = new Map((Array.isArray(input.choices) ? input.choices : []).map((c: any)=>[c.date,c]))
-    for (const key of Object.keys(input)) if (key.startsWith('alt_')) {if(input[key]) choices.set(key.slice(4),{date:key.slice(4),start:input[key]});delete input[key]}
+    for (const key of Object.keys(input)) if (key.startsWith('alt_')) {if(input[key]) choices.set(key.slice(4),input[key] === 'skip' ? {date:key.slice(4),skip:true,reason:input['skipReason_'+key.slice(4)]} : {date:key.slice(4),start:input[key]});delete input[key]}
+    for (const key of Object.keys(input)) if (key.startsWith('skipReason_')) delete input[key]
     input.choices = [...choices.values()]
   }
   if (name === 'appointment.move.prepare') return input
@@ -120,6 +121,11 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name.startsWith('preferences.save')) {
     input.revision=Number(input.revision ?? 0);
     for(const key of ['marketingEmail','marketingSms','marketingInApp','contactEmail','contactSms','contactInApp','attendanceSharing','feedback','bookingEmail'])if(input[key] !== undefined)input[key]=input[key] === 'true';
+  }
+  if (name === 'staff.access.grant') {
+    const selected = (prefix: string) => Object.keys(input).filter(key => key.startsWith(prefix) && input[key] === 'true').map(key => key.slice(prefix.length));
+    const scope = {memberIds:selected('member_'),locationIds:selected('location_'),doors:['all']};
+    return {personId:input.personId,role:input.role,enabled:input.enabled === 'true',rights:Object.fromEntries(selected('right_').map(right => [right,{enabled:true,scopes:[scope],...(right === 'member-record' ? {canCreate:input.canCreate === 'true'} : {})}]))};
   }
   if (name === 'member.record.grant') { input.enabled = input.enabled === 'true'; input.canCreate = input.canCreate === 'true'; input.memberIds = Object.keys(input).filter(k => k.startsWith('member_') && input[k] === 'true').map(k => k.slice(7));for(const key of Object.keys(input)) if(key.startsWith('member_')) delete input[key]; }
   if (name === 'member.note.add') input.alert = input.alert === 'true';

@@ -1,3 +1,4 @@
+import { requireStaffRight } from './staff-rights';
 import { coolingRefund } from './cooling-refunds';
 import { coolingAgreementPackIds } from './cooling-void';
 import { studioSettings } from './studio';
@@ -65,7 +66,7 @@ async function prepare(tx:Transaction,input:Record<string,unknown>,mode:string,a
   const saved={...preview,key:id()};tx.put('contractCancellation',saved);return saved;
 }
 function schedule(tx:Transaction,c:RecordData,input:Record<string,unknown>){
-  const terms=record(tx.state,c.termsId,'recurringTerms'),at=now(),channel=tx.who.role==='owner'?staffChannel(input):'member-self-service';
+  const terms=record(tx.state,c.termsId,'recurringTerms'),at=now(),channel=tx.who.role!=='member'?staffChannel(input):'member-self-service';
   const scheduled={...c,status:'scheduled',terminatedBy:tx.who.id,terminatedRole:tx.who.role,confirmedBy:tx.who.id,confirmedAt:at,confirmationRequestId:text(input.requestId,'requestId',100),confirmationBasis:fingerprint(input),channel,staffActionId:id()};
   supersedeScheduledFreezes(tx,scheduled);tx.put('contractCancellation',scheduled);
   tx.put('recurringTerms',{...terms,status:'cancellation_scheduled',cancellationId:c.id,cancellationEffectiveAt:c.effectiveAt,stoppedAt:terms.stoppedAt??at,stoppedBy:terms.stoppedBy??tx.who.id,stopReason:terms.stopReason??null,stopChannel:terms.stopChannel??channel,stop:terms.stop??{actorId:tx.who.id,personId:c.personId,at,channel,reason:null,effectiveAt:at,accessEndsAt:c.effectiveAt}});
@@ -108,7 +109,7 @@ export async function requestCancellation(tx:Transaction,input:Record<string,unk
   const request={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,effectiveAt,reason:text(input.reason,'reason',500),status:'requested',createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};tx.put('cancellationRequest',request);return request;
 }
 export async function prepareCancellation(tx:Transaction,input:Record<string,unknown>){
-  humanOwner(tx.who);const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
+  const sourcePack=record(tx.state,input.packId ?? tx.state.records.get(String(input.cancellationRequestId))?.data.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',sourcePack.personId,sourcePack.locationId ?? 'studio');const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
   insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
   insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
   const reason=text(merged.reason,'reason',500),c=await prepare(tx,{...input,packId:pack.id},'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
@@ -116,7 +117,7 @@ export async function prepareCancellation(tx:Transaction,input:Record<string,unk
   if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
-  humanOwner(tx.who);const c=record(tx.state,input.id,'contractCancellation');insist(input.key===c.key,'preview_changed',409);
+  const c=record(tx.state,input.id,'contractCancellation'),sourcePack=record(tx.state,c.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',c.personId,sourcePack.locationId ?? 'studio');insist(input.key===c.key,'preview_changed',409);
   if(c.confirmedAt){insist(c.terminatedBy===tx.who.id&&c.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return c;}
   insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
   const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}return scheduled;

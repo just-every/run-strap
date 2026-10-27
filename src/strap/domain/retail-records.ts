@@ -1,3 +1,4 @@
+import { hasStaffRight, legacyStaffGrant, staffIdentity, staffLocationIds, staffMemberIds, updateLegacyStaffAccess } from './staff-rights';
 import {
   humanOwner,
   person,
@@ -64,32 +65,34 @@ export const ordered = (s: State, kind: string) =>
       ) || a.id.localeCompare(b.id),
   );
 
-export const retailGrant = (s: State, who: Actor) => s.records.get("retail-staff:" + who.personId)?.data;
-export function grantRetailStaff(tx: Transaction, input: Record<string, unknown>) {
+export const retailGrant = (s: State, who: Actor) => legacyStaffGrant(s,who,'retail');
+export async function grantRetailStaff(tx: Transaction, input: Record<string, unknown>) {
   humanOwner(tx.who);
-  const staff = person(tx.state,input.personId);
-  insist(staff.role === "member" && staff.email, "member_staff_identity_required");
-  for (const key of ["enabled","sale","refund"]) insist(typeof input[key] === "boolean", "invalid_retail_grant");
-  insist(Array.isArray(input.memberIds) && input.memberIds.length <= 500 && Array.isArray(input.locationIds) && input.locationIds.length <= 50, "invalid_retail_scope");
-  const memberIds = [...new Set(input.memberIds.map(key => person(tx.state,key).id))];
-  const locationIds = [...new Set(input.locationIds.map(String))];
-  insist(locationIds.every(key => key === "studio" || tx.state.records.get(key)?.kind === "location"), "invalid_location");
-  const id = "retail-staff:" + staff.id, before = tx.state.records.get(id)?.data ?? null;
-  const saved = {id,personId:staff.id,enabled:input.enabled,sale:input.sale,refund:input.refund,memberIds,locationIds,updatedBy:tx.who.id,updatedAt:now()};
-  tx.put("retailStaffGrant",saved);
-  tx.put("retailStaffGrantEvent",{id:crypto.randomUUID(),before,after:saved,actorId:tx.who.id,createdAt:now()});
-  return saved;
+  const staff = await staffIdentity(tx,input.personId,'front-desk');
+  for (const key of ['enabled','sale','refund']) insist(typeof input[key] === 'boolean','invalid_retail_grant');
+  const memberIds = staffMemberIds(tx.state,input.memberIds), locationIds = staffLocationIds(tx.state,input.locationIds);
+  return updateLegacyStaffAccess(tx,'retail',{id:'retail-staff:'+staff.id,personId:staff.id,enabled:input.enabled,sale:input.sale,refund:input.refund,memberIds,locationIds});
 }
 
 export function requireRetail(tx: Transaction, action: string, input: Record<string,unknown>) {
-  if (tx.who.role === "front-desk") {
-    const grant = retailGrant(tx.state, tx.who), right = action === "sale" || action === "gift.issue" ? "sale" : "refund";
-    insist(["sale","gift.issue","gift.adjust","gift.refund"].includes(action) && grant?.enabled && grant[right], "retail_right_required", 403);
-    const card = input.giftCardId ? tx.state.records.get(String(input.giftCardId))?.data : null;
-    const cardAction = action === "gift.adjust" || action === "gift.refund";
-    insist(grant.memberIds.includes(cardAction ? card?.personId : input.personId) && grant.locationIds.includes(cardAction ? card?.locationId : input.locationId ?? "studio"), "retail_scope_required", 403);
-    if (action === "sale") insist(card && grant.memberIds.includes(card.personId), "retail_scope_required", 403);
-    if (action === "gift.issue") insist(grant.memberIds.includes(input.recipientId), "retail_scope_required", 403);
-    if (action === "sale") insist(input.tender === "gift", "gift_redemption_only", 403);
-  } else humanOwner(tx.who);
+  if (tx.who.role === 'owner' && tx.who.isOwner) { humanOwner(tx.who); return; }
+  insist(['manager','front-desk','finance'].includes(tx.who.role),'retail_right_required',403);
+  const giftAction = ['sale','gift.issue','gift.adjust','gift.refund'].includes(action);
+  insist(giftAction || action === 'return','retail_right_required',403);
+  const right = action === 'sale' || action === 'gift.issue' ? 'sale' : 'refund';
+  const card = input.giftCardId ? tx.state.records.get(String(input.giftCardId))?.data : null;
+  const cardAction = action === 'gift.adjust' || action === 'gift.refund';
+  const sale = action === 'return' ? tx.state.records.get(String(input.saleId)) : null;
+  const memberId = cardAction ? card?.personId : action === 'return' ? sale?.kind === 'retailSale' ? sale.data.personId : undefined : input.personId;
+  const locationId = cardAction ? card?.locationId : action === 'return' ? sale?.data.locationId : input.locationId ?? 'studio';
+  const common = hasStaffRight(tx.state,tx.who,right,memberId,locationId);
+  const legacy = giftAction && hasStaffRight(tx.state,tx.who,right,memberId,locationId,'retail');
+  insist(common || legacy,'retail_right_required',403);
+  insist(typeof memberId === 'string' && typeof locationId === 'string','retail_scope_required',403);
+  const door = common ? 'all' : 'retail';
+  if (action === 'sale' && !common) {
+    insist(card && hasStaffRight(tx.state,tx.who,right,card.personId,card.locationId ?? locationId,door),'retail_scope_required',403);
+    insist(input.tender === 'gift','gift_redemption_only',403);
+  }
+  if (action === 'gift.issue') insist(typeof input.recipientId === 'string' && hasStaffRight(tx.state,tx.who,right,input.recipientId,locationId,door),'retail_scope_required',403);
 }

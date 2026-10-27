@@ -37,7 +37,7 @@
       "browser": true,
       "hosted": false,
       "commands": [
-        "pnpm run test:strap:scheduling"
+        "STRAP_RESERVATIONS_PROOF_DIR=logs/proof/reservations pnpm run test:strap:scheduling"
       ]
     },
     {
@@ -45,7 +45,7 @@
       "browser": true,
       "hosted": false,
       "commands": [
-        "pnpm run test:strap:studio",
+        "STRAP_RIGHTS_PROOF_DIR=logs/proof/staff pnpm run test:strap:studio",
         "node --test tests/demo.test.mjs"
       ]
     },
