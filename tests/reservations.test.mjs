@@ -278,9 +278,12 @@ test('Private desk reservations atomically hold resources and sessions, preview 
   await h.db.prepare("UPDATE st_records SET data=json_set(data,'$.effectiveAt',?) WHERE id=?").bind(new Date(Date.parse(past)-60_000).toISOString(),rate.id).run();
   // Shift elapsed source clocks only; all business transitions above use HTTP.
   const untaught=saved.occurrences[2];await backdate(h,untaught.id,past);
+  await h.cmd('attendance.noshow',{id:untaught.bookingId},coach.cookie);
+  await refused(h,'attendance.noshow',{id:untaught.bookingId},coach.cookie,'attendance_already_recorded');
+  const noShow=(await h.state()).bookings.find(b=>b.id===untaught.bookingId);assert.equal(noShow.attendance,'no_show');
   const report=(await h.send('/api/strap/teaching-pay',undefined,h.owner)).value;
   assert.equal(report.rows.length,1);assert.equal(report.rows[0].classId,first.id);assert.equal(report.totalCents,4500);
-  state=await h.state();assert.deepEqual([state.packs.find(p=>p.id===funded.id).summary.remaining,state.packs.find(p=>p.id===funded.id).summary.reserved,state.packs.find(p=>p.id===funded.id).summary.consumed],[5,4,1]);
+  state=await h.state();assert.deepEqual([state.packs.find(p=>p.id===funded.id).summary.remaining,state.packs.find(p=>p.id===funded.id).summary.reserved,state.packs.find(p=>p.id===funded.id).summary.consumed],[5,3,2]);
   assert.equal(state.packs.find(p=>p.id===other.id).remaining,10);
 
   {
@@ -317,6 +320,22 @@ test('Private desk reservations atomically hold resources and sessions, preview 
   const clear=await h.cmd('series.cancel.prepare',{classId:collision.classes[0].id,scope:'this',reason:'Release competing slot'});
   await h.cmd('series.cancel.confirm',{id:clear.id,impact:clear.impact.key});
   await refused(h,'appointment.restore.prepare',restoreInput,mover.cookie,null,403);
+  // Current eligibility is checked both before review and after it.
+  const pendingRestore=await h.cmd('appointment.restore.prepare',restoreInput);
+  const waiver=await h.cmd('waiver.publish',{text:'Current private participation terms'});
+  await refused(h,'appointment.restore.prepare',restoreInput,h.owner,'waiver_acknowledgement_required');
+  await refused(h,'appointment.change.confirm',{id:pendingRestore.id,key:pendingRestore.key,channel:'phone'},h.owner,'waiver_acknowledgement_required');
+  await h.cmd('waiver.acknowledge',{id:waiver.id},mover.cookie);
+  const intakePending=await h.cmd('appointment.restore.prepare',restoreInput);
+  const intake=await h.cmd('intake.form.publish',{title:'Private flow intake',scope:'service',service:'Private Flow',required:true,questions:[{label:'Experience',required:true,sensitive:false}],requestId:'synthetic-strap-private-intake'});
+  await refused(h,'appointment.restore.prepare',restoreInput,h.owner,'intake_completion_required');
+  await refused(h,'appointment.change.confirm',{id:intakePending.id,key:intakePending.key,channel:'phone'},h.owner,'appointment_facts_changed');
+  await h.cmd('intake.submit',{formId:intake.id,answers:{q0:'Beginner'},requestId:'synthetic-strap-private-intake-answer'},mover.cookie);
+  const windowPending=await h.cmd('appointment.restore.prepare',restoreInput);
+  await h.cmd('bookingRule.save',{opensHoursBefore:1});
+  await refused(h,'appointment.restore.prepare',restoreInput,h.owner,'booking_window_not_open');
+  await refused(h,'appointment.change.confirm',{id:windowPending.id,key:windowPending.key,channel:'phone'},h.owner,'appointment_facts_changed');
+  await h.cmd('bookingRule.save',{});
   const restore=await h.cmd('appointment.restore.prepare',restoreInput),restoreBefore=await h.state();
   assert.equal(restore.occurrences.length,2);
   assert.equal(restoreBefore.packs.find(p=>p.id===movingPack.id).remaining,2,'restore preview does not reserve');
@@ -330,7 +349,7 @@ test('Private desk reservations atomically hold resources and sessions, preview 
 
   // An explicit skipped date retains its reason, creates no class or booking,
   // and leaves a membership's own allowance as the funding authority.
-  const subscriber=await h.person('Privateallowancemember');
+  const subscriber=await h.person('Privateallowancemember');await h.cmd('waiver.acknowledge',{id:waiver.id},subscriber.cookie);
   const membership=await pack(h,subscriber,{kind:'visits',credits:undefined,planName:'Two private visits',visits:2,period:'month',rollover:0,eligibleServices:['Private allowance']});
   const allowanceMonth=plus(dates.end,40).slice(0,8),skippedDate=allowanceMonth+'15';
   const allowanceSource={personId:subscriber.id,service:'Private allowance',instructorId:coach.id,room:'Allowance room',startDate:allowanceMonth+'08',endDate:allowanceMonth+'22',time:'11:00',minutes:50,channel:'desk'};
@@ -411,7 +430,7 @@ test('Scoped front desk books private sessions with checked alternatives, denies
 }));
 
 test('Private appointment changes reserve one configured Base email and keep unavailable, paused and member-suppressed outcomes honest',async()=>{
-  const sent=[];
+  const sent=[];let uncertain=false;
   await run(async h=>{
     const {coach,ana}=await studio(h);await pack(h,ana,{eligibleServices:['Private Mat']});
     const source={personId:ana.id,service:'Private Mat',instructorId:coach.id,room:'Mat private',startDate:'2094-10-19',endDate:'2094-12-21',time:'09:00',minutes:50,channel:'desk'};
@@ -441,8 +460,20 @@ test('Private appointment changes reserve one configured Base email and keep una
     deliveries=(await h.db.prepare('SELECT * FROM st_notice_deliveries WHERE person_id=? ORDER BY rowid').bind(ana.id).all()).results;
     assert.deepEqual(deliveries.slice(-3).map(d=>d.status),['not_configured','paused','opted_out']);
     assert.equal((await h.state(ana.cookie)).notices.length,6,'in-app notices continue for every unsent email outcome');
+    await h.cmd('mail.preference.save',{optedOut:false,requestId:'synthetic-strap-private-optin'},ana.cookie);
+    uncertain=true;
+    const unknownPreview=await h.cmd('appointment.reservation.prepare',{...source,startDate:'2095-01-25',endDate:'2095-01-25'});
+    await confirm(unknownPreview);assert.equal(sent.length,4);
+    const delivery=(await h.state()).noticeDeliveries.filter(d=>d.personId===ana.id&&d.status==='uncertain');assert.equal(delivery.length,1);
+    const originalDelivery=delivery[0];assert.equal(originalDelivery.code,'unexpected_response');
+    uncertain=false;await confirm(unknownPreview);
+    await (await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+    const reconciled=(await h.state()).noticeDeliveries.find(d=>d.id===originalDelivery.id);
+    assert.deepEqual(reconciled,originalDelivery);assert.equal(sent.length,4,'replay, reads and scheduled reconciliation never resend an uncertain private change');
+    assert.equal((await h.state(ana.cookie)).notices.length,7);
+
   },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-1',MAIL_FROM:'studio@studio.example'},outbound:async request=>{
-    assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-message-'+sent.length});
+    assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());if(uncertain)return new Response('Synthetic provider outcome unknown',{status:502});return Response.json({id:'synthetic-strap-message-'+sent.length});
   }});
 });
 

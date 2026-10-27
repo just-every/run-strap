@@ -7,7 +7,7 @@ import { memberCheckin } from './checkin';
 import { memberMail } from './notices';
 
 export const staffChannel = (input: Record<string,unknown>) => { const channel = text(input.channel ?? 'desk','channel',20); insist(['desk','phone','inbox'].includes(channel),'invalid_channel'); return channel; };
-export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade && (!a.parentActionId || !list(state,'staffAction').some(parent => parent.id === a.parentActionId))),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade && (!a.parentActionId || !['staffAction','bookingAction'].includes(state.records.get(a.parentActionId)?.kind ?? ''))),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
 export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Object.keys(input).sort().map(key => [key,input[key]]));
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
