@@ -62,7 +62,7 @@ export async function staffBookingRights(h) {
   const series=await h.cmd('series.publish',{id:seriesDraft.id}),occurrences=series.classes;
   assert.equal(occurrences.length,8);
   await h.cmd('booking.book',{classId:occurrences[1].id},ben.cookie);
-  const holiday=await h.cmd('closure.prepare',{scope:'class',classId:occurrences[3].id,reason:'Holiday closure'});await h.cmd('closure.confirm',{id:holiday.id,key:holiday.impact.key});
+  const holiday=await h.cmd('closure.prepare',{scope:'class',seriesScope:'this',classId:occurrences[3].id,reason:'Holiday closure'});await h.cmd('closure.confirm',{id:holiday.id,impact:holiday.impact.key});
   const standing=await h.cmd('reservation.prepare',{personId:ana.id,classId:occurrences[0].id,throughDate,channel:'phone'},desk.cookie);
   assert.deepEqual(standing.outcomes.map(o=>o.status),['booked','waitlisted','booked','skipped','booked','booked','booked','booked']);
   const standingSaved=await h.cmd('reservation.confirm',{id:standing.id,key:standing.key,channel:'phone',requestId:randomUUID()},desk.cookie);
@@ -81,6 +81,7 @@ export async function staffBookingRights(h) {
   await grant(manager,'manager',base,[ana.id],['studio']);await h.enroll(manager.cookie);
   await refuse('booking.desk',{personId:ben.id,classId:open.id},manager.cookie);
   assert.equal((await h.state(manager.cookie)).actor.role,'manager');
+  const managerClass=await s.publish('Manager appointment desk',60);const managerBooking=await h.cmd('booking.desk',{personId:ana.id,classId:managerClass.id,channel:'phone'},manager.cookie);assert.equal(managerBooking.status,'booked');
   await grant(finance,'finance',['exports'],[ana.id],['studio']);await h.enroll(finance.cookie);
   assert.equal((await h.send('/api/strap/reports/revenue.csv',undefined,finance.cookie)).status,200);
   await refuse('booking.desk',{personId:ana.id,classId:other.id},finance.cookie);
@@ -115,4 +116,30 @@ export async function staffContractRights(h) {
   const saved=await h.cmd('plan.cancellation.confirm',confirm,desk.cookie);assert.equal(saved.status,'scheduled');assert.equal(saved.terminatedRole,'front-desk');assert.equal(saved.channel,'phone');
   assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),saved);
   const history=(await h.state()).staffActions;assert.equal(history.filter(a=>a.command==='plan.cancellation.confirm'&&a.personId===ana.id).length,1);
+}
+
+export async function staffAppointmentRoles(h) {
+  const {coach,manager,ana,west,grant,refuse}=await rightsSeed(h);
+  const rights=['booking','member-record'];
+  await grant(manager,'manager',rights,[ana.id],['studio']);await h.enroll(manager.cookie);
+  await grant(coach,'instructor',rights,[ana.id],['studio']);await h.enroll(coach.cookie);
+  const date=new Date(Date.now()+20*86400000).toISOString().slice(0,10),last=new Date(Date.parse(date)+14*86400000).toISOString().slice(0,10);
+  const source={personId:ana.id,service:'Private coached session',instructorId:coach.id,locationId:'studio',room:'Coaching room',startDate:date,endDate:last,time:'10:00',minutes:50,channel:'phone'};
+  const prepared=await h.cmd('appointment.reservation.prepare',source,coach.cookie);
+  assert.equal(prepared.occurrences.length,3);
+  const saved=await h.cmd('appointment.reservation.confirm',{id:prepared.id,key:prepared.key,channel:'phone',requestId:randomUUID()},coach.cookie);
+  assert.equal(saved.occurrences.length,3);assert.equal((await h.state(coach.cookie)).appointments.length,1);
+  assert.equal((await h.send('/app/teaching-pay',undefined,coach.cookie)).status,200,'instructor keeps own pay screen');
+  assert.equal((await h.send('/api/strap/exit.json',undefined,coach.cookie)).status,403);
+  const other=await h.person('OtherPrivateCoach','instructor');
+  await refuse('appointment.reservation.prepare',{...source,instructorId:other.id,room:'Other room',time:'14:00'},coach.cookie);
+  await refuse('appointment.reservation.prepare',{...source,locationId:west.id,room:'West coaching room',time:'14:00'},manager.cookie);
+  const moved=await h.cmd('appointment.move.prepare',{reservationId:saved.id,classId:saved.occurrences[0].id,scope:'future',startDate:date,time:'12:00',channel:'phone'},manager.cookie);
+  await grant(manager,'manager',['member-record'],[ana.id],['studio']);
+  await refuse('appointment.change.confirm',{id:moved.id,key:moved.key,channel:'phone'},manager.cookie);
+  await grant(manager,'manager',rights,[ana.id],['studio']);
+  await h.cmd('appointment.change.confirm',{id:moved.id,key:moved.key,channel:'phone',requestId:randomUUID()},manager.cookie);
+  await grant(coach,'instructor',['member-record'],[ana.id],['studio']);
+  await refuse('appointment.reservation.confirm',{id:prepared.id,key:prepared.key,channel:'phone'},coach.cookie);
+  assert.equal((await h.state(coach.cookie)).appointments.length,0);
 }

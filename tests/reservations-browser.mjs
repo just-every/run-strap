@@ -135,7 +135,7 @@ export async function appointmentsBrowser(h,{coach,start}) {
       await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:85000,expiresAt:'2099-12-31T00:00:00Z',eligibleServices:['Private Pilates']})).id})
       await h.cmd('member.record.grant',{personId:desk.id,enabled:true,canCreate:false,memberIds:[member.id]})
       desk.cookie=await h.signIn(desk.email);await h.enroll(desk.cookie)
-      const owner=await pageFor(h.owner);await owner.goto(h.origin+'/app/people')
+      const owner=await pageFor(h.owner),ownerResponse=await owner.goto(h.origin+'/app/people');assert.equal(ownerResponse.status(),200,(await owner.locator('body').innerText()).slice(0,1000))
       const access=owner.locator('#appointment-booking-access')
       await access.getByLabel('Staff sign-in identity').selectOption(desk.id)
       await access.locator(`[name="member_${member.id}"]`).check();await access.locator('[name="loc_studio"]').check()
@@ -262,6 +262,24 @@ export async function appointmentsBrowser(h,{coach,start}) {
       const allowanceMine=await pageFor(allowanceMember.cookie);await allowanceMine.goto(h.origin+'/app')
       assert.ok((await h.state(allowanceMember.cookie)).notices[0].body.includes('Member away this week'))
       await shot(allowanceMine,'member-skipped-reason')
+      const pricedMember=await h.person('Priced'+width),pricedService='Private priced '+width,pricedDate=plus(date,210);
+      await owner.goto(h.origin+'/app/studio');const pricing=owner.locator('#appointment-prices');
+      await pricing.getByLabel('Private service',{exact:true}).fill(pricedService);await pricing.getByLabel('Price location',{exact:true}).selectOption('studio');await pricing.getByLabel('Price per visit',{exact:true}).fill('90.00');
+      await pricing.getByRole('button',{name:'Publish appointment price',exact:true}).click();
+      const price=(await h.state()).appointmentPrices.find(p=>p.service===pricedService);assert.equal(price.amountCents,9000);await shot(owner,'published-appointment-price',pricing);
+      const scope={enabled:true,scopes:[{memberIds:[member.id,pricedMember.id],locationIds:['studio'],doors:['all']}]};
+      await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{booking:scope,'member-record':scope,sale:scope}});
+      await page.goto(h.origin+'/app/people?person='+pricedMember.id);const pricedPanel=page.locator('#appointments');await pricedPanel.getByText('Book a private series',{exact:true}).click();
+      const pricedForm=pricedPanel.locator('form').filter({has:page.getByRole('button',{name:'Preview private series',exact:true})});
+      await pricedForm.getByLabel('Private service',{exact:true}).fill(pricedService);await pricedForm.getByLabel('Instructor',{exact:true}).selectOption(coach.id);await pricedForm.getByLabel('Room',{exact:true}).fill('Priced private studio');
+      await pricedForm.getByLabel('First appointment date').fill(pricedDate);await pricedForm.getByLabel('Last appointment date').fill(plus(pricedDate,7));await pricedForm.getByLabel('Local start time',{exact:true}).fill('15:00');
+      await pricedForm.getByLabel('Appointment funding',{exact:true}).selectOption('pay-per-visit');await pricedForm.getByLabel('Pay-per-visit price (when chosen)',{exact:true}).selectOption(price.id);
+      await pricedForm.getByRole('button',{name:'Preview private series',exact:true}).click();
+      const paymentPreview=(await h.state(desk.cookie)).appointmentPreviews.filter(p=>p.personId===pricedMember.id).at(-1),paymentReview=page.locator('[data-appointment-preview="'+paymentPreview.id+'"]');
+      assert.equal(paymentPreview.funding.amountCents,9000);await shot(page,'priced-series-preview',paymentReview);await paymentReview.getByRole('button',{name:'Confirm appointment reservation',exact:true}).click();
+      const priced=(await h.state(desk.cookie)).appointments.find(p=>p.personId===pricedMember.id);assert.equal(priced.occurrences.length,2);
+      assert.deepEqual((await h.state()).charges.filter(c=>c.appointmentReservationId===priced.id).map(c=>c.amountCents),[9000,9000]);
+      await shot(page,'priced-series-saved',page.locator('[data-appointment-reservation="'+priced.id+'"]'));
     } finally {for(const context of contexts) await context.close()}
   }} finally {await browser.close()}
 }

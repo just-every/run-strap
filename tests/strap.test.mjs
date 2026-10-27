@@ -427,3 +427,8 @@ test('Scoped staff booking rights enforce capacity, waivers, check-in, member an
 test('Separate membership-sale and contract-change rights preserve personal acceptance and refuse revoked termination previews',()=>run(async h=>{
   await (await import('./staff-rights-cases.mjs')).staffContractRights(h);
 }));
+
+
+test('Manager and assigned-instructor private grants preserve personal views and revoke reviewed changes and replays immediately',()=>run(async h=>{
+  await (await import('./staff-rights-cases.mjs')).staffAppointmentRoles(h);
+}));

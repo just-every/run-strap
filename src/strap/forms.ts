@@ -75,6 +75,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   }
   if (name === 'appointment.reservation.prepare' && !input.offerId) {
     if (input.proposal) { const source = JSON.parse(String(input.proposal)); delete input.proposal; Object.assign(input,{...source,...input}) }
+    if (input.fundingKind) {input.funding=input.fundingKind === 'pay-per-visit' ? {kind:'pay-per-visit',priceId:input.appointmentPriceId} : {kind:'entitlement'};delete input.fundingKind;delete input.appointmentPriceId;}
     input.minutes = Number(input.minutes)
     const choices = new Map((Array.isArray(input.choices) ? input.choices : []).map((c: any)=>[c.date,c]))
     for (const key of Object.keys(input)) if (key.startsWith('alt_')) {if(input[key]) choices.set(key.slice(4),input[key] === 'skip' ? {date:key.slice(4),skip:true,reason:input['skipReason_'+key.slice(4)]} : {date:key.slice(4),start:input[key]});delete input[key]}
@@ -245,6 +246,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'booking.desk' && String(input.amount ?? '').trim() === '') delete input.amount
   if (name === 'booking.desk' && !['sell-pack'].includes(String(input.pay))) { delete input.expiresOn; delete input.credits }
   if (name === 'booking.desk' && String(input.pay) !== 'pack') delete input.packId
+  if (name === 'appointment.price.save') { input.amountCents=cents(input.amount,'the appointment price');delete input.amount; }
   if ('amount' in input) { input.amountCents = cents(input.amount, name === 'payment.record' ? 'the amount received' : 'the pack price'); delete input.amount }
   if ('expiresOn' in input) {
     if (!date.test(String(input.expiresOn))) fail('Choose the last day the pack can be used')

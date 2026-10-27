@@ -67,6 +67,8 @@ export async function staffIdentity(tx: Transaction, personId: unknown, role: St
 function saveAccess(tx: Transaction, before: StaffAccess | null, value: Pick<StaffAccess,'personId'|'role'|'enabled'|'rights'> & Partial<StaffAccess>) {
   const saved = {...value,id:`staff-access:${value.personId}`,version:(before?.version ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id} as StaffAccess;
   tx.put('staffAccess',saved);
+  const staff=person(tx.state,saved.personId,false);
+  tx.sql.push(tx.statement("UPDATE oa_tokens SET revoked_at=? WHERE kind='invite' AND consumed_at IS NULL AND revoked_at IS NULL AND issuer_id IN (SELECT id FROM oa_operators WHERE lower(email)=lower(?))",Date.now(),staff.email));
   tx.put('staffAccessEvent',{id:id(),personId:saved.personId,before:before ?? null,after:saved,version:saved.version,at:saved.updatedAt,actorId:tx.who.id});
   return saved;
 }

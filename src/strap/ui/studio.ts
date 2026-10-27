@@ -1,3 +1,4 @@
+import { appointmentPricesPanel } from './appointment-prices';
 import { taxSettingsPanel } from './tax-settings'
 import { smsTestPanel } from './sms-test'
 import { studioProfileFields } from './studio-profile'
@@ -23,6 +24,7 @@ export function studioPage(s: any, notice: any = {}) {
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
     + locationsPanel(s)
+    + appointmentPricesPanel(s)
     + classRemindersPanel(s)
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)

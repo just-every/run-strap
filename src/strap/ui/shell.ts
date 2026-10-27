@@ -9,8 +9,8 @@ export interface Tab { href: string; label: string; glyph: string; count?: numbe
 
 export function tabs(s: any): Tab[] {
   const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
-  if (s.actor.role === 'front-desk' || s.actor.staffAccess && ['manager','instructor'].includes(s.actor.role)) return [...(s.saleGrant?.enabled ? [{href:'/app/retail',label:'Gift sales',glyph:'card'}] : []),{href:'/app/referrals',label:'Referrals',glyph:'users'},{href:'/app/intake',label:'Intake forms',glyph:'report'},{href:'/app/people',label:'Member records',glyph:'users'},security]
-  if (s.actor.role === 'manager') return [{ href: '/app/time-clock', label: 'Time clock', glyph: 'today' }, { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
+  if (s.actor.role === 'front-desk') return [...(s.saleGrant?.enabled ? [{href:'/app/retail',label:'Gift sales',glyph:'card'}] : []),{href:'/app/referrals',label:'Referrals',glyph:'users'},{href:'/app/intake',label:'Intake forms',glyph:'report'},{href:'/app/people',label:'Member records',glyph:'users'},security]
+  if (s.actor.role === 'manager') return [...(s.actor.staffAccess ? [{href:'/app/people',label:'Member records',glyph:'users'}] : []),{ href: '/app/time-clock', label: 'Time clock', glyph: 'today' }, { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
   if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length
   if (owner(s)) return [
@@ -38,6 +38,7 @@ export function tabs(s: any): Tab[] {
     security,
   ]
   if (s.actor.role === 'instructor') return [
+    ...(s.actor.staffAccess ? [{href:'/app/people',label:'Member records',glyph:'users'}] : []),
     { href: '/app', label: 'Today', glyph: 'today' },
     { href: '/app/classes', label: 'My classes', glyph: 'calendar' },
     { href: '/app/time-clock', label: 'Time clock', glyph: 'today' },

@@ -1,3 +1,5 @@
+import { restoreAppointmentPayment } from './appointment-funding';
+import { reverseAppointmentCancellationFee } from './appointment-policy';
 import { addDays, localDate } from '../zone';
 import { acknowledged } from './bookings';
 import { insistBookingOpen } from './booking-policy';
@@ -10,7 +12,7 @@ import type { Transaction } from './store';
 import { instant, insist, now, record, text, type RecordData } from './types';
 
 const unused = (entry: RecordData, booking: RecordData, restore: boolean) => entry.start > now() && !booking.attendance
-  && (restore ? entry.status === 'cancelled' && booking.status === 'cancelled' && booking.cancellation === 'early' && booking.refunded === true
+  && (restore ? entry.status === 'cancelled' && booking.status === 'cancelled' && ['early','late'].includes(booking.cancellation)
     : entry.status === 'published' && booking.status === 'booked');
 
 /** The stored occurrence order survives alternatives, moves and cancellations. */
@@ -55,27 +57,31 @@ export function validateAppointmentChanges(tx: Transaction, occurrences: RecordD
   }
   const remaining = new Map<string,number>();
   for (const occurrence of occurrences) {
-    const booking = record(tx.state,occurrence.bookingId,'booking'), pack = record(tx.state,booking.packId,'pack');
+    const booking = record(tx.state,occurrence.bookingId,'booking');
     insist(acknowledged(tx.state,booking.personId,occurrence),'waiver_acknowledgement_required',409);
     requireIntake(tx.state,booking.personId,[occurrence.service]);
+    if (booking.payment?.kind === 'pay-per-visit') {insistBookingOpen(tx,occurrence,false,null);continue;}
+    const pack=record(tx.state,booking.packId,'pack');
     const available = remaining.get(pack.id) ?? pack.remaining;
     insist(pack.personId === booking.personId && pack.expiresAt > occurrence.start && pack.expiresAt > now()
-      && packServiceEligible(pack,occurrence) && (!restore || !countsCredits(pack) || available > 0)
-      && packCanSeat(projected,{...pack,remaining:restore ? available : pack.remaining+1},occurrence,booking.id),'appointment_pack_not_eligible',409);
-    if (restore && countsCredits(pack)) remaining.set(pack.id,available-1);
+      && packServiceEligible(pack,occurrence) && (!restore || !booking.refunded || !countsCredits(pack) || available > 0)
+      && packCanSeat(projected,{...pack,remaining:restore && booking.refunded ? available : pack.remaining+1},occurrence,booking.id),'appointment_pack_not_eligible',409);
+    if (restore && booking.refunded && countsCredits(pack)) remaining.set(pack.id,available-1);
     insistBookingOpen(tx,occurrence,pack.priorityBooking === true,pack);
     tx.future(pack.expiresAt);
   }
 }
 
 /** Original booking, class and funding identities are reused by both changes. */
-export function applyAppointmentChanges(tx: Transaction, occurrences: RecordData[], restore: boolean, reason?: string) {
+export function applyAppointmentChanges(tx: Transaction, occurrences: RecordData[], restore: boolean, reason?: string, restorationId = '') {
   validateAppointmentChanges(tx,occurrences,restore);
   return occurrences.map(occurrence => {
     const entry = record(tx.state,occurrence.id,'class'), booking = record(tx.state,occurrence.bookingId,'booking');
     if (restore) {
       const {cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents,...active} = booking;
-      bookingCredit(tx,booking,{type:'reserve',credits:-1,bookingId:booking.id,classId:entry.id,reason});
+      restoreAppointmentPayment(tx,booking,entry,restorationId);
+      reverseAppointmentCancellationFee(tx,booking,restorationId,reason ?? 'Restored private appointment');
+      bookingCredit(tx,booking,{type:'reserve',credits:booking.refunded ? -1 : 0,bookingId:booking.id,classId:entry.id,reason});
       tx.put('booking',{...active,status:'booked',restoredAt:now(),restoredBy:tx.who.id,
         appointmentRestorations:[...(booking.appointmentRestorations ?? []),{at:now(),actorId:tx.who.id,reason,
           cancellation:{cancelledAt,cancelledBy,cancelledByRole,cancellation,refunded,feeCents}}]});

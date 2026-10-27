@@ -168,10 +168,57 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     const intakeForm=await h.cmd('intake.form.publish',{title:'Archived intake',scope:'signup',required:false,questions:[{label:'Private request',required:true,sensitive:true}],requestId:'synthetic-strap-archive-intake'})
     const intakeAnswer=await h.cmd('intake.submit',{formId:intakeForm.id,answers:{q0:'Restricted original intake source'},requestId:'synthetic-strap-archive-answer'},member.cookie)
     const tabletLaunch=await h.cmd('intake.tablet.launch',{personId:member.id,formId:intakeForm.id,requestId:'synthetic-strap-archive-tablet'})
+
+    // Private appointments and canonical booking scope travel as retained data;
+    // neither a source session nor its second factor grants restored access.
+    const privateMember=await h.person('ArchivePrivateMember'),privateCoach=await h.person('ArchivePrivateCoach','instructor')
+    const privatePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:privateMember.id,credits:3,amountCents:24000,expiresAt:'2099-12-31T00:00:00Z',eligibleServices:['Archived private Pilates']})).id})
+    const privateScope={memberIds:[member.id,privateMember.id],locationIds:['studio'],doors:['all']}
+    const privateGrantInput={personId:desk.id,role:'front-desk',enabled:true,rights:{booking:{enabled:true,scopes:[privateScope]},'member-record':{enabled:true,canCreate:true,scopes:[privateScope]}}}
+    const privateGrant=await h.cmd('staff.access.grant',privateGrantInput)
+    const sourceStaff=await h.signIn(desk.email);await h.enroll(sourceStaff)
+    const privateSource={personId:privateMember.id,service:'Archived private Pilates',instructorId:privateCoach.id,room:'Archived private room',startDate:'2097-10-01',endDate:'2097-10-15',time:'09:00',minutes:50,channel:'phone'}
+    const privateSave=await h.cmd('appointment.reservation.prepare',privateSource,sourceStaff)
+    const privateSaveInput={id:privateSave.id,key:privateSave.key,channel:'phone',requestId:'synthetic-strap-archive-private-save'}
+    let privateSeries=await h.cmd('appointment.reservation.confirm',privateSaveInput,sourceStaff)
+    const privateIdentities=privateSeries.occurrences.map(o=>[o.id,o.bookingId,o.packId])
+    const privateMove=await h.cmd('appointment.move.prepare',{reservationId:privateSeries.id,classId:privateSeries.occurrences[0].id,scope:'future',startDate:'2097-10-02',time:'09:00',channel:'phone'},sourceStaff)
+    const privateMoveInput={id:privateMove.id,key:privateMove.key,channel:'phone',requestId:'synthetic-strap-archive-private-move'}
+    const movedPrivateSeries=await h.cmd('appointment.change.confirm',privateMoveInput,sourceStaff)
+    const privateCancel=await h.cmd('appointment.cancel.prepare',{reservationId:privateSeries.id,classId:privateSeries.occurrences[1].id,scope:'future',reason:'Travel plans',channel:'phone'},sourceStaff)
+    await h.cmd('appointment.change.confirm',{id:privateCancel.id,key:privateCancel.key,channel:'phone',requestId:'synthetic-strap-archive-private-cancel'},sourceStaff)
+    const releasedPrivatePack=(await h.state()).packs.find(p=>p.id===privatePack.id)
+    assert.deepEqual([releasedPrivatePack.summary.remaining,releasedPrivatePack.summary.reserved,releasedPrivatePack.summary.consumed],[2,1,0])
+    const privateRestore=await h.cmd('appointment.restore.prepare',{reservationId:privateSeries.id,classId:privateSeries.occurrences[1].id,scope:'future',reason:'Member can attend after all',channel:'phone'})
+    const privateRestoreInput={id:privateRestore.id,key:privateRestore.key,channel:'phone',requestId:'synthetic-strap-archive-private-restore'}
+    privateSeries=await h.cmd('appointment.change.confirm',privateRestoreInput)
+    assert.deepEqual(privateSeries.occurrences.map(o=>[o.id,o.bookingId,o.packId]),privateIdentities)
+    const privateSourceState=await h.state(),privatePackBefore=privateSourceState.packs.find(p=>p.id===privatePack.id)
+    const privateEvents=privateSourceState.packCreditEvents.filter(e=>e.packId===privatePack.id)
+    assert.deepEqual([privatePackBefore.summary.remaining,privatePackBefore.summary.reserved,privatePackBefore.summary.consumed],[0,3,0])
+    assert.equal(privateEvents.filter(e=>e.type==='restore').reduce((sum,e)=>sum+e.credits,0),2,'both canceled sessions returned before the original allocations were reserved again')
+    const privateActions=privateSourceState.staffActions.filter(a=>a.personId===privateMember.id)
+    assert.ok(privateActions.some(a=>a.command==='appointment.reservation.confirm'&&a.actorRole==='front-desk'&&a.right==='booking'&&a.channel==='phone'))
+    assert.ok(privateActions.some(a=>a.command==='appointment.change.confirm'&&a.action==='appointment.restore'&&a.actorRole==='owner'))
+    const privateRecords=records=>records.map(r=>({id:r.id,kind:r.kind,data:JSON.parse(r.data)}))
+      .filter(r=>r.data.personId===privateMember.id||r.data.appointmentReservationId===privateSeries.id||r.id===privateGrant.id||r.kind==='staffAccessEvent'&&r.data.personId===desk.id)
+      .sort((a,b)=>a.id.localeCompare(b.id))
+    const privateOriginals=privateRecords((await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records)
+    const privateMailCount=(await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries WHERE person_id=?').bind(privateMember.id).first()).n
     const originalOwner=h.owner
     await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,owner:originalOwner});assert.equal((await h.send('/api/strap/state',undefined,originalOwner)).status,401,'native sessions never restore');const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
+    assert.equal((await h.send('/api/strap/state',undefined,sourceStaff)).status,401,'the source booking staff session does not travel')
+    const privateRestoredState=await h.state(owner)
+    assert.deepEqual(privateRecords((await h.send('/api/strap/exit.json',undefined,owner)).value.tables.st_records),privateOriginals,'native restore keeps private classes, bookings, previews, original funding movements, notices, canonical grants and actions')
+    assert.deepEqual(privateRestoredState.staffAccessGrants.find(g=>g.id===privateGrant.id),privateGrant)
+    assert.deepEqual(privateRestoredState.appointments.find(r=>r.id===privateSeries.id).occurrences.map(o=>[o.id,o.bookingId,o.packId]),privateIdentities)
+    assert.deepEqual(privateRestoredState.packs.find(p=>p.id===privatePack.id),privatePackBefore)
+    assert.deepEqual(privateRestoredState.packCreditEvents.filter(e=>e.packId===privatePack.id),privateEvents)
+    const privateVersion=privateRestoredState.version
+    assert.deepEqual(await h.cmd('appointment.change.confirm',privateRestoreInput,owner),privateSeries,'fresh owner MFA can replay the exact source restoration without a second allocation')
+    assert.equal((await h.state(owner)).version,privateVersion,'committed restoration replay adds no change, audit or notice')
     const original=await h.send('/api/strap/preferences.json?personId='+member.id,undefined,owner)
     assert.equal(original.status,200);assert.deepEqual(original.value.preference,preference);assert.equal(original.value.history[0].source,'signed-in-member')
     const history=(await h.send('/api/strap/member-history?personId='+member.id,undefined,owner)).value
@@ -187,7 +234,27 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     assert.equal(state.memberMessages.length,0,'owner state does not expose a member-only conversation projection')
     const staff=await h.signIn(desk.email)
     assert.equal((await h.send('/api/strap/state',undefined,staff)).status,403,'restored front desk must enroll a fresh second factor before opening records')
+    const heldPrivateReplay=await h.send('/api/strap/command',{name:'appointment.change.confirm',input:privateMoveInput},staff)
+    assert.equal(heldPrivateReplay.status,403,'the archived booking grant cannot replace fresh staff MFA even for replay')
+    assert.equal((await h.state(owner)).version,state.version,'the MFA refusal does not change studio records')
     assert.equal((await h.send('/api/strap/command',{name:'member.record.create',input:{name:'Refused',email:'refused@studio.example',requestId:'synthetic-strap-restored'}},staff)).status,403)
     assert.equal((await h.send('/auth/invite',{email:'refused@studio.example'},staff)).status,403,'generic native invitation remains closed after restore')
+    await h.enroll(staff)
+    assert.equal((await h.state(staff)).appointments.find(r=>r.id===privateSeries.id).id,privateSeries.id,'fresh enrollment opens only the retained booking scope')
+    const beforePrivateReplay=await h.state(owner)
+    assert.deepEqual(await h.cmd('appointment.change.confirm',privateMoveInput,staff),movedPrivateSeries,'the original staff identity reuses its retained reviewed move result')
+    assert.equal((await h.state(owner)).version,beforePrivateReplay.version)
+    assert.deepEqual((await h.state(owner)).staffActions.filter(a=>a.personId===privateMember.id),privateActions)
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries WHERE person_id=?').bind(privateMember.id).first()).n,privateMailCount,'native restore and both replays reserve no duplicate outbound notice')
+    const pendingPrivateMove=await h.cmd('appointment.move.prepare',{reservationId:privateSeries.id,classId:privateSeries.occurrences[0].id,scope:'this',startDate:'2097-10-03',time:'09:00',channel:'phone'},staff)
+    await h.cmd('staff.access.grant',{...privateGrantInput,rights:{...privateGrantInput.rights,booking:{...privateGrantInput.rights.booking,enabled:false}}},owner)
+    const revokedPrivateState=await h.state(owner)
+    for(const input of [{id:pendingPrivateMove.id,key:pendingPrivateMove.key,channel:'phone'},privateMoveInput,privateSaveInput]) {
+      const name=input===privateSaveInput?'appointment.reservation.confirm':'appointment.change.confirm'
+      assert.equal((await h.send('/api/strap/command',{name,input},staff)).status,403,'revoked booking authority refuses the next approval and old committed requests')
+      assert.equal((await h.state(owner)).version,revokedPrivateState.version)
+    }
+    assert.deepEqual((await h.state(staff)).appointments,[],'member-record scope alone cannot expose private bookings after booking revocation')
+    assert.deepEqual((await h.state(owner)).packCreditEvents.filter(e=>e.packId===privatePack.id),privateEvents)
   } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
 })

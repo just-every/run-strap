@@ -1,3 +1,6 @@
+import { quoteAppointmentPayment, allocateAppointmentPayment, cancelAppointmentPayment, type AppointmentPaymentQuote } from './appointment-funding';
+import { requireStaffRight, hasStaffRight } from './staff-rights';
+import { appointmentPolicy, authorizeAppointmentPolicy, validateAppointmentPolicy, assessAppointmentFee } from './appointment-policy';
 import { legacyStaffGrants } from './staff-rights';
 import { addDays } from '../zone';
 import { appointmentAvailability, appointmentSeriesFields } from './appointment-offers';
@@ -19,7 +22,7 @@ import { DomainError, humanOwner, id, instant, insist, list, now, person, record
 // in a cloned transaction; the real save rechecks under the shared revision.
 async function facts(tx: Transaction) {
   const value = JSON.stringify([await seriesBasis(tx.state),list(tx.state,'waiver'),list(tx.state,'acknowledgement'),
-    list(tx.state,'intakeSeries'),list(tx.state,'intakeResponse').map(r=>[r.id,r.personId,r.formId,r.complete]),mailBasis(tx.notices)]);
+    list(tx.state,'intakeSeries'),list(tx.state,'intakeResponse').map(r=>[r.id,r.personId,r.formId,r.complete]),mailBasis(tx.notices),list(tx.state,'appointmentPrice')]);
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),byte=>byte.toString(16).padStart(2,'0')).join('');
 }
 function ownerMember(tx: Transaction, personId: unknown) {
@@ -33,13 +36,19 @@ const fundingLabel = (pack: RecordData) => countsCredits(pack) ? `${pack.credits
 function requireOccurrences(tx: Transaction, personId: string, occurrences: RecordData[]) {
   for (const o of occurrences) requireAppointmentBooking(tx,personId,[o.locationId ?? 'studio'],o.instructorId);
 }
-function allocate(tx: Transaction, occurrences: RecordData[], personId: string, reservationId: string, channel: string): RecordData[] {
+function allocate(tx: Transaction, occurrences: RecordData[], personId: string, reservationId: string, channel: string, payment: AppointmentPaymentQuote|null = null): RecordData[] {
   checkAllocations(tx,occurrences.filter(o=>o.status !== 'skipped'));
   return occurrences.map((entry,index): RecordData => {
     if (entry.status === 'skipped') return {...entry,appointmentIndex:index};
     insist(acknowledged(tx.state,personId,entry),'waiver_acknowledgement_required',409);
     requireIntake(tx.state,personId,[entry.service]);
     const saved = {...entry,privatePersonId:personId,appointmentReservationId:reservationId,appointmentIndex:index,status:'published'};
+    if (payment) {
+      insistBookingOpen(tx,saved,false,null);tx.put('class',saved);
+      const booking={id:id(),classId:saved.id,personId,status:'booked',packId:null,payment,capacityPool:'desk',bookingChannel:channel,madeBy:tx.who.id,madeByRole:tx.who.role,right:'booking',appointmentReservationId:reservationId,cancelTerms:cancelTerms(tx.state,saved,null),createdAt:now()};
+      tx.put('booking',booking);allocateAppointmentPayment(tx,booking,saved,payment);
+      return {...saved,bookingId:booking.id,packId:null,payment,packLabel:`Pay per visit: $${(payment.amountCents/100).toFixed(2)}`,status:'booked'};
+    }
     const pack = bookingPack(tx.state,personId,saved);
     insist(pack,planRefused(tx.state,personId,saved)?.code ?? 'private_session_pack_required',409);
     insistBookingOpen(tx,saved,pack.priorityBooking === true,pack);
@@ -78,9 +87,10 @@ export async function prepareAppointmentReservation(tx: Transaction,input: Recor
     }
     return {...entry,available:availability.available,blockers:availability.blockers.map(b=>tx.who.role === 'owner' ? b : {id:b.id,kind:b.kind,resource:b.resource,start:b.start,end:b.end}),alternatives,status:availability.available?'available':'conflict'};
   });
+  const payment=quoteAppointmentPayment(tx,input,member.id,occurrences);
   const available = checked.every(o=>o.available), simulation = new Transaction(tx.db,structuredClone(tx.state),tx.who);
-  const funded = available ? allocate(simulation,occurrences,member.id,'preview',channel).map(({bookingId,...entry})=>entry) : checked;
-  const preview = {id:id(),personId:member.id,offerId,source:input.offerId ? null : Object.fromEntries(['personId','service','instructorId','locationId','room','equipment','startDate','endDate','time','minutes','intervalWeeks','choices','bufferBeforeMinutes','bufferAfterMinutes'].filter(k=>input[k] !== undefined).map(k=>[k,input[k]])),operation:'save',status:'preview',available,occurrences:funded,
+  const funded = available ? allocate(simulation,occurrences,member.id,'preview',channel,payment).map(({bookingId,...entry})=>entry) : checked;
+  const preview = {id:id(),personId:member.id,offerId,source:input.offerId ? null : Object.fromEntries(['personId','service','instructorId','locationId','room','equipment','startDate','endDate','time','minutes','intervalWeeks','choices','bufferBeforeMinutes','bufferAfterMinutes','funding'].filter(k=>input[k] !== undefined).map(k=>[k,input[k]])),operation:'save',status:'preview',available,funding:payment,occurrences:funded,
     key:id(),channel,basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
   tx.put('appointmentPreview',preview); return preview;
 }
@@ -109,8 +119,9 @@ export async function confirmAppointmentReservation(tx: Transaction,input: Recor
   insist(preview.available,'appointment_conflicts_unresolved',409);
   requireOccurrences(tx,preview.personId,preview.occurrences);
   if (preview.offerId) insist(!list(tx.state,'appointmentReservation').some(r => r.offerId === preview.offerId),'appointment_offer_already_saved',409);
-  const reservationId = id(), occurrences = allocate(tx,preview.occurrences,preview.personId,reservationId,preview.channel);
-  const saved = {id:reservationId,personId:preview.personId,offerId:preview.offerId,status:'active',occurrences,createdAt:now(),createdBy:tx.who.id};
+  const payment=quoteAppointmentPayment(tx,{funding:preview.funding ?? undefined},preview.personId,preview.occurrences);
+  const reservationId = id(), occurrences = allocate(tx,preview.occurrences,preview.personId,reservationId,preview.channel,payment);
+  const saved = {id:reservationId,personId:preview.personId,offerId:preview.offerId,status:'active',occurrences,createdAt:now(),createdBy:tx.who.id,funding:payment};
   tx.put('appointmentReservation',saved);
   notify(tx,{...preview,reservationId},occurrences.filter(o=>o.bookingId).map(o=>o.bookingId),null,saved);
   tx.put('appointmentPreview',{...preview,status:'confirmed',reservationId}); return saved;
@@ -126,13 +137,13 @@ export async function prepareAppointmentMove(tx: Transaction,input: Record<strin
   insist(occurrences.some(o=>o.start !== o.before.start),'appointment_unchanged',409);
   validateAppointmentChanges(tx,occurrences,false);
   const preview = {id:id(),personId:reservation.personId,reservationId:reservation.id,operation:'move',scope,status:'preview',key:id(),channel:staffChannel(input),
-    occurrences,basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
+    occurrences,policy:appointmentPolicy(tx,chosen,input,'move'),basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
   tx.put('appointmentPreview',preview); return preview;
 }
 export async function prepareAppointmentCancellation(tx: Transaction,input: Record<string,unknown>) {
   const {reservation,scope,occurrences} = selected(tx,input);
   const preview = {id:id(),personId:reservation.personId,reservationId:reservation.id,operation:'cancel',scope,status:'preview',key:id(),channel:staffChannel(input),reason:text(input.reason,'reason',500),
-    occurrences,basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
+    occurrences,policy:appointmentPolicy(tx,occurrences,input,'cancel'),basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
   tx.put('appointmentPreview',preview); return preview;
 }
 export async function prepareAppointmentRestore(tx: Transaction,input: Record<string,unknown>) {
@@ -150,18 +161,22 @@ export async function confirmAppointmentChange(tx: Transaction,input: Record<str
   requireOccurrences(tx,reservation.personId,reservation.occurrences);
   if (preview.status === 'confirmed') return reservation;
   insist(preview.status === 'preview' && preview.basis === await facts(tx),'appointment_facts_changed',409);
+  validateAppointmentPolicy(tx,preview);
   const changed = new Map<string,RecordData>();
   if (preview.operation !== 'cancel') {
-    for (const occurrence of applyAppointmentChanges(tx,preview.occurrences,preview.operation === 'restore',preview.reason)) changed.set(occurrence.id,occurrence);
+    for (const occurrence of applyAppointmentChanges(tx,preview.occurrences,preview.operation === 'restore',preview.reason,preview.id)) changed.set(occurrence.id,occurrence);
   } else for (const occurrence of preview.occurrences) {
     const entry = record(tx.state,occurrence.id,'class'), booking = record(tx.state,occurrence.bookingId,'booking');
     insist(entry.start > now() && entry.status === 'published' && booking.status === 'booked' && !booking.attendance,'appointment_change_closed',409);
     tx.future(entry.start);
-    bookingCredit(tx,booking,{type:'restore',credits:1,bookingId:booking.id,classId:entry.id,reason:preview.reason});
-    tx.put('booking',{...booking,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,refunded:true,feeCents:0,cancellation:'early'});
+    const policy=preview.policy.find((p: RecordData)=>p.bookingId===booking.id);
+    bookingCredit(tx,booking,{type:policy.creditReturned?'restore':'consume',credits:policy.creditReturned?1:0,bookingId:booking.id,classId:entry.id,reason:preview.reason});
+    tx.put('booking',{...booking,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role,refunded:policy.creditReturned,feeCents:policy.feeCents,cancellation:policy.mode,cancellationId:preview.id,waiver:policy.waiver});
+    if (policy.mode === 'early') cancelAppointmentPayment(tx,booking,entry,preview.id);
     tx.put('class',{...entry,status:'cancelled',cancelledAt:now(),cancelledBy:tx.who.id});
     changed.set(entry.id,{...occurrence,status:'cancelled'});
   }
+  for (const policy of preview.policy ?? []) assessAppointmentFee(tx,preview,policy);
   const saved = {...reservation,occurrences:reservation.occurrences.map((o: RecordData)=>changed.get(o.id) ?? o),updatedAt:now()};
   tx.put('appointmentReservation',saved);
   notify(tx,preview,preview.occurrences.map((o: RecordData)=>o.bookingId),reservation,saved);
@@ -183,7 +198,8 @@ export function appointmentSnapshot(state: State,who: import('./types').Actor) {
     })}));
   const appointmentPreviews = staff ? visible('appointmentPreview').map(r=>who.role === 'owner' ? r : {...r,
     occurrences:r.occurrences.map(({availabilityAtCreation,...o}: RecordData)=>({...o,blockers:(o.blockers ?? []).map(({reason,...b}: RecordData)=>b)}))}) : [];
-  return {appointmentBookingGrants:who.role === 'owner' ? legacyStaffGrants(state,'appointmentBookingGrant') : [],appointments,appointmentPreviews,
+  const appointmentPrices=list(state,'appointmentPrice').filter(p=>p.enabled && (who.role==='owner' || hasStaffRight(state,who,'sale',undefined,p.locationId)));
+  return {appointmentPrices,appointmentBookingGrants:who.role === 'owner' ? legacyStaffGrants(state,'appointmentBookingGrant') : [],appointments,appointmentPreviews,
     appointmentSeriesOffers:who.role === 'owner' ? [...list(state,'appointmentSeriesOffer'),...list(state,'appointmentOffer').map(o=>({...o,occurrences:[o]}))] : []};
 }
 
@@ -192,6 +208,6 @@ export function authorizeAppointmentCommand(tx: Transaction,input: Record<string
   const preview = input.id ? tx.state.records.get(String(input.id)) : null;
   const reservation = input.reservationId ? tx.state.records.get(String(input.reservationId)) : null;
   const target = preview?.kind === 'appointmentPreview' ? preview.data : reservation?.kind === 'appointmentReservation' ? reservation.data : null;
-  if (target) requireOccurrences(tx,target.personId,target.occurrences);
+  if (target) { requireOccurrences(tx,target.personId,target.occurrences); authorizeAppointmentPolicy(tx,target); for (const o of target.occurrences) if (target.funding?.kind==='pay-per-visit' || o.payment?.kind==='pay-per-visit') requireStaffRight(tx.state,tx.who,'sale',target.personId,o.locationId ?? 'studio'); }
   else requireAppointmentBooking(tx,String(input.personId ?? ''),[String(input.locationId ?? 'studio')],String(input.instructorId ?? ''));
 }

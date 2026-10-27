@@ -461,3 +461,11 @@ test('Concurrent private saves share the resource and credit fence; stale resour
   await refused(h,'appointment.reservation.prepare',{...safe,startDate:'2097-04-02',endDate:'2097-06-11'},h.owner,'private_session_pack_required',409);
   state=await h.state();assert.equal(state.bookings.length,10);assert.equal(state.packs.find(p=>p.personId===loser.id).remaining,10,'failed eleven-session simulation commits no partial holds');
 }));
+
+test('Private changes disclose late policy, carry allocations, require separate waivers and restore original fees once',()=>run(async h=>{
+  await (await import('./appointment-policy-cases.mjs')).privatePolicy(h);
+}));
+
+test('Published private visit prices require sale authority, reject stale quotes and preserve original obligations through cancellation and restore',()=>run(async h=>{
+  await (await import('./appointment-policy-cases.mjs')).privatePayment(h);
+}));

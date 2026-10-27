@@ -20,7 +20,7 @@ const text = (input: Record<string, unknown>, key: string, max: number, optional
 }
 
 /** Owners (the human, never an agent key) and finance staff must have a second factor for the privileged doors. */
-export const covered = (who: Actor) => (who.role === 'owner' && who.isOwner) || who.role === 'finance' || (who.role === 'manager' || who.role === 'front-desk')
+export const covered = (who: Actor) => (who.role === 'owner' && who.isOwner) || who.staffAccess === true || who.role === 'finance' || (who.role === 'manager' || who.role === 'front-desk')
 
 type Factor = { id: string; kind: 'totp' | 'passkey'; label: string; status: string; sealed_secret: string | null; last_step: number; credential_id: string | null; public_key: string | null; sign_count: number; created_at: number }
 const binding = (factor: string, operator: string) => `${factor}:${operator}`

@@ -70,7 +70,7 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
 }
 export const saveOwnPreferences=(tx: Transaction,input: Record<string,unknown>) => save(tx,input,false);
 export const saveStaffPreferences=(tx: Transaction,input: Record<string,unknown>) => save(tx,input,true);
-export const visiblePreferences=(p: RecordData,who: Actor) => who.role === 'front-desk' ? {...p,accessibility:undefined,feedback:undefined} : p;
+export const visiblePreferences=(p: RecordData,who: Actor) => who.role === 'owner' || who.role === 'member' && who.personId === p.personId ? p : {...p,accessibility:undefined,feedback:undefined};
 export function preferenceExport(state: State,who: Actor,personId: string) {
   if(who.role === 'member')insist(who.personId === personId,'own_preference_required',403);else requireMemberRecord(state,who,personId);
   person(state,personId,false);

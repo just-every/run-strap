@@ -32,12 +32,12 @@ export async function staffRightsBrowser(h,s) {
         const book=page.locator('form[action*="name=booking.desk"]');await book.locator('[name="classId"]').selectOption(entry.id);
         await book.getByRole('button',{name:'Book at desk',exact:true}).click();
         const booked=(await h.state()).bookings.find(b=>b.classId===entry.id&&b.personId===s.ana.id);assert.ok(booked);
-        let row=page.locator('[data-staff-booking="'+booked.id+'"]');
+        let row=page.locator('[data-staff-booking="'+booked.id+'"]');await row.locator('summary').click();
         const cancel=row.locator('form[action*="name=booking.cancel"]');await cancel.locator('[name="cancelReason"]').selectOption('Sick');await cancel.getByRole('button',{name:'Cancel booking',exact:true}).click();
         assert.equal((await h.state()).bookings.find(b=>b.id===booked.id).status,'cancelled');
-        row=page.locator('[data-staff-booking="'+booked.id+'"]');const restore=row.locator('form[action*="name=booking.restore"]');await restore.locator('[name="reason"]').fill('Member requested the seat again');await restore.getByRole('button',{name:'Restore booking',exact:true}).click();
+        row=page.locator('[data-staff-booking="'+booked.id+'"]');await row.locator('summary').click();const restore=row.locator('form[action*="name=booking.restore"]');await restore.locator('[name="reason"]').fill('Member requested the seat again');await restore.getByRole('button',{name:'Restore booking',exact:true}).click();
         assert.equal((await h.state()).bookings.find(b=>b.id===booked.id).status,'booked');
-        await page.locator('#staff-bookings').scrollIntoViewIfNeeded();await capture('desk-bookings');
+        await page.locator('[data-staff-booking="'+booked.id+'"] summary').click();await page.locator('#staff-bookings').scrollIntoViewIfNeeded();await capture('desk-bookings');
         for(const path of ['/api/strap/exit.json','/api/strap/reports/revenue.csv'])assert.equal((await context.request.get(h.origin+path)).status(),403);
         await login(s.manager.cookie);await page.goto(h.origin+'/app/people?person='+s.ana.id);await capture('manager-members');
       } finally {await context.close();}
