@@ -194,7 +194,9 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     privateSeries=await h.cmd('appointment.change.confirm',privateRestoreInput)
     assert.deepEqual(privateSeries.occurrences.map(o=>[o.id,o.bookingId,o.packId]),privateIdentities)
     const privateSourceState=await h.state(),privatePackBefore=privateSourceState.packs.find(p=>p.id===privatePack.id)
-    const privateEvents=privateSourceState.packCreditEvents.filter(e=>e.packId===privatePack.id)
+    const privateLedger=state=>state.packCreditEvents.filter(e=>e.packId===privatePack.id).sort((a,b)=>a.revision-b.revision)
+    const privateEvents=privateLedger(privateSourceState)
+    assert.deepEqual(privateEvents.map(e=>e.revision),privateEvents.map((_,i)=>i+1),'the original funding chronology has one consecutive revision per movement')
     assert.deepEqual([privatePackBefore.summary.remaining,privatePackBefore.summary.reserved,privatePackBefore.summary.consumed],[0,3,0])
     assert.equal(privateEvents.filter(e=>e.type==='restore').reduce((sum,e)=>sum+e.credits,0),2,'both canceled sessions returned before the original allocations were reserved again')
     const privateActions=privateSourceState.staffActions.filter(a=>a.personId===privateMember.id)
@@ -215,7 +217,7 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
     assert.deepEqual(privateRestoredState.staffAccessGrants.find(g=>g.id===privateGrant.id),privateGrant)
     assert.deepEqual(privateRestoredState.appointments.find(r=>r.id===privateSeries.id).occurrences.map(o=>[o.id,o.bookingId,o.packId]),privateIdentities)
     assert.deepEqual(privateRestoredState.packs.find(p=>p.id===privatePack.id),privatePackBefore)
-    assert.deepEqual(privateRestoredState.packCreditEvents.filter(e=>e.packId===privatePack.id),privateEvents)
+    assert.deepEqual(privateLedger(privateRestoredState),privateEvents)
     const privateVersion=privateRestoredState.version
     assert.deepEqual(await h.cmd('appointment.change.confirm',privateRestoreInput,owner),privateSeries,'fresh owner MFA can replay the exact source restoration without a second allocation')
     assert.equal((await h.state(owner)).version,privateVersion,'committed restoration replay adds no change, audit or notice')
@@ -255,6 +257,6 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
       assert.equal((await h.state(owner)).version,revokedPrivateState.version)
     }
     assert.deepEqual((await h.state(staff)).appointments,[],'member-record scope alone cannot expose private bookings after booking revocation')
-    assert.deepEqual((await h.state(owner)).packCreditEvents.filter(e=>e.packId===privatePack.id),privateEvents)
+    assert.deepEqual(privateLedger(await h.state(owner)),privateEvents)
   } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
 })

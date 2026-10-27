@@ -3318,7 +3318,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "b8993ba66bbfe0a75227256e5f6ad4f710b414bc0827ab9540f2588d7e85dd63",
+      "sha256": "fd3e95cb8859ad6fe975894b19407f56f13bb62f49dcc86631a47363dfe49a8a",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -4442,7 +4442,7 @@
       "executable": false
     },
     "tests/staff-actions-archive.test.mjs": {
-      "sha256": "cd4078f72ad595eb5b7a9e2d804e45aeb3bd9fdd6b1f29301df626bebd159de1",
+      "sha256": "9f4ea0bcc3b61c69483eb9cd359f1d413da706d112ff0a5a9015251ad7bb6cc2",
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
