@@ -142,4 +142,6 @@ export async function staffAppointmentRoles(h) {
   await grant(coach,'instructor',['member-record'],[ana.id],['studio']);
   await refuse('appointment.reservation.confirm',{id:prepared.id,key:prepared.key,channel:'phone'},coach.cookie);
   assert.equal((await h.state(coach.cookie)).appointments.length,0);
+  await h.cmd('staff.access.grant',{personId:coach.id,role:'instructor',enabled:false,rights:{}});
+  await refuse('attendance.checkin',{id:saved.occurrences[0].bookingId},coach.cookie);
 }

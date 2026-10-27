@@ -343,7 +343,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   }
   if (!spec) throw new DomainError('unknown_command',404);
   const delegatedRight = delegatedCommandRight(name), commonAccess = staffAccess(tx.state,tx.who);
-  const delegatedStaff = !!delegatedRight && commonAccess?.enabled && who.role !== 'member';
+  const delegatedStaff = !!delegatedRight && !!commonAccess && who.role !== 'member';
   if (delegatedStaff) authorizeStaffCommand(tx,name,input,delegatedRight!);
   if (who.role === 'front-desk' && !delegatedStaff) { insist(spec.roles.includes('front-desk'),'member_record_right_required',403);if (!name.startsWith('retail.') && !name.startsWith('attendance.')) requireMemberRecord(tx.state,tx.who,input.personId); }
   insist(who.role !== 'finance' && (who.role !== 'manager' || name === 'clock.approve' || delegatedStaff || (!!commonAccess?.enabled && (name.startsWith('appointment.') || spec.roles.includes('front-desk')))),'owner_required',403);

@@ -21,6 +21,7 @@ export async function privatePolicy(h) {
   let second=await confirm(h,await h.cmd('appointment.reservation.prepare',input(9,'Policy second'),desk.cookie),desk.cookie);
   const change={reservationId:second.id,classId:second.occurrences[0].id,scope:'this',reason:'Sick',channel:'phone'};
   await refuse('appointment.cancel.prepare',{...change,mode:'early'},desk.cookie);
+  await refuse('appointment.cancel.prepare',{...change,suppressNotice:true,suppressionReason:'Unsafe late suppression'},desk.cookie);
   const late=await h.cmd('appointment.cancel.prepare',change,desk.cookie);assert.equal(late.policy[0].creditReturned,false);assert.equal(late.policy[0].feeCents,1500);
   second=await confirm(h,late,desk.cookie);const afterLate=await h.state();
   assert.equal(afterLate.packs.find(p=>p.id===ana.pack.id).remaining,initial-1);
@@ -30,15 +31,16 @@ export async function privatePolicy(h) {
   state=await h.state();assert.equal(state.packs.find(p=>p.id===ana.pack.id).remaining,initial-1,'restoring a retained late allocation spends no second credit');
   assert.deepEqual(state.charges.filter(c=>c.bookingId===second.occurrences[0].bookingId).map(c=>c.amountCents).sort((a,b)=>a-b),[-1500,1500]);
   await grant(desk,'front-desk',[...rights,'fee-waiver'],[ana.id],['studio']);
-  const waiver=await h.cmd('appointment.cancel.prepare',{...change,mode:'early',waiverReason:'Sick courtesy'},desk.cookie);
+  const waiver=await h.cmd('appointment.cancel.prepare',{...change,mode:'early',waiverReason:'Sick courtesy',suppressNotice:true,suppressionReason:'Member confirmed personally at the desk'},desk.cookie);
   assert.deepEqual([waiver.policy[0].effect.feeCents,waiver.policy[0].feeCents,waiver.policy[0].creditReturned],[1500,0,true]);
   await grant(desk,'front-desk',rights,[ana.id],['studio']);await refuse('appointment.change.confirm',{id:waiver.id,key:waiver.key,channel:'phone'},desk.cookie);
   await grant(desk,'front-desk',[...rights,'fee-waiver'],[ana.id],['studio']);
   await confirm(h,waiver,desk.cookie);state=await h.state();assert.equal(state.packs.find(p=>p.id===ana.pack.id).remaining,initial);
   assert.equal(state.charges.filter(c=>c.bookingId===second.occurrences[0].bookingId).reduce((n,c)=>n+c.amountCents,0),0);
   assert.equal(state.bookings.find(b=>b.id===second.occurrences[0].bookingId).waiver.right,'fee-waiver');
+  const suppressed=state.staffActions.find(a=>a.command==='appointment.change.confirm'&&a.action==='appointment.cancel'&&a.notice.status==='suppressed');assert.equal(suppressed.notice.suppressionReason,'Member confirmed personally at the desk');
   assert.equal(state.staffActions.filter(a=>a.command==='appointment.change.confirm'&&a.after?.id===second.id).length,3);
-  assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.appointmentReservationId===second.id).length,4,'one notice for save, cancellation, restoration and waived cancellation');
+  assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.appointmentReservationId===second.id).length,3,'one notice for save, cancellation and restoration; explicit courtesy suppression emits none');
 }
 
 export async function privatePayment(h) {

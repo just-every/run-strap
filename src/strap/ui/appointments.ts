@@ -1,3 +1,4 @@
+import { actionNotice } from './booking-rules';
 import { dayOf, when, whenLabel, money } from './format'
 import { body, cell, emptyLine, field, form, h, hidden, owner, panel, rows, select, statusPill, table, textarea } from './shared'
 
@@ -26,6 +27,7 @@ function preview(s: any, personId: string, back: string, entry: any) {
   return `<details class="more" open data-appointment-preview="${h(entry.id)}"><summary>${title}</summary><div class="panel-body">`
     + (entry.scope === 'future' ? '<p>This change covers the following unused occurrences in their original series order.</p>' : '')
     + `<div class="table-wrap">${appointmentTable(['Appointment','Pack','Status'],entry.occurrences.map((occurrence: any) => `<tr>${occurrenceCells(s,occurrence)}</tr>`).join(''))}</div>`
+    + (entry.suppressNotice ? '<p>Member notice suppressed: '+h(entry.suppressionReason)+'</p>' : '')
     + (entry.reason ? `<p>Reason: ${h(entry.reason)}</p>` : '')
     + (entry.policy ? '<div class="table-wrap">'+appointmentTable(['Occurrence','Policy fee','Effective fee','Allocation'],entry.policy.map((p: any)=>'<tr>'+cell('Occurrence',when(s,entry.occurrences.find((o: any)=>o.id===p.id)?.start))+cell('Policy fee',money(p.effect.feeCents))+cell('Effective fee',money(p.feeCents)+(p.waiver?'<small>Waiver: '+h(p.waiver.reason)+'</small>':''))+cell('Allocation',entry.operation==='move'?'Original allocation carries':p.creditReturned?'Original allocation returns':'Visit stays used')+'</tr>').join(''))+'</div>' : '')
     + confirmation + '</div></details>'
@@ -47,7 +49,7 @@ function occurrenceActions(s: any, personId: string, back: string, reservation: 
   const cancel = form('appointment.cancel.prepare',back,identity()
     + select('scope','Cancellation scope',[['this','This occurrence'],['future','This and following occurrences']],'this')
     + textarea('reason','Cancellation reason','','required maxlength="500" rows="2"')
-    + policyChoice(s)+channel(),'Preview appointment cancellation','quiet','small')
+    + policyChoice(s)+actionNotice()+channel(),'Preview appointment cancellation','quiet','small')
   return `<details class="more"><summary>Move appointment</summary>${move}</details>`
     + `<details class="more"><summary>Cancel appointment</summary>${cancel}</details>`
 }

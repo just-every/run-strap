@@ -107,10 +107,12 @@ function notify(tx: Transaction,preview: RecordData,bookingIds: string[],before:
   const skipped = (preview.occurrences as RecordData[]).filter(o=>o.status === 'skipped');
   const body = messageBody(tx.state,subject,bookingIds)+(skipped.length ? '\nSkipped appointments:\n'+skipped.map(o=>`${o.occurrenceDate}: ${o.reason}`).join('\n') : '');
   const actionId = id();
-  putNotice(tx,{id:`notice:${actionId}`,personId:preview.personId,subject,body,appointmentReservationId:preview.reservationId},true);
-  const mail = reserveMail(tx,tx.notices,{id:`mail:${actionId}`,sourceKind:'booking_action',sourceId:actionId,personId:preview.personId,bookingIds,subject,body,prepared:true});
+  const suppressed=preview.suppressNotice === true;
+  insist(!suppressed || preview.operation==='cancel' && preview.policy.every((p: RecordData)=>p.mode==='early'),'suppression_requires_courtesy_cancel',403);
+  if (!suppressed) putNotice(tx,{id:`notice:${actionId}`,personId:preview.personId,subject,body,appointmentReservationId:preview.reservationId},true);
+  const mail = suppressed ? {status:'suppressed'} : reserveMail(tx,tx.notices,{id:`mail:${actionId}`,sourceKind:'booking_action',sourceId:actionId,personId:preview.personId,bookingIds,subject,body,prepared:true});
   tx.put('bookingAction',{id:actionId,action:`appointment.${preview.operation}`,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'booking',
-    personId:preview.personId,channel:preview.channel,before,after,reason:preview.reason ?? null,notice:{mailStatus:mail.status},at:now()});
+    personId:preview.personId,channel:preview.channel,before,after,reason:preview.reason ?? null,notice:{status:suppressed?'suppressed':'in_app',suppressionReason:preview.suppressionReason ?? null,mailStatus:mail.status},at:now()});
 }
 export async function confirmAppointmentReservation(tx: Transaction,input: Record<string,unknown>) {
   const preview = review(tx,input,'save');
@@ -142,8 +144,12 @@ export async function prepareAppointmentMove(tx: Transaction,input: Record<strin
 }
 export async function prepareAppointmentCancellation(tx: Transaction,input: Record<string,unknown>) {
   const {reservation,scope,occurrences} = selected(tx,input);
+  insist(input.suppressNotice === undefined || typeof input.suppressNotice === 'boolean','invalid_notice_suppression');
+  const suppressionReason=input.suppressNotice === true ? text(input.suppressionReason,'suppression_reason',500) : null;
+  const policy=appointmentPolicy(tx,occurrences,input,'cancel');
+  insist(!input.suppressNotice || policy.every(p=>p.mode==='early'),'suppression_requires_courtesy_cancel',403);
   const preview = {id:id(),personId:reservation.personId,reservationId:reservation.id,operation:'cancel',scope,status:'preview',key:id(),channel:staffChannel(input),reason:text(input.reason,'reason',500),
-    occurrences,policy:appointmentPolicy(tx,occurrences,input,'cancel'),basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
+    occurrences,policy,suppressNotice:input.suppressNotice === true,suppressionReason,basis:await facts(tx),createdAt:now(),createdBy:tx.who.id};
   tx.put('appointmentPreview',preview); return preview;
 }
 export async function prepareAppointmentRestore(tx: Transaction,input: Record<string,unknown>) {

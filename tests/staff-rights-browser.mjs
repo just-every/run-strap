@@ -40,6 +40,9 @@ export async function staffRightsBrowser(h,s) {
         await page.locator('[data-staff-booking="'+booked.id+'"] summary').click();await page.locator('#staff-bookings').scrollIntoViewIfNeeded();await capture('desk-bookings');
         for(const path of ['/api/strap/exit.json','/api/strap/reports/revenue.csv'])assert.equal((await context.request.get(h.origin+path)).status(),403);
         await login(s.manager.cookie);await page.goto(h.origin+'/app/people?person='+s.ana.id);await capture('manager-members');
+        await s.grant(s.coach,'instructor',['booking','member-record'],[s.ana.id],['studio']);
+        if(width===1440)await h.enroll(s.coach.cookie);
+        await login(s.coach.cookie);await page.goto(h.origin+'/app/people?person='+s.ana.id);await capture('instructor-members');
       } finally {await context.close();}
     }
   } finally {await browser.close();}
