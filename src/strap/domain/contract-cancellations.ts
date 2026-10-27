@@ -109,6 +109,7 @@ export async function requestCancellation(tx:Transaction,input:Record<string,unk
   const request={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,effectiveAt,reason:text(input.reason,'reason',500),status:'requested',createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};tx.put('cancellationRequest',request);return request;
 }
 export async function prepareCancellation(tx:Transaction,input:Record<string,unknown>){
+  requireStaffRight(tx.state,tx.who,'contract-change');
   const sourcePack=record(tx.state,input.packId ?? tx.state.records.get(String(input.cancellationRequestId))?.data.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',sourcePack.personId,sourcePack.locationId ?? 'studio');const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
   insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
   insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
@@ -117,6 +118,7 @@ export async function prepareCancellation(tx:Transaction,input:Record<string,unk
   if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
+  requireStaffRight(tx.state,tx.who,'contract-change');
   const c=record(tx.state,input.id,'contractCancellation'),sourcePack=record(tx.state,c.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',c.personId,sourcePack.locationId ?? 'studio');insist(input.key===c.key,'preview_changed',409);
   if(c.confirmedAt){insist(c.terminatedBy===tx.who.id&&c.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return c;}
   insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);

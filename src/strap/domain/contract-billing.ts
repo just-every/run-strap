@@ -45,6 +45,7 @@ function nextInvoiceAt(at: string, months: number, day: number, timeZone: string
   return new Date(wall-offset*60_000).toISOString();
 }
 export async function prepareRecurringTerms(tx: Transaction, input: Record<string,unknown>) {
+  requireStaffRight(tx.state,tx.who,'membership-sale');
   text(input.requestId,'requestId',100);
   const pack = record(tx.state,input.packId,'pack');
   requireStaffRight(tx.state,tx.who,'membership-sale',pack.personId,pack.locationId ?? 'studio'); person(tx.state,pack.personId);

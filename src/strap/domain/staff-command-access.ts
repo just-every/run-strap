@@ -19,6 +19,7 @@ export function requireClassRight(tx: Transaction, right: StaffRight, personId: 
 
 /** Resolve saved targets before replay; a request body cannot substitute its own scope. */
 export function authorizeStaffCommand(tx: Transaction, name: string, input: Record<string,unknown>, right: StaffRight) {
+  requireStaffRight(tx.state,tx.who,right);
   const target = input.id ? tx.state.records.get(String(input.id)) : null;
   const reservation = input.reservationId ? tx.state.records.get(String(input.reservationId))?.data : null;
   const pack = input.packId ? record(tx.state,input.packId,'pack') : target?.data.packId ? record(tx.state,target.data.packId,'pack') : null;
