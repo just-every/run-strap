@@ -12,6 +12,7 @@ test('Personal membership signatures bind immutable originals and separate payme
     await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-10'},h.owner,403);
     await h.cmd('billing.agreement.prepare',{},h.owner,403);
     assert.equal(edge.calls.length,0);await h.enroll(h.owner);
+    await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'});
     const seed=await billingSeed(h);
     const unsignedPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:seed.outsider.id,credits:2,amountCents:4000,expiresAt:'2099-12-31T00:00:00Z'})).id});
     const proposal=await h.cmd('plan.recurring.prepare',{packId:unsignedPack.id,intervalMonths:1,requestId:'synthetic-strap-80'});
@@ -60,6 +61,99 @@ test('Personal membership signatures bind immutable originals and separate payme
     const launch=after.staffActions.filter(a=>a.command === 'billing.agreement.prepare' && a.after.id === agreement.id);
     assert.equal(launch.length,1);assert.equal(launch[0].right,'membership-sale');assert.equal(launch[0].staffMade,true);assert.equal(launch[0].after.sellingStaffId,before.actor.id);
     assert.equal(edge.calls.length,0);
+    {
+    // Delegated staff may launch the personal act within the original sale scope.
+    const desk=await h.person('BillingDesk'), finance=await h.person('BillingFinance');
+    const west=await h.cmd('location.save',{name:'Billing West',timeZone:'America/Los_Angeles'});
+    const grant=async(actor,role,right,memberIds=[seed.member.id],locationIds=['studio'])=>h.cmd('staff.access.grant',{personId:actor.id,role,enabled:true,rights:{[right]:{enabled:true,scopes:[{memberIds,locationIds,doors:['all']}]}}});
+    const prepare={...seed.prepare,requestId:'synthetic-strap-300'};
+    const launchInput={id:agreement.id,requestId:'synthetic-strap-301',channel:'phone'};
+    await grant(desk,'front-desk','member-record');
+    await refuse('billing.setup.start.launch',launchInput,desk.cookie,403,'mfa_enrollment_required');
+    await h.enroll(desk.cookie);
+    await refuse('billing.agreement.prepare',prepare,desk.cookie,403,'staff_right_required');
+    await refuse('billing.setup.start.launch',launchInput,desk.cookie,403,'staff_right_required');
+    await grant(desk,'front-desk','collection',[seed.outsider.id]);
+    await refuse('billing.setup.start.launch',launchInput,desk.cookie,403,'staff_scope_required');
+    await grant(desk,'front-desk','collection',[seed.member.id],[west.id]);
+    await refuse('billing.setup.start.launch',launchInput,desk.cookie,403,'staff_scope_required');
+    await grant(desk,'front-desk','collection');
+    const personalBefore=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
+    const launch=await h.cmd('billing.setup.start.launch',launchInput,desk.cookie);
+    assert.equal(launch.status,'member_action_required');assert.equal(launch.personId,seed.member.id);
+    assert.deepEqual(await h.cmd('billing.setup.start.launch',launchInput,desk.cookie),launch);
+    const action=(await h.state()).staffActions.filter(a=>a.requestId===launchInput.requestId);
+    assert.equal(action.length,1);assert.deepEqual([action[0].right,action[0].actorRole,action[0].channel,action[0].personId],['collection','front-desk','phone',seed.member.id]);
+    const personalAfter=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
+    for(const key of ['agreements','mandates','methods','setups','operations'])assert.deepEqual(personalAfter[key],personalBefore[key]);
+    await refuse('billing.setup.start',{id:agreement.id,requestId:'synthetic-strap-302'},desk.cookie,403,'member_record_right_required');
+    assert.equal((await h.send('/api/strap/billing/agreement.json?id='+agreement.id,undefined,desk.cookie)).status,403);
+    await grant(desk,'front-desk','member-record');
+    await refuse('billing.setup.start.launch',launchInput,desk.cookie,403,'staff_right_required');
+    await grant(finance,'finance','collection');await h.enroll(finance.cookie);
+    const financeLaunch=await h.cmd('billing.setup.start.launch',{...launchInput,requestId:'synthetic-strap-303'},finance.cookie);
+    assert.equal(financeLaunch.personId,seed.member.id);assert.equal(financeLaunch.status,'member_action_required');
+    assert.equal((await h.send('/api/strap/billing',undefined,finance.cookie)).status,403);
+    await grant(finance,'finance','collection',[seed.outsider.id]);
+    await refuse('billing.setup.start.launch',{...launchInput,requestId:'synthetic-strap-303'},finance.cookie,403,'staff_scope_required');
+    const delegated=await billingSeed(h,'DelegatedAgreement');
+    const delegatedPrepare={...delegated.prepare,requestId:'synthetic-strap-304'};
+    await grant(desk,'front-desk','membership-sale',[seed.member.id]);
+    await refuse('billing.agreement.prepare',delegatedPrepare,desk.cookie,403,'staff_scope_required');
+    await grant(desk,'front-desk','membership-sale',[delegated.member.id],[west.id]);
+    await refuse('billing.agreement.prepare',delegatedPrepare,desk.cookie,403,'staff_scope_required');
+    await grant(desk,'front-desk','membership-sale',[delegated.member.id]);
+    const staffAgreement=await h.cmd('billing.agreement.prepare',delegatedPrepare,desk.cookie);
+    const staffActor=(await h.state(desk.cookie)).actor;
+    assert.equal(staffAgreement.sellingStaffId,staffActor.id);assert.equal(staffAgreement.signature,null);
+    assert.deepEqual(await h.cmd('billing.agreement.prepare',delegatedPrepare,desk.cookie),staffAgreement);
+    await refuse('billing.agreement.accept',acceptance(staffAgreement,delegated.member.name),desk.cookie,403,'member_record_right_required');
+    const personallySigned=await h.cmd('billing.agreement.accept',acceptance(staffAgreement,delegated.member.name),delegated.member.cookie);
+    assert.equal(personallySigned.signature.actorId,(await h.state(delegated.member.cookie)).actor.id);
+    assert.notEqual(personallySigned.signature.actorId,staffActor.id);
+    const staffEvents=(await h.state()).staffActions.filter(a=>a.command==='billing.agreement.prepare'&&a.after.id===staffAgreement.id);
+    assert.equal(staffEvents.length,1);assert.equal(staffEvents[0].actorRole,'front-desk');assert.equal(staffEvents[0].right,'membership-sale');
+    await grant(desk,'front-desk','member-record',[delegated.member.id]);
+    await refuse('billing.agreement.prepare',delegatedPrepare,desk.cookie,403,'staff_right_required');
+    // The same billing authority is exercised for each role at both locations.
+    for(const site of ['East','West'])for(const role of ['manager','front-desk','finance','instructor']){
+      await run(async h=>{
+      await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Austin',timeZone:'America/Chicago'});
+      const west=await h.cmd('location.save',{name:'Matrix West',timeZone:'America/Los_Angeles'}),locationId=site==='East'?'studio':west.id;
+      const refuse=async(name,input,cookie,status,code)=>{const version=(await h.state()).version,r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,JSON.stringify(r.value));assert.equal(r.value.error,code);assert.equal((await h.state()).version,version);};
+      const suffix=site+role.replace('-',''), actor=await h.person('Matrix'+suffix,role==='instructor'?'instructor':'member');
+      const target=await billingSeed(h,'Target'+suffix,locationId);
+      const permitsSale=['manager','front-desk'].includes(role),permitsCollection=['manager','front-desk','finance'].includes(role);
+      const names=[...(permitsSale?['membership-sale']:[]),...(permitsCollection?['collection']:[])];
+      const scoped=async(locations,enabled=true)=>h.cmd('staff.access.grant',{personId:actor.id,role,enabled,rights:Object.fromEntries(names.map(right=>[right,{enabled:true,scopes:[{memberIds:[target.member.id],locationIds:locations,doors:['all']}]}]))});
+      await scoped([locationId]);await h.enroll(actor.cookie);
+      const prepare={...target.prepare,requestId:'synthetic-strap-matrix-'+suffix};
+      const agreement=await h.cmd('billing.agreement.prepare',prepare,permitsSale?actor.cookie:h.owner);
+      if(!permitsSale)await refuse('billing.agreement.prepare',prepare,actor.cookie,403,role==='finance'?'finance_reports_only':'staff_right_required');
+      else {
+        assert.equal(agreement.sellingStaffId,(await h.state(actor.cookie)).actor.id);
+        await scoped([locationId==='studio'?west.id:'studio']);
+        await refuse('billing.agreement.prepare',prepare,actor.cookie,403,'staff_scope_required');
+        await scoped([locationId]);
+      }
+      await h.cmd('billing.agreement.accept',acceptance(agreement,target.member.name),target.member.cookie);
+      const input={id:agreement.id,requestId:'synthetic-strap-matrix-launch-'+suffix,channel:'desk'};
+      assert.equal((await h.send('/api/strap/billing/agreement.json?id='+agreement.id,undefined,actor.cookie)).status,role==='instructor'?404:403,role+' cannot read completed agreement evidence');
+      if(permitsCollection){
+        const opened=await h.cmd('billing.setup.start.launch',input,actor.cookie);assert.equal(opened.personId,target.member.id);
+        const events=(await h.state()).staffActions.filter(a=>a.requestId===input.requestId);
+        assert.equal(events.length,1);assert.equal(events[0].actorRole,role);assert.equal(events[0].right,'collection');
+        await scoped([locationId==='studio'?west.id:'studio']);
+        await refuse('billing.setup.start.launch',input,actor.cookie,403,'staff_scope_required');
+        await scoped([locationId],false);
+        const revision=(await h.state()).version;
+        assert.equal((await h.send('/api/strap/command',{name:'billing.setup.start.launch',input},actor.cookie)).status,403);
+        assert.equal((await h.state()).version,revision);
+      } else await refuse('billing.setup.start.launch',input,actor.cookie,403,'staff_right_required');
+      });
+    }
+    assert.equal(edge.calls.length,0,'staff launch never calls a provider or supplies member authorization');
+    }
     await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
     await h.cmd('billing.agreement.accept',acceptance(agreement),seed.member.cookie,409);
     const revoked=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
@@ -124,16 +218,52 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     assert.equal(state.methods.length,1);assert.equal(state.methods[0].available,true);assert.equal(state.mandates[0].methodAuthorized,true);
     assert.ok(!JSON.stringify(state).includes('must-not-be-retained'));assert.ok(!JSON.stringify(state).includes('checkout.stripe.com'));
     assert.equal((await h.send('/api/strap/billing',undefined,seed.outsider.cookie)).value.methods.length,0);
+    // Collection staff opens the handoff; only the member replaces the method.
+    const desk=await h.person('ReplaceDesk');
+    const grant=async right=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{[right]:{enabled:true,scopes:[{memberIds:[seed.member.id],locationIds:['studio'],doors:['all']}]}}});
+    await grant('collection');await h.enroll(desk.cookie);
+    const handoffInput={id:agreement.id,requestId:'synthetic-strap-400',channel:'desk'};
+    const handoff=await h.cmd('billing.setup.start.launch',handoffInput,desk.cookie);
+    assert.equal(handoff.status,'member_action_required');
+    const replace={id:agreement.id,replaceMethodId:method.result.id,confirmReplacement:true,requestId:'synthetic-strap-401'};
+    const unchanged=await h.state();
+    for(const [input,cookie,status] of [[replace,desk.cookie,403],[{...replace,confirmReplacement:false},seed.member.cookie,409],[{...replace,replaceMethodId:'synthetic-strap-other'},seed.member.cookie,409]]){
+      const calls=edge.calls.length;await h.cmd('billing.setup.start',input,cookie,status);assert.equal(edge.calls.length,calls);assert.equal((await h.state()).version,unchanged.version);
+    }
+    await grant('member-record');await h.cmd('billing.setup.start.launch',handoffInput,desk.cookie,403);
+    const replacement=await billingSucceeded(h,'billing.setup.start',replace,seed.member.cookie);
+    assert.equal(replacement.result.replacesMethodId,method.result.id);
+    assert.deepEqual((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods,state.methods,'pending replacement leaves the current method available');
+    edge.setComplete(false);
+    const replacementComplete={id:agreement.id,setupId:replacement.result.id,requestId:'synthetic-strap-402'};
+    assert.equal((await h.cmd('billing.setup.complete',replacementComplete,seed.member.cookie)).status,'incomplete');
+    edge.setComplete(true);edge.setCard('5556');
+    const replaced=await billingSucceeded(h,'billing.setup.complete',{...replacementComplete,requestId:'synthetic-strap-403'},seed.member.cookie);
+    assert.equal(replaced.result.last4,'5556');assert.equal(replaced.result.replacesMethodId,method.result.id);
+    const replacementState=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
+    assert.deepEqual(replacementState.methods.filter(m=>m.available).map(m=>[m.id,m.last4]),[[replaced.result.id,'5556']]);
+    assert.deepEqual((await h.send('/api/strap/billing',undefined,h.owner)).value.methods,replacementState.methods);
+    assert.equal(JSON.stringify(replacementState).includes('must-not-be-retained'),false);
+    assert.equal((await h.send('/api/strap/billing',undefined,seed.outsider.cookie)).value.methods.length,0);
+    const previous=replacementState.methods.find(m=>m.id===method.result.id);
+    assert.equal(previous.status,'superseded');assert.equal(previous.supersededBy,replaced.result.id);assert.equal(previous.last4,'4242');
+    assert.deepEqual(replacementState.agreements[0].signature,state.agreements[0].signature);assert.deepEqual(replacementState.mandates[0].financialTerms,state.mandates[0].financialTerms);
+    const replacementCalls=edge.calls.length;
+    assert.deepEqual(await h.cmd('billing.setup.complete',{...replacementComplete,requestId:'synthetic-strap-403'},seed.member.cookie),replaced);
+    await h.cmd('billing.setup.start',replace,seed.member.cookie);assert.equal(edge.calls.length,replacementCalls);
+    assert.deepEqual((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods,replacementState.methods);
+    assert.deepEqual((await h.state()).charges,unchanged.charges);assert.deepEqual((await h.state()).payments,unchanged.payments);
+    edge.setCard('4242');
     const before=await h.state();
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-998'});
-    assert.equal((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods[0].available,false);
+    assert.equal((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.some(m=>m.available),false);
     const count=edge.calls.length;
     await h.cmd('billing.setup.complete',{...complete,requestId:'synthetic-strap-23'},seed.member.cookie,409);assert.equal(edge.calls.length,count);
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'});
     const historical=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
     await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
     const revoked=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
-    assert.equal(revoked.methods[0].available,false);assert.deepEqual(revoked.agreements[0].signature,historical.agreements[0].signature);
+    assert.equal(revoked.methods.some(m=>m.available),false);assert.deepEqual(revoked.agreements[0].signature,historical.agreements[0].signature);
     assert.deepEqual(revoked.mandates[0].financialTerms,historical.mandates[0].financialTerms);assert.equal(revoked.mandates[0].status,'revoked');
     const revokedVersion=(await h.state()).version,revokedCalls=edge.calls.length;
     for(const [name,input] of [['billing.setup.start',{...start,requestId:'synthetic-strap-87'}],['billing.setup.start',start],['billing.setup.complete',{...complete,requestId:'synthetic-strap-88'}],['billing.setup.complete',{...complete,requestId:'synthetic-strap-22'}]]){

@@ -29,10 +29,12 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
     return retained(tx.state,prior);
   }
   if(name === 'billing.setup.start') {
-    insist(!mandate!.methodAuthorized,'billing_method_already_authorized',409);
-    insist(!list(tx.state,'billingOperation').some(o=>o.type === 'setup.start' && o.agreementId === agreement!.id && ['pending','uncertain','succeeded'].includes(o.status)),'billing_setup_already_started',409);
+    if(mandate!.methodAuthorized)insist(input.replaceMethodId === mandate!.methodId && input.confirmReplacement === true,'billing_replacement_confirmation_required',409);
+    else insist(!input.replaceMethodId,'billing_replacement_changed',409);
+    insist(!list(tx.state,'billingOperation').some(o=>o.type === 'setup.start' && o.agreementId === agreement!.id &&
+      (['pending','uncertain'].includes(o.status) || o.status === 'succeeded' && tx.state.records.get(o.resultId)?.data.status !== 'completed')),'billing_setup_already_started',409);
   }
-  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? id(),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',resultId:null};
+  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,replacesMethodId:setup?.replacesMethodId ?? (name === 'billing.setup.start' ? input.replaceMethodId ?? null : null),requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? id(),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',resultId:null};
   if(c)fence(tx,c);
   tx.put('billingOperation',reservation); await tx.commit();
   let receipt: {requestId:string|null;httpStatus:number}|null=null,result: RecordData|null=null,errorCode:string|null=null,status='uncertain',launchURL:string|null=null;
@@ -64,18 +66,24 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
       insist(accepted.mandate.financialHash === mandate!.financialHash,'billing_mandate_changed',409);
       if(name === 'billing.setup.start') {
         const checked=session(body,agreement!.id,mandate!.id,operationId);
-        result={id:'billing-setup:'+operationId,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,operationId,connectionId:c!.connection_id,accountId:c!.account_id,providerSessionId:checked.id,status:'awaiting-member',expiresAt:checked.expiresAt,createdAt:now()};finish.put('billingSetup',result);
+        result={id:'billing-setup:'+operationId,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,operationId,replacesMethodId:reservation.replacesMethodId,connectionId:c!.connection_id,accountId:c!.account_id,providerSessionId:checked.id,status:'awaiting-member',expiresAt:checked.expiresAt,createdAt:now()};finish.put('billingSetup',result);
       } else {
         const method=savedMethod(body,agreement!.id,mandate!.id,setup!.operationId);
         const existing=list(finish.state,'storedPaymentMethod').find(m=>m.setupId === setup!.id);
         if(existing)result=existing;
         else {
-          result={id:'billing-method:'+setup!.id,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,setupId:setup!.id,connectionId:c!.connection_id,accountId:c!.account_id,...method,authorizedBy:who.id,authorizedAt:now(),authorizationChannel:'member-account-and-stripe-hosted-setup',status:'authorized'};
+          if(setup!.replacesMethodId)insist(accepted.mandate.methodId === setup!.replacesMethodId,'billing_replacement_changed',409);
+          result={id:'billing-method:'+setup!.id,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,setupId:setup!.id,connectionId:c!.connection_id,accountId:c!.account_id,...method,authorizedBy:who.id,authorizedAt:now(),authorizationChannel:'member-account-and-stripe-hosted-setup',replacesMethodId:setup!.replacesMethodId ?? null,status:'authorized'};
+          if(setup!.replacesMethodId) {
+            const previous=finish.state.records.get(setup!.replacesMethodId);
+            insist(previous?.kind === 'storedPaymentMethod' && previous.data.personId === agreement!.personId,'billing_replacement_changed',409);
+            finish.put('storedPaymentMethod',{...previous.data,status:'superseded',supersededBy:result.id,supersededAt:result.authorizedAt});
+          }
           finish.put('storedPaymentMethod',result);
           finish.put('paymentMandate',{...accepted.mandate,methodAuthorized:true,methodId:result.id,methodAuthorizedAt:result.authorizedAt,connectionId:c!.connection_id});
           finish.put('billingAgreement',{...accepted.agreement,status:'signed-method-authorized'});
           finish.put('billingSetup',{...setup!,status:'completed',completedAt:result.authorizedAt,methodId:result.id});
-          finish.put('billingConsentEvent',{id:'billing-method-consent:'+setup!.id,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,actorId:who.id,actorRole:'member',channel:'member-account-and-stripe-hosted-setup',at:result.authorizedAt,before:{methodAuthorized:false},after:{methodAuthorized:true,methodId:result.id,setupIntentId:result.setupIntentId},staffMade:false});
+          finish.put('billingConsentEvent',{id:'billing-method-consent:'+setup!.id,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,actorId:who.id,actorRole:'member',channel:'member-account-and-stripe-hosted-setup',at:result.authorizedAt,before:{methodAuthorized:accepted.mandate.methodAuthorized,methodId:accepted.mandate.methodId ?? null},after:{methodAuthorized:true,methodId:result.id,replacesMethodId:setup!.replacesMethodId ?? null,setupIntentId:result.setupIntentId},staffMade:false});
         }
       }
     }

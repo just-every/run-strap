@@ -1,6 +1,7 @@
+import { requireStaffRight } from '../domain/staff-rights';
 import { membershipDocument } from './document';
 import { contractCopy } from '../domain/contract-copies';
-import { humanOwner, id, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
+import { id, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
 import type { Transaction } from '../domain/store';
 import { sha256Hex } from '../security/crypto';
 import { canonical, currentAgreement, digest, eligibleAdult, mandateFor, ownMember } from './model';
@@ -9,9 +10,11 @@ export const agreementAffirmation = 'I personally sign this exact membership agr
 export const mandateAffirmation = 'I separately authorize the exact recurring payments described below, using only a payment method I personally authorize with Stripe. I can revoke this permission immediately from my account.';
 
 export async function prepareAgreement(tx: Transaction,input: Record<string,unknown>) {
-  humanOwner(tx.who);
+  requireStaffRight(tx.state,tx.who,'membership-sale');
   const terms = record(tx.state,input.termsId,'recurringTerms'), member = person(tx.state,terms.personId);
   insist(terms.status === 'active' && terms.acceptedAt,'accepted_recurring_terms_required',409);
+  const salePack = record(tx.state,terms.currentPackId,'pack');
+  requireStaffRight(tx.state,tx.who,'membership-sale',member.id,salePack.locationId ?? 'studio');
   eligibleAdult(tx.state,member.id);
   insist(input.adultVerified === true,'adult_eligibility_verification_required');
   const requestId = text(input.requestId,'requestId',100), source = {termsId:terms.id,title:text(input.title,'title',160),documentText:text(input.documentText,'documentText',20000),adultEvidenceReference:text(input.adultEvidenceReference,'adultEvidenceReference',200)};

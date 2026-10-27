@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { unstable_splitSqlQuery } from 'wrangler';
 
 const iso = hours => new Date(Math.ceil((Date.now()+hours*3600000)/60000)*60000).toISOString();
 const monday = value => {const d=new Date(value);d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);return d.toISOString().slice(0,10);};
@@ -101,7 +103,7 @@ export async function staffBookingRights(h) {
 }
 
 export async function staffContractRights(h) {
-  const {desk,ana,grant,refuse}=await rightsSeed(h);
+  const s=await rightsSeed(h),{desk,ana,grant,refuse}=s;
   await grant(desk,'front-desk',['member-record']);await h.enroll(desk.cookie);
   const input={packId:ana.pack.id,intervalMonths:1,requestId:randomUUID(),channel:'phone'};
   await refuse('plan.recurring.prepare',input,desk.cookie);
@@ -120,10 +122,44 @@ export async function staffContractRights(h) {
   const saved=await h.cmd('plan.cancellation.confirm',confirm,desk.cookie);assert.equal(saved.status,'scheduled');assert.equal(saved.terminatedRole,'front-desk');assert.equal(saved.channel,'phone');
   assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),saved);
   const history=(await h.state()).staffActions;assert.equal(history.filter(a=>a.command==='plan.cancellation.confirm'&&a.personId===ana.id).length,1);
+  // Contract-change eligibility is independent of role titles and location scope.
+  for(const actor of [s.finance,s.coach]) {
+    const role=actor===s.coach?'instructor':'finance',version=(await h.state()).version;
+    const denied=await h.send('/api/strap/command',{name:'staff.access.grant',input:{personId:actor.id,role,enabled:true,rights:{'contract-change':{enabled:true,scopes:[{memberIds:[ana.id],locationIds:['studio'],doors:['all']}]}}}},h.owner);
+    assert.equal(denied.status,400);assert.equal(denied.value.error,'staff_role_right_forbidden');assert.equal((await h.state()).version,version);
+    await refuse('plan.cancellation.prepare',cancel,actor.cookie);
+  }
+  await grant(s.manager,'manager',['member-record']);await h.enroll(s.manager.cookie);
+  for(const [actor,role] of [[desk,'front-desk'],[s.manager,'manager']])for(const locationId of ['studio',s.west.id]) {
+    const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:s.ben.id,credits:4,amountCents:8000,locationId,eligibleLocations:'all',expiresAt:iso(2000)})).id});
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
+    const accepted=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},s.ben.cookie);
+    const input={packId:accepted.currentPackId,effectiveAt:iso(1000),reason:'Moving out of town',channel:'phone',requestId:randomUUID()};
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);
+    await refuse('plan.cancellation.prepare',input,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[ana.id],[locationId]);
+    await refuse('plan.cancellation.prepare',input,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId==='studio'?s.west.id:'studio']);
+    await refuse('plan.cancellation.prepare',input,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const preview=await h.cmd('plan.cancellation.prepare',input,actor.cookie);
+    assert.equal(preview.personId,s.ben.id);assert.equal(preview.status,'preview');
+    const confirm={id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()};
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);
+    await refuse('plan.cancellation.confirm',confirm,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const committed=await h.cmd('plan.cancellation.confirm',confirm,actor.cookie);
+    assert.equal(committed.status,'scheduled');assert.equal(committed.terminatedRole,role);
+    assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,actor.cookie),committed);
+    const actions=(await h.state()).staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.requestId===confirm.requestId);
+    assert.equal(actions.length,1);assert.equal(actions[0].right,'contract-change');assert.equal(actions[0].actorRole,role);assert.equal(actions[0].personId,s.ben.id);
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.confirm',confirm,actor.cookie);
+  }
+
 }
 
 export async function staffAppointmentRoles(h) {
-  const {coach,manager,ana,west,grant,refuse}=await rightsSeed(h);
+  const s=await rightsSeed(h),{coach,manager,ana,west,grant,refuse}=s;
   const rights=['booking','member-record'];
   await grant(manager,'manager',rights,[ana.id],['studio']);await h.enroll(manager.cookie);
   await grant(coach,'instructor',rights,[ana.id],['studio']);await h.enroll(coach.cookie);
@@ -148,4 +184,44 @@ export async function staffAppointmentRoles(h) {
   assert.equal((await h.state(coach.cookie)).appointments.length,0);
   await h.cmd('staff.access.grant',{personId:coach.id,role:'instructor',enabled:false,rights:{}});
   await refuse('attendance.checkin',{id:saved.occurrences[0].bookingId},coach.cookie);
+  await populatedLegacyRights(h,s);
+}
+
+// Upgrade a populated installation: public legacy grant doors create the source
+// records, then the actual forward migration must preserve each independent scope.
+async function populatedLegacyRights(h,s) {
+  const staff=await h.person('LegacyDesk');
+  await h.cmd('member.record.grant',{personId:staff.id,enabled:true,canCreate:false,memberIds:[s.ana.id,s.ben.id]});
+  await h.cmd('appointment.booking.grant',{personId:staff.id,enabled:true,memberIds:[s.ben.id],locationIds:[s.west.id]});
+  await h.cmd('attendance.booking.grant',{personId:staff.id,enabled:false,memberIds:[s.ana.id],locationIds:['studio']});
+  await h.cmd('retail.staff.grant',{personId:staff.id,enabled:true,sale:true,refund:false,memberIds:[s.ana.id],locationIds:['studio']});
+  const canonical=(await h.state()).staffAccessGrants.find(g=>g.personId===staff.id);
+  assert.ok(canonical);assert.deepEqual(Object.keys(canonical.legacyGrants).sort(),['appointment','attendance-plan','member-record','retail']);
+  const kinds={'member-record':'memberRecordGrant',appointment:'appointmentBookingGrant','attendance-plan':'attendanceBookingGrant',retail:'retailStaffGrant'};
+  // Recreate the pre-upgrade storage shape from the product-created grant facts.
+  const operations=[h.db.prepare("DELETE FROM st_records WHERE kind='staffAccess'")];
+  for(const [door,grant] of Object.entries(canonical.legacyGrants))operations.push(h.db.prepare('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?)').bind(grant.id,kinds[door],JSON.stringify(grant),1));
+  await h.db.batch(operations);
+  await h.db.batch(unstable_splitSqlQuery(await readFile('migrations/core/0040-staff-rights.sql','utf8')).map(sql=>h.db.prepare(sql)));
+  staff.cookie=await h.signIn(staff.email);await h.enroll(staff.cookie);
+  const migrated=(await h.state()).staffAccessGrants.find(g=>g.personId===staff.id);
+  assert.equal(migrated.role,'front-desk');assert.equal(migrated.enabled,true);
+  assert.deepEqual(migrated.rights['member-record'].scopes,[{memberIds:[s.ana.id,s.ben.id].sort(),locationIds:[],doors:['member-record']}]);
+  assert.equal(migrated.rights['member-record'].canCreate,false);
+  assert.deepEqual(migrated.rights.booking.scopes,[{memberIds:[s.ben.id],locationIds:[s.west.id],doors:['appointment']}]);
+  assert.deepEqual(migrated.rights.sale.scopes,[{memberIds:[s.ana.id],locationIds:['studio'],doors:['retail']}]);
+  assert.equal(migrated.rights.refund.enabled,false);assert.deepEqual(migrated.rights.refund.scopes,[]);
+  assert.deepEqual(migrated.legacyGrants,canonical.legacyGrants);
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM st_records WHERE kind IN ('memberRecordGrant','appointmentBookingGrant','attendanceBookingGrant','retailStaffGrant')").first()).n,0);
+  const edited=await h.cmd('profile.save.staff',{personId:s.ana.id,phone:'5125550101',channel:'phone',requestId:randomUUID()},staff.cookie);
+  assert.equal(edited.phone,'5125550101');
+  await s.refuse('profile.save.staff',{personId:s.manager.id,phone:'5125550102',requestId:randomUUID()},staff.cookie);
+  await s.refuse('member.record.create',{name:'Unscoped',email:'unscoped@studio.example',requestId:randomUUID()},staff.cookie);
+  await s.refuse('booking.desk',{personId:s.ben.id,classId:s.other.id},staff.cookie);
+  const source={personId:s.ben.id,service:'Fitness',instructorId:s.coach.id,locationId:s.west.id,room:'Legacy private room',startDate:new Date(Date.now()+40*86400000).toISOString().slice(0,10),endDate:new Date(Date.now()+54*86400000).toISOString().slice(0,10),time:'10:00',minutes:50,channel:'phone'};
+  const proposal=await h.cmd('appointment.reservation.prepare',source,staff.cookie);
+  assert.equal(proposal.occurrences.length,3);
+  await s.refuse('appointment.reservation.prepare',{...source,personId:s.ana.id},staff.cookie);
+  await s.refuse('appointment.reservation.prepare',{...source,locationId:'studio'},staff.cookie);
+  assert.equal((await h.send('/api/strap/reports/revenue.csv',undefined,staff.cookie)).status,403);
 }

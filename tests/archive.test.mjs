@@ -79,14 +79,23 @@ async function archiveMembership(h,member,terms,edge) {
     await billingSucceeded(h,'billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-archive-billing-connect'});
     const methodSetup=await billingSucceeded(h,'billing.setup.start',{id:membership.id,requestId:'synthetic-strap-archive-billing-setup'},member.cookie);
     edge.setComplete(true);
-    const methodInput={id:membership.id,setupId:methodSetup.result.id,requestId:'synthetic-strap-archive-billing-complete'};
-    const methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
+    let methodInput={id:membership.id,setupId:methodSetup.result.id,requestId:'synthetic-strap-archive-billing-complete'};
+    let methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
+    const originalMethod=methodResult.result;
+    const replacement=await billingSucceeded(h,'billing.setup.start',{id:membership.id,replaceMethodId:originalMethod.id,confirmReplacement:true,requestId:'synthetic-strap-archive-billing-replace'},member.cookie);
+    edge.setCard('5556');
+    methodInput={id:membership.id,setupId:replacement.result.id,requestId:'synthetic-strap-archive-billing-replaced'};
+    methodResult=await billingSucceeded(h,'billing.setup.complete',methodInput,member.cookie);
+    edge.setCard('4242');
+    assert.equal(methodResult.result.replacesMethodId,originalMethod.id);assert.equal(methodResult.result.last4,'5556');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
     const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
     assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
     const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
     assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
-    return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore};
+    assert.equal(connectedBilling.methods.find(method=>method.id===originalMethod.id).status,'superseded');
+    assert.deepEqual(connectedBilling.methods.filter(method=>method.available).map(method=>method.last4),['5556']);
+    return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore,methodHistory:connectedBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id))};
 }
 async function archiveCopyTablet(h,owner,waiver,suffix) {
   const person=await h.cmd('member.record.create',{name:'Archive copy '+suffix,email:'synthetic-strap-copy-'+suffix.toLowerCase()+'@studio.example',channel:'desk',requestId:'synthetic-strap-archive-copy-person-'+suffix},owner)
@@ -381,7 +390,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
     const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
-    const {membership,methodInput,methodResult,membershipBefore}=await archiveMembership(h,member,agreed,paymentEdge);
+    const {membership,methodInput,methodResult,membershipBefore,methodHistory}=await archiveMembership(h,member,agreed,paymentEdge);
     const expiryPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
     const expiryDisclosure=await h.cmd('plan.disclosure.schedule',{packId:expiryPack.id,leadDays:7,requestId:'synthetic-strap-expiry-archive'});
     const deliveredPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
@@ -427,7 +436,9 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(restoredDisclosure.canAccept,false,'a restored price proposal cannot revive excluded dispatch authority');
     const restoredMember=await h.signIn(member.email);
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
-    assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.find(method=>method.id===methodResult.result.id).available,false);
+    assert.equal(historicalBilling.methods.length,2);
+    assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
+    assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the superseded method and selected replacement as historical records');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
     const providerCalls=paymentEdge.calls.length,financialBefore=await h.state(restoredOwner);
     const restoredAttempt=await h.cmd('billing.setup.complete',{...methodInput,requestId:'synthetic-strap-archive-billing-restored'},restoredMember,409);
