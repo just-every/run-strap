@@ -135,6 +135,12 @@ export function courseAttendance(tx: Transaction,input: Record<string,unknown>) 
   if(previous){insist(previous.outcome===input.outcome,'attendance_correction_required',409);return e;}
   const updated={...e,attendance:[...e.attendance,{sessionId:session.id,outcome:input.outcome,at:now(),actorId:tx.who.id}]};tx.put('courseEnrollment',updated);return updated;
 }
+/** Financial and contract authority never implies attendance access; replay responses use the same projection. */
+export function coursePublicResult(who: Actor,value: RecordData): RecordData {
+  const {basis,payerBasis,...visible}=value;
+  if(Array.isArray(value.attendance) && who.role!=='owner' && value.personId!==who.personId)return {...visible,attendance:[],attendanceRestricted:true};
+  return visible;
+}
 export function coursesSnapshot(s: State,who: Actor) {
   const owner=who.role==='owner',member=who.role==='member',staff=['front-desk','manager'].includes(who.role);
   const allowed=(personId: string,locationId: string)=>owner || member && personId===who.personId || staff && (hasStaffRight(s,who,'sale',personId,locationId) || hasStaffRight(s,who,'contract-change',personId,locationId));
@@ -142,5 +148,5 @@ export function coursesSnapshot(s: State,who: Actor) {
   const visible=list(s,'courseEnrollment').filter(e=>allowed(e.personId,e.locationId) || member && e.payerId===who.personId).map(e=>({...e,attendance:owner || e.personId===who.personId ? e.attendance : [],attendanceRestricted:!owner && e.personId!==who.personId,overdueCents:e.installments.filter((r: any)=>r.dueAt<=now()).reduce((n: number,r: any)=>n+r.amountCents-r.paidCents-r.creditedCents,0)}));
   const people=staff ? s.people.filter(p=>courses.some(c=>allowed(p.id,c.locationId))).map(p=>({id:p.id,name:p.name})) : [];
   const enrollPreviews=list(s,'courseEnrollmentPreview').filter(p=>owner || member && p.payerId===who.personId || staff && allowed(p.personId,s.records.get(p.courseId)!.data.locationId)).map(({payerBasis,...p})=>p);
-  return {courses,people,enrollments:visible,previews:enrollPreviews,withdrawals:list(s,'courseWithdrawalPreview').filter(p=>owner || staff && hasStaffRight(s,who,'contract-change',p.personId,s.records.get(p.courseId)!.data.locationId)),canManage:owner || staff,canPublish:owner};
+  return {courses,people,enrollments:visible,previews:enrollPreviews,withdrawals:list(s,'courseWithdrawalPreview').filter(p=>owner || staff && hasStaffRight(s,who,'contract-change',p.personId,s.records.get(p.courseId)!.data.locationId)).map(p=>coursePublicResult(who,p)),canManage:owner || staff,canPublish:owner};
 }
