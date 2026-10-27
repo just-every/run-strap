@@ -3262,7 +3262,7 @@
       "executable": false
     },
     "src/strap/domain/courses.ts": {
-      "sha256": "560e9b9610d89b464b83057112bd1eed650bc6bd230618ce3c9da0f8a1458990",
+      "sha256": "b886ae7536648cf16db8e5965fa9b5efa22977a8fbf6bb69aa9aef725403621d",
       "executable": false
     },
     "src/strap/domain/demand.ts": {
@@ -3778,7 +3778,7 @@
       "executable": false
     },
     "src/strap/ui/courses.ts": {
-      "sha256": "f9499b5e96f59f0b36d243db040339f25de5a486e5dd2bf74a6f39c84b8e1206",
+      "sha256": "bdad73764bb2b6b5f39a8a547e41edaf92b283bd93f84b019969eda8b64ed751",
       "executable": false
     },
     "src/strap/ui/demand.ts": {
@@ -4174,7 +4174,7 @@
       "executable": false
     },
     "tests/courses-journey.mjs": {
-      "sha256": "dcb74a6b89c67a3b65e98e78fd5437c6f8b2971088d1ee738345fe3ff5114cbb",
+      "sha256": "a283c9c926672cdf11fccb5ae7e47f3b90478a6ce5aad0f9cc57cbe42244f224",
       "executable": false
     },
     "tests/demand-browser.mjs": {
