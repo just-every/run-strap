@@ -28,6 +28,11 @@ function moveControl(s: any, c: any, b: any, back: string) {
 }
 
 export function restoreControl(s: any, c: any, b: any, back: string) {
+  if (owner(s) && b.appointmentReservationId && c?.status === 'cancelled' && Date.parse(c.start) > Date.now() && ['early','late'].includes(b.cancellation)) {
+    return details('Restore appointment', form('appointment.restore.prepare', `/app/people?${new URLSearchParams({person:b.personId,classId:c.id})}#appointments`,
+      hidden('reservationId',b.appointmentReservationId)+hidden('classId',c.id)+hidden('scope','this')+actionChannel()
+      +field('reason','Restoration reason','','text','required maxlength="500"'), 'Preview appointment restoration','quiet','small'))
+  }
   if (!owner(s) || !canRestore(c, b)) return ''
   return details('Restore booking', '<p class="meta">Restore rechecks the member’s eligibility, available credit and capacity. A full class requires a capacity override reason.</p>'
     + form('booking.restore', back, hidden('id', b.id) + actionChannel() + field('reason', 'Restore reason', '', 'text', 'required maxlength="500"') + overrideField(), 'Restore booking', 'quiet', 'small'))

@@ -102,7 +102,7 @@ function review(tx: Transaction,input: Record<string,unknown>,operation?: string
   insist(input.key === preview.key && (!operation || preview.operation === operation),'appointment_review_required',409);
   return preview;
 }
-function notify(tx: Transaction,preview: RecordData,bookingIds: string[],before: unknown,after: unknown) {
+function notify(tx: Transaction,preview: RecordData,bookingIds: string[],before: unknown,after: unknown,bookingBefore: RecordData[] = []) {
   const subject = preview.operation === 'save' ? 'Private series reserved' : preview.operation === 'move' ? 'Private appointments moved' : preview.operation === 'restore' ? 'Private appointments restored' : 'Private appointments cancelled';
   const skipped = (preview.occurrences as RecordData[]).filter(o=>o.status === 'skipped');
   const body = messageBody(tx.state,subject,bookingIds)+(skipped.length ? '\nSkipped appointments:\n'+skipped.map(o=>`${o.occurrenceDate}: ${o.reason}`).join('\n') : '');
@@ -113,6 +113,20 @@ function notify(tx: Transaction,preview: RecordData,bookingIds: string[],before:
   const mail = suppressed ? {status:'suppressed'} : reserveMail(tx,tx.notices,{id:`mail:${actionId}`,sourceKind:'booking_action',sourceId:actionId,personId:preview.personId,bookingIds,subject,body,prepared:true});
   tx.put('bookingAction',{id:actionId,action:`appointment.${preview.operation}`,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'booking',
     personId:preview.personId,channel:preview.channel,before,after,reason:preview.reason ?? null,notice:{status:suppressed?'suppressed':'in_app',suppressionReason:preview.suppressionReason ?? null,mailStatus:mail.status},at:now()});
+  // Occurrence history shares the grouped action and mail identity. It never
+  // creates another canonical staff action or another member notice.
+  if (['cancel','restore'].includes(preview.operation)) for (const before of bookingBefore) {
+    const after = record(tx.state,before.id,'booking');
+    tx.put('bookingAction',{id:`appointment-change:${preview.id}:${before.id}`,parentActionId:actionId,
+      appointmentReservationId:preview.reservationId,bookingId:before.id,classId:before.classId,personId:before.personId,
+      action:preview.operation,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'booking',channel:preview.channel,
+      reason:preview.reason ?? null,at:after.cancelledAt ?? now(),type:after.cancellation ?? before.cancellation,
+      feeCents:after.feeCents ?? 0,creditReturned:after.refunded ?? false,waiver:after.waiver ?? null,
+      ...(preview.operation === 'restore' ? {cancellationId:`appointment-change:${before.cancellationId}:${before.id}`} : {}),
+      before,after,mailSourceId:actionId,
+      notice:{status:suppressed?'suppressed':'in_app',suppressionReason:preview.suppressionReason ?? null,mailStatus:mail.status}});
+  }
+
 }
 export async function confirmAppointmentReservation(tx: Transaction,input: Record<string,unknown>) {
   const preview = review(tx,input,'save');
@@ -168,6 +182,7 @@ export async function confirmAppointmentChange(tx: Transaction,input: Record<str
   if (preview.status === 'confirmed') return reservation;
   insist(preview.status === 'preview' && preview.basis === await facts(tx),'appointment_facts_changed',409);
   validateAppointmentPolicy(tx,preview);
+  const bookingBefore = preview.occurrences.map((o: RecordData)=>record(tx.state,o.bookingId,'booking'));
   const changed = new Map<string,RecordData>();
   if (preview.operation !== 'cancel') {
     for (const occurrence of applyAppointmentChanges(tx,preview.occurrences,preview.operation === 'restore',preview.reason,preview.id)) changed.set(occurrence.id,occurrence);
@@ -185,7 +200,7 @@ export async function confirmAppointmentChange(tx: Transaction,input: Record<str
   for (const policy of preview.policy ?? []) assessAppointmentFee(tx,preview,policy);
   const saved = {...reservation,occurrences:reservation.occurrences.map((o: RecordData)=>changed.get(o.id) ?? o),updatedAt:now()};
   tx.put('appointmentReservation',saved);
-  notify(tx,preview,preview.occurrences.map((o: RecordData)=>o.bookingId),reservation,saved);
+  notify(tx,preview,preview.occurrences.map((o: RecordData)=>o.bookingId),reservation,saved,bookingBefore);
   tx.put('appointmentPreview',{...preview,status:'confirmed'});return saved;
 }
 export function appointmentSnapshot(state: State,who: import('./types').Actor) {

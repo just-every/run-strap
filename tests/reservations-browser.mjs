@@ -6,7 +6,7 @@ const plus = (date,n) => new Date(Date.parse(date+'T12:00:00Z')+n*86_400_000).to
 // SCHED-005: members and the owner's booking-right door review every outcome,
 // commit eight weeks at 6 pm (six booked, one waitlisted, one closed), cancel a single occurrence, then review and cancel the future series.
 export async function reservationsBrowser(h,{coach,ben,start}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {
     for(const width of [1440,390]) {
@@ -105,7 +105,7 @@ export async function reservationsBrowser(h,{coach,ben,start}) {
 
 // The private desk path uses real form posts, native sessions and D1 records.
 export async function appointmentsBrowser(h,{coach,start}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390]) {
     const contexts=[]
@@ -176,6 +176,11 @@ export async function appointmentsBrowser(h,{coach,start}) {
       assert.equal(preview.occurrences.length,5);await shot(page,'week-six-preview',review)
       await review.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click();await shot(page,'five-sessions-released',savedPanel)
       const state=await h.state(),pack=state.packs.find(p=>p.personId===member.id);assert.deepEqual([pack.summary.remaining,pack.summary.reserved,pack.summary.consumed],[5,5,0])
+      await owner.goto(h.origin+'/app/people?classId='+saved.occurrences[5].id+'#cancellations')
+      await owner.locator('#cancellations').getByText('1 cancellations · 0 late',{exact:false}).waitFor()
+      await owner.locator('#cancellations').getByText('Away from week six',{exact:true}).waitFor()
+      await shot(owner,'private-cancellation-history',owner.locator('#cancellations'))
+
       const first=saved.occurrences[0]
       await h.cmd('attendance.checkin',{id:first.bookingId})
       const past=new Date(Date.now()-3_600_000).toISOString()
@@ -226,12 +231,32 @@ export async function appointmentsBrowser(h,{coach,start}) {
       await shot(page,'restore-preview',review)
       await review.getByRole('button',{name:'Confirm appointment restoration',exact:true}).click()
       await shot(page,'restored-private-occurrence',savedPanel)
+      await owner.goto(h.origin+'/app/people?classId='+canceledOccurrence.id+'#cancellations')
+      await owner.locator('#cancellations').getByText(/^Restored /).waitFor()
+      await shot(owner,'private-restored-history',owner.locator('#cancellations'))
+
       active=(await h.state(desk.cookie)).appointments.find(r=>r.id===saved.id)
       assert.equal(active.occurrences[5].status,'booked');assert.equal(active.occurrences[5].bookingId,canceledOccurrence.bookingId)
       const restoredPack=(await h.state()).packs.find(p=>p.personId===member.id)
       assert.deepEqual([restoredPack.summary.remaining,restoredPack.summary.reserved,restoredPack.summary.consumed],[4,5,1])
       await mine.reload();assert.equal((await h.state(member.cookie)).notices.length,5)
       await shot(mine,'member-reads-following-move-and-restore')
+      // The cancellations list uses the same reviewed private restoration door.
+      const listedOccurrence=active.occurrences[6]
+      await owner.goto(h.origin+'/app/people?classId='+listedOccurrence.id+'#cancellations')
+      const listed=owner.locator('#cancellations')
+      await listed.getByText('Restore appointment',{exact:true}).click()
+      await listed.getByLabel('Restoration reason').fill('Member requested the listed session')
+      await listed.getByRole('button',{name:'Preview appointment restoration',exact:true}).click()
+      const listPreview=(await h.state()).appointmentPreviews.filter(p=>p.personId===member.id&&p.operation==='restore').at(-1)
+      assert.equal(listPreview.occurrences[0].bookingId,listedOccurrence.bookingId)
+      const listReview=owner.locator(`[data-appointment-preview="${listPreview.id}"]`)
+      await listReview.getByRole('button',{name:'Confirm appointment restoration',exact:true}).click()
+      const listedRestored=await h.state()
+      assert.equal(listedRestored.bookings.find(b=>b.id===listedOccurrence.bookingId).status,'booked')
+      assert.equal(listedRestored.packs.find(p=>p.personId===member.id).remaining,3)
+      await owner.locator('#cancellations').getByText(/^Restored /).waitFor()
+
 
       // Owner and member screens retain an explicitly skipped date and reason;
       // the two held appointments use the membership allowance without credits.
@@ -281,5 +306,58 @@ export async function appointmentsBrowser(h,{coach,start}) {
       assert.deepEqual((await h.state()).charges.filter(c=>c.appointmentReservationId===priced.id).map(c=>c.amountCents),[9000,9000]);
       await shot(page,'priced-series-saved',page.locator('[data-appointment-reservation="'+priced.id+'"]'));
     } finally {for(const context of contexts) await context.close()}
+  }} finally {await browser.close()}
+}
+
+// The manager and assigned instructor use the same reviewed private changes
+// as front desk, with their own actor and current named grants.
+export async function delegatedPrivateBrowser(h,{staff,role,member,reservation}) {
+  const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try {for(const width of [390,1440]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try {
+      await context.route(h.origin+'/**',async route=>{
+        const path=new URL(route.request().url()).pathname
+        if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path)) return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+        return route.continue()
+      })
+      const index=staff.cookie.indexOf('=');await context.addCookies([{name:staff.cookie.slice(0,index),value:staff.cookie.slice(index+1),url:h.origin}])
+      const page=await context.newPage();await page.goto(h.origin+'/app/people?person='+member.id)
+      const saved=page.locator(`[data-appointment-reservation="${reservation.id}"]`),row=saved.locator('tbody tr').first()
+      const shot=async name=>{
+        await page.waitForLoadState('networkidle');await page.evaluate(()=>document.fonts.ready)
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+        await saved.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-013-${role}-${name}-${width}.png`)})
+      }
+      if(width===390) {
+        const before=await h.state(),remaining=before.packs.find(p=>p.personId===member.id).remaining
+        await row.getByText('Cancel appointment',{exact:true}).click()
+        await row.getByLabel('Cancellation reason').fill('Member phoned to cancel')
+        await row.locator('form').filter({has:page.getByRole('button',{name:'Preview appointment cancellation',exact:true})}).getByLabel('Request received by').selectOption('phone')
+        await row.getByRole('button',{name:'Preview appointment cancellation',exact:true}).click()
+        let preview=(await h.state(staff.cookie)).appointmentPreviews.filter(p=>p.reservationId===reservation.id&&p.operation==='cancel').at(-1)
+        let review=page.locator(`[data-appointment-preview="${preview.id}"]`)
+        assert.deepEqual(preview.occurrences.map(o=>o.bookingId),[reservation.occurrences[0].bookingId])
+        await review.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click()
+        assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,remaining+1)
+        await shot('cancelled')
+        await row.getByText('Restore appointment',{exact:true}).click()
+        await row.getByLabel('Restoration reason').fill('Member phoned to restore')
+        await row.getByLabel('Request received by').selectOption('phone')
+        await row.getByRole('button',{name:'Preview appointment restoration',exact:true}).click()
+        preview=(await h.state(staff.cookie)).appointmentPreviews.filter(p=>p.reservationId===reservation.id&&p.operation==='restore').at(-1)
+        review=page.locator(`[data-appointment-preview="${preview.id}"]`)
+        await review.getByRole('button',{name:'Confirm appointment restoration',exact:true}).click()
+        const state=await h.state(),booking=state.bookings.find(b=>b.id===reservation.occurrences[0].bookingId)
+        assert.equal(booking.status,'booked');assert.equal(booking.classId,reservation.occurrences[0].id)
+        assert.equal(state.packs.find(p=>p.personId===member.id).remaining,remaining)
+        const events=state.staffActions.filter(a=>a.after?.id===reservation.id)
+        assert.equal(events.length,6,'four HTTP changes plus two phone-view changes, one canonical event each')
+        assert.ok(events.every(a=>a.actorRole===role&&a.right==='booking'&&a.personId===member.id&&a.channel==='phone'))
+        assert.equal((await h.state(member.cookie)).notices.filter(n=>n.appointmentReservationId===reservation.id).length,6)
+      }
+      await shot('restored')
+    } finally {await context.close()}
   }} finally {await browser.close()}
 }
