@@ -43,6 +43,7 @@ export async function staffRightsBrowser(h,s) {
         await s.grant(s.coach,'instructor',['booking','member-record'],[s.ana.id],['studio']);
         if(width===1440)await h.enroll(s.coach.cookie);
         await login(s.coach.cookie);await page.goto(h.origin+'/app/people?person='+s.ana.id);await capture('instructor-members');
+        await login(s.finance.cookie);await page.goto(h.origin+'/app/revenue');await capture('finance-report');
       } finally {await context.close();}
     }
   } finally {await browser.close();}

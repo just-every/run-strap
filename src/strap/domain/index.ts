@@ -409,7 +409,7 @@ export async function financeSnapshot(db: D1Database, who: Actor) {
   const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as Record<string,unknown>;
   if (loaded.who.staffAccess) {
     const scope=new Set(loaded.who.locationIds),ledger={classes:full.classes as RecordData[],bookings:full.bookings as RecordData[],packs:full.packs as RecordData[],charges:full.charges as RecordData[]};
-    for (const key of ['charges','payments','packs']) full[key]=(full[key] as RecordData[]).filter(row=>scope.has(ledgerLocation(row,ledger)));
+    for (const key of ['charges','payments','packs']) full[key]=(full[key] as RecordData[]).filter(row=>hasStaffRight(loaded.state,loaded.who,'exports',row.personId,ledgerLocation(row,ledger)));
     const charges=full.charges as RecordData[],payments=full.payments as RecordData[],visible=new Set([...charges,...payments].map(row=>row.personId));
     full.people=(full.people as Person[]).filter(p=>visible.has(p.id));
     full.balances=[...visible].map(personId=>({personId,balanceCents:charges.filter(r=>r.personId===personId).reduce((n,r)=>n+r.amountCents,0)-payments.filter(r=>r.personId===personId).reduce((n,r)=>n+r.amountCents,0)}));
@@ -427,9 +427,9 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
   insist(loaded.who.role === 'manager','owner_required',403);
   const full = await snapshotFor(loaded.state,{...loaded.who,role:'owner',isOwner:true}) as unknown as Record<string,any[]>;
   const scope = new Set(loaded.who.locationIds), ledger = {classes:full.classes,bookings:full.bookings,packs:full.packs,charges:full.charges};
-  const own = (row: RecordData) => scope.has(ledgerLocation(row,ledger));
-  const classes = full.classes.filter(c => !c.privatePersonId && scope.has(c.locationId)), classIds = new Set(classes.map(c => c.id));
-  const charges = full.charges.filter(own), payments = full.payments.filter(own), packs = full.packs.filter(p => scope.has(p.locationId ?? 'studio'));
+  const own = (row: RecordData) => loaded.who.staffAccess ? hasStaffRight(loaded.state,loaded.who,'exports',row.personId,ledgerLocation(row,ledger)) : scope.has(ledgerLocation(row,ledger));
+  const classes = full.classes.filter(c => !c.privatePersonId && (loaded.who.staffAccess ? hasStaffRight(loaded.state,loaded.who,'exports',undefined,c.locationId) : scope.has(c.locationId))), classIds = new Set(classes.map(c => c.id));
+  const charges = full.charges.filter(own), payments = full.payments.filter(own), packs = full.packs.filter(p => own(p));
   const visible = new Set([...charges,...payments].map(r => r.personId));
   const balances = [...visible].sort().map(personId => ({personId,balanceCents:charges.filter(r => r.personId === personId).reduce((n,r) => n+r.amountCents,0)-payments.filter(r => r.personId === personId).reduce((n,r) => n+r.amountCents,0)}));
   const people = (full.people as unknown as Person[]).filter(p => visible.has(p.id) || packs.some(pack => pack.personId === p.id)).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}));
@@ -437,7 +437,7 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
   // The business's own identity and clock, never the original location's address, phone or hours unless it is one of theirs.
   const studio = {id:'studio',location:places.map(l => l.name).join(' · '),timeZone:places[0]?.timeZone ?? 'UTC',legalName:(full.studio as unknown as {legalName?:string}|null)?.legalName ?? null};
   return {actor:loaded.who,people,locations:places,studio,timeClock:timeSnapshot(loaded.state,loaded.who),version:full.version,classes,packs,charges,payments,balances,
-    bookings:full.bookings.filter(b => classIds.has(b.classId)),bookingActions:full.bookingActions.filter(a => classIds.has(a.classId))};
+    bookings:full.bookings.filter(b => classIds.has(b.classId) && (!loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',b.personId,loaded.state.records.get(b.classId)?.data.locationId ?? 'studio'))),bookingActions:full.bookingActions.filter(a => classIds.has(a.classId) && (!loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',a.personId,loaded.state.records.get(a.classId)?.data.locationId ?? 'studio')))};
 }
 export async function snapshot(db: D1Database, who: Actor, origin?: string, operational = true) {
   const loaded = await load(db,who);

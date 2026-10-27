@@ -1,3 +1,4 @@
+import { hasStaffRight } from './domain/staff-rights';
 import { delegatedCommandRight } from './domain/staff-command-access';
 import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
 import { taxCommand, taxState, taxFilingCsv } from './tax'
@@ -135,6 +136,7 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
+  if (who.staffAccess && /^\/api\/strap\/reports\/.*\.(csv|xlsx)$/.test(path)) {const current=await load(env.DB,who);if(!hasStaffRight(current.state,current.who,'exports'))fail('staff_right_required',403);}
   const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || who.staffAccess === true || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }

@@ -81,9 +81,13 @@ export async function staffBookingRights(h) {
   await grant(manager,'manager',base,[ana.id],['studio']);await h.enroll(manager.cookie);
   await refuse('booking.desk',{personId:ben.id,classId:open.id},manager.cookie);
   assert.equal((await h.state(manager.cookie)).actor.role,'manager');
+  assert.equal((await h.send('/api/strap/reports/revenue.csv',undefined,manager.cookie)).status,403,'report downloads need the separate export right');
   const managerClass=await s.publish('Manager appointment desk',60);const managerBooking=await h.cmd('booking.desk',{personId:ana.id,classId:managerClass.id,channel:'phone'},manager.cookie);assert.equal(managerBooking.status,'booked');
   await grant(finance,'finance',['exports'],[ana.id],['studio']);await h.enroll(finance.cookie);
-  assert.equal((await h.send('/api/strap/reports/revenue.csv',undefined,finance.cookie)).status,200);
+  const financeDownload=await h.send('/api/strap/reports/revenue.csv',undefined,finance.cookie);assert.equal(financeDownload.status,200);
+  const financeReport=await h.send('/api/strap/reports/revenue',undefined,finance.cookie);assert.equal(financeReport.status,200);
+  assert.deepEqual([...new Set(financeReport.value.sources.map(row=>row.personId))],[ana.id],'finance report includes exactly the selected member');
+  assert.ok(!financeDownload.text.includes(ben.id),'another member is absent from the download');
   await refuse('booking.desk',{personId:ana.id,classId:other.id},finance.cookie);
   assert.equal((await h.send('/api/strap/exit.json',undefined,finance.cookie)).status,403);
   await grant(desk,'front-desk',base,[ana.id],[s.west.id]);
