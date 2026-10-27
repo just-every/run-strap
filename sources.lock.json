@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b6643a6acbae62f3836c5ce21bce7d36bdfb20c411095d1c25f53f749239622f",
+      "sha256": "51007031b219613d6c2d4c358f1c2479351606acaaea165f2839315e9552b7ad",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "cd211fe8b92477ddbef67bcf03fc6407bca50aadc05c9768703b36844fe40ff4",
+      "sha256": "f55e0e08721da81f12d2912369428a662b77f5227938e7f507f95d13abf416e5",
       "executable": false
     },
     "DEMO.md": {
@@ -363,6 +363,10 @@
     },
     "docs/classes.md": {
       "sha256": "3907766b31a24b9618e6465103d5a3c68c72646ede4e5b0ede993e06cea18b2a",
+      "executable": false
+    },
+    "docs/COURSES.md": {
+      "sha256": "709e2d9bb520c421cbb48d8013271f12edced7ec2fb10cf9c4126449c9933651",
       "executable": false
     },
     "docs/EXIT-EXPORT.md": {
@@ -3257,6 +3261,10 @@
       "sha256": "1f9fa45d577feed5d7f6bebd3b52fafc5e1f87be884919973dae0bb50c764634",
       "executable": false
     },
+    "src/strap/domain/courses.ts": {
+      "sha256": "560e9b9610d89b464b83057112bd1eed650bc6bd230618ce3c9da0f8a1458990",
+      "executable": false
+    },
     "src/strap/domain/demand.ts": {
       "sha256": "3eb7c3fcb0726eb4840eb0c984b614d7ebbd02fc4bb8e5f8ed4cbf112a423184",
       "executable": false
@@ -3318,7 +3326,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "fd3e95cb8859ad6fe975894b19407f56f13bb62f49dcc86631a47363dfe49a8a",
+      "sha256": "b4ffca0d4d64a171c00b91c3e90f8cd5f5959f5c8cdc16a48e55abb28d491b2d",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3454,11 +3462,11 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "cd92c490faa74322f20eb3a28e244322e5397be00eb79b0a1ef0d0d60c3f9c78",
+      "sha256": "6331d07036b2797ae9eda4d73cdab383100c0b3c03e14d723a9b1522f645ef78",
       "executable": false
     },
     "src/strap/domain/staff-command-access.ts": {
-      "sha256": "b523f95d2bbf5d9e1f62f1856f55d3655468cb70a1d435cb9e374b963631cdb2",
+      "sha256": "1862712d6ee7dd63c5f6a1c853ae84759071f6bd2b814d43771ea7cb87385e51",
       "executable": false
     },
     "src/strap/domain/staff-rights.ts": {
@@ -3534,11 +3542,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "e7633f9d2cc4fc7c54ea27ca565f9d7acdb29c776520b249e9a5d775f68ee9fe",
+      "sha256": "88d0365741fd20ecceab67e9dd76ab349725ffc94ecc3e2ff4f4f3bc8292bd6e",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "59c3e68cad5b1bab5709ad59f946a0baf17625ab3a435eb1ec8432e2b4f1241f",
+      "sha256": "57a995974683b9933369ea4b63fb54ad725aa192a58758f630c942be4a5938ad",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3769,6 +3777,10 @@
       "sha256": "c3f09112ca96208a9824e20c162418095379e60d5d57a25e4c02191088eb2542",
       "executable": false
     },
+    "src/strap/ui/courses.ts": {
+      "sha256": "f9499b5e96f59f0b36d243db040339f25de5a486e5dd2bf74a6f39c84b8e1206",
+      "executable": false
+    },
     "src/strap/ui/demand.ts": {
       "sha256": "6d08e3782a35d3d833b696e975cc0ec210e3bb8bc6bd569538cc82c0e19485d7",
       "executable": false
@@ -3818,7 +3830,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "81bbba97a9f2f93e2ecb882e15a2a3a9ba3e335d96900015f0178d570881fe4d",
+      "sha256": "b512eaa224b21f1ad2d3f51675c3b73a5e2b51c187e57d7bdedca722c59d5b55",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -3950,7 +3962,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "1955ed6b0718f91e55c3c237ae072fa05f73d680c63a3bb4d060fac8b1910603",
+      "sha256": "ab69c03a707b8c224d71a7d1e9d53c331b6acc8579a969517463fe7f58db25aa",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -3966,7 +3978,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "d473c45b9b0725e0f6b13188492823c672b1be98599b6e665aff59dbad80daf1",
+      "sha256": "81112d014f74a9b7ae1ec2bf23b4426432c7b0d85bcba1cd9ca61e73bc068572",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4149,6 +4161,22 @@
       "sha256": "fcc65d18970b6a57603fad980b2d162a9fcbfef53125a5a9f3c2e943d9a900e6",
       "executable": false
     },
+    "tests/course-pair.mjs": {
+      "sha256": "bbf660e963342b8e35b8211f3510ad3d2a0578f07fb660de5cf9820759b47129",
+      "executable": false
+    },
+    "tests/courses-browser.mjs": {
+      "sha256": "9297b47b35f6be88cf58258b61f43a255f247e561e883801e799350c5b1b6988",
+      "executable": false
+    },
+    "tests/courses-clock.mjs": {
+      "sha256": "37b034ffba74fd245e3f0e733627b764f01e00585ef1be68e95307df9174122a",
+      "executable": false
+    },
+    "tests/courses-journey.mjs": {
+      "sha256": "dcb74a6b89c67a3b65e98e78fd5437c6f8b2971088d1ee738345fe3ff5114cbb",
+      "executable": false
+    },
     "tests/demand-browser.mjs": {
       "sha256": "f8f0cb7bbe67d1c979059bd8b06886fb982b06bdbaf403abe0b3378177877df6",
       "executable": false
@@ -4234,7 +4262,7 @@
       "executable": false
     },
     "tests/households.test.mjs": {
-      "sha256": "ef6ca40582fcaa2f673da5984003899726eb3cc2959a71e182e3bb31048b885d",
+      "sha256": "1f711fdc1edb92ab3ad28e4795adfa85efa1a4a71aa08602d9bd7a85c0e4d00d",
       "executable": false
     },
     "tests/intake-browser.mjs": {
@@ -4450,7 +4478,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "1f9fb953d96a28add0fdd2a56404550187fb2e4d77b3a9122ad943fbdab71d92",
+      "sha256": "30fd77886dee5b0a76382464a27a2899fa6805f88e1f3bc0b110881869263c11",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {

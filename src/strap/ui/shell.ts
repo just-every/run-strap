@@ -8,9 +8,10 @@ import { avatar, h, owner, rows } from './shared'
 export interface Tab { href: string; label: string; glyph: string; count?: number }
 
 export function tabs(s: any): Tab[] {
+  const courseTab: Tab = {href:'/app/courses',label:'Courses',glyph:'calendar'}
   const security: Tab = { href: '/app/security', label: 'Security', glyph: 'key' }
-  if (s.actor.role === 'front-desk') return [...(s.saleGrant?.enabled ? [{href:'/app/retail',label:'Gift sales',glyph:'card'}] : []),{href:'/app/referrals',label:'Referrals',glyph:'users'},{href:'/app/intake',label:'Intake forms',glyph:'report'},{href:'/app/people',label:'Member records',glyph:'users'},security]
-  if (s.actor.role === 'manager') return [...(s.actor.staffAccess ? [{href:'/app/people',label:'Member records',glyph:'users'}] : []),{ href: '/app/time-clock', label: 'Time clock', glyph: 'today' }, { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
+  if (s.actor.role === 'front-desk') return [courseTab,...(s.saleGrant?.enabled ? [{href:'/app/retail',label:'Gift sales',glyph:'card'}] : []),{href:'/app/referrals',label:'Referrals',glyph:'users'},{href:'/app/intake',label:'Intake forms',glyph:'report'},{href:'/app/people',label:'Member records',glyph:'users'},security]
+  if (s.actor.role === 'manager') return [...(s.actor.staffAccess ? [courseTab] : []),...(s.actor.staffAccess ? [{href:'/app/people',label:'Member records',glyph:'users'}] : []),{ href: '/app/time-clock', label: 'Time clock', glyph: 'today' }, { href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, { href: '/app/reports', label: 'Attendance reports', glyph: 'report' }, security]
   if (s.actor.role === 'finance') return [{ href: '/app/revenue', label: 'Revenue reports', glyph: 'report' }, security]
   const waiting = (types: string[]) => rows(s, 'drafts').filter(d => d.status === 'draft' && types.includes(d.type)).length
   if (owner(s)) return [
@@ -19,7 +20,7 @@ export function tabs(s: any): Tab[] {
     { href: '/app/people', label: 'People', glyph: 'users' },
     { href: '/app/households', label: 'Households', glyph: 'users' },
     { href: '/app/intake', label: 'Intake forms', glyph: 'report' },
-    { href: '/app/tuition', label: 'Family tuition', glyph: 'card' },
+    { href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, courseTab,
     { href: '/app/leads', label: 'Lead follow-up', glyph: 'users' },
     { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' },
     { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' },
@@ -48,7 +49,7 @@ export function tabs(s: any): Tab[] {
     security,
   ]
   const member: Tab[] = [{href:'/app/offers',label:'Studio offers',glyph:'calendar'},{ href: '/app/intake', label: 'Intake forms', glyph: 'report' },
-    { href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, { href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
+    { href: '/app/tuition', label: 'Family tuition', glyph: 'card' }, courseTab, { href: '/app', label: 'Classes', glyph: 'calendar' }, { href: '/app/makeups', label: 'Absences and makeups', glyph: 'calendar' }, { href: '/app/packs', label: 'My packs', glyph: 'card' }, { href: '/app/profile', label: 'My profile', glyph: 'users' }, { href: '/app/recognition', label: 'Visit recognition', glyph: 'users' }, security]
   return rows(s, 'households').length ? [...member.slice(0, -1), { href: '/app/household', label: 'My household', glyph: 'users' }, member.at(-1)!] : member
 }
 

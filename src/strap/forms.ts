@@ -319,5 +319,14 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
       start: localInstant(String(input.startDate), String(input.startTime), zone),
       end: localInstant(String(input.endDate), String(input.endTime), zone) }
   }
+  if (name.startsWith('course.')) {
+    for (const key of ['confirm','confirmPolicy']) if (key in input) input[key] = input[key] === 'true'
+    if ('capacity' in input) input.capacity = Number(input.capacity)
+    if (name === 'course.publish') {
+      input.depositCents = cents(input.deposit,'the deposit'); delete input.deposit
+      input.sessions = String(input.sessions ?? '').split(/\r?\n/).filter(v=>v.trim()).map(v=>{const [start,end]=v.split('|').map(x=>x.trim());return {start,end}})
+      input.installments = String(input.installments ?? '').split(/\r?\n/).filter(v=>v.trim()).map(v=>{const [dueAt,amount]=v.split('|').map(x=>x.trim());return {dueAt,amountCents:cents(amount,'the installment')}})
+    }
+  }
   return input
 }
