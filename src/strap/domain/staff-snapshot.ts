@@ -1,3 +1,4 @@
+import { locations } from './locations';
 import { memberRecordVisible } from './member-records';
 import { classRightVisible } from './staff-command-access';
 import { staffAccess, hasStaffRight } from './staff-rights';
@@ -19,7 +20,7 @@ export function staffDeskSnapshot(state: State, who: Actor) {
       ...(state.records.get(b.classId)!.data.start > new Date().toISOString() && b.status !== 'cancelled' ? {cancelEffect:cancellationEffect(b,state.records.get(b.classId)!.data)} : {})}));
   const packs = list(state,'pack').filter(p => members.some(m => m.id === p.personId) && memberRecordVisible(state,who,p.personId,p.locationId ?? 'studio')).map(p => ({id:p.id,personId:p.personId,credits:p.credits,remaining:p.remaining,expiresAt:p.expiresAt,eligibleServices:p.eligibleServices,entitlement:p.entitlement,summary:packSummary(state,p)}));
   const rightForPack=(right: 'membership-sale'|'contract-change',packId: string) => {const p=state.records.get(packId)?.data;return p && hasStaffRight(state,who,right,p.personId,p.locationId ?? 'studio');};
-  return {staffRecurring:list(state,'recurringTerms').filter(t => rightForPack('membership-sale',t.packId) || rightForPack('contract-change',t.packId)),staffContracts:list(state,'contractCancellation').filter(c => rightForPack('contract-change',c.packId)),classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c)})),bookings,packs,
+  return {collectionLocations:locations(state).filter(l=>hasStaffRight(state,who,'collection',undefined,l.id)).map(l=>({id:l.id,name:l.name})),staffRecurring:list(state,'recurringTerms').filter(t => rightForPack('membership-sale',t.packId) || rightForPack('contract-change',t.packId)),staffContracts:list(state,'contractCancellation').filter(c => rightForPack('contract-change',c.packId)),classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c)})),bookings,packs,
     cancellationReasons:state.records.get('cancellation-reasons')?.data.reasons ?? ['Sick','Schedule conflict','Other'],
     staffPermissions:access?.enabled ? Object.keys(access.rights).filter(right => access.rights[right as keyof typeof access.rights]?.enabled) : []};
 }

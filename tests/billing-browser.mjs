@@ -14,7 +14,7 @@ export async function billingBrowser(h,edge) {
     try {
       await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
       // Hosted provider UI is an external paid edge; this proves only the native launch.
-      await context.route('https://checkout.stripe.com/**',route=>route.abort())
+      await context.route('https://checkout.stripe.com/**',route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Test provider handoff</title>'}))
       const page=await context.newPage(),panel=page.locator('#billing')
       const sign=async cookie=>{await page.goto('about:blank');await context.clearCookies();const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])}
       const capture=async name=>{
@@ -77,7 +77,7 @@ export async function billingBrowser(h,edge) {
       const launch=page.waitForRequest(r=>r.url().startsWith('https://checkout.stripe.com/'))
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor();await capture('stripe-handoff')
-      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();await launch
+      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();await launch;await page.waitForURL(url=>url.hostname==='checkout.stripe.com',{waitUntil:'load'})
       await page.goto(h.origin+'/app/packs#billing')
       await staffLaunch('billing.setup.complete','Open authorization status','status')
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
