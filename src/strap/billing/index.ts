@@ -19,7 +19,7 @@ const native = (run: (tx: Transaction,input: Record<string,unknown>)=>any): Bill
   await tx.commit();return result;
 };
 const hosted = (name: string): BillingRun => (env,who,input)=>providerCommand(env,who,name,input);
-const launch = (name: string,right: string)=>defineBilling(native((tx,input)=>launchBillingAction(tx,input,name,right)),['owner'],{staffRight:right});
+const launch = (name: string,right: string)=>defineBilling(native((tx,input)=>launchBillingAction(tx,input,name,right)),right === 'collection' ? ['owner','manager','front-desk','finance'] : ['owner'],{staffRight:right});
 const member = (name: string,right: string)=>({member:{staff:name+'.launch',right,ownStep:true}});
 const handlers = {
   'billing.connect':defineBilling(hosted('billing.connect'),['owner']),
@@ -52,5 +52,5 @@ export async function billingState(env: BillingBindings,who: Actor) {
     if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured'].includes(error.code))throw error;
   }
   return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id} : null,
-    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,available:!!c && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted'})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
+    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,available:!!c && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
 }

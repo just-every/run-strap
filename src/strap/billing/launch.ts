@@ -1,12 +1,23 @@
 import type { Transaction } from '../domain/store';
 import { humanOwner, id, insist, list, now, person, record, text } from '../domain/types';
+import { requireStaffRight } from '../domain/staff-rights';
 import { canonical, currentAgreement, mandateFor } from './model';
 
 /** Staff can open the personal step, never supply its financial authorization. */
 export function launchBillingAction(tx: Transaction,input: Record<string,unknown>,memberCommand: string,right: string) {
-  humanOwner(tx.who);
+  if(right !== 'collection')humanOwner(tx.who);
+  else requireStaffRight(tx.state,tx.who,'collection');
+  if(!input.id) {
+    const member=person(tx.state,input.personId);
+    requireStaffRight(tx.state,tx.who,'collection',member.id,input.locationId ?? 'studio');
+    const candidates=list(tx.state,'billingAgreement').filter(a=>a.personId===member.id && a.signature && mandateFor(tx.state,a.id)?.status==='accepted' && (tx.state.records.get(a.termsId)?.data.locationId ?? tx.state.records.get(tx.state.records.get(a.termsId)?.data.packId)?.data.locationId ?? 'studio')===(input.locationId ?? 'studio'));
+    insist(candidates.length===1,'choose_one_current_billing_agreement',409);
+    input={...input,id:candidates[0].id};
+  }
   const agreement = memberCommand === 'billing.mandate.revoke' ? record(tx.state,input.id,'billingAgreement') : currentAgreement(tx.state,input.id);
   person(tx.state,agreement.personId);
+  const terms=record(tx.state,agreement.termsId,'recurringTerms'),pack=record(tx.state,terms.packId,'pack');
+  if(right === 'collection')requireStaffRight(tx.state,tx.who,'collection',agreement.personId,pack.locationId ?? 'studio');
   const requestId=text(input.requestId,'requestId',100), channel=input.channel ?? 'desk';
   insist(['desk','phone','inbox'].includes(String(channel)),'invalid_channel');
   const basis=canonical({agreementId:agreement.id,memberCommand,channel});

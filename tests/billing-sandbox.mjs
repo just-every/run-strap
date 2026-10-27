@@ -39,7 +39,7 @@ export function billingEdge() {
   return {calls,outbound,setComplete:v=>complete=v,setUncertain:v=>uncertain=v,setLive:v=>live=v};
 }
 
-async function actualHostedSetup(h,agreement,member) {
+async function actualHostedSetup(h,agreement,member,replacement=false) {
   const { chromium }=await import('@playwright/test');
   const { readFile,mkdir }=await import('node:fs/promises');
   const { join,extname }=await import('node:path');
@@ -52,10 +52,10 @@ async function actualHostedSetup(h,agreement,member) {
       const page=await context.newPage();page.setDefaultTimeout(45000);
       await page.goto(h.origin+'/app/packs#billing');
       const section=page.locator('[data-billing-agreement="'+agreement.id+'"]');
-      await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click();
+      await section.getByRole('button',{name:replacement?'Replace test card with Stripe':'Authorize a test card with Stripe',exact:true}).click();
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).click();
       const snapshot=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
-      const setup=snapshot.setups.find(s=>s.agreementId === agreement.id);
+      const setup=snapshot.setups.filter(s=>s.agreementId === agreement.id && s.status !== 'completed').at(-1);
       assert.ok(setup,JSON.stringify({stage:'native-hosted-launch',operations:snapshot.operations.map(o=>({type:o.type,status:o.status,errorCode:o.errorCode,providerReceipt:o.providerReceipt}))}));
       const start=snapshot.operations.find(o=>o.resultId === setup.id);assert.ok(start);
       await page.waitForURL(url=>url.hostname === 'checkout.stripe.com',{waitUntil:'commit'});
@@ -93,11 +93,11 @@ async function actualHostedSetup(h,agreement,member) {
         console.log(JSON.stringify({stage:'hosted-post-submit',atNative:at.origin === h.origin,atStripe:at.hostname === 'checkout.stripe.com',captchaPresent:page.frames().some(f=>/hcaptcha|recaptcha/.test(f.url())),fields}));
         if(process.env.STRAP_PROOF_DIR)await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-post-submit-390.png'),fullPage:true});
       }
-      const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete'},member.cookie);
+      const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete-'+setup.id},member.cookie);
       assert.equal(verified.result.last4,'4242');assert.equal(verified.result.livemode,false);
       await page.goto(h.origin+'/app/packs#billing');
       await section.getByText(/visa ending 4242/).waitFor();
-      if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await section.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-method-390.png')});}
+      if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await section.screenshot({path:join(process.env.STRAP_PROOF_DIR,'STAFF-001-real-hosted-'+(replacement?'replacement':'initial')+'-390.png')});}
       return {setup,start,method:verified.result,returnNavigationCompleted};
     } finally {await context.close();}
   } finally {await browser.close();}
@@ -116,6 +116,19 @@ async function sandbox() {
     const ledgerBefore=await h.state();
     const actual=process.env.STRAP_BILLING_HOSTED_PROOF === '1';
     const hosted=actual?await actualHostedSetup(h,agreement,seed.member):null;
+    let replacement=null;
+    if(actual) {
+      const desk=await h.person('SandboxCollectionDesk');
+      const grant=enabled=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{collection:{enabled,scopes:[{memberIds:[seed.member.id],locationIds:['studio'],doors:['all']}]}}});
+      await grant(true);await h.enroll(desk.cookie);
+      const launch={id:agreement.id,requestId:'synthetic-strap-live-collection',channel:'desk'};
+      const calls=edge.length;await h.cmd('billing.setup.start.launch',launch,desk.cookie);assert.equal(edge.length,calls);
+      replacement=await actualHostedSetup(h,agreement,seed.member,true);
+      assert.notEqual(replacement.method.paymentMethodId,hosted.method.paymentMethodId);
+      const current=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
+      assert.deepEqual(current.methods.map(m=>m.available),[false,true]);
+      await grant(false);const version=(await h.state()).version;await h.cmd('billing.setup.start.launch',launch,desk.cookie,403);assert.equal((await h.state()).version,version);
+    }
     const input={id:agreement.id,requestId:hosted?.start.requestId ?? 'synthetic-strap-11'};
     const setup=hosted?{result:hosted.setup}:await billingSucceeded(h,'billing.setup.start',input,seed.member.cookie);
     if(!actual)assert.equal(new URL(setup.launchURL).hostname,'checkout.stripe.com');
@@ -126,11 +139,11 @@ async function sandbox() {
       assert.equal(incomplete.status,'incomplete');
     }
     const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
-    assert.equal(state.methods.length,actual?1:0);assert.equal(state.mandates[0].methodAuthorized,actual);
+    assert.equal(state.methods.length,actual?2:0);assert.equal(state.mandates[0].methodAuthorized,actual);
     await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
     assert.equal((await h.send('/api/strap/command',{name:'billing.setup.complete',input:{id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-13'}},seed.member.cookie)).status,409);
     const ledgerAfter=await h.state();assert.deepEqual(ledgerAfter.charges,ledgerBefore.charges);assert.deepEqual(ledgerAfter.payments,ledgerBefore.payments);
-    console.log(JSON.stringify({at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,setupIntentId:hosted?.method.setupIntentId ?? null,paymentMethodId:hosted?.method.paymentMethodId ?? null,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:actual,storedMethodAuthorized:actual,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:actual?'Synthetic member completed real Stripe-hosted TEST method authorization; recurring collection remains unproved':'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
+    console.log(JSON.stringify({at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,setupIntentId:hosted?.method.setupIntentId ?? null,paymentMethodId:hosted?.method.paymentMethodId ?? null,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:actual,storedMethodAuthorized:actual,replacementMethodId:replacement?.method.paymentMethodId ?? null,replacementSetupIntentId:replacement?.method.setupIntentId ?? null,collectionLaunchAndRevocationProved:!!replacement,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:actual?'Synthetic member completed real Stripe-hosted TEST method authorization; recurring collection remains unproved':'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
   },{auth:{STRIPE_BILLING_TEST_KEY:key},outbound:async request=>{
     const url=new URL(request.url);assert.equal(url.origin,'https://api.stripe.com');
     assert.ok(url.pathname === '/v1/account' || url.pathname.startsWith('/v1/checkout/sessions'));
