@@ -84,6 +84,11 @@ await run(async h=>{
   }
   state=await h.state();assert.equal(state.courseTuition.courses[0].enrolled,0)
   assert.equal(state.balances.find(b=>b.personId===second.id).balanceCents,30000,'deposit and overdue installment remain owed after phone withdrawal')
+  payer.cookie=await h.signIn(payer.email)
+  const financial=(await h.state(payer.cookie)).courseTuition.enrollments.find(row=>row.id===e.id)
+  assert.deepEqual([financial.attendance,financial.attendanceRestricted,financial.installments.map(r=>[r.paidCents,r.creditedCents])],[[],true,[[10000,0],[20000,0],[0,30000]]],'payer sees their exact financial facts without participant attendance')
+  const restrictedDesk=(await h.state(desk.cookie)).courseTuition.enrollments.find(row=>row.id===e.id)
+  assert.deepEqual([restrictedDesk.attendance,restrictedDesk.attendanceRestricted],[[],true],'sale and contract-change rights do not grant participant attendance reads')
   const deskActor=(await h.state(desk.cookie)).actor.id
   const phoneActions=state.staffActions.filter(a=>a.actorId===deskActor && a.personId===second.id && ['course.enrollment.confirm','course.withdraw.confirm'].includes(a.command))
   assert.deepEqual(phoneActions.map(a=>[a.command,a.channel,a.right,a.staffMade]).sort(),[['course.enrollment.confirm','phone','sale',true],['course.withdraw.confirm','phone','contract-change',true]])
