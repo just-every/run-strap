@@ -1,8 +1,11 @@
+import { authorizeCourse } from './courses';
 import { hasStaffRight, requireStaffRight, staffAccess, type StaffRight } from './staff-rights';
 import { insist, record, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 
 const delegated = new Map<string,StaffRight>([
+  ...['course.enrollment.prepare','course.enrollment.launch','course.enrollment.confirm'].map(name=>[name,'sale'] as [string,StaffRight]),
+  ...['course.withdraw.prepare','course.withdraw.confirm'].map(name=>[name,'contract-change'] as [string,StaffRight]),
   ...['booking.desk','booking.cancel','booking.move','booking.restore','booking.spot.staff','booking.offer.accept.staff','reservation.prepare','reservation.confirm','reservation.cancel.prepare','reservation.cancel.confirm'].map(name => [name,'booking'] as [string,StaffRight]),
   ['booking.waitlist.position','override'],
   ['attendance.checkin','check-in'],
@@ -19,6 +22,7 @@ export function requireClassRight(tx: Transaction, right: StaffRight, personId: 
 
 /** Resolve saved targets before replay; a request body cannot substitute its own scope. */
 export function authorizeStaffCommand(tx: Transaction, name: string, input: Record<string,unknown>, right: StaffRight) {
+  if(name.startsWith('course.'))return authorizeCourse(tx,name,input);
   requireStaffRight(tx.state,tx.who,right);
   const target = input.id ? tx.state.records.get(String(input.id)) : null;
   const reservation = input.reservationId ? tx.state.records.get(String(input.reservationId))?.data : null;

@@ -98,3 +98,7 @@ test('MEM-002: a household with two children and a payer, guardian-booked classe
   assert.deepEqual((await h.state(leo.cookie)).households.map(x => x.role), [], 'the replaced payer leaves the household view')
   assert.ok(third.participantIds.length === 3)
 }))
+
+test('PLAN-009: household tuition, exact payer consent, installment receipts, attendance and previewed phone withdrawal reconcile with scoped rights',async()=>{
+  await (await import('./courses-clock.mjs')).coursesClock()
+})

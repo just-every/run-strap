@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
+import { readFile, writeFile, rename } from 'node:fs/promises'
+import { run } from './harness.mjs'
+import { totp } from './mfa-helpers.mjs'
+import { courseTerms } from './course-pair.mjs'
+const key=()=>randomUUID()
+await run(async h=>{
+  const cmd=h.cmd,nativeState=h.state;h.cmd=(name,input,cookie=h.owner,...rest)=>cmd(name,input,cookie,...rest);h.state=(cookie=h.owner,...rest)=>nativeState(cookie,...rest)
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Course studio',timeZone:'America/Phoenix'})
+  const payer=await h.person('CoursePayer'),desk=await h.person('CourseDesk'),second=await h.person('CourseSecond'),stranger=await h.person('CourseStranger')
+  const home=await h.cmd('household.save',{name:'Course household'}),participant=(await h.cmd('household.participant.add',{id:home.id,name:'Course child'})).participantIds[0]
+  await h.cmd('household.payer.propose',{id:home.id,payerId:payer.id});await h.cmd('household.payer.accept',{id:home.id},payer.cookie)
+  const rights=(enabled=true)=>Object.fromEntries(['sale','contract-change'].map(r=>[r,{enabled,scopes:[{memberIds:[participant,second.id],locationIds:['studio'],doors:['all']}]}]))
+  await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:rights()});const deskFactor=await h.enroll(desk.cookie)
+  const terms=courseTerms(),sessions=terms.sessions.map(r=>({start:r.start.replace('2098','2032'),end:r.end.replace('2098','2032')})),installments=terms.installments.map(r=>({...r,dueAt:r.dueAt.replace('2098','2032')}))
+  const c=await h.cmd('course.publish',{...terms,sessions,installments})
+  const refuse=async(name,input,cookie,status=403)=>{const before=(await h.state()).version,r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,JSON.stringify(r.value));assert.equal((await h.state()).version,before,'refusal makes no writes');return r}
+  await refuse('course.publish',terms,desk.cookie)
+  await refuse('course.enrollment.prepare',{courseId:c.id,personId:stranger.id,requestId:key()},desk.cookie)
+  const preview=await h.cmd('course.enrollment.prepare',{courseId:c.id,personId:participant,requestId:key(),channel:'phone'},desk.cookie)
+  await refuse('course.enrollment.prepare',{courseId:c.id,personId:stranger.id,id:preview.id,requestId:key()},desk.cookie)
+  const remoteLocation=await h.cmd('location.save',{name:'Other course studio',timeZone:'America/Phoenix'})
+  const foreignCourse=await h.cmd('course.publish',{...terms,sessions,installments,locationId:remoteLocation.id})
+  const foreignPreview=await h.cmd('course.enrollment.prepare',{courseId:foreignCourse.id,personId:second.id,requestId:key()})
+  await refuse('course.enrollment.confirm',{id:foreignPreview.id,courseId:c.id,key:foreignPreview.key,confirm:true,requestId:key()},desk.cookie)
+
+  await refuse('course.enrollment.confirm',{id:preview.id,key:preview.key,confirm:true,requestId:key()},desk.cookie,409)
+  await refuse('course.accept',{id:preview.id,key:preview.key,confirm:true},stranger.cookie,404)
+  await refuse('course.accept',{id:preview.id,key:preview.key,confirm:true},desk.cookie)
+  const ownPreview=(await h.state(payer.cookie)).courseTuition.previews.find(p=>p.id===preview.id)
+  assert.equal(ownPreview.amountCents,60000);assert.equal(ownPreview.payerBasis,undefined,'no household internals in payer preview')
+  await refuse('course.accept',{id:preview.id,key:'changed',confirm:true},payer.cookie,409)
+  await h.cmd('course.accept',{id:preview.id,key:preview.key,confirm:true},payer.cookie)
+  const waiver=await h.cmd('waiver.publish',{text:'Current course participation policy.',requiresSignature:true,service:c.name})
+  await refuse('course.enrollment.confirm',{id:preview.id,key:preview.key,confirm:true,requestId:key()},desk.cookie,409)
+  await h.cmd('household.guardian.link',{id:home.id,guardianId:payer.id,evidenceReference:'synthetic-strap-course-guardian'})
+  // A changed household requires the payer to review a fresh exact preview.
+  const refreshed=await h.cmd('course.enrollment.prepare',{courseId:c.id,personId:participant,requestId:key(),channel:'phone'},desk.cookie)
+  await h.cmd('course.accept',{id:refreshed.id,key:refreshed.key,confirm:true},payer.cookie)
+  Object.assign(preview,refreshed)
+  await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:payer.name,confirm:true,participantId:participant},payer.cookie)
+  await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:second.name,confirm:true},second.cookie)
+  const confirm={id:preview.id,key:preview.key,confirm:true,requestId:key(),channel:'phone'},e=await h.cmd('course.enrollment.confirm',confirm,desk.cookie)
+  assert.deepEqual([e.personId,e.payerId,e.amountCents,e.installments.map(r=>r.amountCents)],[participant,payer.id,60000,[10000,20000,30000]])
+  await h.cmd('course.enrollment.confirm',confirm,desk.cookie)
+  assert.equal((await h.state()).staffActions.filter(a=>a.requestId===confirm.requestId).length,1)
+  assert.equal((await h.state()).courseTuition.previews.filter(p=>p.courseId===c.id && p.personId===participant && p.status==='preview').length,0,'superseded payer reviews cannot remain actionable')
+  assert.equal((await h.state()).balances.find(b=>b.personId===payer.id).balanceCents,60000)
+  await refuse('course.payment.record',{id:e.id,installmentId:'deposit',amountCents:10000,reference:key()},desk.cookie)
+  for(const [installmentId,amountCents] of [['deposit',10000],['1',20000]]) {
+    const input={id:e.id,installmentId,amountCents,reference:'synthetic-strap-course-'+installmentId};await h.cmd('course.payment.record',input);await h.cmd('course.payment.record',input)
+    await refuse('course.payment.record',{...input,amountCents:amountCents-1},h.owner,409)
+  }
+  assert.equal((await h.state()).payments.filter(p=>p.courseEnrollmentId===e.id).length,2)
+  await refuse('course.attendance',{id:e.id,sessionId:'1',outcome:'attended'},h.owner,409)
+  if(process.env.STRAP_PROOF_DIR || process.env.CI)await(await import('./courses-browser.mjs')).coursesBrowser(h,{desk,second,course:c,preview})
+  else {
+    const p=await h.cmd('course.enrollment.prepare',{courseId:c.id,personId:second.id,channel:'phone',requestId:key()},desk.cookie);await h.cmd('course.accept',{id:p.id,key:p.key,confirm:true},second.cookie);await h.cmd('course.enrollment.confirm',{id:p.id,key:p.key,confirm:true,requestId:key(),channel:'phone'},desk.cookie)
+  }
+  let state=await h.state();assert.equal(state.courseTuition.courses[0].enrolled,2)
+  await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:stranger.name,confirm:true},stranger.cookie)
+  const full=await h.cmd('course.enrollment.prepare',{courseId:c.id,personId:stranger.id,requestId:key()});await h.cmd('course.accept',{id:full.id,key:full.key,confirm:true},stranger.cookie)
+  await refuse('course.enrollment.confirm',{id:full.id,key:full.key,confirm:true,requestId:key()},h.owner,409)
+  const original=Number(await readFile(process.env.STRAP_RECOVERY_CLOCK,'utf8')),target=Date.parse('2032-01-16T12:00:00Z'),offset=Math.ceil((target-(Date.now()-original*1000))/1000)
+  await writeFile(process.env.STRAP_RECOVERY_CLOCK+'.new',String(offset));await rename(process.env.STRAP_RECOVERY_CLOCK+'.new',process.env.STRAP_RECOVERY_CLOCK)
+  h.owner=await h.signIn('owner@studio.example');await h.cmd('mfa.verify',{code:totp(h.mfaOwner.secret)})
+  desk.cookie=await h.signIn(desk.email);await h.cmd('mfa.verify',{code:totp(deskFactor.secret)},desk.cookie)
+  stranger.cookie=await h.signIn(stranger.email)
+  await h.cmd('course.attendance',{id:e.id,sessionId:'1',outcome:'attended'});await h.cmd('course.attendance',{id:e.id,sessionId:'2',outcome:'absent'})
+  await h.cmd('course.attendance',{id:e.id,sessionId:'1',outcome:'attended'})
+  const wp=await h.cmd('course.withdraw.prepare',{id:e.id,reason:'Participant requested withdrawal',requestId:key(),channel:'phone'})
+  assert.deepEqual([wp.creditCents,wp.releasedSessions,wp.rows.map(r=>r.creditCents)],[30000,['3','4','5','6'],[0,0,30000]])
+  const withdrawal={id:wp.id,key:wp.key,confirm:true,requestId:key(),channel:'phone'};await h.cmd('course.withdraw.confirm',withdrawal);await h.cmd('course.withdraw.confirm',withdrawal)
+  state=await h.state();const withdrawn=state.courseTuition.enrollments.find(r=>r.id===e.id)
+  assert.deepEqual([withdrawn.status,withdrawn.attendance.map(a=>[a.sessionId,a.outcome]),withdrawn.installments.map(r=>[r.paidCents,r.creditedCents])],['withdrawn',[['1','attended'],['2','absent']],[[10000,0],[20000,0],[0,30000]]])
+  assert.equal(state.balances.find(b=>b.personId===payer.id).balanceCents,0);assert.equal(state.charges.filter(r=>r.courseEnrollmentId===e.id).reduce((n,r)=>n+r.amountCents,0),30000)
+  assert.equal(state.courseTuition.courses[0].enrolled,1);assert.equal(state.staffActions.filter(a=>a.requestId===withdrawal.requestId).length,1)
+  const phoneEnrollment=state.courseTuition.enrollments.find(row=>row.personId===second.id)
+  if(process.env.STRAP_PROOF_DIR || process.env.CI)await(await import('./courses-browser.mjs')).courseWithdrawalBrowser(h,{desk,enrollment:phoneEnrollment})
+  else {
+    const p=await h.cmd('course.withdraw.prepare',{id:phoneEnrollment.id,reason:'Phoned-in withdrawal',requestId:key(),channel:'phone'},desk.cookie)
+    assert.equal(p.creditCents,30000);await h.cmd('course.withdraw.confirm',{id:p.id,key:p.key,confirm:true,requestId:key(),channel:'phone'},desk.cookie)
+  }
+  state=await h.state();assert.equal(state.courseTuition.courses[0].enrolled,0)
+  assert.equal(state.balances.find(b=>b.personId===second.id).balanceCents,30000,'deposit and overdue installment remain owed after phone withdrawal')
+  const deskActor=(await h.state(desk.cookie)).actor.id
+  const phoneActions=state.staffActions.filter(a=>a.actorId===deskActor && a.personId===second.id && ['course.enrollment.confirm','course.withdraw.confirm'].includes(a.command))
+  assert.deepEqual(phoneActions.map(a=>[a.command,a.channel,a.right,a.staffMade]).sort(),[['course.enrollment.confirm','phone','sale',true],['course.withdraw.confirm','phone','contract-change',true]])
+  await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:rights(false)})
+  await refuse('course.enrollment.confirm',confirm,desk.cookie)
+  assert.equal((await h.state(desk.cookie)).courseTuition.enrollments.length,0)
+  assert.equal((await h.state(stranger.cookie)).courseTuition.enrollments.length,0)
+  console.log('Course tuition: exact consent, receipt replay, attendance, credited debt, seats and scope fences passed')
+})
