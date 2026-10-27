@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "bf613165557a0c5cfa6acf27ea21a691f69d4a69130c1e226cfbf8c59699f929",
+      "sha256": "9c0e5af19600f6a419feafc2222c9f38d461dd8f38a5cbac9a10c77b998f8baa",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "3f49c2c0ae7508f483049353072bf3c5c950f660c9683234316f0fe0aa35697d",
+      "sha256": "c9ca116522e5f11b5140591baf9263f0bcef8e2a023e19a0523183be52da6f94",
       "executable": false
     },
     "DEMO.md": {
@@ -3086,7 +3086,7 @@
       "executable": false
     },
     "src/strap/billing/launch.ts": {
-      "sha256": "3838c021f8c9139af4a18bdf2ea176ae6e31aba0b7a6a40beaf7b7182c11df44",
+      "sha256": "8768ca60a4d2438e0795b2ded2c39f8b61488a703c21c8e91e318cf8f36241be",
       "executable": false
     },
     "src/strap/billing/model.ts": {
@@ -4062,7 +4062,7 @@
       "executable": false
     },
     "tests/billing-sandbox.mjs": {
-      "sha256": "0bcdd33f3faea54b06c89237bfcb5b1f21bc110de9aec878918ea4a6b7710bdb",
+      "sha256": "61b6a348b261179caee9b0de67ccd47e12ffcaf1e580a0849fe5b210f9cf45d5",
       "executable": false
     },
     "tests/booking-actions-browser.mjs": {

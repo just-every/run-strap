@@ -93,10 +93,10 @@ async function actualHostedSetup(h,agreement,member,replacement=false) {
         console.log(JSON.stringify({stage:'hosted-post-submit',atNative:at.origin === h.origin,atStripe:at.hostname === 'checkout.stripe.com',captchaPresent:page.frames().some(f=>/hcaptcha|recaptcha/.test(f.url())),fields}));
         if(process.env.STRAP_PROOF_DIR)await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-014-real-hosted-post-submit-390.png'),fullPage:true});
       }
-      const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete-'+setup.id},member.cookie);
+      const verified=await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:setup.id,requestId:'synthetic-strap-actual-complete-'+(replacement?'replacement':'initial')},member.cookie);
       assert.equal(verified.result.last4,'4242');assert.equal(verified.result.livemode,false);
       await page.goto(h.origin+'/app/packs#billing');
-      await section.getByText(/visa ending 4242/).waitFor();
+      await section.getByText(/visa ending 4242 · authorized/).waitFor();
       if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await section.screenshot({path:join(process.env.STRAP_PROOF_DIR,'STAFF-001-real-hosted-'+(replacement?'replacement':'initial')+'-390.png')});}
       return {setup,start,method:verified.result,returnNavigationCompleted};
     } finally {await context.close();}

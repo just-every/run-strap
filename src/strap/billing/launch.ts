@@ -14,10 +14,11 @@ export function launchBillingAction(tx: Transaction,input: Record<string,unknown
     insist(candidates.length===1,'choose_one_current_billing_agreement',409);
     input={...input,id:candidates[0].id};
   }
-  const agreement = memberCommand === 'billing.mandate.revoke' ? record(tx.state,input.id,'billingAgreement') : currentAgreement(tx.state,input.id);
-  person(tx.state,agreement.personId);
-  const terms=record(tx.state,agreement.termsId,'recurringTerms'),pack=record(tx.state,terms.packId,'pack');
-  if(right === 'collection')requireStaffRight(tx.state,tx.who,'collection',agreement.personId,pack.locationId ?? 'studio');
+  const target=record(tx.state,input.id,'billingAgreement');
+  person(tx.state,target.personId);
+  const terms=record(tx.state,target.termsId,'recurringTerms'),pack=record(tx.state,terms.packId,'pack');
+  if(right === 'collection')requireStaffRight(tx.state,tx.who,'collection',target.personId,pack.locationId ?? 'studio');
+  const agreement=memberCommand === 'billing.mandate.revoke' ? target : currentAgreement(tx.state,target.id);
   const requestId=text(input.requestId,'requestId',100), channel=input.channel ?? 'desk';
   insist(['desk','phone','inbox'].includes(String(channel)),'invalid_channel');
   const basis=canonical({agreementId:agreement.id,memberCommand,channel});
