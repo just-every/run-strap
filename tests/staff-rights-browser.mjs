@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test';
 
 export async function staffRightsBrowser(h,s) {
   const proof=process.env.STRAP_RIGHTS_PROOF_DIR ?? process.env.STRAP_PROOF_DIR;await mkdir(proof,{recursive:true});
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']});
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
   try {
     for(const width of [1440,390]) {
       const context=await browser.newContext({viewport:{width,height:1000}});

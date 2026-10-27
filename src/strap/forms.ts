@@ -39,7 +39,7 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
   if(name.startsWith('billing.')) {
-    for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring'])if(key in input)input[key]=input[key]==='yes'
+    for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
     return input
   }
   if(name === 'tax.config.save') {
