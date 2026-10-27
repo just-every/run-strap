@@ -11,6 +11,7 @@
       "title": "Run your studio",
       "pages": [
         { "slug": "classes", "file": "classes.md", "title": "Classes and the waitlist", "summary": "Prepare and publish the week, let members book, fill cancellations from the waitlist and check people in." },
+        { "slug": "courses", "file": "COURSES.md", "title": "Courses and tuition", "summary": "Publish a course, review tuition with its payer, record received installments and preview a withdrawal." },
         { "slug": "packs-and-payments", "file": "packs-and-payments.md", "title": "Packs, credits and payments", "summary": "Give members class credits, record the payments you receive and see what every member owes." },
         { "slug": "people", "file": "people.md", "title": "People and access", "summary": "Add members and instructors, invite them to sign in, and end someone's access at once." },
         { "slug": "waivers", "file": "waivers.md", "title": "Waivers", "summary": "Publish a waiver version that members acknowledge before they book." },
