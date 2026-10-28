@@ -307,11 +307,15 @@ test('SCHED-009: eligible absences issue one linked expiring makeup; participant
   assert.deepEqual(afterRebooking.noticeDeliveries.filter(d=>d.sourceId===`makeup-booked:${rebooked.id}`).map(d=>d.personId),[child.id],'the new makeup notice goes only to its participant')
   const monthly=await h.person('Lena')
   const periodPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:monthly.id,kind:'visits',visits:2,period:'month',rollover:0,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
-  const periodOriginal=await h.cmd('booking.book',{classId:original.id},monthly.cookie)
-  await h.cmd('booking.book',{classId:secondOriginal.id},monthly.cookie)
+  // All quota fixtures belong to one explicit future studio month. Relative
+  // days from today can otherwise put only the refusal target in a fresh month.
+  const calendar=new Date(),periodDate=day=>new Date(Date.UTC(calendar.getUTCFullYear(),calendar.getUTCMonth()+1,day,12)).toISOString()
+  const periodFirst=await publish('Youth Mat',periodDate(10)),periodSecond=await publish('Youth Mat',periodDate(11)),periodTarget=await publish('Youth Mat',periodDate(12))
+  const periodOriginal=await h.cmd('booking.book',{classId:periodFirst.id},monthly.cookie)
+  await h.cmd('booking.book',{classId:periodSecond.id},monthly.cookie)
   const periodAbsence=await h.cmd('absence.report',{id:periodOriginal.id,reason:'Course absence',requestId:'synthetic-strap-period-absence'},monthly.cookie)
-  await refused(h,'booking.book',{classId:otherTarget.id},monthly.cookie,409,'plan_visits_used')
-  const periodMakeup=await h.cmd('makeup.book',{creditId:periodAbsence.creditId,classId:otherTarget.id,requestId:'synthetic-strap-period-makeup'},monthly.cookie)
+  await refused(h,'booking.book',{classId:periodTarget.id},monthly.cookie,409,'plan_visits_used')
+  const periodMakeup=await h.cmd('makeup.book',{creditId:periodAbsence.creditId,classId:periodTarget.id,requestId:'synthetic-strap-period-makeup'},monthly.cookie)
   const periodState=(await h.state(monthly.cookie)).packs.find(p=>p.id===periodPack.id).summary.plan
   assert.equal(periodState.periods.reduce((n,p)=>n+p.used,0),2)
   assert.equal(periodState.absent,1);assert.equal(periodState.attended,0)
