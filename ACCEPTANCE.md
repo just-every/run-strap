@@ -633,7 +633,7 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-DATA-
 
 Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-DATA-001, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · Rules D-2
 
-**Requirement.** Managers close a room or location or cancel a class with an impact preview, reason, approved credit/refund handling and delivered notifications; waitlists close and future recurrence follows the chosen scope.
+**Requirement.** Managers close a room or location or cancel a class with an impact preview, reason, approved credit/refund handling and delivered notifications; waitlists close and future recurrence follows the chosen scope. Mail configuration is described in [Studio mechanisms](docs/contract/MECHANISMS.md#sched-008-mail-configuration).
 
 **Acceptance.**
 1. Cancel a full class and its waitlist due to a closure, confirm affected members and financial effects, submit twice and verify each credit/refund and notification occurs once.
@@ -642,7 +642,7 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-DATA
 4. Preparing records a preview and changes nothing else: each affected class, each booked member (their credit returns to its own pack) and waitlisted member (the waitlist spot closes, no credit used), the member, credit and waitlist totals, that no money moves, and whether email is configured.
 5. Confirming requires that exact impact; any booking change since the preview refuses the confirmation until the owner previews again.
 6. Confirming cancels the classes with the reason, returns each booked credit once (a pack restore event), closes each waitlist, assesses no fee, writes one in-app notice per affected booking (shown on the member's account until they dismiss it) and reserves one email per affected member per closure covering all of their cancelled bookings; a second or concurrent confirmation changes and sends nothing.
-7. Email goes through the installation's configured Base mail provider (MAIL_PROVIDER resend, sendgrid or cloudflare with its key, from MAIL_FROM), built apart from the sign-in sender, only after the cancellation commits, with the reservation id as the provider idempotency key; each reservation is claimed once and never resent.
+7. Cancellation email uses the configured Resend, SendGrid or Cloudflare provider and studio sender, separate from sign-in mail, only after cancellation commits; its reservation identity prevents a second send.
 8. The owner sees each member's outcome exactly as recorded: accepted by the provider (delivery not confirmed), refused, rate limited, outcome unknown, interrupted, no email address, or not configured. A room closure also blocks that room for new classes in its interval (SCHED-003); a location closure blocks every new class in its interval. Cancelled classes free their instructor, room and equipment and cannot be booked. Money refunds are BILL-008's, series scope SCHED-001's, per-location scope STUDIO-002's, SMS MSG-005's, Postmark email MSG-006's and templates and preferences MSG-002's obligations (pattern 1).
 
 **Evidence.** `src/strap/domain/closures.ts`, `src/strap/notice-mail.ts`, `src/strap/ui/closures.ts`, `migrations/core/0019_notice_deliveries.sql`, `tests/closures.test.mjs`

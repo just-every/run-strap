@@ -625,6 +625,12 @@
       "to": "clause",
       "ids": [
         "SCHED-008"
+      ],
+      "also": [
+        {
+          "to": "docs",
+          "path": "docs/contract/MECHANISMS.md"
+        }
       ]
     },
     {
