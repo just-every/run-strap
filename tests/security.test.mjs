@@ -91,6 +91,43 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   await get(h, '/api/strap/reports/revenue', fourth, 403, 'owner_required')
 }))
 
+test('SEC-004: a form answered while its return page is held shows the security page, never the held report, roster or balance', () => run(async h => {
+  await h.confirmSetup(h.owner)
+  await h.cmd('studio.save', { location: 'Nashville', timeZone: 'America/Chicago' })
+  const member = await h.cmd('person.save', { name: 'synthetic-strap-21', email: 'synthetic-strap-21@studio.example', role: 'member', active: true })
+  await h.cmd('pack.approve', { id: (await h.cmd('pack.prepare', { personId: member.id, credits: 5, amountCents: 12345, expiresAt: '2099-12-31T00:00:00Z' })).id })
+  const fiona = await financeUser(h)
+  const visit = (cookie, returnTo) => h.mf.dispatchFetch(h.origin + returnTo, { headers: { cookie }, redirect: 'manual' })
+  const form = (name, cookie, returnTo, body, type = 'application/x-www-form-urlencoded') => h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=${encodeURIComponent(returnTo)}`, { method: 'POST', headers: { origin: h.origin, cookie, 'content-type': type }, body, redirect: 'manual' })
+  const heldAt = async (response, hold, label) => {
+    const text = await response.text()
+    assert.equal(response.status, 403, label); assert.equal(response.headers.get('x-strap-refusal'), hold, label)
+    assert.match(text, /<h1>Security<\/h1>/, label)
+    assert.ok(!text.includes('synthetic-strap-21') && !text.includes('123.45'), label + ': no member name or balance')
+    return text
+  }
+  const proofs = async () => (await h.db.prepare('SELECT COUNT(*) AS n FROM st_mfa_sessions').first()).n
+  const before = await proofs()
+  // A finance user before enrolling: an empty code, a body that is not a form, and a command finance cannot use.
+  await heldAt(await visit(fiona.cookie, '/app/revenue'), 'mfa_enrollment_required', 'finance direct visit')
+  await heldAt(await form('mfa.verify', fiona.cookie, '/app/revenue', 'code='), 'mfa_enrollment_required', 'empty code')
+  await heldAt(await form('mfa.verify', fiona.cookie, '/app/revenue', 'code', 'text/plain'), 'mfa_enrollment_required', 'not a form')
+  await heldAt(await form('booking.cancel', fiona.cookie, '/app/revenue', 'id=x'), 'mfa_enrollment_required', 'refused command')
+  // Starting an authenticator app from the hold shows its key on the security page.
+  await emailStepUp(h, fiona.cookie)
+  assert.match(await heldAt(await form('mfa.totp.start', fiona.cookie, '/app/revenue', 'label=Phone'), 'mfa_enrollment_required', 'started app'), /checkin-code/)
+  // An enrolled owner's new session is held at every page until a factor is presented, whatever page a form returns to.
+  const fresh = await h.signIn(h.auth.OWNER_EMAIL)
+  await heldAt(await visit(fresh, '/app/revenue'), 'mfa_required', 'owner direct visit')
+  await heldAt(await form('mfa.verify', fresh, '/app/revenue', 'code='), 'mfa_required', 'owner empty code')
+  await heldAt(await form('mfa.verify', fresh, '/app/revenue', 'code', 'text/plain'), 'mfa_required', 'owner not a form')
+  await heldAt(await form('mfa.verify', fresh, '/app/people', 'code=000000'), 'mfa_required', '/app/people')
+  assert.equal(await proofs(), before, 'no second factor is recorded for a held session')
+  const presented = await form('mfa.verify', fresh, '/app/people', `code=${totp(h.mfaOwner.secret, 1)}`)
+  assert.equal(presented.status, 303); assert.equal(presented.headers.get('location'), '/app/people')
+  assert.match((await h.send('/app/people', undefined, fresh)).text, /synthetic-strap-21/)
+}))
+
 test('SEC-004: owners are held at reports, pay, exports, staff access and provider connections until they enroll; another owner resets a factor and the audit shows it', () => run(async h => {
   await h.confirmSetup(h.owner)
   await h.cmd('studio.save', { location: 'Nashville', timeZone: 'America/Chicago' })

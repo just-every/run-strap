@@ -145,6 +145,17 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (hold) fail(hold.code, 403)
 }
 
+/** Where a form's result or error shows: the page it returns to when this person may open that page now, else their security page, refused as a visit to that page is. */
+async function outcomePage(env: Bindings, who: Actor, back: string) {
+  try { await guard(env, who, back.split(/[?#]/)[0]); return { target: back, refusal: '' } }
+  catch (error) {
+    if (Number((error as any)?.status) !== 403) throw error
+    const refusal = (error as Error).message
+    return { target: `/app/security?returnTo=${encodeURIComponent(back)}&hold=${refusal}`, refusal }
+  }
+}
+const refused = (page: Response, refusal: string) => refusal ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': refusal } }) : page
+
 async function inputBody(request: Request): Promise<Record<string, unknown>> {
   const raw = await request.text()
   if (new TextEncoder().encode(raw).length > 9_100_000) fail('Request is too large', 413)
@@ -317,7 +328,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         // private result document (source review, journal, one-time key or pairing link).
         const personalBillingLaunch=name.startsWith('billing.')&&name.endsWith('.launch')
         if (!personalBillingLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
-        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
+        const shown = await outcomePage(env, who, back)
+        return refused(await renderApp(await appState(env, who, shown.target), shown.target, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result }), shown.refusal)
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
@@ -334,9 +346,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
     if (path === '/app/action' && who) {
-      const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
-      const page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') })
-      return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
+      const shown = held ? { target: `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}`, refusal: message } : await outcomePage(env, who, back)
+      const page = await renderApp(await appState(env, who, shown.target), shown.target, { error: message.replace(/_/g, ' ') })
+      return refused(page, shown.refusal || (message === 'step_up_required' ? message : ''))
     }
     if (pages.has(path) && held && who) {
       const target = `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}`
