@@ -1,3 +1,4 @@
+import { clientAppointmentPairs } from './client-appointment-cases.mjs'
 import { coursePair } from './course-pair.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -43,7 +44,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name.startsWith('appointment.client.')||name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let emptyDeskOffer,nurtureDeskOffer,winbackDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
@@ -52,6 +53,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
     let billingMember,billingAgreement,billingSetup;
     const actions={
+      ...clientAppointmentPairs(h,coach,checkAudit,{member:historyMember,staffMember:otherHistoryMember}),
       'course.accept':async door=>coursePair(h,door,checkAudit),
       'intake.submit':async door=>{
         const form=await h.cmd('intake.form.publish',{title:'Phone intake pair',scope:'service',service:'Future intake service',required:false,questions:[{label:'Class preference',required:true,sensitive:false},{label:'Restricted preference',required:true,sensitive:true}],requestId:randomUUID()});
@@ -577,7 +579,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       await actions[name](entry.memberDoor.staff);covered.add(name)
       if (name.startsWith('reservation.')) assert.equal((await h.send(`/app/people?person=${seriesMember.id}`,undefined,h.owner)).status,200,'the staff history renders the recurring action and its before/after effects')
     }
-    assert.equal((await h.send('/app/people',undefined,h.owner)).status,200,'all new canonical staff actions render in the shared history')
+    const historyPage=await h.send('/app/people',undefined,h.owner);assert.equal(historyPage.status,200,'all new canonical staff actions render in the shared history: '+historyPage.text)
     assert.equal((await h.send('/app/people?person='+ana.id,undefined,h.owner)).status,200,'member history renders guest and makeup effects')
     for (const entry of memberCommands) assert.ok(covered.has(entry.name),`${entry.name}: a new member action needs a tested staff pair`)
     const key=await h.cmd('agent.create',{label:'Staff parity agent'})

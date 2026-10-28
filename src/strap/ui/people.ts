@@ -1,3 +1,4 @@
+import { clientAppointmentsPanel } from './client-appointments'
 import { attendanceBookingAccess } from './attendance-access'
 import { attendancePlanControls } from './attendance-plan'
 import { appointmentBookingAccess } from './appointment-access'
@@ -36,7 +37,7 @@ function card(s: any, p: any, back: string) {
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + (p.role === 'member' ? invoiceDocumentsPanel(s,p.id,back,true) : '')
     + personCheckin(s, p, back)
-    + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? reservationsPanel(s,p.id,back) + clientAppointmentsPanel(s,p.id,back+'#client-appointments') : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
     + (p.role === 'member' ? attendancePlanControls(s,p.id,back+'#attendance-plan') : '')
     + staffProfileEditor(s, p, back)
