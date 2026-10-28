@@ -1,6 +1,7 @@
 import { cell, field, form, h, hidden, select, table, textarea } from './shared'
 import { money } from './format'
 import { taxAddressFields } from './tax-fields'
+import { taxPayments } from './tax-payments'
 
 export function taxOperations(s: any,tax: any) {
   const config=tax.config
@@ -24,6 +25,7 @@ export function taxOperations(s: any,tax: any) {
   return calculate+(previews ? `<h3>Tax previews</h3><div class="table-wrap">${table(['Sale','Original price','Tax','Total','Approval'],previews)}</div>` : '')
     +(invoices ? `<h3>Recorded test tax invoices</h3><div class="table-wrap">${table(['Sale','Price','Tax','Provider reference'],invoices)}</div>` : '')+refund
     +(reversals ? `<h3>Recorded test tax reversals</h3><div class="table-wrap">${table(['Original invoice','Returned price','Tax credit','Provider reference'],reversals)}</div>` : '')
+    +taxPayments(tax)
     +`<p><a href="/api/strap/tax/filing.csv">Download tax evidence CSV</a></p>`
     +(outcomes ? `<details><summary>Tax operation history</summary><ul>${outcomes}</ul>${textarea('taxEvidence','Retained tax evidence',JSON.stringify({invoices:tax.invoices,reversals:tax.reversals},null,2),'readonly rows="10"')}</details>` : '')
 }

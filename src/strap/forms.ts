@@ -54,6 +54,10 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     return {requestId:input.requestId,chargeId,productId,address:{line1:input.customerLine1,line2:input.customerLine2,city:input.customerCity,state:input.customerState,postalCode:input.customerPostalCode,country:'US'},...(input.exemptionId ? {exemptionId:input.exemptionId} : {})}
   }
   if(name === 'tax.confirm')return {...input,expectedTaxCents:Number(input.expectedTaxCents)}
+  if(name === 'tax.payment.record') {
+    const [invoiceId,reversalId]=JSON.parse(String(input.taxPaymentSource))
+    return {requestId:input.requestId,invoiceId,...(reversalId ? {reversalId} : {}),amountCents:cents(input.amountCents,'the tax payment'),reference:input.reference,reason:input.reason}
+  }
   if(name === 'tax.refund') {
     const [invoiceId,retailReturnId]=JSON.parse(String(input.taxReturn))
     return {requestId:input.requestId,invoiceId,retailReturnId,expectedTaxCents:cents(input.expectedTaxCents,'the expected tax credit'),reference:input.reference,reason:input.reason}

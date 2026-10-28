@@ -418,7 +418,7 @@
       "executable": false
     },
     "docs/TAX.md": {
-      "sha256": "a7ef072532d30b816246201bee66588ee0faf28cce474b4658708248c41281fb",
+      "sha256": "4afdd5fd1db4e4efb79aa50732363a1f77bdb54fd3253132b36de1cda8906f82",
       "executable": false
     },
     "docs/TWILIO-SMS.md": {
@@ -3562,7 +3562,7 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "acc8008e2151e3c8138ce492c82765c8089a1abc3229450240de597b497b5e96",
+      "sha256": "45550f936f30366c9840ab632ab43cf90e60ba831aa8a7dbbf8f62bd644c028e",
       "executable": false
     },
     "src/strap/http.ts": {
@@ -4038,7 +4038,7 @@
       "executable": false
     },
     "src/strap/ui/tax-operations.ts": {
-      "sha256": "6785d2a5a6ff77d96e5791bbe4cf90f7beb95be32fc68b920ec9e885262c4f73",
+      "sha256": "421f11e42281ad43c7610c07165294d931ffe85b63cd704deff1cf5f6f63b765",
       "executable": false
     },
     "src/strap/ui/tax-settings.ts": {
@@ -4562,7 +4562,7 @@
       "executable": false
     },
     "tests/tax-browser.mjs": {
-      "sha256": "2c114944f809f2f76f5cea8e1cfab15aa7ffb605fd136922288bdf55b88770f0",
+      "sha256": "c284b10307c75d2e39f4cd7021828c22b2ca8c21fc01bddbeafb6122b48fc310",
       "executable": false
     },
     "tests/tax-edge.mjs": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/tax.test.mjs": {
-      "sha256": "c78c3de763fb9dc687423918dbe44e232d066ebf3c6db50b0303ced95932099d",
+      "sha256": "73c88c30f1121bdc20b70a01b3b6887efcf66ca25711528e8411382c5d0cb4ec",
       "executable": false
     },
     "tests/teaching-pay-browser.mjs": {
@@ -4610,7 +4610,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "7b098be899c272ae409823c0d60ca5859f40afef5ea0fa7eb30ee9c871ee5dbe",
+      "sha256": "870bfc49b59acc73afacc228d43012d54ec699250f750b6a3f72e077edce0ccd",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {

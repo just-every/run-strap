@@ -41,6 +41,22 @@ export async function taxBrowser(h,seed,widths=[1440,390]) {
       await preview.getByRole('button',{name:'Record test tax invoice',exact:true}).click()
       const invoice=(await h.send('/api/strap/tax',undefined,h.owner)).value.invoices.find(i=>i.originalChargeId===sale.chargeId);assert.ok(invoice)
       await panel.locator('[data-tax-invoice="'+invoice.id+'"]').waitFor();await capture('invoice')
+      const recordPayment=async (reversalId,amount,reference)=>{
+        await panel.getByText('Record an external tax payment',{exact:true}).click()
+        const payment=panel.locator('form[action*="name=tax.payment.record"]')
+        await payment.getByLabel('Tax invoice or reversal',{exact:true}).selectOption(JSON.stringify([invoice.id,reversalId]))
+        await payment.getByLabel('Tax payment amount (USD)',{exact:true}).fill(amount)
+        await payment.getByLabel('External payment reference',{exact:true}).fill(reference)
+        await payment.getByLabel('Payment reason',{exact:true}).fill('Owner records money already exchanged outside Strap')
+        await payment.getByRole('button',{name:'Record external tax payment',exact:true}).click()
+        await panel.getByRole('cell',{name:reference,exact:true}).waitFor()
+        const saved=(await h.send('/api/strap/tax',undefined,h.owner)).value.payments.find(p=>p.reference===reference)
+        assert.ok(saved);assert.equal(saved.taxInvoiceId,invoice.id);assert.equal(saved.taxReversalId,reversalId)
+        assert.equal(saved.amountCents,(reversalId ? -1 : 1)*Math.round(Number(amount)*100))
+        assert.equal(saved.providerTransactionId,reversalId ? (await h.send('/api/strap/tax',undefined,h.owner)).value.reversals.find(r=>r.id===reversalId).providerTransactionId : invoice.providerTransactionId)
+        return saved
+      }
+      await recordPayment(null,'4.00','synthetic-strap-tax-browser-receipt-'+width);await capture('receipt')
       const returned=await h.cmd('retail.return',{saleId:sale.id,quantity:1,restock:false,reason:'One mat returned after the test sale',requestId:'synthetic-strap-tax-browser-return-'+width})
       await page.reload();await panel.getByText('Reverse tax for a recorded return',{exact:true}).click()
       const refund=panel.locator('form[action*="name=tax.refund"]')
@@ -52,9 +68,20 @@ export async function taxBrowser(h,seed,widths=[1440,390]) {
       const tax=(await h.send('/api/strap/tax',undefined,h.owner)).value,reversal=tax.reversals.find(r=>r.retailReturnId===returned.id)
       assert.equal(reversal?.taxCents,-200);assert.equal(reversal?.priceCents,-2000)
       const recorded=panel.locator('[data-tax-reversal="'+reversal.id+'"]');await recorded.waitFor();assert.match(await recorded.innerText(),/\$2\.00/)
+      await recordPayment(reversal.id,'2.00','synthetic-strap-tax-browser-refund-'+width);await capture('refund')
       await panel.getByText('Tax operation history',{exact:true}).click();await capture('reversal')
       const [download]=await Promise.all([page.waitForEvent('download'),panel.getByRole('link',{name:'Download tax evidence CSV',exact:true}).click()])
       const csv=await readFile(await download.path(),'utf8');assert.ok(csv.includes(reversal.providerTransactionId));assert.ok(csv.includes(invoice.providerTransactionId))
+      await panel.getByText('Recorded exemptions',{exact:true}).click()
+      const exemption=panel.locator('form[action*="name=tax.config.save"]').filter({has:page.locator('[name=exemptionPersonId]')})
+      await exemption.getByLabel('Exempt member',{exact:true}).selectOption(seed.member.id)
+      await exemption.getByLabel('Exemption evidence reference',{exact:true}).fill('synthetic-strap-browser-exemption-'+width)
+      await exemption.getByLabel('Exemption reason',{exact:true}).fill('Owner reviewed the member exemption evidence')
+      await exemption.getByRole('checkbox').check()
+      await exemption.getByRole('button',{name:'Record exemption',exact:true}).click()
+      const configured=(await h.send('/api/strap/tax',undefined,h.owner)).value.config
+      assert.ok(configured.exemptions.some(e=>e.personId===seed.member.id&&e.reference==='synthetic-strap-browser-exemption-'+width))
+      assert.deepEqual(configured.registeredStates,['WA','CA'])
       for(const tip of await page.locator('.has-tooltip:visible').all()) {await tip.focus();await tip.locator('[role=tooltip]').waitFor({state:'visible'});await tip.hover();await page.waitForTimeout(350);await tip.locator('[role=tooltip]').waitFor({state:'visible'})}
     } finally {await context.close()}
   }} finally {await browser.close()}

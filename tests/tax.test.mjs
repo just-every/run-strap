@@ -120,6 +120,9 @@ test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized a
     assert.equal(live.status,'failed');
     assert.ok(e.calls.every(call=>call.method === 'GET'));
     e.setLive(false);
+    const unregistered = await h.cmd('tax.config.save',{...seed.config,requestId:'unregistered-state',registeredStates:['NY']});
+    assert.equal(unregistered.status,'failed');assert.equal(unregistered.errorCode,'tax_active_registration_required');
+    assert.equal((await h.send('/api/strap/tax',undefined,h.owner)).value.config,null);
     await succeeded(h,'tax.config.save',seed.config);
     const base = {requestId:'preview',chargeId:seed.sale.chargeId,productId:'mat',address:taxAddress};
     for (const input of [{...base,productId:'missing'},{...base,address:{...taxAddress,country:'GB'}},{...base,address:{...taxAddress,state:'NY'}},{...base,chargeId:'missing'}]) {
@@ -127,7 +130,15 @@ test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized a
     }
     const exempt = await succeeded(h,'tax.calculate',{...base,requestId:'exempt',exemptionId:'synthetic-exemption'});
     assert.equal(exempt.result.taxCents,0);
+    assert.equal(exempt.result.exemption.reference,'synthetic-strap-205');
+    assert.equal(e.calls.at(-1).form.get('customer_details[taxability_override]'),'customer_exempt');
+    const other=await h.person('OtherTaxShopper');
+    const otherSale=await h.cmd('retail.sell',{personId:other.id,skuId:seed.sku.id,quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-other-tax-sale',requestId:'synthetic-strap-other-tax-sale'});
+    const beforeExemptionRefusal=e.calls.length,exemptionVersion=(await h.state()).version;
+    assert.equal((await h.send('/api/strap/command',{name:'tax.calculate',input:{...base,requestId:'wrong-exempt-member',chargeId:otherSale.chargeId,exemptionId:'synthetic-exemption'}},h.owner)).status,409);
+    assert.equal(e.calls.length,beforeExemptionRefusal);assert.equal((await h.state()).version,exemptionVersion);
     const preview = await succeeded(h,'tax.calculate',base);
+    assert.equal(preview.result.taxCents,400);assert.equal(e.calls.at(-1).form.get('customer_details[taxability_override]'),'none');
     const confirm = {requestId:'confirm',calculationId:preview.result.id,expectedTaxCents:400,reference:'synthetic-strap-220'};
     assert.equal((await h.send('/api/strap/command',{name:'tax.confirm',input:{...confirm,expectedTaxCents:401}},h.owner)).status,409);
     await succeeded(h,'tax.config.save',{...seed.config,requestId:'changed-config',products:seed.config.products.map(p=>({...p,label:p.label+' reviewed'}))});
