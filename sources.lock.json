@@ -4566,7 +4566,7 @@
       "executable": false
     },
     "tests/tax-browser.mjs": {
-      "sha256": "c284b10307c75d2e39f4cd7021828c22b2ca8c21fc01bddbeafb6122b48fc310",
+      "sha256": "e11b6b7013f1b0076890dae2764d902200c9f0b400d4631cca6ba503d3722ff8",
       "executable": false
     },
     "tests/tax-edge.mjs": {
