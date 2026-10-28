@@ -43,7 +43,7 @@ export async function leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intr
     await row.getByRole('link',{name:'Native membership',exact:true}).click()
     const pack=page.locator(`[id="pack-${membership.id}"]`)
     await pack.waitFor()
-    await pack.locator('summary').click()
+    await pack.locator(':scope > summary').click()
     await pack.getByText('Unlimited visits',{exact:false}).first().waitFor()
     await shot('membership-evidence')
     await page.goBack()

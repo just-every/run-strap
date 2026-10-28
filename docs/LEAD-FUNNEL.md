@@ -1,4 +1,4 @@
-# Inquiry and attendance funnel
+# Lead intro and campaign conversion
 
 Open **Lead follow-up** as the studio owner. An inquiry can retain its actual source, such as a phone inquiry or community event. Leave the source empty when it is unknown. The source is captured with the inquiry and retained in its original event; later follow-up edits do not rewrite it.
 
@@ -6,4 +6,16 @@ The funnel counts each member under their first retained inquiry, ordered by cre
 
 Recorded intro bookings and external membership outcomes drill through the inquiry history. These are recorded pipeline facts, not intro purchases or native membership conversions. Visits come from current corrected attended bookings whose classes have started since the first retained inquiry, through the report instant inclusive. Two visits constitute repeat attendance; future check-ins, no-shows, excused and canceled bookings do not count. The visit links open their authoritative rosters.
 
-Incomplete follow-ups are current inquiries outside the membership and lost stages; overdue follow-ups have a due instant before the report instant. A lost inquiry is an owner-recorded outcome, not an inferred lapse. Campaigns, intro purchases, native membership conversion, campaign spending and attributed revenue remain unavailable. Packs, receipts and recorded external agreements do not establish campaign attribution or marketing consent. RPT-005 remains partial.
+Incomplete follow-ups are current inquiries outside the membership and lost stages; overdue follow-ups have a due instant before the report instant. A lost inquiry is an owner-recorded outcome, never an inferred membership lapse.
+
+In **Intro campaigns**, record the campaign name, existing intro offer and exact UTC purchase window. Choose the campaign when creating the first inquiry. Source and campaign attribution are immutable. A later inquiry cannot move or duplicate that member’s acquisition. Campaign records never send messages or authorize spending. Marketing delivery remains governed by the existing consent and automation flows.
+
+Record spending that actually occurred in the campaign window, with USD amount, occurrence instant and a unique reference. The append-only observation retains the native owner and recording time. Exact request replay returns the same observation; changed replay and a repeated reference refuse. Campaign cost is the full campaign total, including when the source filter selects only one channel; costs are not allocated across channels.
+
+Native intro purchases come from retained confirmed intro sales after the first inquiry. Native membership conversions come from purchased visits or unlimited plans or personally accepted recurring invoice agreements after acquisition. Prepared drafts, generic or named credit packs and external membership labels never count as native conversion. Membership expiry does not manufacture a conversion or remove the historical sale. A member counts once in each funnel stage even with multiple retained events.
+
+Campaign sales require an intro purchase of the exact campaign offer during its window. Later native membership events are attributed from that purchase onward, including when conversion happens after the campaign ends. The campaign link selects the same first-inquiry members in HTTP and on screen. Source filters can be combined with `funnelCampaign` using the retained campaign ID.
+
+Attributed revenue means **gross original invoiced service sales**, in USD cents. It sums the original intro and membership charges linked to those events once. It excludes unrelated packs, fees, renewal invoices and refunds. It is not net, earned or collected revenue, tax or verified settlement. Accepting recurring invoice terms creates no revenue on its own. Cash and liability reporting remains RPT-004; later report exports and delivery remain RPT-006. Each intro sale, native conversion and original charge drills to its recorded ID, time, amount where applicable, native pack and purchase receipt. Spending details retain their reference and actor.
+
+The report and campaign observations use the existing private native-owner door. STAFF-001 retains scoped campaign staff authority; SEC-003 retains used-member erasure and retention policy. Campaign records contain no member identity. The report excludes erased identities and never changes access, consent, balances, payment authorization or follow-up stages.

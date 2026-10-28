@@ -314,11 +314,11 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "dc91728b919e833160817f9977d0c1f9ecd084507d0499a4e504fecf6926081c",
+      "sha256": "13f779685f6aecbd8d4e31b75c39792906fb2457e273cf52e23a5f51a7cebeb1",
       "executable": false
     },
     "AGENTS.md": {
-      "sha256": "1f04383dfce791443dc5fdfe346868268ce0b62b9cd24e5024bfefeb47bb320c",
+      "sha256": "e5ae197d997f4a8c9f8f9ccb3790aa559f13a48b3e8d5933d872b376deac7ac4",
       "executable": false
     },
     "base-copies.json": {
@@ -382,7 +382,7 @@
       "executable": false
     },
     "docs/LEAD-FUNNEL.md": {
-      "sha256": "38981f6eadfe852ff49653dd5157148a10e9b7f480d9819e01b7a69bd328f5b1",
+      "sha256": "b9740fe56cc4784de6596e6cbf72ea664e93959e8eaaf701d98d88be50c275f8",
       "executable": false
     },
     "docs/MOVE-IN.md": {
@@ -3342,7 +3342,7 @@
       "executable": false
     },
     "src/strap/domain/lead-campaigns.ts": {
-      "sha256": "769d12c89843a49b5b9eca4d2bd2710b323d082ff5e3fe8da0ee243242017589",
+      "sha256": "b84a17ecc055de6cb1b25b270352d8afad9f1c09008a8ab95c493d6c0cf3d7a5",
       "executable": false
     },
     "src/strap/domain/leads.ts": {
@@ -4298,7 +4298,7 @@
       "executable": false
     },
     "tests/lead-report-browser.mjs": {
-      "sha256": "0eb4480d2a1474530b6db11c90ba5649877233091578473331d1408310d7dc56",
+      "sha256": "48c8a65e053d0c13b523bd3ad813e31f1ed1dee0cbf4f2ef38e78b01177bc633",
       "executable": false
     },
     "tests/leads-browser.mjs": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "7e89e84cd2b748708a8e4b64a1d2568c1446418b2032543b00d452d4b418a410",
+      "sha256": "5fd8c773331be6c9dd5db0006f4efe1e08e0b940221f57eebbdb13cf5768c52e",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {

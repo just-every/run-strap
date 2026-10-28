@@ -49,7 +49,7 @@ export async function appendLeadCampaignCost(tx: Transaction, input: Record<stri
   const occurredAt = instant(input.occurredAt,'occurredAt'), at = now();
   insist(occurredAt >= campaign.startsAt && occurredAt < campaign.endsAt,'lead_campaign_cost_outside_period',409);
   insist(occurredAt <= at,'lead_campaign_cost_not_occurred',409);
-  const amountCents = integer(input.amountCents,'amountCents',1,Number.MAX_SAFE_INTEGER);
+  const amountCents = integer(input.amountCents,'amountCents',1,100_000_000);
   const reference = text(input.reference,'reference',500);
   insist(!list(tx.state,'leadCampaignCost').some(cost => cost.campaignId === campaign.id && cost.reference === reference),'lead_campaign_cost_reference_used',409);
   const note = input.note === undefined || input.note === null || input.note === '' ? null : text(input.note,'note',4000);
