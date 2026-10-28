@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { run } from './harness.mjs';
+import { execFileSync } from 'node:child_process';
 
 export const taxAddress = {line1:'920 5th Ave',city:'Seattle',state:'WA',postalCode:'98104',country:'US'};
 export const serviceAddress = {line1:'354 Oyster Point Blvd',city:'South San Francisco',state:'CA',postalCode:'94080',country:'US'};
@@ -37,10 +38,54 @@ export async function taxInvoice(h,chargeId,productId,address,requestId) {
   return {calculation,invoice};
 }
 
+// Read the filing download independently; quoted references can contain commas and newlines.
+export async function filingRows(h,query='') {
+  const response = await h.send('/api/strap/tax/filing.csv'+query,undefined,h.owner);
+  assert.equal(response.status,200); assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.match(response.headers.get('content-disposition'),/attachment/);
+  const rows=[], row=[]; let value='',quoted=false;
+  for(let i=0;i<response.text.length;i++) {
+    const c=response.text[i];
+    if(c==='"') {if(quoted && response.text[i+1]==='"') {value+='"';i++;} else quoted=!quoted;}
+    else if(!quoted && (c===',' || c==='\n')) {row.push(value);value='';if(c==='\n'){rows.push(row.splice(0));}}
+    else if(c!=='\r' || quoted)value+=c;
+  }
+  assert.equal(quoted,false); assert.equal(value,''); assert.equal(row.length,0);
+  const [fields,...records]=rows;
+  return records.map(record=>Object.fromEntries(fields.map((key,i)=>[key,record[i]])));
+}
+export async function assertTaxFiling(h,entries) {
+  assert.ok(entries.length>0);
+  const rows=await filingRows(h);
+  assert.deepEqual(rows.map(row=>row.id).sort(),entries.map(entry=>entry.result.id).sort(),'filing contains exactly the retained invoices and reversals');
+  for(const {result:r,invoice=r,priceCents,taxCents} of entries) {
+    const expected={id:r.id,kind:r.invoiceId ? 'reversal' : 'invoice',createdAt:r.createdAt,mode:'test',currency:'usd',
+      originalChargeId:invoice.originalChargeId,originalChargeFingerprint:invoice.originalChargeFingerprint,calculationId:invoice.providerCalculationId,
+      transactionId:r.providerTransactionId,originalTransactionId:r.invoiceId ? invoice.providerTransactionId : '',reference:r.reference,
+      priceCents,taxCents,productId:invoice.product.id,taxCode:invoice.product.taxCode,refundChargeId:r.refundChargeId ?? '',
+      refundBusinessReference:r.refundBusinessReference ?? '',personId:invoice.personId,locationId:invoice.locationId,chargeId:r.taxChargeId};
+    const exported=rows.find(row=>row.id===r.id);
+    for(const [field,value] of Object.entries(expected)) {
+      const plain=String(value),safe=typeof value==='string' && /^[=+\-@\t\r]/.test(plain) ? "'"+plain : plain;
+      assert.equal(exported[field],safe,'filing preserves '+field+' for '+expected.kind);
+    }
+    assert.equal(Object.keys(exported).length,Object.keys(expected).length);
+    const charge=(await h.state()).charges.find(charge=>charge.id===r.taxChargeId);
+    assert.equal(charge.amountCents,taxCents,'signed invoice tax agrees with the ledger');
+    assert.equal(charge.parentChargeId,invoice.originalChargeId,'tax keeps its original sale relationship');
+  }
+  assert.deepEqual(await filingRows(h,'?locationId=synthetic-strap-unmatched'),[],'filing excludes another location');
+  return rows;
+}
+
 async function sandbox() {
   const key = process.env.STRAP_STRIPE_TEST_KEY;
   assert.ok(key && /^(?:sk|rk)_test_/.test(key),'Held Stripe TEST secret required through the environment helper');
-  const edge = [];
+  const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  assert.equal(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'','sandbox proof requires a clean committed tree');
+  const sourcePaths=['src/strap/tax','src/strap/finance-tax.ts','tests/tax-sandbox.mjs','tests/tax.test.mjs'];
+  const sourceTree=execFileSync('git',['ls-tree','-r',head,'--',...sourcePaths],{encoding:'utf8'}).trim();
+  const edge = [],responses=[];
   await run(async h=>{
     const seed = await taxSeed(h);
     await succeeded(h,'tax.config.save',seed.config);
@@ -57,12 +102,25 @@ async function sandbox() {
     assert.deepEqual(await h.cmd('tax.refund',refundInput),reversal);
     assert.equal(reversal.result.taxCents,-expectedTaxCents);
     assert.equal(reversal.result.providerReversal.line_items.data[0].amount_tax,reversal.result.taxCents);
-    const filing = await h.send('/api/strap/tax/filing.csv',undefined,h.owner);
-    assert.equal(filing.status,200);
-    for (const op of [retail.invoice,service.invoice,reversal]) assert.ok(filing.text.includes(op.result.providerTransactionId));
+    assert.equal(service.invoice.result.priceCents,3000);
+    assert.equal(service.invoice.result.taxCents,service.calculation.result.providerCalculation.tax_amount_exclusive);
+    assert.equal(reversal.result.priceCents,-2000);
+    const filing=await assertTaxFiling(h,[{...retail.invoice,priceCents:4000,taxCents:retail.invoice.result.taxCents},
+      {...service.invoice,priceCents:3000,taxCents:service.invoice.result.taxCents},
+      {...reversal,invoice:retail.invoice.result,priceCents:-2000,taxCents:-expectedTaxCents}]);
+    for(const operation of [retail.calculation,retail.invoice,service.calculation,service.invoice,reversal]) {
+      const received=responses.find(response=>response.requestId===operation.providerResponse.requestId);
+      assert.ok(received); assert.deepEqual(operation.providerResponse.body,received.body,'retained evidence is the actual provider response');
+    }
+    const state=await h.state();
+    assert.equal(state.payments.find(payment=>payment.id===seed.sale.paymentId).amountCents,4000,'native sale records its original external tender');
+    assert.equal(state.payments.find(payment=>payment.id===returned.paymentId).amountCents,-2000,'native partial return refunds original price once');
+    assert.equal(state.payments.length,2,'tax calculation and reversal never invent a second collected or refunded payment');
+    assert.deepEqual(await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:true,reason:'Synthetic partial retail return',requestId:'tax-return'}),returned);
+    assert.equal((await h.state()).payments.length,2);
     const posts = edge.filter(request=>request.method === 'POST');
     assert.deepEqual(posts.map(request=>request.path),['/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/transactions/create_reversal']);
-    console.log(JSON.stringify({at:new Date().toISOString(),provider:'Stripe Tax TEST',accountSettingsWritten:false,registrationsWritten:false,
+    console.log(JSON.stringify({head,cleanTree:true,sourceTree,filingRows:filing,at:new Date().toISOString(),provider:'Stripe Tax TEST',accountSettingsWritten:false,registrationsWritten:false,
       edge,retail:{calculationId:retail.calculation.result.providerCalculationId,transactionId:retail.invoice.result.providerTransactionId,priceCents:4000,taxCents:retail.invoice.result.taxCents},
       service:{calculationId:service.calculation.result.providerCalculationId,transactionId:service.invoice.result.providerTransactionId,priceCents:3000,taxCents:service.invoice.result.taxCents},
       reversal:{transactionId:reversal.result.providerTransactionId,originalTransactionId:reversal.result.providerOriginalTransactionId,priceCents:reversal.result.priceCents,taxCents:reversal.result.taxCents},replayProviderPosts:posts.length-5,filing:'Evidence CSV only; no filing or payment collected'}));
@@ -76,7 +134,9 @@ async function sandbox() {
       throw error;
     }
     edge.push({path:url.pathname,method:request.method,status:response.status,requestId:response.headers.get('request-id')});
-    return new Response(await response.text(),{status:response.status,headers:{'content-type':'application/json','request-id':response.headers.get('request-id') ?? ''}});
+    const body=await response.text();
+    responses.push({requestId:response.headers.get('request-id'),body:JSON.parse(body)});
+    return new Response(body,{status:response.status,headers:{'content-type':'application/json','request-id':response.headers.get('request-id') ?? ''}});
   }});
 }
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) await sandbox();
