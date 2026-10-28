@@ -733,6 +733,11 @@
       "to": "clause",
       "ids": [
         "SCHED-015"
+      ],
+      "also": [
+        {
+          "to": "changelog"
+        }
       ]
     },
     {
