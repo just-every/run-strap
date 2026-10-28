@@ -609,6 +609,10 @@
       "sha256": "70ae4bcade4fc4f700334048e96adb6bb1e8cc863626d2d193e4e2615df67f2d",
       "executable": false
     },
+    "migrations/core/0042-member-mail-connection.sql": {
+      "sha256": "91e1e8d54425b2a1f010d961b7af3e40e1a40fb24eae0ec71ab57c278416b89b",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "5835eaca766b9cddadaa3560763aa840dc4206e4cf87df6b1798e971627d1c0c",
       "executable": false
@@ -4094,7 +4098,7 @@
       "executable": false
     },
     "tests/attendance.test.mjs": {
-      "sha256": "368b1d32841f39eb931e8d9ea4f32899f37a42b545d6049732db101ea7b0fea2",
+      "sha256": "a2d152d4a3920b2ed461c2c33c1521112499005de3be28d043301507d0055554",
       "executable": false
     },
     "tests/billing-agreements.test.mjs": {
@@ -4571,6 +4575,10 @@
     },
     "tests/tax-edge.mjs": {
       "sha256": "502c3daf259780a9cd6c056a7965291a24883d0175a17d4d74666390969e8ecc",
+      "executable": false
+    },
+    "tests/tax-restore-browser.mjs": {
+      "sha256": "dfb643ae4c11e03425f92cbb8fc447b78ecc876156794b03398aeae13757a22c",
       "executable": false
     },
     "tests/tax-sandbox.mjs": {
