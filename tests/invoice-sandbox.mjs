@@ -6,9 +6,9 @@ import { run } from './harness.mjs';
 import { invoiceSeed,invoiceView } from './invoice-journey.mjs';
 import { taxInvoice } from './tax-sandbox.mjs';
 
-const key=process.env.STRAP_STRIPE_TEST_KEY,mailKey=process.env.STRAP_MAIL_KEY,from=process.env.STRAP_MAIL_FROM;
-assert.ok(key && mailKey && from,'Held TEST billing and controlled mail credentials must be injected');
-const recipient=from.includes('<')?from.slice(from.lastIndexOf('<')+1,from.lastIndexOf('>')):from;
+const key=process.env.STRAP_STRIPE_TEST_KEY,taxKey=process.env.STRAP_TAX_TEST_KEY,mailKey=process.env.STRAP_MAIL_KEY,from=process.env.STRAP_MAIL_FROM;
+assert.ok(key && taxKey && mailKey && from,'Held TEST billing and controlled mail credentials must be injected');
+const recipient=(from.includes('<')?from.slice(from.lastIndexOf('<')+1,from.lastIndexOf('>')):from).trim().toLowerCase();
 const signing=randomBytes(32).toString('hex'),edge=[];
 async function provider(path) {
   const r=await fetch('https://api.stripe.com/v1'+path,{headers:{authorization:'Bearer '+key,'Stripe-Version':'2025-06-30.basil'},redirect:'manual'});assert.equal(r.status,200,'Stripe sandbox read');return r.json();
@@ -48,7 +48,7 @@ await run(async h=>{
       const country=page.locator('#billingCountry,select[name="billingCountry"]').first();if(await country.count()&&await country.isVisible())await country.selectOption('US');await fill('#billingPostalCode,input[name="billingPostalCode"]','98104',false);
       const link=page.locator('#enableStripePass');if(await link.count()&&await link.isVisible()&&await link.isChecked())await link.uncheck();await page.locator('button[type="submit"]').click();await page.waitForURL(url=>url.origin===h.origin,{waitUntil:'commit',timeout:60000});
     }finally{await context.close();}
-  }finally{await browser.close();}
+  }catch{throw Error('Controlled hosted TEST payment could not complete; no hosted URL or recipient is printed');}finally{await browser.close();}
   let session;for(let observation=0;observation<30;observation++){session=await provider('/checkout/sessions/'+checkout.providerSessionId+'?expand[]=payment_intent.latest_charge&expand[]=invoice');if(session.invoice?.status==='paid')break;await new Promise(resolve=>setTimeout(resolve,1000));}
   assert.equal(session.invoice?.status,'paid');assert.equal(session.payment_intent.amount_received,7000);await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-live-reconcile'});
   let invoice=(await invoiceView(h,member.cookie)).invoices[0];assert.deepEqual([invoice.totalCents,invoice.paidCents,invoice.balanceCents],[11000,11000,0]);
@@ -62,8 +62,8 @@ await run(async h=>{
   const resend={...own,requestId:'synthetic-strap-live-staff-copy',requested:true,channel:'phone'},staffCopy=await h.cmd('billing.receipt.send.staff',resend,desk.cookie);assert.equal(staffCopy.status,'accepted');await h.cmd('billing.receipt.send.staff',resend,desk.cookie);
   const deliveries=[];for(const d of [memberCopy,staffCopy])deliveries.push(await delivered(d));
   for(const path of ['/api/strap/invoice.html?id='+pack.id,'/api/strap/receipt.html?id='+receipt.id+'&packId='+pack.id]){const copy=await h.send(path,undefined,member.cookie);assert.equal(copy.status,200);assert.ok(copy.text.includes('$110.00'));assert.ok(copy.text.includes('$70.00'));assert.ok(copy.text.includes('$10.00'));}
-  console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST and configured Base SendGrid',packId:pack.id,sessionId:checkout.providerSessionId,providerInvoiceId:session.invoice.id,paymentIntentId:session.payment_intent.id,chargeId:session.payment_intent.latest_charge.id,externalRecordedCents:4000,stripeCollectedCents:7000,originalInvoiceCents:11000,providerRefundId:final.providerRefundId,refundedCents:1000,balanceCents:0,taxTransactions:taxes.map(t=>({id:t.providerTransactionId,taxCents:t.taxCents})),deliveries,staffAudit:(await h.state()).staffActions.filter(a=>a.command==='billing.receipt.send.staff').map(a=>({actorRole:a.actorRole,right:a.right,channel:a.channel,staffMade:a.staffMade})),edge}));
-},{auth:{STRIPE_BILLING_TEST_KEY:key,STRIPE_BILLING_WEBHOOK_SECRET:signing,STRIPE_TAX_TEST_KEY:key},outbound:async request=>{
+  console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST and configured Base SendGrid',billingMerchantCountry:account.country,billingCurrency:'usd',taxConnection:'separately configured US Stripe Tax TEST',packId:pack.id,sessionId:checkout.providerSessionId,providerInvoiceId:session.invoice.id,paymentIntentId:session.payment_intent.id,chargeId:session.payment_intent.latest_charge.id,externalRecordedCents:4000,stripeCollectedCents:7000,originalInvoiceCents:11000,providerRefundId:final.providerRefundId,refundedCents:1000,balanceCents:0,taxTransactions:taxes.map(t=>({id:t.providerTransactionId,taxCents:t.taxCents})),deliveries,staffAudit:(await h.state()).staffActions.filter(a=>a.command==='billing.receipt.send.staff').map(a=>({actorRole:a.actorRole,right:a.right,channel:a.channel,staffMade:a.staffMade})),edge}));
+},{auth:{STRIPE_BILLING_TEST_KEY:key,STRIPE_BILLING_WEBHOOK_SECRET:signing,STRIPE_TAX_TEST_KEY:taxKey},outbound:async request=>{
   const u=new URL(request.url);assert.ok(u.origin==='https://api.stripe.com' || u.origin==='https://api.sendgrid.com','only controlled provider edges');
   const response=await fetch(request.url,{method:request.method,headers:request.headers,...(request.method==='POST'?{body:await request.text()}:{}),redirect:'manual'});edge.push({method:request.method,path:u.pathname,status:response.status,requestId:response.headers.get('request-id')});return new Response(await response.text(),{status:response.status,headers:response.headers});
 }});

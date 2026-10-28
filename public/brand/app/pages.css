@@ -131,3 +131,19 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
 #payments section { margin-block: 18px; }
 
 .payment-reference { overflow-wrap: anywhere; }
+
+/* Itemized documents and the corresponding staff audit stay readable. */
+#invoice-documents th, #staff-actions th { font-size: 13px; }
+#invoice-documents { min-width: 0; container-type: inline-size; }
+#invoice-documents .table-wrap { max-width: 100%; overflow-x: auto; }
+#invoice-documents p, #invoice-documents summary { overflow-wrap: anywhere; }
+#invoice-documents td[data-label]::before, #staff-actions td[data-label]::before, .person-card .stat small { font-size: 13px; }
+@container (max-width: 600px) {
+  #invoice-documents .data.stack, #invoice-documents .data.stack tbody { display: block; width: 100%; }
+  #invoice-documents .data.stack thead { display: none; }
+  #invoice-documents .data.stack tr { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 0; }
+  #invoice-documents .data.stack td { display: block; width: auto; padding: 0; border: 0; text-align: left; }
+  #invoice-documents .data.stack td:first-child { flex-basis: 100%; }
+  #invoice-documents .data.stack td[data-label]::before { content: attr(data-label); margin-right: 6px; color: var(--strap-quiet); font-size: 13px; }
+  #invoice-documents .data.stack td:first-child::before { content: none; }
+}

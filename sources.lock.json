@@ -646,7 +646,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "bf08960a15f8977675ab05b7526388f2d2ca5f7011a03849aa1164bb82c8f966",
+      "sha256": "549a654562d94d435ca589deab444cf2c8508120a21494c7a7c7512da8d6d943",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -3894,7 +3894,7 @@
       "executable": false
     },
     "src/strap/ui/invoice-copy.ts": {
-      "sha256": "c284b55facba8b137fec6109ca407e558954f57b2940e54f4cae6576a3c29709",
+      "sha256": "764465596c82c96baeed7e065b105342bdac07bd2c4fd6f9e2da929b12d8bba0",
       "executable": false
     },
     "src/strap/ui/invoice-documents.ts": {
@@ -4350,7 +4350,7 @@
       "executable": false
     },
     "tests/invoice-browser.mjs": {
-      "sha256": "82e39f47af7e0ec36d75071cc50bc2caeb408128c44ef7025431f66e92a09e1b",
+      "sha256": "b5a4e0f3b526918c79f0aaebab7d4e4cad850b7314db7b96eee99310ef790af6",
       "executable": false
     },
     "tests/invoice-edge.mjs": {
@@ -4362,7 +4362,7 @@
       "executable": false
     },
     "tests/invoice-sandbox.mjs": {
-      "sha256": "2149f7fdbf5edb75af9436c5732ce432a98dfe3a11b7ecb7f10648389ac6e6fa",
+      "sha256": "1c9817b1caa7d7911206ee8485f17bb33400b6bb27a4d739dfe26eebdd9040da",
       "executable": false
     },
     "tests/lead-report-browser.mjs": {
