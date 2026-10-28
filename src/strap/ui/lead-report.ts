@@ -11,7 +11,7 @@ export function leadReportPanel(report: ReturnType<typeof leadReport>) {
   const rows = report.rows.map(row => `<tr data-funnel-member="${h(row.personId)}">`
     +cell('Member',`<a href="${h(row.leadUrl)}">${h(row.member)}</a><small>${h(row.source ?? 'Unknown source')}${row.campaignName ? ' · '+h(row.campaignName) : ''}</small>`)
     +cell('Attendance',`${row.attendedVisits} attended${row.repeatAttendance ? ' · repeat attendance' : ''}`)
-    +cell('Sales',`${row.introPurchases.length} intro purchases · ${row.nativeConversions.length ? 'Native membership converted' : 'No native conversion'}<small>${money(row.attributedRevenueCents)} gross invoiced revenue</small>`
+    +cell('Sales',`<span>${row.introPurchases.length} intro purchases · ${row.nativeConversions.length ? 'Native membership converted' : 'No native conversion'}</span><small>${money(row.attributedRevenueCents)} gross invoiced revenue</small>`
       +`<details><summary>Recorded sales evidence</summary><ul>`
       +row.introPurchases.map(e => `<li data-intro-sale-id="${h(e.id)}"><a href="${h(e.url)}">Intro purchase</a> · ${money(e.amountCents)} · ${h(e.at)} · ${h(e.id)}</li>`).join('')
       +row.nativeConversions.map(e => `<li data-conversion-id="${h(e.id)}"><a href="${h(e.url)}">Native membership</a> · ${h(e.kind)} · ${h(e.at)} · ${h(e.id)}</li>`).join('')

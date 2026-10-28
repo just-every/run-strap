@@ -3862,7 +3862,7 @@
       "executable": false
     },
     "src/strap/ui/lead-report.ts": {
-      "sha256": "c2b717ec2658bc68f662e92a5efd3cc65f0502ba4a2aa0ad0877a59ccf4175c5",
+      "sha256": "abf6a25396ff5618f1135e75e2c0f4a066d0fab06658587997af63b8f77d0ade",
       "executable": false
     },
     "src/strap/ui/leads.ts": {
