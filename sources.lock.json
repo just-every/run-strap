@@ -3102,7 +3102,7 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "aa0edf4a58637ed5eb271d5258e1598f2ed35cc13eb218b2583ee4653bd63834",
+      "sha256": "aa51dcd55134a6c555a3e4e3f98a0fbe1fc848c58db1cc82e61f499dbea778b7",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
@@ -3354,7 +3354,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "4c84a077200b3f8cbed81a8ac38f9ac45a38edd4c625bd1004cf8243d539ef23",
+      "sha256": "bef270a20f0f52687c0afcc74c99c5abadbf32c79b081d7a58d675d82199b412",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3590,7 +3590,7 @@
       "executable": false
     },
     "src/strap/integrations.ts": {
-      "sha256": "2bda80de1f307db48b87b6ec1303cc21347f6211859bea86fa28d7cedf14aec6",
+      "sha256": "7dc590781a4323c746d7505873569fd51d2f456fdd70af6a9d5411059060a71a",
       "executable": false
     },
     "src/strap/kiosk/devices.ts": {
@@ -3674,7 +3674,7 @@
       "executable": false
     },
     "src/strap/security/mfa.ts": {
-      "sha256": "063c300dbe0f611d190fface66c6aaf3e13e78c4e732530716617b9a3699fda2",
+      "sha256": "18d3d12a4d209791fab4431fecc118dc62dd967342ccc23fc96bb9faaf516a6a",
       "executable": false
     },
     "src/strap/security/webauthn.ts": {
@@ -4570,7 +4570,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "8a55e037965a4e312f389f8e0ac10f4346f43812d94aee2ec11a6cc0c1c74b72",
+      "sha256": "8174b476db5abf6b341e16e13bceeea7f5cee4e94809ebe7607540b1348b58a3",
       "executable": false
     },
     "tests/studio-browser.mjs": {

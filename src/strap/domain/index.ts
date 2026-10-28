@@ -352,7 +352,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
   if (who.role === 'agent') insist(['attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
-  const spec = handlers[name as keyof typeof handlers];
+  const spec = Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   if (name.startsWith('booking.')) {
     const target = tx.state.records.get(String(input.id))?.data;
     const entry = tx.state.records.get(String(input.classId ?? target?.classId))?.data;

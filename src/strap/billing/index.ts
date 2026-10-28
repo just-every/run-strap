@@ -44,12 +44,12 @@ const handlers = {
   'billing.setup.complete':defineBilling(hosted('billing.setup.complete'),['member'],member('billing.setup.complete','collection')),
   'billing.setup.complete.launch':launch('billing.setup.complete','collection'),
 };
-export const delegatedBillingRight = (name: string) => (handlers[name as keyof typeof handlers] as {staffRight?: string} | undefined)?.staffRight;
+export const delegatedBillingRight = (name: string) => ((Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined) as {staffRight?: string} | undefined)?.staffRight;
 export const billingCommandCatalogue = ()=>Object.entries(handlers).map(([name,spec])=>({name,roles:spec.roles,memberDoor:spec.member ?? null,staffRight:spec.staffRight ?? null}));
 
 /** HTTP adds the native SEC-004 factor gate to the owner-only commands. */
 export async function billingCommand(env: BillingBindings,who: Actor,name: string,input: Record<string,unknown>) {
-  const handler=handlers[name as keyof typeof handlers];
+  const handler=Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   insist(handler,'unknown_command',404);
   return handler.run(env,who,input);
 }
