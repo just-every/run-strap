@@ -1379,6 +1379,14 @@
       "to": "clause",
       "ids": [
         "STAFF-006"
+      ],
+      "also": [
+        {
+          "to": "clause",
+          "ids": [
+            "STAFF-007"
+          ]
+        }
       ]
     },
     {
