@@ -42,7 +42,7 @@ export function paymentEdge() {
     assert.ok(object);const e={id:'synthetic-strap-event-'+suffix,object:'event',type,created:Math.floor(Date.now()/1000)-Number(suffix||0),livemode:false,data:{object:structuredClone(object)}};
     events.set(e.id,e);return e;
   };
-  return {outbound,calls,sessions,events,complete,event,setReady:v=>ready=v,setAccount:v=>accountId=v,setFailCreate:v=>failCreate=v,setChange:v=>change=v};
+  return {...setup,outbound,calls,sessions,events,complete,event,setReady:v=>ready=v,setAccount:v=>accountId=v,setFailCreate:v=>failCreate=v,setChange:v=>change=v};
 }
 export async function signedEvent(h,event,{secret=paymentAuth.STRIPE_BILLING_WEBHOOK_SECRET,stamp=Math.floor(Date.now()/1000),signature,raw=JSON.stringify(event)}={}) {
   const sig=signature ?? createHmac('sha256',secret).update(stamp+'.'+raw).digest('hex');

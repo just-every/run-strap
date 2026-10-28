@@ -634,7 +634,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "f781749a6faa5db6380135c79726c6bec46f8332a97d5a92765da49dc932e56f",
+      "sha256": "b89b2b25695be0e52166beb9caabc7ad9606e66f246a09b298d2e2985907c482",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -4066,7 +4066,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "ed582575ab4945daf2bd20297e21d53e5409ca465bac8188878b1b1aee884cd1",
+      "sha256": "56ddab293fa51deed163916d67e800c423d1781fc6fffadf398e37e7a203423c",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4346,7 +4346,11 @@
       "executable": false
     },
     "tests/payment-fixtures.mjs": {
-      "sha256": "b77083a704c131fd81c176080eb2d3fe078eb3d1f5946ceab25bf9170f56186e",
+      "sha256": "0696504abd5dd7167ab895f7cf115a11591b5c5bd6c0e107ce180344435bb534",
+      "executable": false
+    },
+    "tests/payments-browser.mjs": {
+      "sha256": "d3674cab18e3bac8fe974f40be20936ef6d2fcdab1f77d926e0d68a8778f84f1",
       "executable": false
     },
     "tests/plan-changes-browser.mjs": {

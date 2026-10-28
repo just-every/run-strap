@@ -11,6 +11,7 @@ import { harness } from './harness.mjs'
 import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
+import { paymentEdge, paymentAuth, signedEvent, billingView } from './payment-fixtures.mjs';
 import { copyPost, evidenceCopyMailEdge } from './evidence-copy-journey.mjs'
 const exec = promisify(execFile)
 const cli = resolve('node_modules/@runeditrun/rer/global/rer.mjs')
@@ -378,11 +379,12 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
-  const paymentEdge=billingEdge(),billingAuth={STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'};
+  const payments=paymentEdge(),billingAuth=paymentAuth;
+  const providerEdge=payments;
   try {
     for(const path of [source,restored])await checkout(path)
     await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6})
-    h=await harness({root:source,auth:billingAuth,outbound:paymentEdge.outbound})
+    h=await harness({root:source,auth:billingAuth,outbound:providerEdge.outbound})
     await h.confirmSetup(h.owner)
     await h.cmd('studio.save',{location:'synthetic-strap-1',timeZone:'America/New_York'})
     const member=await h.person('synthetic-strap-2')
@@ -390,7 +392,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
     const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
-    const {membership,methodInput,methodResult,membershipBefore,methodHistory}=await archiveMembership(h,member,agreed,paymentEdge);
+    const {membership,methodInput,methodResult,membershipBefore,methodHistory}=await archiveMembership(h,member,agreed,providerEdge);
     const expiryPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
     const expiryDisclosure=await h.cmd('plan.disclosure.schedule',{packId:expiryPack.id,leadDays:7,requestId:'synthetic-strap-expiry-archive'});
     const deliveredPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
@@ -404,7 +406,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.db.prepare("UPDATE st_notice_deliveries SET status='queued' WHERE source_id=?").bind('renewal-disclosure:'+deliveredDisclosure.id).run();
     assert.equal((await h.state()).renewalDisclosures.find(d=>d.id===deliveredDisclosure.id).delivery.status,'queued');
 
-    const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:paymentEdge.outbound}
+    const paidCheckout=await h.cmd('billing.checkout.start',{packId:expiryPack.id,requestId:'synthetic-strap-archive-paid',confirm:true});
+    assert.equal(paidCheckout.status,'open');payments.complete(paidCheckout.providerSessionId);
+    const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
+    const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
+    const retainedPayments=await billingView(h);
+    assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
+    const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
     assert.equal(before.recurring.invoices.length,0)
@@ -440,10 +448,17 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
     assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the superseded method and selected replacement as historical records');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
-    const providerCalls=paymentEdge.calls.length,financialBefore=await h.state(restoredOwner);
+    const restoredBilling=await billingView(h,restoredOwner);
+    assert.equal(restoredBilling.connected,false);
+    assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i),retainedPayments.invoices.map(({balanceCents,access,...i})=>i));
+    assert.deepEqual(restoredBilling.events,retainedPayments.events);assert.deepEqual(restoredBilling.reconciliations,retainedPayments.reconciliations);assert.deepEqual(restoredBilling.exceptions,retainedPayments.exceptions);
+    const noCalls=providerEdge.calls.length;
+    await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-reconcile'},restoredOwner,409);
+    assert.equal((await signedEvent(h,paidEvent)).status,409);assert.equal(providerEdge.calls.length,noCalls);
+    const providerCalls=providerEdge.calls.length,financialBefore=await h.state(restoredOwner);
     const restoredAttempt=await h.cmd('billing.setup.complete',{...methodInput,requestId:'synthetic-strap-archive-billing-restored'},restoredMember,409);
     assert.equal(restoredAttempt.error,'billing_reconnection_required');
-    assert.equal(paymentEdge.calls.length,providerCalls,'restored provider IDs cannot execute without reviewed reconnection');
+    assert.equal(providerEdge.calls.length,providerCalls,'restored provider IDs cannot execute without reviewed reconnection');
     const financialAfter=await h.state(restoredOwner);assert.deepEqual(financialAfter.payments,financialBefore.payments);assert.deepEqual(financialAfter.charges,financialBefore.charges);
 
     await h.cmd('plan.disclosure.accept',{id:deliveredDisclosure.id,key:deliveredDisclosure.key},restoredMember,409);
@@ -468,5 +483,15 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'the scheduler cannot reconnect billing')
     const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox').all()).results.map(r=>JSON.parse(r.message))
     assert.ok(mail.every(m=>m.text.includes('/auth/confirm?token=')),'only fresh authentication mail, no studio billing mail')
+    const oldEpoch=retainedPayments.connection.connectionId;
+    await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-restored-review'},restoredOwner);
+    const reviewed=await billingView(h,restoredOwner);assert.equal(reviewed.connected,true);assert.notEqual(reviewed.connection.connectionId,oldEpoch);
+    assert.equal(reviewed.methods.some(m=>m.available),false,'fresh merchant review cannot resurrect historical method authority');
+    payments.complete(pendingCheckout.providerSessionId);
+    await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-after-review'},restoredOwner);
+    assert.equal((await billingView(h,restoredOwner)).invoices.find(i=>i.id===pendingCheckout.id).status,'paid');
+    assert.equal((await h.state(restoredOwner)).payments.filter(p=>p.stripeInvoiceId===pendingCheckout.id).length,1);
+    assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'Stripe review never revives native renewal authority');
+
   } finally {if(h)await h.close();await rm(temporary,{recursive:true,force:true})}
 })
