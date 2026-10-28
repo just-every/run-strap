@@ -12,6 +12,8 @@ import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
 import { copyPost, evidenceCopyMailEdge } from './evidence-copy-journey.mjs'
+import { taxEdge } from './tax-edge.mjs'
+import { seedTaxArchive, assertPortableTax, assertRestoredTax } from './tax-archive.mjs'
 const exec = promisify(execFile)
 const cli = resolve('node_modules/@runeditrun/rer/global/rer.mjs')
 const command = async (cwd, args, expected = 0) => {
@@ -109,8 +111,8 @@ const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
-  const paymentEdge=billingEdge(),copyEdge=evidenceCopyMailEdge(),billingAuth={STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'};
-  const outbound=request=>{const origin=new URL(request.url).origin;assert.ok(['https://api.sendgrid.com','https://api.stripe.com'].includes(origin),'only the mail and billing provider edges are simulated');return origin==='https://api.sendgrid.com' ? copyEdge.outbound(request) : paymentEdge.outbound(request)}
+  const paymentEdge=billingEdge(),copyEdge=evidenceCopyMailEdge(),taxProvider=taxEdge(),billingAuth={STRIPE_BILLING_TEST_KEY:'synthetic-strap-999',STRIPE_TAX_TEST_KEY:'synthetic-strap-998'};
+  const outbound=request=>{const origin=new URL(request.url).origin;assert.ok(['https://api.sendgrid.com','https://api.stripe.com'].includes(origin),'only the mail and billing provider edges are simulated');return origin==='https://api.sendgrid.com' ? copyEdge.outbound(request) : new URL(request.url).pathname.startsWith('/v1/tax/') ? taxProvider.outbound(request) : paymentEdge.outbound(request)}
   try {
     for (const path of [source,restored,erased]) await checkout(path)
     await exec(process.execPath, [resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'], { cwd:source, env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'}, maxBuffer:2e6 })
@@ -181,8 +183,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const {membership,membershipBefore,membershipHtmlBefore}=await archiveMembership(h,member,billingTerms,paymentEdge);
     for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAlias.cookie)).status,404,'another member cannot download a membership agreement');
     // Installation-local provider authority is a credential edge, never portable studio data.
-    const taxConnectionMarker='synthetic-strap-archive-tax-connection';
-    await h.db.prepare('INSERT INTO st_tax_connections(id,connection_hash,connected_by,connected_at) VALUES(?,?,?,?)').bind('tax',taxConnectionMarker,(await h.state()).actor.id,new Date().toISOString()).run();
+    const taxProof=await seedTaxArchive(h);
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,1);
     const originalMail={MAIL_PROVIDER:h.auth.MAIL_PROVIDER,MAIL_FROM:h.auth.MAIL_FROM},copyMail={MAIL_PROVIDER:'sendgrid',MAIL_FROM:'copies@studio.example',MAIL_API_KEY:'synthetic-strap-1'}
     await h.setAuth(copyMail)
@@ -201,8 +202,9 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
     assert.equal(download.headers.get('cache-control'),'no-store')
     const portable=download.value
-    assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(taxConnectionMarker),'portable exit excludes installation-local tax execution authority');
-    reconstructExit(portable,csv)
+    assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_TAX_TEST_KEY),'portable exit excludes the configured tax provider credential');
+    assertPortableTax(portable,taxProof);
+    reconstructExit(portable,csv,taxProof)
     assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
     for(const table of ['st_evidence_copies','st_evidence_copy_mail'])assert.ok(!(table in portable.tables),'portable exit excludes initialized personal-copy credentials and mail review')
     for(const credential of [copyToken,copyRecord.token_hash,copyReview.connection_id])assert.ok(!download.text.includes(credential),'portable exit omits personal-copy authority')
@@ -225,7 +227,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await command(source,['export','--output',old,'--no-queue'])
     const bytes=await readFile(old,'utf8');assert.ok(bytes.includes('Temporary joiner'));assert.ok(bytes.includes('Rita Joiner'),'APP-003 the emergency contact and its history travel in the native archive');assert.ok(!bytes.includes('Excluded secret'));assert.ok(!bytes.includes('token_hash'));assert.ok(!bytes.includes('Excluded integration'),'API-002 integration keys never travel in the native archive')
     for (const value of [identity.factor.secret,...identity.factor.recoveryCodes,...factorMaterial]) assert.ok(!bytes.includes(value),'native archive excludes factor secrets and recovery codes')
-    assert.ok(!bytes.includes(taxConnectionMarker),'native archive excludes the tax connection credential');
+    assert.ok(!bytes.includes(billingAuth.STRIPE_TAX_TEST_KEY),'native archive excludes the tax provider credential');
     assert.ok(!bytes.includes(billingAuth.STRIPE_BILLING_TEST_KEY),'native archive excludes billing provider credentials');
     const archived = bytes.split('\n').filter(Boolean).map(JSON.parse)
     for(const table of ['st_evidence_copies','st_evidence_copy_mail']) {
@@ -261,6 +263,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
+    assertPortableTax(restoredDownload.value,taxProof);
+    await assertRestoredTax(h,restoredOwner,taxProof,taxProvider);
     assertWaiverDocuments(restoredDownload.value,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
     const copyHtmlAfter=await h.send('/api/strap/waiver-evidence.html?id='+copyRecord.receipt_id,undefined,restoredOwner)
     assert.equal(copyHtmlAfter.status,200);assert.equal(copyHtmlAfter.text,copyHtmlBefore.text,'native restore retains the exact personal document while dropping its download capability')
@@ -293,7 +297,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(adultHtmlAfter.status,200);assert.equal(adultHtmlAfter.text,adultHtmlBefore.text,'restored member downloads the identical readable signed evidence');
     assert.equal(guardianHtmlAfter.status,200);assert.equal(guardianHtmlAfter.text,guardianHtmlBefore.text,'owner retains identical historical guardian evidence');
     assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'native restore cannot revive historical guardian HTML-download access');
-    reconstructExit(restoredDownload.value,csv)
+    reconstructExit(restoredDownload.value,csv,taxProof)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
     assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')
