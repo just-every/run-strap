@@ -16,6 +16,12 @@ The finance report shows known classified tax liability separately from earned s
 
 Public doors are `tax.config.save`, `tax.calculate`, `tax.confirm` and `tax.refund` through `/api/strap/command`, with `/api/strap/tax` and `/api/strap/tax/filing.csv` for owner reads. Browser forms use those same commands. The controlled provider journey is `node tests/tax-sandbox.mjs`; held credentials enter only through the fleet environment helper. No provider keys or account details belong in source fixtures.
 
+## Recording external tax receipts and refunds
+
+The MFA-protected human owner can use `tax.payment.record` through `/api/strap/command` to record an amount already received or returned outside Strap. Send `requestId`, `invoiceId`, positive `amountCents`, the external `reference` and a `reason`. Include `reversalId` only when recording a payout against that invoice's retained tax reversal. The saved payment is positive for a receipt and negative for a refund, and links its tax charge, original sale and provider transaction. No payment processor is called by this command, and its test-mode records are not evidence of processor settlement.
+
+A receipt cannot exceed the remaining original tax after recorded credits and payouts. A refund cannot exceed its specific reversal or the tax receipts still held for that invoice. Another invoice's reversal, a reused payment reference or changed replay is refused. Exact replay returns the one historical payment without another write. The original invoice's connection must be reviewed and unchanged before a new recording; restoring the studio retains its recorded money and source references while leaving new recording and provider execution disconnected. Historical replay remains a read of the original record.
+
 ## Controlled provider evidence — 26 October 2026
 
 The local held-key journey completed at `2026-10-26T19:57:29.510Z` with exit 0. It exercised the public HTTP commands against real Stripe Tax test endpoints. The working tree contained the retail quantity fix subsequently committed as `03bdfa86a62e28ea872dedcafc6c6a19c3ae0240`; the journey asserted that both the provider calculation and transaction retained the native two-unit retail quantity. This was an uncommitted working-tree run, not an exact-SHA clean-tree run. The exact HEAD at local admission was not captured.

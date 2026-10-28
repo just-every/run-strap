@@ -414,7 +414,7 @@
       "executable": false
     },
     "docs/TAX.md": {
-      "sha256": "68898ae3f3f17b601ad92d601870fb0d0ef97996fce1f2cc37662973cc93f500",
+      "sha256": "a7ef072532d30b816246201bee66588ee0faf28cce474b4658708248c41281fb",
       "executable": false
     },
     "docs/TWILIO-SMS.md": {
@@ -3674,11 +3674,15 @@
       "executable": false
     },
     "src/strap/tax/index.ts": {
-      "sha256": "9c8fe60f4d01996e0f52339a22cf6430ca472dd442229410af9eee133bbad293",
+      "sha256": "c981192a7583d9c6f45e6321fb5429038824cfc2e35bc9d880b750c2ab4c1cda",
       "executable": false
     },
     "src/strap/tax/model.ts": {
       "sha256": "2978b9548ed496edcf574c9f6ef11625a4662ba30ebece01cafa0507ce182501",
+      "executable": false
+    },
+    "src/strap/tax/payments.ts": {
+      "sha256": "477dcdd9aef92665ff7e642c0a9a3e99e60eed2b9ed9729853b0df2f429dc074",
       "executable": false
     },
     "src/strap/tax/provider.ts": {
@@ -3686,7 +3690,7 @@
       "executable": false
     },
     "src/strap/tax/reports.ts": {
-      "sha256": "43a8134f5b45271c7b886c96866c11358fef026361529091e2d8d19cfa26dd07",
+      "sha256": "b5696b211d02b3f53e902a44f272a3f5300a7a827c1eddbb4da990fe74df8d83",
       "executable": false
     },
     "src/strap/tax/reversals.ts": {
@@ -4218,7 +4222,7 @@
       "executable": false
     },
     "tests/exit-receiver.mjs": {
-      "sha256": "3163073dc91156a5f8e764f0d3e5518ef3d70b570d77d2c9056c0419200e8983",
+      "sha256": "514c7dba2d6e49a9790fe2e13c94db776f94934ca3d590fd2b4b1a4ce4c171b3",
       "executable": false
     },
     "tests/fees-browser.mjs": {
@@ -4518,7 +4522,7 @@
       "executable": false
     },
     "tests/tax-archive.mjs": {
-      "sha256": "20a4b3dbadcd672e6a6f7962dc04e4782889d303e831ac123ff3480561e3f3a2",
+      "sha256": "0b9ffb7aee041fccae0877bbfaa93d6b03de6fc68234a7c029a87bfadad684d4",
       "executable": false
     },
     "tests/tax-browser.mjs": {
@@ -4530,11 +4534,11 @@
       "executable": false
     },
     "tests/tax-sandbox.mjs": {
-      "sha256": "1b0af7cb28ba8ebeac4849182a3c374456cad80fd7588446bd89f67b839cefb9",
+      "sha256": "190659322d529b0148ed44d3dfb0cc009052a89f41a242b791669504420deccd",
       "executable": false
     },
     "tests/tax.test.mjs": {
-      "sha256": "ed3567f3b5b56ee469347e722e5389c9e722f8f2a5e53827e0e06b5abaee293f",
+      "sha256": "c78c3de763fb9dc687423918dbe44e232d066ebf3c6db50b0303ced95932099d",
       "executable": false
     },
     "tests/teaching-pay-browser.mjs": {

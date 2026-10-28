@@ -93,6 +93,9 @@ async function sandbox() {
     assert.equal(retail.calculation.result.providerCalculation.line_items.data[0].quantity,seed.sale.quantity);
     assert.equal(retail.invoice.result.providerTransaction.line_items.data[0].quantity,seed.sale.quantity);
     assert.ok(retail.invoice.result.taxCents > 0,'The synthetic retail sale must be taxable');
+    const taxReceipt=await h.cmd('tax.payment.record',{requestId:'sandbox-tax-receipt',invoiceId:retail.invoice.result.id,amountCents:retail.invoice.result.taxCents,reference:'synthetic-strap-sandbox-tax-receipt',reason:'Synthetic owner bookkeeping only; no processor payment observed'});
+    assert.equal(taxReceipt.amountCents,retail.invoice.result.taxCents);
+    assert.equal(taxReceipt.providerTransactionId,retail.invoice.result.providerTransactionId);
     const service = await taxInvoice(h,seed.serviceCharge.id,'fitness-class',serviceAddress,'class');
     assert.notEqual(retail.calculation.result.product.taxCode,service.calculation.result.product.taxCode);
     const returned = await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:true,reason:'Synthetic partial retail return',requestId:'tax-return'});
@@ -101,6 +104,11 @@ async function sandbox() {
     const reversal = await succeeded(h,'tax.refund',refundInput);
     assert.deepEqual(await h.cmd('tax.refund',refundInput),reversal);
     assert.equal(reversal.result.taxCents,-expectedTaxCents);
+    const taxPayoutInput={requestId:'sandbox-tax-payout',invoiceId:retail.invoice.result.id,reversalId:reversal.result.id,amountCents:expectedTaxCents,reference:'synthetic-strap-sandbox-tax-payout',reason:'Synthetic owner bookkeeping only; no processor payout observed'};
+    const taxPayout=await h.cmd('tax.payment.record',taxPayoutInput);
+    assert.equal(taxPayout.amountCents,-expectedTaxCents);
+    assert.equal(taxPayout.providerTransactionId,reversal.result.providerTransactionId);
+    assert.deepEqual(await h.cmd('tax.payment.record',taxPayoutInput),taxPayout);
     assert.equal(reversal.result.providerReversal.line_items.data[0].amount_tax,reversal.result.taxCents);
     assert.equal(service.invoice.result.priceCents,3000);
     assert.equal(service.invoice.result.taxCents,service.calculation.result.providerCalculation.tax_amount_exclusive);
@@ -115,12 +123,12 @@ async function sandbox() {
     const state=await h.state();
     assert.equal(state.payments.find(payment=>payment.id===seed.sale.paymentId).amountCents,4000,'native sale records its original external tender');
     assert.equal(state.payments.find(payment=>payment.id===returned.paymentId).amountCents,-2000,'native partial return refunds original price once');
-    assert.equal(state.payments.length,2,'tax calculation and reversal never invent a second collected or refunded payment');
+    assert.equal(state.payments.length,4,'only two original-price tenders and two explicitly recorded tax tenders exist');
     assert.deepEqual(await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:true,reason:'Synthetic partial retail return',requestId:'tax-return'}),returned);
-    assert.equal((await h.state()).payments.length,2);
+    assert.equal((await h.state()).payments.length,4);
     const posts = edge.filter(request=>request.method === 'POST');
     assert.deepEqual(posts.map(request=>request.path),['/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/transactions/create_reversal']);
-    console.log(JSON.stringify({head,cleanTree:true,sourceTree,filingRows:filing,at:new Date().toISOString(),provider:'Stripe Tax TEST',accountSettingsWritten:false,registrationsWritten:false,
+    console.log(JSON.stringify({head,cleanTree:true,sourceTree,nativeBookkeeping:{receiptCents:taxReceipt.amountCents,refundCents:taxPayout.amountCents,processorSettlementVerified:false},filingRows:filing,at:new Date().toISOString(),provider:'Stripe Tax TEST',accountSettingsWritten:false,registrationsWritten:false,
       edge,retail:{calculationId:retail.calculation.result.providerCalculationId,transactionId:retail.invoice.result.providerTransactionId,priceCents:4000,taxCents:retail.invoice.result.taxCents},
       service:{calculationId:service.calculation.result.providerCalculationId,transactionId:service.invoice.result.providerTransactionId,priceCents:3000,taxCents:service.invoice.result.taxCents},
       reversal:{transactionId:reversal.result.providerTransactionId,originalTransactionId:reversal.result.providerOriginalTransactionId,priceCents:reversal.result.priceCents,taxCents:reversal.result.taxCents},replayProviderPosts:posts.length-5,filing:'Evidence CSV only; no filing or payment collected'}));

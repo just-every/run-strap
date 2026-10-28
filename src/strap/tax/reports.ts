@@ -6,6 +6,7 @@ export function taxSnapshot(state: State) {
   const {connectionHash:_,...publicConfig} = config ?? {id:'' ,connectionHash:null};
   return {mode:'test',productionReady:false,filing:'Studio and tax service responsibility; evidence export only',
     config:config ? publicConfig : null,calculations:list(state,'taxCalculation'),invoices:list(state,'taxInvoice'),reversals:list(state,'taxReversal'),
+    payments:list(state,'payment').filter(p=>p.taxInvoiceId),
     operations:list(state,'taxOperation').map(({connectionHash,inputFingerprint,...operation})=>operation)};
 }
 export function taxEvidence(state: State) {
