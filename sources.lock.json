@@ -361,6 +361,10 @@
       "sha256": "29e606571cc8f3b40aebadb813156f5411a4e032ebc3e6f2900e1a83f9f57578",
       "executable": false
     },
+    "docs/CLAIMS.md": {
+      "sha256": "6ae4972894c3842f301db299930fe4416b7ad1a28769066ee0463acb7353b53b",
+      "executable": false
+    },
     "docs/classes.md": {
       "sha256": "3907766b31a24b9618e6465103d5a3c68c72646ede4e5b0ede993e06cea18b2a",
       "executable": false
@@ -887,6 +891,10 @@
     },
     "scripts/build-deployment-spec.mjs": {
       "sha256": "2e40b36dfa1407af771bd39052d70e6a6a7a120eb2e125b15117ac3566dc170a",
+      "executable": false
+    },
+    "scripts/contract-docs.mjs": {
+      "sha256": "30ba75591d7de7d7e913fb1b75070eaa9689bd0b632cb0d646e9e0bd824744ae",
       "executable": false
     },
     "scripts/delivery/base/artifact.mjs": {
