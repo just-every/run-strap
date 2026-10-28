@@ -122,6 +122,10 @@
     {
       "file": "contract/MECHANISMS.md",
       "reason": "Detailed studio transport and record semantics"
+    },
+    {
+      "file": "verify.md",
+      "reason": "Preserved legacy acceptance prose from contract conversion; current acceptance is generated from CONTRACT.md"
     }
   ]
 }
