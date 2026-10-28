@@ -18,6 +18,8 @@ async function authority(env:Bindings,state:Transaction['state']) {
   return digest({origin:env.AUTH_ORIGIN,mail,provider:env.MAIL_PROVIDER,key:env.MAIL_API_KEY,from:env.MAIL_FROM,relay:env.MAIL_RELAY_URL,account:env.MAIL_ACCOUNT_ID});
 }
 function authorized(tx:Transaction,input:Record<string,unknown>,staff:boolean) {
+  if(staff)requireStaffRight(tx.state,tx.who,'sale');
+  else insist(tx.who.role==='member','member_authorization_required',403);
   const pack=invoiceAccess(tx.state,tx.who,input.packId,staff),member=person(tx.state,pack.personId);
   if(staff){requireStaffRight(tx.state,tx.who,'sale',member.id,pack.locationId ?? 'studio');insist(input.requested===true,'invoice_member_request_required');staffChannel(input);}
   else insist(tx.who.role==='member' && tx.who.personId===member.id,'member_authorization_required',403);
@@ -25,9 +27,11 @@ function authorized(tx:Transaction,input:Record<string,unknown>,staff:boolean) {
 }
 /** Explicit sends only: the current address is derived and fenced, never supplied by a caller. */
 export async function sendInvoiceDocument(env:Bindings,who:Actor,input:Record<string,unknown>,staff=false) {
+  let loaded=await load(env.DB,who),tx=new Transaction(env.DB,loaded.state,loaded.who);
+  if(staff)requireStaffRight(tx.state,tx.who,'sale');else insist(tx.who.role==='member','member_authorization_required',403);
   insist(Object.keys(input).every(k=>['packId','receiptId','requestId','requested','channel'].includes(k)),'invoice_recipient_override_refused');
   insist(typeof input.requestId==='string' && input.requestId.length>0 && input.requestId.length<=100,'invalid_requestId');
-  let loaded=await load(env.DB,who),tx=new Transaction(env.DB,loaded.state,loaded.who),{pack,member}=authorized(tx,input,staff);
+  const {pack,member}=authorized(tx,input,staff);
   const hash=await authority(env,tx.state),id='invoice-delivery:'+await digest({actorId:who.id,requestId:input.requestId}),basis=JSON.stringify(input),prior=tx.state.records.get(id)?.data;
   if(prior){insist(prior.requestBasis===basis,'invoice_delivery_request_changed',409);return prior;}
   const invoice=invoiceDocument(tx.state,tx.who,pack.id),receipt=input.receiptId?invoice.receipts.find(r=>r.id===input.receiptId):undefined;

@@ -563,6 +563,12 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.equal(revoked.revokedBy,(await h.state(billingMember.cookie)).actor.id);
       assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
     };
+    actions['billing.receipt.send']=async door=>{
+      await h.setAuth({MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-mail'});await h.cmd('mail.connect',{});
+      const pack=(await h.state()).packs.find(p=>p.personId===ana.id),own=await h.cmd('billing.receipt.send',{packId:pack.id,requestId:randomUUID()},ana.cookie);assert.equal(own.status,'accepted');
+      const input={packId:pack.id,requestId:randomUUID(),requested:true,channel:'phone'},r=await checkAudit(door,input);assert.equal(r.result.status,own.status);assert.equal(r.event.personId,ana.id);
+      await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+    };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {
       const entry=memberCommands.find(c=>c.name===name)
@@ -669,7 +675,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const fullExport=JSON.stringify(all)
     assert.ok(!fullExport.includes(rotated.result.code),'check-in credentials do not enter audit downloads')
     if(process.env.STRAP_PROOF_DIR)await(await import('./staff-actions-browser.mjs')).staffActionsBrowser(h,{ana,ben,publish,historyMember})
-  },{auth:{STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'},outbound:billing.outbound})
+  },{auth:{STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'},outbound:request=>new URL(request.url).origin==='https://api.sendgrid.com'?new Response(null,{status:202,headers:{'x-message-id':'synthetic-strap-staff-mail'}}):billing.outbound(request)})
 })
 
 test('STAFF-006: invitation launch is an audited request, the new member alone acknowledges, code issuance and reasoned rotation replay once, and uncertain mail is never resent',async()=>{

@@ -411,3 +411,9 @@ test('Merchant readiness, hosted plan payment and signed reconciliation retain h
 
   },{auth:paymentAuth,outbound:async request=>{const response=await edge.outbound(request);if(new URL(request.url).pathname==='/v1/account'&&onAccount)await onAccount();return response;},mfa:false});
 });
+
+
+test('Itemized invoices reconcile mixed tenders, line refunds, private copies and audited receipt resends',{timeout:180000},async()=>{
+  const {invoiceEdge}=await import('./invoice-edge.mjs'),{invoiceJourney}=await import('./invoice-journey.mjs'),edge=invoiceEdge();
+  await run(h=>invoiceJourney(h,edge),{auth:{STRIPE_BILLING_TEST_KEY:'synthetic-strap-901',STRIPE_BILLING_WEBHOOK_SECRET:'synthetic-strap-902',STRIPE_TAX_TEST_KEY:'synthetic-strap-tax'},outbound:edge.outbound});
+});
