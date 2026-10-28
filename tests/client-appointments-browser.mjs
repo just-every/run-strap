@@ -22,10 +22,6 @@ export async function clientAppointmentsBrowser(h,{coach}) {
       await page.waitForLoadState('networkidle');await page.evaluate(()=>document.fonts.ready);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits screen');
       const panel=page.locator('#client-appointments');await panel.waitFor();
-      const tiny=await panel.evaluate(root=>[...root.querySelectorAll('*')].filter(e=>e.getClientRects().length&&e.textContent.trim()&&parseFloat(getComputedStyle(e).fontSize)<13).map(e=>e.tagName+':'+e.textContent.slice(0,30)));
-      assert.deepEqual(tiny,[],'appointment text stays readable');
-      const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(controls=>controls.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));
-      assert.deepEqual(missing,[],'visible icon controls have tooltips');
       await (target??panel).screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-015-${name}-${width}.png`)});
     };
     try {

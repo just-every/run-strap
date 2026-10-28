@@ -4174,7 +4174,7 @@
       "executable": false
     },
     "tests/client-appointment-series.mjs": {
-      "sha256": "c0f15f550a6752c7cc9483f8c5a35281c4fe9e458a10af0275d707fee9f53a33",
+      "sha256": "e2de9b9f7f0d96a3a54efc378fe00dabd60d53b034595aaf965f4bff19e6ce86",
       "executable": false
     },
     "tests/client-appointments-archive.mjs": {
@@ -4182,7 +4182,7 @@
       "executable": false
     },
     "tests/client-appointments-browser.mjs": {
-      "sha256": "c2872fd8a904255e3fd089497427eec1e236d4c0d9d192853b65100f5c530c45",
+      "sha256": "216ef0ee9c80dce8aa1b74443ff8f6691f263ea35b7c50c7fb0dea10c9f59f3c",
       "executable": false
     },
     "tests/closures-browser.mjs": {

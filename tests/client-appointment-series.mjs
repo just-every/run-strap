@@ -31,6 +31,14 @@ export async function clientAppointmentSeries(h) {
   assert.equal(state.packs.find(p=>p.personId===ana.id).remaining,9);
   assert.equal(state.packCreditEvents.filter(e=>e.type==='restore').length,4);
   assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.appointmentReservationId===saved.id).length,3);
+  // A planned skip owns no booking; the next live visit still accepts its linked deposit.
+  const skippedSource=await h.cmd('appointment.series.offer.save',{...sourceInput,requestId:randomUUID(),startDate:'2092-01-06',endDate:'2092-01-13',choices:[{date:'2092-01-06',skip:true,reason:'Studio closed'}]});
+  const skippedOffer=await h.cmd('appointment.client.deliver',{personId:ana.id,offerId:skippedSource.id,depositCents:2500,requestId:randomUUID()});
+  const skippedSaved=await clientAccept(h,skippedOffer,ana.cookie);
+  const receipt={reservationId:skippedSaved.id,amountCents:2500,reference:'synthetic-strap-series-deposit',requestId:randomUUID()};
+  await h.cmd('appointment.client.deposit.record',receipt);await h.cmd('appointment.client.deposit.record',receipt);
+  const paid=(await h.state()).payments.filter(p=>p.appointmentReservationId===skippedSaved.id);
+  assert.equal(paid.length,1);assert.equal(paid[0].amountCents,2500);
   const oversized=await h.cmd('appointment.series.offer.save',{...sourceInput,requestId:randomUUID(),startDate:'2091-01-07',endDate:'2091-03-18',choices:[]});
   await clientRefused(h,'appointment.client.deliver',{personId:ana.id,offerId:oversized.id,requestId:randomUUID()},h.owner,409);
   const rule=await h.cmd('bookingRule.save',{opensHoursBefore:24});
