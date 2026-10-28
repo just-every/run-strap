@@ -222,7 +222,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     for(const value of [key.token,integration.token,'Excluded integration',h.auth.SESSION_SECRET,h.auth.SETUP_TOKEN,h.owner,...(h.mfaOwner ? [h.mfaOwner.secret,h.mfaOwner.recoveryCodes[0]] : [])]) assert.ok(!download.text.includes(value))
     assert.ok(Object.keys(portable.tables).every(name=>!name.startsWith('oa_')&&!name.includes('outbox')&&!name.includes('agent_keys')&&!name.includes('integration')),'API-002 integration keys stay out of the portable exit')
     if(process.env.STRAP_PROOF_DIR) await (await import('./exit-browser.mjs')).exitBrowser(h,portable)
-    const identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner,outbound};
+    const sourceOrigin=h.origin,identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner,port:Number(new URL(h.origin).port),outbound};
     await h.close();h=null
     const old=join(temporary,'before.rer'),later=join(temporary,'later.rer'),again=join(temporary,'again.rer')
     await command(source,['export','--output',old,'--no-queue'])
@@ -248,6 +248,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(rows(bytes).length>0);assert.deepEqual(rows(await readFile(again,'utf8')),rows(bytes))
     // Recover access through native sign-in; the old session never travels.
     h=await harness({root:restored,...identity})
+    assert.equal(h.origin,sourceOrigin,'the tax restore exercises the same origin and configured key as the source installation');
     for(const table of ['st_evidence_copies','st_evidence_copy_mail'])assert.equal((await h.db.prepare('SELECT count(*) AS count FROM '+table).first()).count,0,'native restore leaves personal-copy credentials and review empty')
     assert.equal((await h.send(copyPath)).status,410,'the source capability cannot open a confirmation on the restored installation')
     assert.equal((await copyPost(h,'/evidence/copy',{token:copyToken})).status,410,'the source capability cannot download retained evidence after restore')
