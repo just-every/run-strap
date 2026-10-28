@@ -1,3 +1,6 @@
+import { invoiceDocuments } from './billing/invoice-documents';
+import { renderInvoiceCopy } from './ui/invoice-copy';
+import type { State } from './domain/types';
 import { humanOwner, insist, type Actor } from './domain/types'
 import { assembleWaiverEvidence, renderWaiverCopy } from './waiver-evidence'
 import { assembleAgreementEvidence, renderAgreementCopy } from './billing'
@@ -238,7 +241,10 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
     const evidence=assembleAgreementEvidence(agreement,mandate);
     return documentArtifacts(`./documents/membership-agreements/${encodeURIComponent(agreement.id)}`,evidence,renderAgreementCopy(evidence),{agreementId:agreement.id,termsId:agreement.termsId,mandateId:mandate.id,personId:agreement.personId,signerPersonId:agreement.signature.signerPersonId,sellingStaffId:agreement.sellingStaffId});
   }))).flat();
-  const artifacts=[...waiverArtifacts,...agreementArtifacts];
+  const documentState={records,people:data.st_people.map((p:any)=>({...p,active:!!p.active,erasedAt:p.erased_at})),version:0,operator:{id:who.id,email:who.email,role:'owner',status:'active',version:0}} as State;
+  const invoices=invoiceDocuments(documentState,who).invoices;
+  const invoiceArtifacts=(await Promise.all(invoices.flatMap(invoice=>[documentArtifacts(`./documents/invoices/${encodeURIComponent(invoice.id)}`,invoice,renderInvoiceCopy(invoice as any),{invoiceId:invoice.id,personId:invoice.personId}),...invoice.receipts.map(receipt=>documentArtifacts(`./documents/receipts/${encodeURIComponent(receipt.id)}-${encodeURIComponent(invoice.id)}`,{invoiceId:invoice.id,receipt},renderInvoiceCopy(invoice as any,receipt),{invoiceId:invoice.id,receiptId:receipt.id,personId:invoice.personId}))]))).flat();
+  const artifacts=[...waiverArtifacts,...agreementArtifacts,...invoiceArtifacts];
   const bundle = {
     manifest: {
       format: 'strap-exit', version: 1, generatedAt: new Date().toISOString(),
@@ -248,6 +254,7 @@ export async function exitExport(db: D1Database, who: Actor): Promise<Response> 
         sourceIdentities: 'ik_sources', effects: 'ik_provenance', history: 'ik_d1_history', batches: 'ik_batches' },
       actorReferences: 'Operator IDs in approval, creation, check-in and import provenance are opaque attribution only; no native auth identities are exported. Member-record grants travel as attributed studio data only and grant no authority to an independent receiver.',
       documents: { typedAffirmations: 'st_records kind=acknowledgement data.signature retains exact text, SHA-256, signer, authority and tablet provenance; not a legal-enforceability or payment-authorization claim', waiverTexts: 'st_records kind=waiver', acknowledgements: 'st_records kind=acknowledgement',
+        invoiceFiles: invoiceArtifacts.map(file=>file.manifest),
         typedAffirmationFiles: waiverArtifacts.map(file=>file.manifest),
         membershipAgreementFiles: agreementArtifacts.map(file=>file.manifest),
         signedWaivers: { status: 'not_implemented', meaning: 'Full legally executed waivers remain unproved. Portable typed-affirmation copies are separately inventoried and make no legal-enforceability or payment-authorization claim.', files: [] }, media: { status: 'not_implemented', files: [] },

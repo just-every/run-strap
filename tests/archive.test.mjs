@@ -1,3 +1,4 @@
+import { invoiceEdge } from './invoice-edge.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -38,7 +39,7 @@ function assertWaiverDocuments(bundle,packages) {
   const records=bundle.tables.st_records.filter(row=>row.kind==='acknowledgement').map(row=>JSON.parse(row.data)).filter(receipt=>receipt.signature?.method==='typed-affirmation');
   const files=bundle.manifest.documents.typedAffirmationFiles;
   assert.equal(files.length,records.length*2);
-  assert.deepEqual(Object.keys(bundle.files).sort(),[...files,...bundle.manifest.documents.membershipAgreementFiles].map(file=>file.path).sort());
+  assert.deepEqual(Object.keys(bundle.files).sort(),[...files,...bundle.manifest.documents.membershipAgreementFiles,...bundle.manifest.documents.invoiceFiles].map(file=>file.path).sort());
   for(const file of files) {
     assert.ok(file.path.startsWith('./documents/waivers/'),'artifact paths are explicit relative file paths');
     const content=bundle.files[file.path],bytes=Buffer.from(content,'utf8'),receipt=records.find(record=>record.id===file.receiptId);
@@ -383,7 +384,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
-  const payments=paymentEdge(),billingAuth=paymentAuth;
+  const payments=invoiceEdge(),billingAuth={...paymentAuth,MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-archive-mail'};
   const providerEdge=payments;
   try {
     for(const path of [source,restored])await checkout(path)
@@ -414,6 +415,10 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(paidCheckout.status,'open');payments.complete(paidCheckout.providerSessionId);
     const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
+    await h.cmd('mail.connect',{});
+    const invoiceSend={packId:expiryPack.id,requestId:'synthetic-strap-archive-invoice-copy',requested:true,channel:'phone'};
+    const invoiceDelivery=await h.cmd('billing.receipt.send.staff',invoiceSend);assert.equal(invoiceDelivery.status,'accepted');
+    const invoiceBefore=(await h.send('/api/strap/invoice.html?id='+expiryPack.id,undefined,member.cookie));assert.equal(invoiceBefore.status,200);
     const retainedPayments=await billingView(h);
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
@@ -429,6 +434,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_contract_connections'))
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_contract_connections'))
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_disclosure_connections'));
+    assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_invoice_mail_review' || t.name==='st_invoice_dispatches'));
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_payment_connections'));
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_payment_connections'));
     await command(restored,['import','--input',archive,'--yes','--no-queue'])
@@ -447,6 +453,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(restoredDisclosure.delivery.status,'paused','old delivery intent never claims a live dispatch queue');
     assert.equal(restoredDisclosure.canAccept,false,'a restored price proposal cannot revive excluded dispatch authority');
     const restoredMember=await h.signIn(member.email);
+    const invoiceAfter=await h.send('/api/strap/invoice.html?id='+expiryPack.id,undefined,restoredMember);assert.equal(invoiceAfter.status,200);assert.equal(invoiceAfter.text,invoiceBefore.text,'restored invoices retain the same original lines and settlements');
+    const sendsBefore=payments.mail.length;
+    await h.cmd('billing.receipt.send.staff',{...invoiceSend,requestId:'synthetic-strap-restored-new-copy'},restoredOwner,409);
+    assert.equal(payments.mail.length,sendsBefore,'same-origin restore does not restore receipt delivery authority');
+    await h.cmd('mail.connect',{},restoredOwner);
+    const oldCopy=await h.cmd('billing.receipt.send.staff',invoiceSend,restoredOwner);assert.equal(oldCopy.id,invoiceDelivery.id);assert.equal(payments.mail.length,sendsBefore,'reconnecting never resends retained delivery identities');
+    const freshCopy=await h.cmd('billing.receipt.send.staff',{...invoiceSend,requestId:'synthetic-strap-restored-new-copy'},restoredOwner);assert.equal(freshCopy.status,'accepted');assert.equal(payments.mail.length,sendsBefore+1);
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
     assert.equal(historicalBilling.methods.length,2);
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);

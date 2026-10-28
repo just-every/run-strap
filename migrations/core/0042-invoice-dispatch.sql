@@ -10,3 +10,8 @@ CREATE TABLE st_invoice_dispatches (
  status TEXT NOT NULL,
  provider_message_id TEXT
 );
+CREATE TABLE st_invoice_mail_review (
+ id TEXT PRIMARY KEY,
+ origin TEXT NOT NULL,
+ authority_hash TEXT NOT NULL
+);

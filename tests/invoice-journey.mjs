@@ -18,8 +18,9 @@ export async function invoiceJourney(h,edge) {
   const config={requestId:'synthetic-strap-tax-config',consent:true,originAddress:address,registeredStates:['WA'],products:[{id:'invoice-pack',kind:'service',sourceId:pack.id,label:'Fitness pack',taxCode:'txcd_50021003'}],exemptions:[]};
   await h.cmd('tax.config.save',config);
   const tax=await taxInvoice(h,line.id,'invoice-pack',address,'invoice');assert.equal(tax.invoice.result.taxCents,0);
+  const feeTax=await taxInvoice(h,fee.id,'invoice-pack',address,'invoice-fee');assert.equal(feeTax.invoice.result.taxCents,0);
   let invoice=(await invoiceView(h)).invoices[0];assert.equal(invoice.status,'invoiced');assert.equal(invoice.totalCents,11000);assert.equal(invoice.taxStatus,'retained_provider_evidence');assert.equal(invoice.taxCents,0);assert.equal(invoice.discountCents,0);
-  assert.deepEqual(invoice.lines.map(l=>[l.id,l.amountCents]),[[line.id,10000],[fee.id,1000],[tax.invoice.result.taxChargeId,0]]);
+  assert.deepEqual(invoice.lines.map(l=>[l.id,l.amountCents]),[[line.id,10000],[fee.id,1000],[tax.invoice.result.taxChargeId,0],[feeTax.invoice.result.taxChargeId,0]]);
   const external=await h.cmd('payment.record',{personId:member.id,amountCents:4000,reference:'synthetic-strap-external'});
   await h.cmd('billing.checkout.start',{packId:pack.id,confirm:true,requestId:'synthetic-strap-unallocated'},h.owner,409);
   const allocate={packId:pack.id,paymentId:external.id,chargeId:line.id,amountCents:4000,requestId:'synthetic-strap-allocate'};
@@ -64,6 +65,6 @@ export async function invoiceJourney(h,edge) {
   await grant(['member-record']);await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie,403);assert.equal((await h.send('/api/strap/invoice.html?id='+pack.id,undefined,desk.cookie)).status,403);assert.equal(edge.mail.length>=2,true);
   edge.setMailStatus(503);const uncertain=await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-uncertain-copy'},member.cookie);assert.equal(uncertain.status,'uncertain');const n=edge.mail.length;await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-uncertain-copy'},member.cookie);assert.equal(edge.mail.length,n);
   const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value;assert.ok(!('st_invoice_dispatches' in portable.tables));const retained=portable.tables.st_records.map(r=>({kind:r.kind,data:JSON.parse(r.data)}));assert.equal(retained.filter(r=>r.kind==='invoiceRefund').length,1);assert.ok(retained.some(r=>r.kind==='invoiceDelivery'));assert.ok(retained.some(r=>r.kind==='contractPrepayment' && r.data.paymentId===external.id));
-  await h.setAuth({MAIL_API_KEY:'synthetic-strap-rotated'});await h.cmd('mail.connect',{});
+  await h.setAuth({MAIL_API_KEY:'synthetic-strap-rotated'});await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-stale-mail'},member.cookie,409);assert.equal(edge.mail.length,n);await h.cmd('mail.connect',{});
   await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false});await h.cmd('billing.receipt.send',send,member.cookie,403);assert.equal(edge.mail.length,n);
 }

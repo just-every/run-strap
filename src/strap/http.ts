@@ -1,3 +1,4 @@
+import { reviewInvoiceMail, invoiceMailStatus } from './billing/invoice-mail';
 import { invoiceDocument, invoiceDocuments } from './billing/invoice-documents';
 import { renderInvoiceCopy } from './ui/invoice-copy';
 import { insist } from './domain/types';
@@ -98,7 +99,7 @@ async function appState(env: Bindings, who: Actor, target: string) {
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
   }
   if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) {const loaded=await load(env.DB,who);return {...await state(env,who),invoiceDocuments:await cleared(env,who)?invoiceDocuments(loaded.state,loaded.who):null,billing:await cleared(env,who) ? await billingState(env,who) : null}}
-  if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null,billing:await cleared(env,who) ? await billingState(env,who) : null}
+  if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),invoiceMail:await cleared(env,who)?await invoiceMailStatus(env,who):null,tax:await cleared(env,who) ? await taxState(env,who) : null,billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
   if (url.pathname === '/app/revenue') return {...await state(env,who),financeReport:financeReport(loaded.state,url.searchParams)}
@@ -138,6 +139,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   const result = await command(env.DB, who, name, input, context)
   // Emails go out only after the change and their reservations commit.
   await sendNotices(env, context.queued)
+  if(name==='mail.connect' && memberMailConfigured(env))await reviewInvoiceMail(env,who)
   return name === 'waiver.launch' ? sendWaiverLaunch(request,env,result) : result
 }
 

@@ -1,3 +1,4 @@
+import { invoiceMailSettings } from './invoice-mail-settings';
 import { paymentConnectionPanel } from './payment-connection';
 import { appointmentPricesPanel } from './appointment-prices';
 import { taxSettingsPanel } from './tax-settings'
@@ -30,6 +31,7 @@ export function studioPage(s: any, notice: any = {}) {
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)
     + memberMailPanel(s)
+    + invoiceMailSettings(s)
     + smsTestPanel(s)
     + taxSettingsPanel(s)
     + paymentConnectionPanel(s)

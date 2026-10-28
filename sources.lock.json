@@ -610,7 +610,7 @@
       "executable": false
     },
     "migrations/core/0042-invoice-dispatch.sql": {
-      "sha256": "6b71d79c2b380e042c436c9b8998ec2e66157d90f440dee95001a85bbcb2568e",
+      "sha256": "312dad3f0e5be49a606697cef10056e05ae886a884a4838654d73c8f134612e0",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3086,7 +3086,7 @@
       "executable": false
     },
     "src/strap/archive-policy.mjs": {
-      "sha256": "ddf23c35673284a6203264e303eb317ff46df4e5b3eabcf6ebb907c995dd073b",
+      "sha256": "b7e1b352ca3dc80cf23344312cccb7fc5e94629f8ca5f022a094fbee1acdc5e1",
       "executable": false
     },
     "src/strap/attendance-report.ts": {
@@ -3114,11 +3114,11 @@
       "executable": false
     },
     "src/strap/billing/invoice-documents.ts": {
-      "sha256": "96b76ccf52008bced9d80a169cdbe494a5a619f860047b606b67d0106861f2c4",
+      "sha256": "ac2ae62a7fd2abd2c0307c893f74e02ce1c29fdad2ec6c1e98b309397093d6e1",
       "executable": false
     },
     "src/strap/billing/invoice-mail.ts": {
-      "sha256": "0f57ccd9fff49f54e0ab88a1c3b2ab1433f273c528160983bd21d5d3fbf84a1c",
+      "sha256": "8f4156274aa5d5dd80a30abb5af5b0b64e66dcb0d92a81006db69ffac599bca2",
       "executable": false
     },
     "src/strap/billing/invoice-refunds.ts": {
@@ -3562,7 +3562,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "ae05417bda0c6458812a3437e6b1cdadd59f09fbde3f61c7a2ff7ea3d46d84ef",
+      "sha256": "4734184851c581c147a34f01c60a0a5a19535793357801954f78c9c6457dbfaf",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3590,7 +3590,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "76d68dc8c23d4fb28c866b061237b09f22041733bb76bbb4eac9d07740576e70",
+      "sha256": "6aa11aba425d25328bffeed593070f29565306837672b7aedc03c32a8a2d272d",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3722,7 +3722,7 @@
       "executable": false
     },
     "src/strap/tax/model.ts": {
-      "sha256": "2978b9548ed496edcf574c9f6ef11625a4662ba30ebece01cafa0507ce182501",
+      "sha256": "43e36fb954f1b908e2bda49649caab7d0d877a6da88e2b953768678d8dc80690",
       "executable": false
     },
     "src/strap/tax/payments.ts": {
@@ -3901,6 +3901,10 @@
       "sha256": "819810664a6ed7187d5241a292f779d6de7d038df6dcaf1f8842bbadfff45622",
       "executable": false
     },
+    "src/strap/ui/invoice-mail-settings.ts": {
+      "sha256": "83a309411760fd8f54b8a0d43408850e1003fd56cd8417a97b62a4f77f7b16cf",
+      "executable": false
+    },
     "src/strap/ui/kiosk.ts": {
       "sha256": "f3b7b50370d2dcff00b102550e3a91f51588d2aea7594d5ecf962415d17a89bc",
       "executable": false
@@ -4054,7 +4058,7 @@
       "executable": false
     },
     "src/strap/ui/studio.ts": {
-      "sha256": "a71e63422c5e2eb41e11bb4a489a1666999704ea54f6af29de0170b38fcf9f58",
+      "sha256": "c5f550bea9aa953cc50b489ef7f47fef5bc1b50452851a2f3887ac8ebbef6bd6",
       "executable": false
     },
     "src/strap/ui/substitutions.ts": {
@@ -4114,7 +4118,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "8dbc7b34daccd6ec3222cd419555ab821ee4f7d9d92e91606a2354f9a001a76b",
+      "sha256": "6b014ddbc57c5b64bcc17f965e94f8b3d38cf1534082741044c8e0e69ba04556",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4345,12 +4349,16 @@
       "sha256": "58d019c19f79c06ac2bf9923e99ecd2716e780d9f37dbcadbf0557fef48b984b",
       "executable": false
     },
+    "tests/invoice-browser.mjs": {
+      "sha256": "dd677d97f2178ba5e7a66fc9bb054c715128920e97d8498fb194d7012aebcac8",
+      "executable": false
+    },
     "tests/invoice-edge.mjs": {
       "sha256": "3f742b2a472168a926fb65dc8aa2c4914683399c5ce9e8874146df537fea8340",
       "executable": false
     },
     "tests/invoice-journey.mjs": {
-      "sha256": "9e5a051e7996e41b38065e31c509462e41123c4e1d40db48858f9f9656c376dc",
+      "sha256": "f52fd96abdd0326c23f9cf07dc88dead209fd6b5f2032bc1c7f978900ba17a8b",
       "executable": false
     },
     "tests/lead-report-browser.mjs": {
