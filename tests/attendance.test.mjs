@@ -309,8 +309,9 @@ test('SCHED-009: eligible absences issue one linked expiring makeup; participant
   const periodPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:monthly.id,kind:'visits',visits:2,period:'month',rollover:0,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
   // Keep all three visits in one explicit future studio month. Relative day
   // offsets cross a month boundary near month end and grant a new allowance.
+  // Days 10–12 also keep this instructor clear of the relative-time fixtures.
   const periodAnchor=new Date(),periodClasses=[]
-  for(const day of [1,2,3])periodClasses.push(await publish('Youth Mat',new Date(Date.UTC(periodAnchor.getUTCFullYear(),periodAnchor.getUTCMonth()+1,day,16)).toISOString()))
+  for(const day of [10,11,12])periodClasses.push(await publish('Youth Mat',new Date(Date.UTC(periodAnchor.getUTCFullYear(),periodAnchor.getUTCMonth()+1,day,16)).toISOString()))
   const periodOriginal=await h.cmd('booking.book',{classId:periodClasses[0].id},monthly.cookie)
   await h.cmd('booking.book',{classId:periodClasses[1].id},monthly.cookie)
   const periodAbsence=await h.cmd('absence.report',{id:periodOriginal.id,reason:'Course absence',requestId:'synthetic-strap-period-absence'},monthly.cookie)

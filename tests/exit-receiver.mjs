@@ -17,7 +17,7 @@ function parseCsv(text) {
   return rows
 }
 
-export function reconstructExit(bundle, expectedCsv) {
+export function reconstructExit(bundle, expectedCsv, tax) {
   const receiver = new DatabaseSync(':memory:')
   try {
     for (const table of bundle.manifest.schema) {
@@ -41,13 +41,21 @@ export function reconstructExit(bundle, expectedCsv) {
       for (const key of ['classId','packId','bookingId','draftId','waiverId','seriesId','seriesChangeId','closureId','introSaleId','introOfferId','offerId','previewId']) if (record[key]) assert.ok(byId.has(record[key]), key + ' resolves')
       for (const key of ['classIds','closureIds']) for (const id of record[key] ?? []) assert.ok(byId.has(id),key + ' resolves')
     }
-    const money = kind => records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === kind).reduce((sum, r) => sum + r.amountCents, 0)
+    const originalRecords=tax ? records.filter(record=>record.personId!==tax.seed.member.id && record.packId!==tax.seed.serviceCharge.packId) : records;
+    const allMoney=kind=>records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind===kind).reduce((sum,record)=>sum+record.amountCents,0);
+    if(tax) {
+      assert.equal(allMoney('charge'),19100,'original balances plus the independent 5200-cent net taxed-sale fixture reconstruct');
+      assert.equal(allMoney('payment'),7200,'original receipts plus the independent 2200-cent net retail and tax tenders reconstruct');
+      assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='packCreditEvent').reduce((sum,record)=>sum+record.credits,0),6,'all original credits plus the separately purchased class remain');
+      assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='pack').reduce((sum,record)=>sum+record.remaining,0),6,'all reconstructed pack balances equal the complete credit ledger');
+    }
+    const money = kind => originalRecords.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === kind).reduce((sum, r) => sum + r.amountCents, 0)
     assert.equal(money('charge'), 13900);
-    assert.equal(records.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&!r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),10000,'original pack charge remains intact');
-    assert.equal(records.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),3900,'one intro charge reconstructs'); assert.equal(money('payment'), 5000)
-    const creditHistory = records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'packCreditEvent').reduce((sum,r) => sum+r.credits,0)
+    assert.equal(originalRecords.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&!r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),10000,'original pack charge remains intact');
+    assert.equal(originalRecords.filter(r=>bundle.tables.st_records.find(row=>row.id===r.id).kind==='charge'&&r.introSaleId).reduce((sum,r)=>sum+r.amountCents,0),3900,'one intro charge reconstructs'); assert.equal(money('payment'), 5000)
+    const creditHistory = originalRecords.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'packCreditEvent').reduce((sum,r) => sum+r.credits,0)
     assert.equal(creditHistory,5,'five original credits plus two intro visits less the ordinary and recurring reservations')
-    assert.equal(records.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'pack').reduce((sum,r) => sum+r.remaining,0),creditHistory)
+    assert.equal(originalRecords.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'pack').reduce((sum,r) => sum+r.remaining,0),creditHistory)
     assert.ok(records.some(r => r.text === 'Studio waiver, "current"\nKeep your own limits.'))
     assert.ok(records.some(r => r.waiverId && byId.get(r.waiverId).text.includes('Keep your own limits.')))
     const original = bundle.tables.ik_originals.find(o => o.name.endsWith('.csv'))
