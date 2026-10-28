@@ -206,6 +206,10 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'lead.nurture.purchase')input.confirm=input.confirm === 'true';
   if (name === 'lead.empty.prepare') { for(const key of ['leadMinutes','maxPer30Days'])input[key]=Number(input[key]);for(const key of ['incentive','budget']){input[key+'Cents']=cents(input[key],key);delete input[key];} input.personIds=Object.keys(input).filter(key=>key.startsWith('aud_') && input[key] === 'true').map(key=>key.slice(4));for(const key of Object.keys(input))if(key.startsWith('aud_'))delete input[key]; }
   if (name === 'lead.recovery.rule.save') { for(const key of ['minVisits','missedWeeks','lookbackWeeks'])input[key]=Number(input[key]);input.enabled=input.enabled === 'true'; }
+  if (name.startsWith('lead.campaign.')) {
+    for (const key of ['startsAt','endsAt','occurredAt']) if(input[key]) input[key]=String(input[key])+'Z'
+    if(name === 'lead.campaign.cost') {input.amountCents=cents(input.amount,'campaign cost');delete input.amount}
+  }
   if (name.startsWith('lead.')) {
     if ('version' in input) input.version=Number(input.version)
     if (input.dueAt) input.dueAt=String(input.dueAt)+'Z'
