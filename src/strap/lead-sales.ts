@@ -22,6 +22,6 @@ export function saleEvidence(sales: ReturnType<typeof leadSales>, personId: stri
     lapsedIntroSaleIds:sales.conversions.length ? [] : sales.intros.filter(s => s.expiresAt <= asOf).map(s => s.id),
     introPurchases:sales.intros.map(s => ({id:s.id,packId:s.packId,offerId:s.offerId,at:s.createdAt,amountCents:s.amountCents,url:packUrl(s.packId)})),
     nativeConversions:sales.conversions.map(c => ({...c,url:c.kind === 'recurring-acceptance' ? '/app/packs?person='+encodeURIComponent(personId)+'#recurring-'+encodeURIComponent(c.id) : packUrl(c.packId)})),
-    revenueEvents:sales.charges.map((c:RecordData) => ({id:c.id,packId:c.packId,at:c.createdAt,amountCents:c.amountCents,url:'/app/packs?person='+encodeURIComponent(personId)+'#receipt-'+encodeURIComponent(c.packId)}))
+    revenueEvents:sales.charges.map((c:RecordData) => ({id:c.id,packId:c.packId,at:c.createdAt,amountCents:c.amountCents,url:'/app/packs?person='+encodeURIComponent(personId)+'&receipt='+encodeURIComponent(c.packId)+'#receipt-'+encodeURIComponent(c.packId)}))
   }
 }

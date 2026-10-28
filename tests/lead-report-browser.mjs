@@ -56,6 +56,8 @@ export async function leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intr
       assert.equal(await receipt.getAttribute('data-pack-id'),charge.packId)
       assert.equal(await receipt.locator('time').getAttribute('datetime'),native.packs.find(p=>p.id===charge.packId).createdAt)
       await receipt.getByText('$'+(charge.amountCents/100).toFixed(2),{exact:true}).first().waitFor()
+      await shot('sale-receipt-'+i)
+      await receipt.screenshot({path:join(proofDir,`RPT-005-receipt-panel-${i}-${width}.png`)})
       await page.goBack()
     }
     await openSales()

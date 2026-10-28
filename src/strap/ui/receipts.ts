@@ -30,7 +30,8 @@ export function receipt(s: any, pack: any, staff: boolean) {
     + `<p class="meta">Prices are in US dollars. This receipt records the charge added to the balance; a payment is recorded separately.</p></article>`
 }
 
-export function receiptsPanel(s: any, packs: any[], staff: boolean) {
-  const list = [...packs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10)
+export function receiptsPanel(s: any, packs: any[], staff: boolean, selectedId: string | null = null) {
+  const list = selectedId === null ? [...packs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10)
+    : packs.filter(pack => pack.id === selectedId)
   return panel('Purchase receipts', list.length ? list.map(pack => receipt(s, pack, staff)).join('') : emptyLine('Receipts appear here when a plan is sold.'), { icon: 'report', id: 'receipts', className: 'history' })
 }

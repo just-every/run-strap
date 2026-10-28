@@ -237,6 +237,17 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
   assert.equal(withAgreement.totals.attributedRevenueCents,13000,'agreement acceptance is not a new sale')
   assert.equal((await read('?funnelCampaign='+encodeURIComponent(campaign.id))).totals.nativeMembershipConversions,1,'unrelated agreements stay outside the campaign')
 
+  const originalRevenue=report.rows.flatMap(r=>r.revenueEvents)
+  assert.equal(originalRevenue.length,3)
+  for(const event of originalRevenue) assert.ok((await h.send(event.url,undefined,h.owner)).text.includes(`id="receipt-${event.packId}"`),'original sale receipt is reachable before later studio sales')
+  for(let i=0;i<10;i++) await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:cy.id,credits:1,amountCents:1000,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const historicalRevenue=(await read('?funnelCampaign='+encodeURIComponent(campaign.id))).rows.flatMap(r=>r.revenueEvents)
+  assert.deepEqual(historicalRevenue,originalRevenue)
+  for(const event of historicalRevenue) assert.ok((await h.send(event.url,undefined,h.owner)).text.includes(`id="receipt-${event.packId}"`),'original sale receipt remains reachable after ten later studio sales')
+  const ownReceipt=row.revenueEvents[0]
+  assert.ok((await h.send(ownReceipt.url,undefined,ana.cookie)).text.includes(`id="receipt-${ownReceipt.packId}"`),'member can reach their own historical receipt')
+  assert.equal((await h.send(ownReceipt.url,undefined,ben.cookie)).text.includes(`id="receipt-${ownReceipt.packId}"`),false,'receipt selection cannot expose another member sale')
+
   await h.cmd('booking.cancel',{id:visits[2].id},ana.cookie)
   await h.cmd('attendance.correct',{id:noShow.id,outcome:'excused',reason:'Studio excused the missed intro'})
   assert.deepEqual((await read()).rows.find(r=>r.personId===ben.id).attendedBookingIds,[])
