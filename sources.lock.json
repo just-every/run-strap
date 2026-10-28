@@ -601,6 +601,10 @@
       "sha256": "e1954b41e96c096da96132a93fe96fede5feebd21da0d5230146cf455f455b71",
       "executable": false
     },
+    "migrations/core/0041-payment-control.sql": {
+      "sha256": "70ae4bcade4fc4f700334048e96adb6bb1e8cc863626d2d193e4e2615df67f2d",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "5835eaca766b9cddadaa3560763aa840dc4206e4cf87df6b1798e971627d1c0c",
       "executable": false
@@ -3070,7 +3074,7 @@
       "executable": false
     },
     "src/strap/archive-policy.mjs": {
-      "sha256": "844e6cb3c9753afdd145b66aa929749644a3b3e2217283bbb21a015589e6f9ba",
+      "sha256": "083f54dfc689eda78b9ca194fd907819f6628f97cfb7d793191b0f9c86071e2c",
       "executable": false
     },
     "src/strap/attendance-report.ts": {
@@ -3090,7 +3094,7 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "84247a09a5d9ca6c54d43aff669f81badb6802e2ce6eca2a7e5fd740dfef7898",
+      "sha256": "aa0edf4a58637ed5eb271d5258e1598f2ed35cc13eb218b2583ee4653bd63834",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
@@ -3102,7 +3106,7 @@
       "executable": false
     },
     "src/strap/billing/operations.ts": {
-      "sha256": "c906180a87f5ea589ea81a42e1c4d19c9ccd7474c9953ee5311c4ecb81a8cf58",
+      "sha256": "9c733bfb3d5e0a9801830bde6baab8268e9faef415d1590dc361c0d358561182",
       "executable": false
     },
     "src/strap/billing/provider.ts": {
@@ -3526,7 +3530,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "1157148e28098a4b6db520b474548e29ea6dac3964993bd1cc58e052a169bfd5",
+      "sha256": "75d9cceb74cc3c2c18cc0f6e76e67c60015071784035b2de677a384198ba17e8",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -4078,7 +4082,7 @@
       "executable": false
     },
     "tests/billing-agreements.test.mjs": {
-      "sha256": "171fea5471b286907dd2afe6ae21e6c3c8e5fb4e4b8c6f3fc8fc7199335a4629",
+      "sha256": "beeb02bafd2c4a9731510c6879208d2b8b5644044a011c8b8d3c431b79547464",
       "executable": false
     },
     "tests/billing-browser.mjs": {
@@ -4351,6 +4355,10 @@
     },
     "tests/payments-browser.mjs": {
       "sha256": "d3674cab18e3bac8fe974f40be20936ef6d2fcdab1f77d926e0d68a8778f84f1",
+      "executable": false
+    },
+    "tests/payments-sandbox.mjs": {
+      "sha256": "0de41db957694f94f83397629763c95e99e905b68beca5612a80244b89ae1200",
       "executable": false
     },
     "tests/plan-changes-browser.mjs": {

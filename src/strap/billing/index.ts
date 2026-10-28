@@ -29,7 +29,7 @@ const handlers = {
   'billing.disconnect':defineBilling(native((tx,input)=>{
     humanOwner(tx.who);insist(input.confirm===true,'billing_disconnect_confirmation_required');
     const event={id:crypto.randomUUID(),type:'disconnect',actorId:tx.who.id,at:now()};
-    tx.sql.push(tx.statement("DELETE FROM st_payment_connections WHERE id='billing'"));
+    tx.sql.push(tx.statement("DELETE FROM st_payment_connections WHERE id='billing'"),tx.statement("DELETE FROM st_payment_control WHERE id='billing'"));
     tx.put('billingConnectionEvent',event);return event;
   }),['owner']),
   'billing.checkout.start':defineBilling(startCheckout,['owner']),

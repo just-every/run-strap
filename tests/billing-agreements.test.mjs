@@ -317,7 +317,7 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
 });
 
 test('Merchant readiness, hosted plan payment and signed reconciliation retain history through rotation, missing events and replay',{timeout:180000},async()=>{
-  const edge=paymentEdge();
+  const edge=paymentEdge();let onAccount=null;
   await run(async h=>{
     const view=()=>billingView(h),posts=()=>edge.calls.filter(c=>c.method==='POST').length;
     const refuse=async(name,input,cookie,status=403)=>{const before=(await h.state()).version,calls=edge.calls.length;await h.cmd(name,input,cookie,status);assert.equal((await h.state()).version,before);assert.equal(edge.calls.length,calls);};
@@ -398,5 +398,16 @@ test('Merchant readiness, hosted plan payment and signed reconciliation retain h
     await h.cmd('billing.disconnect',{confirm:true});assert.equal((await view()).connected,false);assert.deepEqual((await h.state()).payments,retainedPayments);
     assert.equal((await signedEvent(h,success,{secret:'synthetic-strap-905'})).status,409);
     await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-disconnected'},h.owner,409);
-  },{auth:paymentAuth,outbound:edge.outbound,mfa:false});
+    onAccount=async()=>{onAccount=null;await h.cmd('billing.disconnect',{confirm:true});};
+    const superseded=await connectPayment(h,'synthetic-strap-inflight');
+    assert.equal(superseded.status,'uncertain');assert.equal(superseded.errorCode,'billing_connection_review_superseded');assert.equal((await view()).connected,false,'disconnect invalidates an earlier in-flight review');
+    await connectPayment(h,'synthetic-strap-after-disconnect');
+    const receipt=await paymentSeed(h,'ReceiptAlreadyMember');await h.cmd('payment.record',{personId:receipt.member.id,amountCents:100,reference:'synthetic-strap-existing-receipt'});
+    await refuse('billing.checkout.start',{...start,packId:receipt.pack.id,requestId:'synthetic-strap-already'},h.owner,409);
+    const erased=await h.cmd('person.save',{name:'Unused erased person',email:crypto.randomUUID()+'@'+['invalid','local'].join('.'),role:'member',active:true});
+    await h.cmd('person.erase',{id:erased.id});
+    const unmatched={id:'synthetic-strap-erased-event',object:'event',type:'invoice.paid',livemode:false,created:Math.floor(Date.now()/1000),data:{object:{id:'synthetic-strap-erased-invoice',object:'invoice',metadata:{strapInvoiceId:erased.id}}}};edge.events.set(unmatched.id,unmatched);
+    assert.equal((await signedEvent(h,unmatched,{secret:'synthetic-strap-905'})).value.status,'exception');assert.equal((await h.state()).people.some(p=>p.id===erased.id),false);assert.equal((await view()).invoices.some(i=>i.personId===erased.id),false);
+
+  },{auth:paymentAuth,outbound:async request=>{const response=await edge.outbound(request);if(new URL(request.url).pathname==='/v1/account'&&onAccount)await onAccount();return response;},mfa:false});
 });
