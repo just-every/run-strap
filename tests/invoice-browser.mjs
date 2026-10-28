@@ -3,7 +3,7 @@ import { mkdir,readFile } from 'node:fs/promises';
 import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
 
-export async function invoiceBrowser(h,{member,other,pack,desk,stripeReceipt}) {
+export async function invoiceBrowser(h,{member,other,pack,desk,stripeReceipt,payerPack}) {
   const proof=process.env.STRAP_PROOF_DIR ?? 'logs/proof/invoices';await mkdir(proof,{recursive:true});
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
   try {
@@ -29,7 +29,10 @@ export async function invoiceBrowser(h,{member,other,pack,desk,stripeReceipt}) {
           const copy=await context.newPage();try{await copy.setViewportSize({width,height:1000});await copy.setContent(html);assert.equal(await copy.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await copy.screenshot({path:join(proof,'BILL-009-'+(receipt?'receipt':'invoice')+'-download-'+width+'.png'),fullPage:true});}finally{await copy.close();}
         }
         await sign(other.cookie);await page.goto(h.origin+'/app/packs');assert.equal(await page.locator('[data-invoice-document="'+pack.id+'"]').count(),0);
+        const payerInvoice=page.locator('[data-invoice-document="'+payerPack.id+'"]');await payerInvoice.evaluate(el=>{el.open=true;});assert.ok((await payerInvoice.innerText()).includes('$25.00'));await capture('payer',width,payerInvoice);
         await sign(h.owner);await page.goto(h.origin+'/app/studio#invoice-mail');await capture('mail-settings',width,page.locator('#invoice-mail'));await page.goto(h.origin+'/app/packs#invoice-documents');invoice=await open();assert.ok((await invoice.innerText()).includes('$110.00'));await capture('owner-packs',width,invoice);
+        const prepare=page.locator('#prepare-pack');await prepare.locator('[name=personId]').selectOption(other.id);await prepare.getByLabel('Price',{exact:true}).fill('110.00');await prepare.getByLabel('Pack discount (optional)',{exact:true}).fill('10.00');await prepare.getByLabel('One-time initiation fee (optional)',{exact:true}).fill('10.00');await capture('prepare-discount',width,prepare);await prepare.getByRole('button',{name:'Prepare pack',exact:true}).click();
+        const draft=(await h.state()).drafts.filter(d=>d.type==='pack'&&d.status==='draft'&&d.personId===other.id).at(-1);assert.deepEqual([draft.amountCents,draft.discountCents,draft.initiationFeeCents],[10000,1000,1000]);await capture('discount-approval',width,page.locator('#draft-'+draft.id));
         await page.goto(h.origin+'/app/people?person='+pack.personId+'#invoice-documents');invoice=await open();await capture('owner-profile',width,invoice);
         await sign(desk.cookie);await page.goto(h.origin+'/app/people?person='+pack.personId+'#invoice-documents');invoice=await open();
         const receipt=invoice.locator('[data-payment-receipt="'+stripeReceipt.id+'"]');await receipt.getByText('Email receipt',{exact:true}).click();const form=receipt.locator('form');assert.equal(await form.getByRole('checkbox').isChecked(),false);await form.getByLabel('Member requested this through').selectOption('phone');await form.getByRole('checkbox').check();await capture('staff-resend',width,invoice);await form.getByRole('button',{name:'Send requested copy'}).click();

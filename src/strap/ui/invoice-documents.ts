@@ -40,7 +40,7 @@ function allocationControls(s: any, invoice: InvoiceDocument, back: string) {
 
 /** Supplied documents are already authorized; the selected profile adds a person filter. */
 export function invoiceDocumentsPanel(s: any, personId?: string, back = '/app/packs', staff = s.actor.role !== 'member') {
-  const selected = staff ? personId : s.actor.personId
+  const selected = staff ? personId : undefined
   const invoices: InvoiceDocument[] = (s.invoiceDocuments?.invoices ?? []).filter((invoice: InvoiceDocument) => !selected || invoice.personId === selected)
   const documents = [...invoices].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(invoice => {
     const receipts = invoice.receipts.map(receipt => `<section data-payment-receipt="${h(receipt.id)}"><h4>Payment receipt</h4>${receiptDetails(invoice, receipt)}<p><a class="btn-quiet small" download href="/api/strap/receipt.html?id=${encodeURIComponent(receipt.id)}&amp;packId=${encodeURIComponent(invoice.packId)}">Download receipt</a></p>${sendDocument(invoice, receipt, back, staff)}</section>`).join('')

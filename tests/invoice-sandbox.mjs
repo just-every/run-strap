@@ -8,6 +8,7 @@ import { taxInvoice } from './tax-sandbox.mjs';
 
 const key=process.env.STRAP_STRIPE_TEST_KEY,mailKey=process.env.STRAP_MAIL_KEY,from=process.env.STRAP_MAIL_FROM;
 assert.ok(key && mailKey && from,'Held TEST billing and controlled mail credentials must be injected');
+const recipient=from.includes('<')?from.slice(from.lastIndexOf('<')+1,from.lastIndexOf('>')):from;
 const signing=randomBytes(32).toString('hex'),edge=[];
 async function provider(path) {
   const r=await fetch('https://api.stripe.com/v1'+path,{headers:{authorization:'Bearer '+key,'Stripe-Version':'2025-06-30.basil'},redirect:'manual'});assert.equal(r.status,200,'Stripe sandbox read');return r.json();
@@ -17,7 +18,7 @@ async function delivered(delivery) {
   for(let attempt=0;attempt<30;attempt++) {
     const r=await fetch('https://api.sendgrid.com/v3/messages?'+query,{headers:{authorization:'Bearer '+mailKey},redirect:'manual'});assert.equal(r.status,200,'Controlled mail activity read');
     const body=await r.json();assert.ok(Array.isArray(body.messages));
-    const found=body.messages.filter(m=>m.to_email===from && m.msg_id?.startsWith(delivery.providerMessageId));
+    const found=body.messages.filter(m=>m.to_email===recipient && m.msg_id?.startsWith(delivery.providerMessageId));
     assert.ok(found.length<=1,'one activity identity for the one-recipient application send');
     if(found[0]?.status==='delivered')return {messageId:found[0].msg_id,status:found[0].status,recipientOnFile:true};
     if(found[0]?.status==='not_delivered')throw Error('Controlled receipt was not delivered');
@@ -27,7 +28,7 @@ async function delivered(delivery) {
 }
 const account=await provider('/account');
 await run(async h=>{
-  const seed=await invoiceSeed(h,'SandboxInvoiceMember',from),{member,pack,line,fee}=seed;
+  const seed=await invoiceSeed(h,'SandboxInvoiceMember',recipient),{member,pack,line,fee}=seed;
   const connected=await h.cmd('billing.connect',{accountId:account.id,mode:'test',confirm:true,requestId:'synthetic-strap-live-connect'});assert.equal(connected.result.ready,true);
   const address={line1:'920 5th Ave',city:'Seattle',state:'WA',postalCode:'98104',country:'US'};
   await h.cmd('tax.config.save',{requestId:'synthetic-strap-live-tax',consent:true,originAddress:address,registeredStates:['WA'],products:[{id:'invoice-fitness',kind:'service',sourceId:pack.id,label:'Fitness class pack and initiation',taxCode:'txcd_50021003'}],exemptions:[]});
@@ -42,7 +43,7 @@ await run(async h=>{
     try {
       const page=await context.newPage();page.setDefaultTimeout(45000);await page.goto(checkout.launchURL);
       const fill=async(selector,value,required=true)=>{for(const frame of page.frames()){const input=frame.locator(selector).first();if(await input.count()&&await input.isVisible()){await input.fill(value);return;}}if(required)throw Error('Controlled hosted field unavailable: '+selector);};
-      await page.locator('#email,input[name="email"]').first().waitFor({state:'visible'});await fill('#email,input[name="email"]',from);
+      await page.locator('#email,input[name="email"]').first().waitFor({state:'visible'});await fill('#email,input[name="email"]',recipient);
       await fill('#cardNumber,input[name="cardNumber"]','4242424242424242');await fill('#cardExpiry,input[name="cardExpiry"]','12/34');await fill('#cardCvc,input[name="cardCvc"]','123');await fill('#billingName,input[name="billingName"]',member.name,false);
       const country=page.locator('#billingCountry,select[name="billingCountry"]').first();if(await country.count()&&await country.isVisible())await country.selectOption('US');await fill('#billingPostalCode,input[name="billingPostalCode"]','98104',false);
       const link=page.locator('#enableStripePass');if(await link.count()&&await link.isVisible()&&await link.isChecked())await link.uncheck();await page.locator('button[type="submit"]').click();await page.waitForURL(url=>url.origin===h.origin,{waitUntil:'commit',timeout:60000});
