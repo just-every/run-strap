@@ -6,7 +6,7 @@ const path = '/app/leads'
 const request = () => hidden('requestId',crypto.randomUUID())
 export function leadCampaignPanel(report: ReturnType<typeof leadReport>, offers: any[]) {
   const campaigns = report.campaigns.map(c => `<article id="${h(c.id)}" data-funnel-campaign="${h(c.id)}"><h3>${h(c.name)}</h3>`
-    +`<p>${c.members} leads · ${c.introPurchases} intro purchases · ${c.firstVisits} first visits · ${c.nativeMembershipConversions} native conversions · ${c.repeatAttendance} repeat attendance · ${c.lostInquiries} lost</p>`
+    +`<p>${c.members} leads · ${c.introPurchases} intro purchases · ${c.firstVisits} first visits · ${c.nativeMembershipConversions} native conversions · ${c.repeatAttendance} repeat attendance · ${c.lapsedIntros} lapsed intros · ${c.lostInquiries} lost</p>`
     +`<p>Recorded cost <strong data-campaign-cost>${money(c.costCents)}</strong> · Gross invoiced revenue <strong data-campaign-revenue>${money(c.attributedRevenueCents)}</strong></p>`
     +`<p><a href="${path}?funnelCampaign=${encodeURIComponent(c.id)}">Drill into campaign members and sales</a></p>`
     +`<details><summary>Campaign and spending evidence</summary><p>Intro offer: ${h(offers.find(o => o.id === c.introOfferId)?.name)}. Purchase window: ${h(c.startsAt)} to ${h(c.endsAt)} (exclusive).</p><ul>`

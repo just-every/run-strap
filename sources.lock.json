@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "13f779685f6aecbd8d4e31b75c39792906fb2457e273cf52e23a5f51a7cebeb1",
+      "sha256": "5c4cb67c42903749d06cf67b64444123b2bb20f6435447bb1870b805f0425908",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "4490e22e2dec3efff4738d8790ea26234768bb268265a5accf93ed7db0e73dff",
+      "sha256": "92c8bc84b2a30b96f6347ee30bd55d4782698b0d3db26d94fff72ea0334ba246",
       "executable": false
     },
     "DEMO.md": {
@@ -386,7 +386,7 @@
       "executable": false
     },
     "docs/LEAD-FUNNEL.md": {
-      "sha256": "b9740fe56cc4784de6596e6cbf72ea664e93959e8eaaf701d98d88be50c275f8",
+      "sha256": "8d8b62d67c2548edfe0a62f4247e46de0df4681ee4d0c87b6b7866f15ebd7fe0",
       "executable": false
     },
     "docs/MOVE-IN.md": {
@@ -3586,11 +3586,11 @@
       "executable": false
     },
     "src/strap/lead-report.ts": {
-      "sha256": "58071078698e3eeba84bc629f01019d930a96e1f6b68f31e0d35118ca62a1051",
+      "sha256": "2786b14e62809ba3b44f5bdc3c73adcbe7fe74919af60dc0ded8eb39a12441b1",
       "executable": false
     },
     "src/strap/lead-sales.ts": {
-      "sha256": "1abf8f1666d8a464af739d95507d1bdbdb8fede2c74c6123f462bcbe2cf125f9",
+      "sha256": "4c1901857c1b2476d14b2278d18744be818eed023de908656265233c8973eaaa",
       "executable": false
     },
     "src/strap/location-scope.ts": {
@@ -3866,11 +3866,11 @@
       "executable": false
     },
     "src/strap/ui/lead-campaigns.ts": {
-      "sha256": "580a577dfc0ef367d9fff872ac3f218993e12b80ef1a25df8ee3a3f7ecc11a72",
+      "sha256": "0bae511e65c99c4b71c4b34ce18d95cdeb325e642a1b601afccda673a2292c48",
       "executable": false
     },
     "src/strap/ui/lead-report.ts": {
-      "sha256": "abf6a25396ff5618f1135e75e2c0f4a066d0fab06658587997af63b8f77d0ade",
+      "sha256": "e958897b6bd3d5e33cbaec5e0629a692659416026aebc6cac7daa1225feb5cd3",
       "executable": false
     },
     "src/strap/ui/leads.ts": {
@@ -4306,7 +4306,7 @@
       "executable": false
     },
     "tests/lead-report-browser.mjs": {
-      "sha256": "39d772fc09bb1874574a5e1cc66ad5c9b815dfc5ce8d4237aa224455eab068a2",
+      "sha256": "66a7c9abc3d036e7e2e67d804a738a443bc3fef0436fb4ce170e279cbbbd827a",
       "executable": false
     },
     "tests/leads-browser.mjs": {
@@ -4314,7 +4314,7 @@
       "executable": false
     },
     "tests/leads.test.mjs": {
-      "sha256": "14b3eda125156852c369baabccb9cb7e8533948319aad79700522263041d4503",
+      "sha256": "dcccdce434e7ab5cdb5f15f8c6c285006ebd322788f29f3ee24553ec50a98258",
       "executable": false
     },
     "tests/locations-browser.mjs": {

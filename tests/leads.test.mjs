@@ -76,12 +76,36 @@ test('LEAD-002: assigned inquiry, overdue callback, evidenced first visit, exter
   if(process.env.STRAP_PROOF_DIR) {const {leadsBrowser}=await import('./leads-browser.mjs');await leadsBrowser(h,{ana,ben,ownerId,lead})}
 }))
 
-test('RPT-005: first-source inquiries reconcile to native campaign sales, recorded cost and corrected visits without invented conversions',{timeout:240000},()=>run(async h=>{
+// Run this public-door flow at a fixed instant, then cross the real intro term.
+// The existing process clock affects workerd too; production has no clock switch.
+async function funnelRun(fn) {
+  if (process.env.STRAP_FUNNEL_CLOCK === 'child') return run(fn)
+  const {spawn} = await import('node:child_process')
+  const {mkdtemp,writeFile,rm} = await import('node:fs/promises')
+  const {tmpdir} = await import('node:os')
+  const {join} = await import('node:path')
+  const dir=await mkdtemp(join(tmpdir(),'strap-funnel-clock-'))
+  const clock=join(dir,'offset'),library=join(dir,process.platform === 'darwin' ? 'clock.dylib' : 'clock.so')
+  const execute=(command,args,env=process.env)=>new Promise((resolve,reject)=>{
+    const child=spawn(command,args,{env,stdio:'inherit'})
+    child.once('error',reject);child.once('close',resolve)
+  })
+  try {
+    assert.equal(await execute(process.env.CC || 'cc',[...(process.platform === 'darwin' ? ['-dynamiclib'] : ['-shared','-fPIC']),'-O2','tests/recovery-clock.c','-o',library]),0)
+    await writeFile(clock,String(Math.floor((Date.parse('2032-01-05T12:00:00Z')-Date.now())/1000)))
+    const key=process.platform === 'darwin' ? 'DYLD_INSERT_LIBRARIES' : 'LD_PRELOAD'
+    const env={...process.env,[key]:library,STRAP_RECOVERY_CLOCK:clock,STRAP_FUNNEL_CLOCK:'child'}
+    delete env.NODE_TEST_CONTEXT
+    assert.equal(await execute(process.execPath,['--test','--test-name-pattern=RPT-005','tests/leads.test.mjs'],env),0,'native campaign and elapsed intro public-door journey')
+  } finally {await rm(dir,{recursive:true,force:true})}
+}
+
+test('RPT-005: first-source inquiries reconcile to native campaign sales, recorded cost and corrected visits without invented conversions',{timeout:240000},()=>funnelRun(async h=>{
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   const coach=await h.person('Elena','instructor'),ana=await h.person('Priya'),ben=await h.person('Jules'),cy=await h.person('Morgan')
   const ownerId=(await h.state()).actor.id
   const intro=await h.cmd('intro.offer.save',{name:'Community first week',days:7,credits:4,amountCents:2000,eligibility:'new',limit:'person'})
-  const campaignInput={requestId:'synthetic-strap-campaign-1',name:'October introduction',introOfferId:intro.id,startsAt:new Date(Date.now()-86400000).toISOString(),endsAt:new Date(Date.now()+7*86400000).toISOString()}
+  const campaignInput={requestId:'synthetic-strap-campaign-1',name:'October introduction',introOfferId:intro.id,startsAt:new Date(Date.now()-86400000).toISOString(),endsAt:new Date(Date.now()+14*86400000).toISOString()}
   const campaign=await h.cmd('lead.campaign.create',campaignInput)
   assert.deepEqual(await h.cmd('lead.campaign.create',campaignInput),campaign)
   await h.cmd('lead.campaign.create',{...campaignInput,name:'Changed'},h.owner,409)
@@ -96,7 +120,11 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
     await h.cmd('lead.campaign.cost',{...costInput,requestId:'synthetic-strap-denied-cost'},actor.cookie,403)
     assert.equal((await h.state(actor.cookie)).leadCampaigns,null)
   }
-  const create=async(person,requestId,source)=>h.cmd('lead.create',{personId:person.id,ownerId,requestId,source,...(person.id===cy.id?{}:{campaignId:campaign.id}),nextAction:'Call after first class',dueAt:new Date(Date.now()-3600000).toISOString()})
+  const captures=new Map()
+  const create=async(person,requestId,source)=>{
+    const input={personId:person.id,ownerId,requestId,source,...(person.id===cy.id?{}:{campaignId:campaign.id}),nextAction:'Call after first class',dueAt:new Date(Date.now()-3600000).toISOString()}
+    captures.set(requestId,input);return h.cmd('lead.create',input)
+  }
   const lead=await create(ana,'source-one','Community event'),other=await create(ben,'source-two','Phone'),unknown=await create(cy,'unknown')
   assert.equal(lead.source,'Community event')
   const duplicate=await create(ana,'second-inquiry','Phone')
@@ -139,6 +167,9 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
   assert.deepEqual([report.totals.incompleteFollowUps,report.totals.overdueFollowUps,report.totals.lostInquiries],[2,2,1])
   assert.equal(report.totals.recordedIntroBookings,1)
   assert.deepEqual([report.totals.introPurchases,report.totals.nativeMembershipConversions,report.totals.attributedRevenueCents],[2,0,4000],'external membership and named credit packs cannot invent native conversion or revenue')
+  assert.equal(row.introPurchases.length,1,'the retained native intro sale is visible')
+  assert.equal(report.campaigns[0].costCents,4500,'recorded campaign spending is retained')
+  assert.equal(report.totals.overdueFollowUps,2,'overdue follow-ups remain visible')
   assert.deepEqual([report.campaigns[0].members,report.campaigns[0].introPurchases,report.campaigns[0].nativeMembershipConversions,report.campaigns[0].costCents,report.campaigns[0].attributedRevenueCents],[2,2,0,4500,4000])
   assert.deepEqual(report.campaigns[0].costs.map(c=>c.id),[cost.id])
   assert.deepEqual(report.rows.find(r=>r.personId===cy.id).nativeConversions,[])
@@ -147,6 +178,8 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
   const membership=await h.cmd('pack.approve',{id:membershipDraft.id})
   await h.cmd('pack.approve',{id:membershipDraft.id},h.owner,409)
   report=await read();row=report.rows.find(r=>r.personId===ana.id)
+  assert.deepEqual(row.nativeConversions.map(c=>c.packId),[membership.id],'native purchase establishes the conversion')
+  assert.equal(report.campaigns[0].attributedRevenueCents,13000,'original service sales establish attributed revenue')
   assert.deepEqual([report.totals.introPurchases,report.totals.nativeMembershipConversions,report.totals.attributedRevenueCents],[2,1,13000])
   assert.deepEqual(row.nativeConversions.map(c=>c.packId),[membership.id])
   assert.deepEqual(report.rows.find(r=>r.personId===ben.id).nativeConversions,[])
@@ -165,6 +198,7 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
   assert.deepEqual([native.leadCampaigns.costs[0].createdBy,native.leadCampaigns.costs[0].command],[ownerId,'lead.campaign.cost'])
   await h.cmd('attendance.correct',{id:visits[1].id,outcome:'attended',reason:'Signed the paper roster'})
   report=await read();row=report.rows.find(r=>r.personId===ana.id)
+  assert.equal(report.totals.repeatAttendance,1,'corrected repeat attendance is visible')
   assert.deepEqual([row.attendedVisits,row.repeatAttendance,report.totals.repeatAttendance],[2,true,1])
   const state=await h.state()
   assert.deepEqual(new Set(row.attendedBookingIds),new Set(visits.slice(0,2).map(v=>v.id)))
@@ -185,6 +219,50 @@ test('RPT-005: first-source inquiries reconcile to native campaign sales, record
   assert.equal(JSON.parse(exit.value.tables.st_records.find(r=>r.id===lead.id).data).source,'Community event')
   assert.ok(exit.value.tables.st_records.some(r=>r.id===campaign.id))
   assert.ok(exit.value.tables.st_records.some(r=>r.id===cost.id))
+  // Replayed capture retains the original acquisition and cannot duplicate a sale.
+  assert.deepEqual(await h.cmd('lead.create',captures.get('source-one')),lead)
+  assert.deepEqual((await read()).totals,report.totals)
+  await h.cmd('person.erase',{id:ana.id},h.owner,409)
+  assert.deepEqual((await read()).rows.map(r=>r.personId),[ana.id,ben.id,cy.id])
+  await h.cmd('agent.revoke',{id:key.id})
+  assert.equal((await h.send('/api/strap/reports/leads',undefined,'',{authorization:'Bearer '+key.token})).status,401)
+
+  const creditPack=(await h.state()).packs.find(p=>p.personId===cy.id)
+  const terms=await h.cmd('plan.recurring.prepare',{packId:creditPack.id,intervalMonths:1,requestId:'synthetic-strap-recurring-1'})
+  assert.equal((await read()).totals.nativeMembershipConversions,1,'unaccepted recurring terms are not conversion')
+  await h.cmd('plan.recurring.accept',{id:terms.id,key:terms.key},cy.cookie)
+  const withAgreement=await read()
+  assert.deepEqual(withAgreement.rows.find(r=>r.personId===cy.id).nativeConversions.map(c=>c.id),[terms.id])
+  assert.equal(withAgreement.totals.nativeMembershipConversions,2)
+  assert.equal(withAgreement.totals.attributedRevenueCents,13000,'agreement acceptance is not a new sale')
+  assert.equal((await read('?funnelCampaign='+encodeURIComponent(campaign.id))).totals.nativeMembershipConversions,1,'unrelated agreements stay outside the campaign')
+
+  await h.cmd('booking.cancel',{id:visits[2].id},ana.cookie)
+  await h.cmd('attendance.correct',{id:noShow.id,outcome:'excused',reason:'Studio excused the missed intro'})
+  assert.deepEqual((await read()).rows.find(r=>r.personId===ben.id).attendedBookingIds,[])
+  const {writeFile,rename,readFile}=await import('node:fs/promises')
+  const clock=process.env.STRAP_RECOVERY_CLOCK
+  await writeFile(clock+'.new',String(Number(await readFile(clock,'utf8'))+8*86400))
+  await rename(clock+'.new',clock)
+  const originalCmd=h.cmd,originalState=h.state
+  h.owner=await h.signIn(h.auth.OWNER_EMAIL)
+  await originalCmd('mfa.verify',{code:(await import('./mfa-helpers.mjs')).totp(h.mfaOwner.secret)},h.owner)
+  h.cmd=(name,input,cookie=h.owner,...rest)=>originalCmd(name,input,cookie,...rest)
+  h.state=(cookie=h.owner,...rest)=>originalState(cookie,...rest)
+  report=await read()
+  const lapsed=report.rows.find(r=>r.personId===ben.id)
+  const retainedSale=(await h.state()).intros.sales.find(s=>s.personId===ben.id)
+  assert.ok(retainedSale.expiresAt < report.asOf)
+  assert.deepEqual(lapsed.lapsedIntroSaleIds,[retainedSale.id])
+  assert.deepEqual(lapsed.nativeConversions,[],'an elapsed intro and lost follow-up never manufacture conversion')
+  assert.deepEqual(report.rows.find(r=>r.personId===ana.id).lapsedIntroSaleIds,[],'converted intro is not a lapsed acquisition')
+  assert.deepEqual([report.totals.introPurchases,report.totals.lapsedIntros,report.totals.nativeMembershipConversions,report.totals.attributedRevenueCents],[2,1,2,13000])
+  assert.deepEqual([report.campaigns[0].introPurchases,report.campaigns[0].lapsedIntros,report.campaigns[0].nativeMembershipConversions,report.campaigns[0].attributedRevenueCents],[2,1,1,13000])
+  const closed=await h.cmd('lead.campaign.create',{...campaignInput,requestId:'synthetic-strap-closed-campaign',startsAt:new Date(Date.now()-2*86400000).toISOString(),endsAt:new Date(Date.now()-86400000).toISOString()})
+  const expiredVersion=(await h.state()).version
+  await h.cmd('lead.create',{...captures.get('source-two'),campaignId:closed.id,requestId:'synthetic-strap-expired-capture'},h.owner,409)
+  assert.equal((await h.state()).version,expiredVersion)
+  assert.deepEqual((await read('?funnelSource=Phone&funnelCampaign='+encodeURIComponent(campaign.id))).rows.map(r=>r.personId),[ben.id])
   await (await import('./lead-report-browser.mjs')).leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intro,membership})
 }))
 

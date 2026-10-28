@@ -5,13 +5,14 @@ import { body, cell, field, h, hidden, panel, table } from './shared'
 export function leadReportPanel(report: ReturnType<typeof leadReport>) {
   const sources = report.sources.map(row => '<tr>'+cell('Source',h(row.source ?? 'Unknown source'))
     +cell('Inquiries',`${row.members} members · ${row.inquiries} inquiries<small>${row.recordedIntroBookings} recorded intro bookings</small>`)
-    +cell('Sales',`${row.introPurchases} intro purchases · ${row.nativeMembershipConversions} native conversions<small>${money(row.attributedRevenueCents)} gross invoiced revenue</small>`)
+    +cell('Sales',`${row.introPurchases} intro purchases · ${row.nativeMembershipConversions} native conversions<small>${row.lapsedIntros} lapsed intros · ${money(row.attributedRevenueCents)} gross invoiced revenue</small>`)
     +cell('Attendance',`${row.firstVisits} first · ${row.repeatAttendance} repeat`)
     +cell('Outcomes',`${row.externalOutcomes} external · ${row.lostInquiries} lost<small>${row.incompleteFollowUps} follow-ups · ${row.overdueFollowUps} overdue</small>`)+'</tr>').join('')
   const rows = report.rows.map(row => `<tr data-funnel-member="${h(row.personId)}">`
     +cell('Member',`<a href="${h(row.leadUrl)}">${h(row.member)}</a><small>${h(row.source ?? 'Unknown source')}${row.campaignName ? ' · '+h(row.campaignName) : ''}</small>`)
     +cell('Attendance',`${row.attendedVisits} attended${row.repeatAttendance ? ' · repeat attendance' : ''}`)
     +cell('Sales',`<span>${row.introPurchases.length} intro purchases · ${row.nativeConversions.length ? 'Native membership converted' : 'No native conversion'}</span><small>${money(row.attributedRevenueCents)} gross invoiced revenue</small>`
+      +(row.lapsedIntroSaleIds.length ? '<small>Intro lapsed without native conversion</small>' : '')
       +`<details><summary>Recorded sales evidence</summary><ul>`
       +row.introPurchases.map(e => `<li data-intro-sale-id="${h(e.id)}"><a href="${h(e.url)}">Intro purchase</a> · ${money(e.amountCents)} · ${h(e.at)} · ${h(e.id)}</li>`).join('')
       +row.nativeConversions.map(e => `<li data-conversion-id="${h(e.id)}"><a href="${h(e.url)}">Native membership</a> · ${h(e.kind)} · ${h(e.at)} · ${h(e.id)}</li>`).join('')

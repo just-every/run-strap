@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 
 export async function leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intro,membership}) {
   const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--use-mock-keychain','--password-store=basic',...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? ['--no-sandbox'] : [])]})
-  const proofDir=process.env.STRAP_PROOF_DIR ?? 'logs/proof/leads'
+  const proofDir=process.env.STRAP_LEAD_REPORT_PROOF_DIR ?? process.env.STRAP_PROOF_DIR ?? 'logs/proof/leads'
   await mkdir(proofDir,{recursive:true})
   try {for(const width of [1440,390]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -23,7 +23,10 @@ export async function leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intr
     const campaignRow=page.locator(`[data-funnel-campaign="${campaign.id}"]`)
     await campaignRow.locator('[data-campaign-cost]').getByText('$45.00',{exact:true}).waitFor()
     await campaignRow.locator('[data-campaign-revenue]').getByText('$130.00',{exact:true}).waitFor()
+    await page.locator(`[data-funnel-member="${ben.id}"]`).getByText('Intro lapsed without native conversion',{exact:true}).waitFor()
     await shot('sources')
+    await funnel.screenshot({path:join(proofDir,`RPT-005-funnel-panel-${width}.png`)})
+    await campaignRow.screenshot({path:join(proofDir,`RPT-005-campaign-panel-${width}.png`)})
     await campaignRow.getByRole('link',{name:'Drill into campaign members and sales',exact:true}).click()
     assert.equal(await page.locator('[data-funnel-member]').count(),2)
     await page.locator(`[data-funnel-member="${ben.id}"]`).getByText('1 intro purchases · No native conversion',{exact:true}).waitFor()
@@ -40,6 +43,22 @@ export async function leadReportBrowser(h,{ana,ben,unknown,ownerId,campaign,intr
     assert.equal(await row.locator('[data-intro-sale-id]').count(),1)
     assert.equal(await row.locator('[data-revenue-id]').count(),2)
     await shot('filtered')
+    const openSales=async()=>{if(await row.locator('details').getAttribute('open') === null) await row.getByText('Recorded sales evidence',{exact:true}).click()}
+    const native=await h.state()
+    const sale=native.intros.sales.find(s=>s.personId===ana.id)
+    await row.getByRole('link',{name:'Intro purchase',exact:true}).click()
+    await page.locator(`[id="pack-${sale.packId}"]`).waitFor()
+    await page.goBack()
+    for(const [i,charge] of native.charges.filter(c=>[sale.packId,membership.id].includes(c.packId)).entries()) {
+      await openSales()
+      await row.getByRole('link',{name:'Original sale charge',exact:true}).nth(i).click()
+      const receipt=page.locator(`[id="receipt-${charge.packId}"]`)
+      assert.equal(await receipt.getAttribute('data-pack-id'),charge.packId)
+      assert.equal(await receipt.locator('time').getAttribute('datetime'),native.packs.find(p=>p.id===charge.packId).createdAt)
+      await receipt.getByText('$'+(charge.amountCents/100).toFixed(2),{exact:true}).first().waitFor()
+      await page.goBack()
+    }
+    await openSales()
     await row.getByRole('link',{name:'Native membership',exact:true}).click()
     const pack=page.locator(`[id="pack-${membership.id}"]`)
     await pack.waitFor()
