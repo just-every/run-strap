@@ -402,7 +402,7 @@ test('RPT-003 / RPT-006: native finite-pack acquisition cohorts reconcile applie
   assert.equal((await h.send(path,undefined,ben.cookie)).status,403)
 }))
 
-test('RPT-003: tenure and attendance frequency count only corrected attended visits inside each member\'s retained-pack span, per member and pooled per cohort, in HTTP and CSV', () => run(async h => {
+test('RPT-008: tenure and attendance frequency count only corrected attended visits inside each member\'s retained-pack span, per member and pooled per cohort, in HTTP and CSV', () => run(async h => {
   await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const coach = await h.person('SpanCoach','instructor'), tia = await h.person('SpanTia'), xan = await h.person('SpanXan'), uma = await h.person('SpanUma'), wes = await h.person('SpanWes')
@@ -430,23 +430,23 @@ test('RPT-003: tenure and attendance frequency count only corrected attended vis
   const path = '/api/strap/reports/retention', read = async query => (await h.send(path+(query?'?'+query:''),undefined,h.owner)).value
   const report = await read(), version = (await h.state()).version
   const row = member => report.rows.find(r=>r.personId===member.id)
-  assert.deepEqual([row(tia).tenureDays,row(tia).attendedVisits,row(tia).visitsPer30Days],[60,2,1],'RPT-003: only attended visits whose class started inside the span count')
+  assert.deepEqual([row(tia).tenureDays,row(tia).attendedVisits,row(tia).visitsPer30Days],[60,2,1],'RPT-008: only attended visits whose class started inside the span count')
   assert.deepEqual([row(xan).tenureDays,row(xan).attendedVisits,row(xan).visitsPer30Days],[30,2,2])
-  assert.deepEqual([row(uma).tenureDays,row(uma).attendedVisits,row(uma).visitsPer30Days],[45,1,0.67],'RPT-003: span ends at the report instant when a pack is still running')
-  assert.deepEqual([row(wes).tenureDays,row(wes).attendedVisits,row(wes).visitsPer30Days],[0,0,null],'RPT-003: zero tenure has an unavailable frequency, never zero')
+  assert.deepEqual([row(uma).tenureDays,row(uma).attendedVisits,row(uma).visitsPer30Days],[45,1,0.67],'RPT-008: span ends at the report instant when a pack is still running')
+  assert.deepEqual([row(wes).tenureDays,row(wes).attendedVisits,row(wes).visitsPer30Days],[0,0,null],'RPT-008: zero tenure has an unavailable frequency, never zero')
   const mat = report.cohorts.find(cohort=>cohort.initialOffer==='Mat five')
-  assert.deepEqual([mat.members,mat.meanTenureDays,mat.attendedVisits,mat.visitsPer30Days],[2,45,4,1.33],'RPT-003: cohort frequency pools visits over pooled tenure days rather than averaging member rates')
+  assert.deepEqual([mat.members,mat.meanTenureDays,mat.attendedVisits,mat.visitsPer30Days],[2,45,4,1.33],'RPT-008: cohort frequency pools visits over pooled tenure days rather than averaging member rates')
   assert.deepEqual(report.cohorts.find(cohort=>cohort.initialOffer==='Wes offer').visitsPer30Days,null)
   assert.ok(!('tenure' in report.unavailable)&&!('attendanceFrequency' in report.unavailable))
   const {parseCsv} = await import('./report-downloads.mjs'), csv = await h.send(path+'.csv?offer=Mat+five',undefined,h.owner)
   const [keys,...values] = parseCsv(csv.text), exported = values.map(values=>Object.fromEntries(keys.map((key,i)=>[key,values[i]])))
-  assert.deepEqual(exported,(await read('offer=Mat+five')).rows,'RPT-003: CSV carries the same tenure and frequency columns as HTTP')
+  assert.deepEqual(exported,(await read('offer=Mat+five')).rows,'RPT-008: CSV carries the same tenure and frequency columns as HTTP')
   assert.deepEqual(exported.map(r=>[r.tenureDays,r.attendedVisits,r.visitsPer30Days]).sort(),[[30,2,2],[60,2,1]])
   assert.equal((await h.send(path,undefined,tia.cookie)).status,403)
   assert.equal((await h.state()).version,version,'tenure and frequency reads have no domain side effects')
 }))
 
-test('RPT-003: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',()=>run(async h=>{
+test('RPT-008: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',()=>run(async h=>{
   await h.confirmSetup(h.owner)
   const members=[await h.person('MovedMember'),await h.person('PriceMember'),await h.person('RenewedMember')]
   const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
@@ -497,7 +497,7 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
 }))
 
 
-test('RPT-003: period churn reconciles unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
+test('RPT-008: period churn reconciles unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
   await h.confirmSetup(h.owner)
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const members = [await h.person('ChurnLost'),await h.person('ChurnRetained'),await h.person('ChurnReplacement'),await h.person('ChurnScheduled')]
@@ -544,7 +544,7 @@ test('RPT-003: period churn reconciles unique lost members and opening recurring
 }))
 
 
-test('RPT-003: reviewed eighteen-month historical terms join native cutover renewals and terminations with labeled source and payment evidence', () => run(async h => {
+test('RPT-003 / RPT-008: reviewed eighteen-month historical terms join native cutover renewals and terminations with labeled source and payment evidence', () => run(async h => {
   await h.confirmSetup(h.owner)
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const member=await h.person('HistoryMember'),other=await h.person('HistoryOther'),coach=await h.person('HistoryCoach','instructor')

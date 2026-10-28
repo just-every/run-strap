@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "8b711dcc97842d04ceb68696fe130b7f4c49c549d4f7c8311af1dda61502516e",
+      "sha256": "b8485dafe3c265747067f08bbbfd57ce7d3a485ba582f3fe823c02e3aa874924",
       "executable": false
     },
     "AGENTS.md": {
@@ -326,7 +326,7 @@
       "executable": false
     },
     "CHANGELOG.md": {
-      "sha256": "3c660a839675aa6199ec086109766c953c73365699e8a822ed484308f4d1600a",
+      "sha256": "50c6523130efbda86645e5312525ee974e30ca9854b67a22d0ea25ab802d10b8",
       "executable": false
     },
     "composition.lock.json": {
@@ -334,7 +334,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "93ecbaf54e44ad19e7888ee3b98213fd42755a09e2a050070dc7cca3318c8bf1",
+      "sha256": "16acf485bc04d62b39cde1a9428b7a486ea4218476cdbf7d806efbd5806e17b8",
       "executable": false
     },
     "DEMO.md": {
@@ -374,11 +374,19 @@
       "executable": false
     },
     "docs/contract/COVERAGE.json": {
-      "sha256": "f425930df3a90eec1a743626604433b67fcdf1d586f6c20fbdabeeabbd78f62e",
+      "sha256": "f792f54acc3c7410387377b01ded05d7730ef7898c09c5659a3bf93d0e68ca10",
+      "executable": false
+    },
+    "docs/contract/DONE-AUDIT.md": {
+      "sha256": "fc6a0dd5df13d7ba8a33455ba3356e9fef944e3812cc287b3cb1b72b0d4d3573",
       "executable": false
     },
     "docs/contract/ID-MAP.json": {
       "sha256": "669dfe5c65b3db7826fbfcb6a06479e7f9ea437f70dc760ada9e737e69bb4d12",
+      "executable": false
+    },
+    "docs/contract/MECHANISMS.md": {
+      "sha256": "802bd49e7ce2ab94fa481144aff1838dc893844497645dc8df5371b58e01bd95",
       "executable": false
     },
     "docs/COURSES.md": {
@@ -418,7 +426,7 @@
       "executable": false
     },
     "docs/RETENTION-REPORT.md": {
-      "sha256": "75d30355dd724387ad6f72732bbfbaa7ab555720f8baaa639271c2ea8d9caa6c",
+      "sha256": "4787c00a37f574ce8babfcc3fd9ed3038b25e15f0a7b03014acc4bdfab09533b",
       "executable": false
     },
     "docs/site.json": {
@@ -903,6 +911,10 @@
     },
     "rer-setup.json": {
       "sha256": "faeaec0c672d3c4c02e37faa006647ac180dd8a6ba40457eaf6b3a6203fe01ec",
+      "executable": false
+    },
+    "RULINGS.md": {
+      "sha256": "1b6afa1194d0b440e578c3bcd2c80b4c0dc7cb6d29125dd941d32e55f295619a",
       "executable": false
     },
     "RUN-LOCALLY.md": {
@@ -4454,11 +4466,11 @@
       "executable": false
     },
     "tests/reports-browser.mjs": {
-      "sha256": "072dc676c162e22e81dcbd34acace73e3ea72a214ed05c51f3c54563aca90de0",
+      "sha256": "0acfbbf6968a0eca69f1937203fa05311603223a8d82a04a43bdd04a9022b034",
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "388a3ca349db5fcadc671f28acf5c050426f7d5c2d5cbc13f7edc77a668e8f68",
+      "sha256": "1ba56df3b65ce12b6a776ca42fef38b5cd6953632a464e20f72fec19ad348250",
       "executable": false
     },
     "tests/reservations-browser.mjs": {

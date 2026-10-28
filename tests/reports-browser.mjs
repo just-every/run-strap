@@ -142,7 +142,7 @@ export async function retentionLifecycleBrowser(h,report){
     await page.locator(`[data-pack-id="${row.packId}"]`).getByRole('link',{name:'Receipt 1',exact:true}).click()
     await page.locator('#source-record').waitFor()
     const source=JSON.parse(await page.getByLabel('Retained source record',{exact:true}).inputValue())
-    assert.equal(source.id,row.paymentIds[0]);await shot(page,'RPT-003-collected-receipt')
+    assert.equal(source.id,row.paymentIds[0]);await shot(page,'RPT-008-collected-receipt')
   })
 }
 
@@ -160,10 +160,10 @@ export async function retentionChurnBrowser(h,report,query) {
     assert.match(await cohort.innerText(),/25% member churn/)
     assert.match(await cohort.innerText(),/80% gross canceled recurring revenue/)
     assert.deepEqual(await downloadNativePair(page,'retention-churn',page.viewportSize().width,'Download retention CSV','Download retention XLSX'),report.rows)
-    await shot(page,'RPT-003-period-churn')
+    await shot(page,'RPT-008-period-churn')
     await page.getByRole('link',{name:'Opening agreement 1',exact:true}).first().click()
     await page.locator('[data-recurring]').first().waitFor()
-    await shot(page,'RPT-003-opening-agreement')
+    await shot(page,'RPT-008-opening-agreement')
   })
 }
 

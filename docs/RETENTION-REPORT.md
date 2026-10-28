@@ -125,3 +125,5 @@ CSV headers are plain text, with each data cell a JSON value, including nested
 source records and nulls. XLSX preserves those typed source values, a Cohorts
 sheet, declared unavailable facts and the context definitions. Report and source
 links remain owner-only. Scheduled delivery remains RPT-006.
+
+Contract scope: RPT-003 owns cohort acquisition, historical-term admission and renewal identity; RPT-008 owns churn, tenure, attendance frequency and source reconciliation.

@@ -1345,3 +1345,5 @@ Current raw clause inventory: 61 done, 36 partial, 54 missing; 151 total. This i
 **MOVE-011.** The manifest labels signed waivers and media as not implemented; acknowledgments are version receipts, never signatures.
 
 **MOVE-011.** No studio billing or delivery provider connections exist today and none travel with either export; native access recovery mail is separate from studio delivery.
+
+**MEM-005.**  the BILL-014 additional immutable agreement and separate personal adult recurring-payment permission default is approved with riders as a PARTIAL foundation.
