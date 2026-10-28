@@ -45,6 +45,8 @@ export async function taxBrowser(h,seed,widths=[1440,390]) {
         await panel.getByText('Record an external tax payment',{exact:true}).click()
         const payment=panel.locator('form[action*="name=tax.payment.record"]')
         await payment.getByLabel('Tax invoice or reversal',{exact:true}).selectOption(JSON.stringify([invoice.id,reversalId]))
+        const providerReference=reversalId ? (await h.send('/api/strap/tax',undefined,h.owner)).value.reversals.find(r=>r.id===reversalId).providerTransactionId : invoice.providerTransactionId
+        assert.ok((await payment.locator('select option:checked').innerText()).includes(providerReference),'the owner can distinguish the exact provider tax record')
         await payment.getByLabel('Tax payment amount (USD)',{exact:true}).fill(amount)
         await payment.getByLabel('External payment reference',{exact:true}).fill(reference)
         await payment.getByLabel('Payment reason',{exact:true}).fill('Owner records money already exchanged outside Strap')

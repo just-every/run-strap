@@ -11,11 +11,11 @@ export function taxPayments(tax: any) {
     const reversals=tax.reversals.filter((r: any)=>r.invoiceId===invoice.id)
     const credited=-reversals.reduce((sum: number,r: any)=>sum+r.taxCents,0)
     const remaining=invoice.taxCents-credited+refunded-received
-    if(remaining>0)choices.push([JSON.stringify([invoice.id,null]),invoice.product.label+' · receive up to '+money(remaining)])
+    if(remaining>0)choices.push([JSON.stringify([invoice.id,null]),invoice.product.label+' · receive up to '+money(remaining)+' · '+invoice.providerTransactionId])
     for(const reversal of reversals) {
       const returned=-recorded.filter((p: any)=>p.taxReversalId===reversal.id).reduce((sum: number,p: any)=>sum+p.amountCents,0)
       const available=Math.min(-reversal.taxCents-returned,received-refunded)
-      if(available>0)choices.push([JSON.stringify([invoice.id,reversal.id]),invoice.product.label+' · refund up to '+money(available)])
+      if(available>0)choices.push([JSON.stringify([invoice.id,reversal.id]),invoice.product.label+' · refund up to '+money(available)+' · '+reversal.providerTransactionId])
     }
   }
   const recording=tax.connected&&choices.length ? `<details><summary>Record an external tax payment</summary><p>Record tax money already received or returned outside Strap. This does not collect or refund money through Stripe.</p>${form('tax.payment.record','/app/studio#tax',hidden('requestId',crypto.randomUUID())

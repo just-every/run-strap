@@ -4042,7 +4042,7 @@
       "executable": false
     },
     "src/strap/ui/tax-payments.ts": {
-      "sha256": "0441124508bd62d55b3820547b504bb0e66ce4f5127152de7ecceeeead307880",
+      "sha256": "3f8742477d36d35c7b0b86a493a0fa28d9f09f8079f2232d94a04beac0ece3cc",
       "executable": false
     },
     "src/strap/ui/tax-settings.ts": {
@@ -4566,7 +4566,7 @@
       "executable": false
     },
     "tests/tax-browser.mjs": {
-      "sha256": "e11b6b7013f1b0076890dae2764d902200c9f0b400d4631cca6ba503d3722ff8",
+      "sha256": "a1919c39898bd7becb675715dd51bcc713b0b547558519dbce298ae8de9a737b",
       "executable": false
     },
     "tests/tax-edge.mjs": {
