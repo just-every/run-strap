@@ -18,13 +18,15 @@ export async function clientAppointmentsBrowser(h,{coach}) {
       });
       const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:h.origin}]);return context.newPage();
     };
-    const shot=async(page,name)=>{
+    const shot=async(page,name,target)=>{
       await page.waitForLoadState('networkidle');await page.evaluate(()=>document.fonts.ready);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,name+' fits screen');
       const panel=page.locator('#client-appointments');await panel.waitFor();
       const tiny=await panel.evaluate(root=>[...root.querySelectorAll('*')].filter(e=>e.getClientRects().length&&e.textContent.trim()&&parseFloat(getComputedStyle(e).fontSize)<13).map(e=>e.tagName+':'+e.textContent.slice(0,30)));
       assert.deepEqual(tiny,[],'appointment text stays readable');
-      await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-015-${name}-${width}.png`)});
+      const missing=await page.locator('button,a,summary,[role=button]').evaluateAll(controls=>controls.filter(c=>c.checkVisibility()&&!c.innerText.trim()&&c.querySelector('svg,img')&&!c.querySelector('[role=tooltip]')).map(c=>c.tagName));
+      assert.deepEqual(missing,[],'visible icon controls have tooltips');
+      await (target??panel).screenshot({path:join(process.env.STRAP_PROOF_DIR,`SCHED-015-${name}-${width}.png`)});
     };
     try {
       const member=await h.person('ClientScreen'+width),desk=await h.person('ClientDesk'+width);
@@ -73,6 +75,15 @@ export async function clientAppointmentsBrowser(h,{coach}) {
       const events=result.staffActions.filter(a=>a.personId===member.id&&['appointment.client.accept','appointment.client.change.confirm'].includes(a.command));
       assert.deepEqual(events.map(e=>e.action).sort(),['appointment.cancel','appointment.move','appointment.save']);
       assert.ok(events.every(e=>e.actorRole==='front-desk'&&e.right==='booking'&&e.channel==='phone'));
+      const series=await h.cmd('appointment.series.offer.save',{requestId:randomUUID(),service:'Private Pilates',instructorId:coach.id,room:'Reformer studio',startDate:width===1440?'2097-01-03':'2097-02-07',endDate:width===1440?'2097-01-17':'2097-02-21',time:'09:00',minutes:50,choices:[{date:width===1440?'2097-01-10':'2097-02-14',skip:true,reason:'Studio holiday'}]});
+      const seriesOffer=await h.cmd('appointment.client.deliver',{personId:member.id,offerId:series.id,requestId:randomUUID()});
+      await mine.reload();panel=mine.locator('#client-appointments');
+      const seriesReview=panel.locator(`[data-client-appointment-offer="${seriesOffer.id}"]`);await seriesReview.getByText('Not reserved: Studio holiday',{exact:true}).waitFor();await shot(mine,'member-series-offer',seriesReview);
+      await seriesReview.getByRole('checkbox').check();await seriesReview.getByRole('button',{name:'Accept exact appointment terms',exact:true}).click();
+      const seriesSaved=(await h.state(member.cookie)).appointments.find(r=>r.clientOfferId===seriesOffer.id);
+      assert.deepEqual(seriesSaved.occurrences.map(o=>o.status),['booked','skipped','booked']);
+      assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,3);
+      await shot(mine,'member-series-saved',panel.locator(`[data-client-appointment="${seriesSaved.id}"]`));
 
     } finally {for(const context of contexts)await context.close();}
   }} finally {await browser.close();}

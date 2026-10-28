@@ -10,6 +10,7 @@ const scope = () => select('scope', 'Occurrences to change', [['this', 'This occ
 function occurrenceTerms(s: any, o: any) {
   const terms = o.cancelTerms
   return `<p><strong>${h(o.service)}</strong><br>${when(s, o.start, o.timeZone)} – ${clock(s, o.end, o.timeZone)} · ${h(o.timeZone)}<br>${h(o.instructorName)} · ${h(o.room)}</p>`
+    + (o.status === 'skipped' ? `<p>Not reserved: ${h(o.reason)}</p>` : '')
     + `<p class="meta">Equipment: ${h(Array.isArray(o.equipment) ? o.equipment.join(', ') || 'None' : o.equipment || 'None')}. Resource buffers: ${h(o.bufferBeforeMinutes)} minutes before, ${h(o.bufferAfterMinutes)} minutes after.</p>`
     + (o.packLabel ? `<p>Funding: ${h(o.packLabel)}</p>` : '')
     + (terms ? `<p>Cancellation cutoff: ${h(terms.cutoffHours)} hours before start. Late cancellation: ${terms.lateReturnsCredit ? 'original credit returns' : 'visit stays used'}, ${money(terms.lateFeeCents)} fee. No-show fee: ${money(terms.noShowFeeCents)}.</p>` : '')

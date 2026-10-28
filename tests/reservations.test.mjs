@@ -509,6 +509,10 @@ test('Client appointment scope, member ownership, changed eligibility and revoke
   await (await import('./client-appointment-cases.mjs')).clientRights(h);
 }));
 
+test('Member appointment series preserve local DST, explicit skipped dates and occurrence funding through moves and future cancellation',()=>run(async h=>{
+  await (await import('./client-appointment-series.mjs')).clientAppointmentSeries(h);
+}));
+
 test('Client appointments disclose retained late fees, send configured confirmations once and preserve in-app changes after member opt-out',async()=>{
   const sent=[];
   await run(async h=>{

@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "4490e22e2dec3efff4738d8790ea26234768bb268265a5accf93ed7db0e73dff",
+      "sha256": "a4a30358e3b32828d4e2ee2432ba882a4e024e5f3a932d4dc0137c038012de0e",
       "executable": false
     },
     "DEMO.md": {
@@ -3526,7 +3526,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "1157148e28098a4b6db520b474548e29ea6dac3964993bd1cc58e052a169bfd5",
+      "sha256": "042740a8045672f8b50d958c1b925ecc78b1e80efdb1f86aadff8f1097b09286",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3770,7 +3770,7 @@
       "executable": false
     },
     "src/strap/ui/client-appointments.ts": {
-      "sha256": "c4c3f28b95d8ed85a576b88a1eb4b255735edfa02fff17144a0b3756f5a02b12",
+      "sha256": "1f43d153781967d0fb8cfbd27687de6ee9287657a30ca327e3215702f6870880",
       "executable": false
     },
     "src/strap/ui/closures.ts": {
@@ -4145,8 +4145,16 @@
       "sha256": "bc5ce5ae4b0e1de51125e1da57e39b1fc78c67425b4b3e2a12e35a26c98c0d31",
       "executable": false
     },
+    "tests/client-appointment-series.mjs": {
+      "sha256": "c0f15f550a6752c7cc9483f8c5a35281c4fe9e458a10af0275d707fee9f53a33",
+      "executable": false
+    },
+    "tests/client-appointments-archive.mjs": {
+      "sha256": "25794d0a8f5fdccab5217dbfdf40ecfbafa0561ee51b94fa351293d867383606",
+      "executable": false
+    },
     "tests/client-appointments-browser.mjs": {
-      "sha256": "e2575d055711f8bc591472a7f7720975eba8f89a565dd12a195a08ed9dfc27ee",
+      "sha256": "0415291a34a8eefde5ea62f9c547be80db14448d5fd1b50f39c8fe98d1017ace",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4430,7 +4438,7 @@
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "45c94dbdf7c47185ffb7e4f0644968bd98370ca0eabdfd3135a5ed18cf46ffe4",
+      "sha256": "735bbc58701d323a6ece035f0956b6e97cc7fd325be01d2a6bc98e312f09a022",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
@@ -4494,7 +4502,7 @@
       "executable": false
     },
     "tests/staff-actions-archive.test.mjs": {
-      "sha256": "9f4ea0bcc3b61c69483eb9cd359f1d413da706d112ff0a5a9015251ad7bb6cc2",
+      "sha256": "75a277a347c8160c65cb6a123020cd048b966b5aec2507dc8d53963ec75396b2",
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {

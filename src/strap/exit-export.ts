@@ -33,6 +33,10 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.clientOfferId', to: 'st_records.id', kind: 'clientAppointmentOffer' },
+  { from: 'st_records.data.sourceOfferId', to: 'st_records.id', when: 'kind=clientAppointmentOffer' },
+  { from: 'st_records.data.reservationId', to: 'st_records.id', kind: 'appointmentReservation', when: 'kind=clientAppointmentOffer or kind=clientAppointmentPreview' },
+  { from: 'st_records.data.deposit.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=appointmentReservation' },
   { from: 'manifest.documents.membershipAgreementFiles[].agreementId', to: 'st_records.id', kind: 'billingAgreement' },
   { from: 'manifest.documents.membershipAgreementFiles[].termsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'manifest.documents.membershipAgreementFiles[].mandateId', to: 'st_records.id', kind: 'paymentMandate' },
