@@ -500,3 +500,11 @@ test('Private changes disclose late policy, carry allocations, require separate 
 test('Published private visit prices require sale authority, reject stale quotes and preserve original obligations through cancellation and restore',()=>run(async h=>{
   await (await import('./appointment-policy-cases.mjs')).privatePayment(h);
 }));
+
+test('Client appointment invitations race one resource, reserve a package, record one external deposit and preserve funding through member reschedule and cancellation',()=>run(async h=>{
+  await (await import('./client-appointment-cases.mjs')).clientCampaign(h);
+}));
+
+test('Client appointment scope, member ownership, changed eligibility and revoked staff rights fence pending changes and committed replay',()=>run(async h=>{
+  await (await import('./client-appointment-cases.mjs')).clientRights(h);
+}));

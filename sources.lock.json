@@ -3213,6 +3213,14 @@
       "sha256": "9b7e9a976e89fbc8e4611d8d81ff5d0cd753fdd8cdc74f7a5bb8d8b598af4c8e",
       "executable": false
     },
+    "src/strap/domain/client-appointment-changes.ts": {
+      "sha256": "b8cd7124325e7f117d63d3dc6cc45fece5d86af6ec94871e5b70d83d2ae4eb4c",
+      "executable": false
+    },
+    "src/strap/domain/client-appointments.ts": {
+      "sha256": "53deb8da861c1f9504a1c270470df0e0e0173bc467ae66b46f05c3eadf527617",
+      "executable": false
+    },
     "src/strap/domain/closures.ts": {
       "sha256": "3f1d13bfd735e267ddc216386e6a3d5b36fd81d47ad6ab176637efdcd6605731",
       "executable": false
@@ -3326,7 +3334,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "7ab6945d04babf7834c8d7ee6b85657120c95dc48af920da5b7cbd6f9430b27e",
+      "sha256": "4c84a077200b3f8cbed81a8ac38f9ac45a38edd4c625bd1004cf8243d539ef23",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3542,11 +3550,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "acc8008e2151e3c8138ce492c82765c8089a1abc3229450240de597b497b5e96",
+      "sha256": "b4a1a38b80e6f6e9a8c86aff58463dadc346e9d52eae7d966aab13514291733d",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "b8564592a878cd4ebcf82b426968000869276213ae129653d9f5dbab9faa85be",
+      "sha256": "cc7fd5e4a13eb32040fd94c36211727d45f16eafe634f6316b3ca6a9655ef027",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3761,6 +3769,10 @@
       "sha256": "80f91b93524c43e3dec429bbb4b40f32c84a8a58ea598de1fc625bcf2bd4be29",
       "executable": false
     },
+    "src/strap/ui/client-appointments.ts": {
+      "sha256": "b1adc9ab38f66a8fd9ce0f54cff08f2716b994ebc1362a6040f161ce54ac2ef6",
+      "executable": false
+    },
     "src/strap/ui/closures.ts": {
       "sha256": "c12bcac2743eee973f2249cb446fdbf497fbdc68e85ff83ef328fdc6ddda9f9e",
       "executable": false
@@ -3870,11 +3882,11 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "d4a7341873f72f64ca8a7aa456a8ddb480d9cabc44b8e81e493d2ee4aa9b248f",
+      "sha256": "40bf4713c5d1f5615849fd55067c70a3a9dc99c59ba9eef75e2e2910c339cbd4",
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "bbc7d0109a4dcac74e45a071afe576a298c465d013f8053abf49d92428bc00db",
+      "sha256": "c3b9a713b7db7aa9563958e0afe9620c52a14ee3d6bd5c273ead91306a12d8fe",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {
@@ -3890,7 +3902,7 @@
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "e15a731b0520f066ae13ba33ec3f1129187d66fdf2d286981b131fee0d6a9e10",
+      "sha256": "c01019cb9e065f4325f73e6589e2483dbfe9d9f879780aeb752737392796d2bb",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -4127,6 +4139,14 @@
     },
     "tests/class-reminders.test.mjs": {
       "sha256": "aa3b36a1fdc4e4fa1006281fe1901c418a3819d0d7a921b50caf3698f0f92c37",
+      "executable": false
+    },
+    "tests/client-appointment-cases.mjs": {
+      "sha256": "d0328b9afdc812c369d343c87c39ed075500fdb4568d9188b6eb2e3ea7b72abc",
+      "executable": false
+    },
+    "tests/client-appointments-browser.mjs": {
+      "sha256": "46ccb78619ea1d0806bb90e5d8e83c3582f2fffb51e2fc244cecef2a0d573568",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4410,7 +4430,7 @@
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "10102b0280823faa541169fea8b194ebd0737f8637da480dee101e860914f4a7",
+      "sha256": "62fe0df3505f68dc2e97c60cdc17cf7a013303f43cc6150b2a72ef1ba0a49040",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
@@ -4482,7 +4502,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "30fd77886dee5b0a76382464a27a2899fa6805f88e1f3bc0b110881869263c11",
+      "sha256": "1fb1cd02b9a2a6555059f4c17a2ee635f9ee490c01465268b06735f13db26918",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
