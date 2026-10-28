@@ -4358,7 +4358,7 @@
       "executable": false
     },
     "tests/invoice-journey.mjs": {
-      "sha256": "d0b301519e87ec1e4092153714c55ec2f04901524bdc378e1e00d4b76fd49939",
+      "sha256": "facf04c548e089ac28824c87c9637e95431f178f427526cee64f6ec91f7ed589",
       "executable": false
     },
     "tests/invoice-sandbox.mjs": {

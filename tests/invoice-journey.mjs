@@ -63,9 +63,11 @@ export async function invoiceJourney(h,edge) {
   assert.deepEqual(await h.cmd('billing.receipt.send',send,member.cookie),delivered);assert.equal(edge.mail.length,1);
   await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-override',email:other.email},member.cookie,400);await h.cmd('billing.receipt.send',send,other.cookie,404);assert.equal(edge.mail.length,1);
   const desk=await h.person('InvoiceDesk');await h.enroll(desk.cookie);
-  const grant=rights=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:Object.fromEntries(rights.map(right=>[right,{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}]))});
+  const grant=(rights,memberIds=[member.id],locationIds=['studio'])=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:Object.fromEntries(rights.map(right=>[right,{enabled:true,scopes:[{memberIds,locationIds,doors:['all']}]}]))});
   const staffSend={...send,requestId:'synthetic-strap-staff-copy',requested:true,channel:'phone'};
   await grant(['member-record']);await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie,403);
+  await grant(['sale'],[other.id]);const wrongMemberVersion=(await h.state()).version;await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie,403);assert.equal((await h.state()).version,wrongMemberVersion);assert.deepEqual((await invoiceView(h,desk.cookie)).invoices,[]);
+  const west=await h.cmd('location.save',{name:'West Studio',timeZone:'America/Los_Angeles'});await grant(['sale'],[member.id],[west.id]);const wrongLocationVersion=(await h.state()).version;await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie,403);assert.equal((await h.state()).version,wrongLocationVersion);assert.deepEqual((await invoiceView(h,desk.cookie)).invoices,[]);assert.equal(edge.mail.length,1);
   await grant(['sale']);const staff=await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie);assert.equal(staff.status,'accepted');assert.equal(edge.mail.length,2);assert.deepEqual(edge.mail[1].personalizations[0].to,[{email:member.email}]);
   await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie);assert.equal(edge.mail.length,2);
   const audit=(await h.state()).staffActions.filter(a=>a.command==='billing.receipt.send.staff' && a.requestId===staffSend.requestId);assert.equal(audit.length,1);assert.deepEqual([audit[0].staffMade,audit[0].right,audit[0].actorRole,audit[0].channel,audit[0].personId],[true,'sale','front-desk','phone',member.id]);assert.ok(audit[0].before&&audit[0].after);
