@@ -14,7 +14,7 @@ export interface InvoiceDocument {
   id: string; packId: string; personId: string; memberName: string; currency: 'usd'; createdAt: string
   studio: { legalName: string; receiptDetails: string; address: unknown; phone: string; locationName: string; timeZone: string }
   lines: InvoiceLine[]; subtotalCents: number; taxCents: number; discountCents: number; totalCents: number
-  paidCents: number; refundedCents: number; balanceCents: number; status: string; taxStatus: 'not_assessed' | 'retained_provider_evidence'; receipts: InvoiceReceipt[]
+  externallyRecordedCents:number; collectedCents:number; disputedCents:number; pendingCents:number; paidCents: number; refundedCents: number; balanceCents: number; status: string; taxStatus: 'not_assessed' | 'retained_provider_evidence'; receipts: InvoiceReceipt[]
   refunds: { id: string; lineId: string; amountCents: number; tender: string; status: string; createdAt: string }[]
   canSend: boolean; canRefund: boolean; canAllocate: boolean
 }
@@ -50,7 +50,7 @@ export function invoiceLines(invoice: InvoiceDocument) {
 }
 
 export function invoiceTotals(invoice: InvoiceDocument) {
-  const amounts: [string, number][] = [['Subtotal', invoice.subtotalCents], ['Discounts', invoice.discountCents], ['Tax', invoice.taxCents], ['Original invoice total', invoice.totalCents], ['Payments applied', invoice.paidCents], ['Refunded', invoice.refundedCents], ['Balance due', invoice.balanceCents]]
+  const amounts: [string, number][] = [['Subtotal after discounts', invoice.subtotalCents], ['Discounts', invoice.discountCents], ['Tax', invoice.taxCents], ['Original invoice total', invoice.totalCents], ['Payments applied', invoice.paidCents], ['Externally recorded', invoice.externallyRecordedCents], ['Processor collected', invoice.collectedCents], ['Pending collection', invoice.pendingCents], ['Disputed', invoice.disputedCents], ['Refunded', invoice.refundedCents], ['Balance due', invoice.balanceCents]]
   return `<p>${h(invoiceTaxNote(invoice))}</p><div class="table-wrap">${table(['Summary', '>Amount (USD)'], amounts.map(([label, cents]) => `<tr>${cell('Summary', label)}${cell('Amount (USD)', `<strong>${money(cents)}</strong>`, 'right')}</tr>`).join(''))}</div>`
 }
 

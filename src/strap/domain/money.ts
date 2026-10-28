@@ -26,7 +26,8 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
   if (entitlement && entitlement.kind !== 'credits') insist(input.credits === undefined || input.credits === null || input.credits === '','plan_has_no_credit_count');
   const guestTerms = parseGuestTerms(input.guestTerms);
   const initiationFeeCents = integer(input.initiationFeeCents === undefined ? 0 : input.initiationFeeCents,'initiationFeeCents',0,100_000_000);
-  const fullAmountCents = integer(input.amountCents,'amountCents',0,100_000_000);
+  const quotedAmountCents=integer(input.amountCents,'amountCents',0,100_000_000),fullDiscountCents=integer(input.discountCents ?? 0,'discountCents',0,quotedAmountCents);
+  const fullAmountCents=quotedAmountCents-fullDiscountCents;
   let proration = null;
   if (input.cycleStartAt !== undefined || input.joinAt !== undefined) {
     const cycleStartAt = instant(input.cycleStartAt,'cycleStartAt'), joinAt = instant(input.joinAt,'joinAt');
@@ -37,7 +38,8 @@ export function preparePack(tx: Transaction, input: Record<string,unknown>) {
     proration = {cycleStartAt,joinAt,cycleEndAt:expiresAt,totalSeconds,remainingSeconds,fullAmountCents,
       amountCents:halfUp(BigInt(fullAmountCents)*BigInt(remainingSeconds),BigInt(totalSeconds)),rounding:'half-up',clock:'elapsed UTC seconds'};
   }
-  const draft = {proration,guestTerms,eligibleServices,priorityBooking,...packPlaces(tx.state,input),...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:proration?.amountCents ?? fullAmountCents,initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const amountCents=proration?.amountCents ?? fullAmountCents,originalAmountCents=proration?halfUp(BigInt(quotedAmountCents)*BigInt(proration.remainingSeconds),BigInt(proration.totalSeconds)):quotedAmountCents,discountCents=originalAmountCents-amountCents;
+  const draft = {originalAmountCents,discountCents,proration,guestTerms,eligibleServices,priorityBooking,...packPlaces(tx.state,input),...(entitlement ? {entitlement} : {}),id:id(),type:'pack',status:'draft',personId:member.id,personVersion:member.version,credits,amountCents:proration?.amountCents ?? fullAmountCents,initiationFeeCents,expiresAt,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approvePack(tx: Transaction, input: Record<string,unknown>) {
@@ -49,11 +51,11 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {purchaseAmountCents:draft.amountCents,proration:draft.proration ?? null,...(draft.proration ? {termStartAt:draft.proration.joinAt} : {}),guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  const pack = {originalAmountCents:draft.originalAmountCents ?? draft.amountCents,discountCents:draft.discountCents ?? 0,purchaseAmountCents:draft.amountCents,proration:draft.proration ?? null,...(draft.proration ? {termStartAt:draft.proration.joinAt} : {}),guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   const debtor = debtorOf(tx.state,member.id), forMember = debtor === member.id ? {} : {forPersonId:member.id};
-  tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,amountCents:draft.amountCents,createdAt:now()});
+  tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,amountCents:draft.amountCents,originalAmountCents:pack.originalAmountCents,discountCents:pack.discountCents,createdAt:now()});
   if (pack.initiationFeeCents > 0) tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,reason:'initiation_fee',amountCents:pack.initiationFeeCents,createdAt:now()});
   settleUnpaid(tx,record(tx.state,pack.id,'pack'));
   promoteAll(tx);
