@@ -5,7 +5,9 @@ import { hasStaffRight, requireStaffRight } from '../domain/staff-rights';
 export function invoiceCharges(state: State, packId: string) {
   const base=list(state,'charge').filter(c=>c.packId===packId && !c.invoiceRefundId);
   const ids=new Set(base.map(c=>c.id));
-  return [...base,...list(state,'charge').filter(c=>!ids.has(c.id) && (ids.has(c.taxSourceChargeId) || ids.has(c.parentChargeId)) && ['sales_tax','sales_tax_reversal'].includes(c.reason))];
+  const charges=[...base,...list(state,'charge').filter(c=>!ids.has(c.id) && (ids.has(c.taxSourceChargeId) || ids.has(c.parentChargeId)) && ['sales_tax','sales_tax_reversal'].includes(c.reason))];
+  const rank=(c:RecordData)=>c.reason==='initiation_fee'?1:c.reason?.startsWith('sales_tax')?2:0;
+  return charges.sort((a,b)=>String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')) || rank(a)-rank(b) || a.id.localeCompare(b.id));
 }
 export function invoiceAccess(state: State,who: Actor,packId: unknown,staff=false) {
   const pack=record(state,packId,'pack');person(state,pack.personId,false);

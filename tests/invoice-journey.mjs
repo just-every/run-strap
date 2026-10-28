@@ -35,7 +35,7 @@ export async function invoiceJourney(h,edge) {
   edge.complete(checkout.providerSessionId);await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-reconcile'});
   invoice=(await invoiceView(h)).invoices[0];assert.deepEqual([invoice.paidCents,invoice.totalCents,invoice.balanceCents,invoice.status],[11000,11000,0,'mixed tenders']);
   assert.deepEqual(invoice.receipts.map(r=>[r.amountCents,r.tender,r.status]),[[4000,'external','externally recorded'],[7000,'stripe-test-card','collected']]);
-  assert.deepEqual(invoice.receipts[1].allocations.map(a=>[a.lineId,a.amountCents]),[[fee.id,1000],[line.id,6000]].sort((a,b)=>a[0].localeCompare(b[0])));
+  assert.deepEqual(invoice.receipts[1].allocations.map(a=>[a.lineId,a.amountCents]),[[line.id,6000],[fee.id,1000]]);
   const stripeReceipt=invoice.receipts.find(r=>r.tender==='stripe-test-card');
   assert.deepEqual([invoice.externallyRecordedCents,invoice.collectedCents,invoice.pendingCents,invoice.disputedCents],[4000,7000,0,0]);
   edge.setChange(body=>{body.payment_intent.latest_charge.disputed=true;});await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-dispute'});
@@ -75,8 +75,16 @@ export async function invoiceJourney(h,edge) {
   const payerPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:participant.id,credits:2,amountCents:3000,discountCents:500,expiresAt:'2099-12-31T00:00:00Z'})).id});
   const payerCharge=(await h.state()).charges.find(c=>c.packId===payerPack.id),payerReceipt=await h.cmd('payment.record',{personId:other.id,amountCents:2500,reference:'synthetic-strap-household-receipt'});
   await h.cmd('billing.receipt.allocate',{packId:payerPack.id,paymentId:payerReceipt.id,chargeId:payerCharge.id,amountCents:2500,requestId:'synthetic-strap-payer-allocation'});
-  const payerInvoices=(await invoiceView(h,other.cookie)).invoices;assert.deepEqual(payerInvoices.map(i=>i.id),[payerPack.id]);assert.equal(payerInvoices[0].status,'externally recorded');assert.equal(payerInvoices[0].discountCents,500);assert.equal(payerInvoices[0].balanceCents,0);
+  const payerInvoices=(await invoiceView(h,other.cookie)).invoices;assert.deepEqual(payerInvoices.map(i=>i.id),[payerPack.id]);assert.equal(payerInvoices[0].status,'externally recorded');assert.equal(payerInvoices[0].discountCents,500);assert.equal(payerInvoices[0].balanceCents,0);assert.equal(payerInvoices[0].taxStatus,'not_assessed');
   assert.equal((await h.send('/api/strap/invoice.html?id='+payerPack.id,undefined,other.cookie)).status,200);assert.equal((await h.send('/api/strap/invoice.html?id='+payerPack.id,undefined,member.cookie)).status,404);
+  const taxablePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:1,amountCents:2000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+  const taxableCharge=(await h.state()).charges.find(c=>c.packId===taxablePack.id);
+  await h.cmd('tax.config.save',{...config,requestId:'synthetic-strap-positive-tax-config',products:[...config.products,{id:'taxable-class',kind:'service',sourceId:taxablePack.id,label:'Taxable class service',taxCode:'txcd_99999999'}]});
+  const positiveTax=(await taxInvoice(h,taxableCharge.id,'taxable-class',address,'positive-invoice')).invoice.result;assert.equal(positiveTax.taxCents,200);
+  const taxablePayment=await h.cmd('payment.record',{personId:member.id,amountCents:2200,reference:'synthetic-strap-positive-tax-receipt'});
+  for(const [chargeId,amountCents] of [[taxableCharge.id,2000],[positiveTax.taxChargeId,200]])await h.cmd('billing.receipt.allocate',{packId:taxablePack.id,paymentId:taxablePayment.id,chargeId,amountCents,requestId:'synthetic-strap-tax-allocation-'+chargeId});
+  const taxed=(await invoiceView(h,member.cookie)).invoices.find(i=>i.id===taxablePack.id);assert.deepEqual([taxed.subtotalCents,taxed.taxCents,taxed.totalCents,taxed.paidCents,taxed.balanceCents],[2000,200,2200,2200,0]);assert.equal(taxed.lines.find(l=>l.id===positiveTax.taxChargeId).amountCents,200);assert.deepEqual(taxed.receipts[0].allocations.map(a=>a.amountCents),[2000,200]);
+  const taxedCopy=await h.send('/api/strap/receipt.html?id='+taxablePayment.id+'&packId='+taxablePack.id,undefined,member.cookie);assert.equal(taxedCopy.status,200);assert.ok(taxedCopy.text.includes('$2.00'));assert.ok(taxedCopy.text.includes('$22.00'));assert.equal((await h.send('/api/strap/invoice.html?id='+taxablePack.id,undefined,other.cookie)).status,404);
   if(process.env.STRAP_BILLING_BROWSER==='1' || process.env.STRAP_PROOF_DIR)await(await import('./invoice-browser.mjs')).invoiceBrowser(h,{...seed,desk,stripeReceipt,pending,staffSend,payerPack});
   await grant(['member-record']);await h.cmd('billing.receipt.send.staff',staffSend,desk.cookie,403);assert.equal((await h.send('/api/strap/invoice.html?id='+pack.id,undefined,desk.cookie)).status,403);assert.equal(edge.mail.length>=2,true);
   edge.setMailStatus(503);const uncertain=await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-uncertain-copy'},member.cookie);assert.equal(uncertain.status,'uncertain');const n=edge.mail.length;await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-uncertain-copy'},member.cookie);assert.equal(edge.mail.length,n);

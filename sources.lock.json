@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "003fbb3d20417f778ca62ba780678c848b06ddc5c7fad21a05f65466fd8cfd4c",
+      "sha256": "de470a39949124d668f4a961950f6c7f75144a7307c061e3c390839f0060d790",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "04c073a7c24d0f2ff903df415d73854175b535ffb1bcaffbd350d425ebe86a58",
+      "sha256": "a62d2ae653edc11299b8b2d0a81ffde0161951066c82b6b7e0f35392cd55e470",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "4877ea4317815a22e649776b52e025b02f07efa96c7fcdd228af319545a40d35",
+      "sha256": "ba19381c7927ace0bfae3b076450c0c7bb58317835974424d2a77cd87792964e",
       "executable": false
     },
     "docs/classes.md": {
@@ -3114,7 +3114,7 @@
       "executable": false
     },
     "src/strap/billing/invoice-documents.ts": {
-      "sha256": "251d4173857ee03f0acc34d27b6e723e94b758a84f11b547eb12d0602b32b0b6",
+      "sha256": "94d4ef650be2acb436571a3fe3b588b11750a5c9bc16ed00aa043965f30afa77",
       "executable": false
     },
     "src/strap/billing/invoice-mail.ts": {
@@ -3126,7 +3126,7 @@
       "executable": false
     },
     "src/strap/billing/invoice-sources.ts": {
-      "sha256": "7b21bf3f8f464acb01d1599fc4f8a1507218d445db36a5571f5d5edab728bde0",
+      "sha256": "96239f2210e05d294c5a82dbdd878e4439473060eb58d3456ea52fbf396a6ecf",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
@@ -4358,7 +4358,7 @@
       "executable": false
     },
     "tests/invoice-journey.mjs": {
-      "sha256": "2b1475988ca0eae7ce2262f00304094c0aee96e52ebd39a0e7dea4bda47b4bab",
+      "sha256": "d0b301519e87ec1e4092153714c55ec2f04901524bdc378e1e00d4b76fd49939",
       "executable": false
     },
     "tests/invoice-sandbox.mjs": {
