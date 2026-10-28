@@ -33,6 +33,12 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
+  { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
+  { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },
+  { from: 'st_records.data.chargeIds[]', to: 'st_records.id', kind: 'charge', when: 'kind=stripeInvoice or kind=payment with collection=stripe-test-checkout' },
+  { from: 'st_records.data.accountId', to: 'Stripe merchant account', when: 'kind=stripeInvoice or kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=billingConnectionReview', note: 'Historical provider identity only. It grants no execution or reconnection authority.' },
+  { from: 'st_records.data.providerSessionId and paymentIntentId and providerInvoiceId', to: 'Stripe test resources under accountId', when: 'kind=stripeInvoice', note: 'Retained provider references; reconciliation reads canonical account-scoped resources.' },
   { from: 'manifest.documents.membershipAgreementFiles[].agreementId', to: 'st_records.id', kind: 'billingAgreement' },
   { from: 'manifest.documents.membershipAgreementFiles[].termsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'manifest.documents.membershipAgreementFiles[].mandateId', to: 'st_records.id', kind: 'paymentMandate' },

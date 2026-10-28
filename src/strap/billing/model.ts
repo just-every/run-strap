@@ -1,7 +1,7 @@
 import { insist, list, person, record, type Actor, type State } from '../domain/types';
 import { sha256Hex } from '../security/crypto';
 
-export interface BillingBindings { DB: D1Database; AUTH_ORIGIN: string; STRIPE_BILLING_TEST_KEY?: string; RER_DEMO?: string }
+export interface BillingBindings { DB: D1Database; AUTH_ORIGIN: string; STRIPE_BILLING_TEST_KEY?: string; STRIPE_BILLING_WEBHOOK_SECRET?: string; RER_DEMO?: string }
 export type Json = Record<string, any>;
 export type Connection = {connection_id:string;origin:string;account_id:string;key_digest:string};
 export const canonical = (value: any): string => JSON.stringify(sort(value));
@@ -10,7 +10,7 @@ export const digest = (value: any) => sha256Hex(canonical(value));
 export async function keyDigest(env: BillingBindings) {
   insist(env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1','stripe_billing_test_not_configured',409);
   insist(!/^(?:sk|rk|pk)_/.test(env.STRIPE_BILLING_TEST_KEY) || /^(?:sk|rk)_test_/.test(env.STRIPE_BILLING_TEST_KEY),'stripe_billing_live_key_refused',409);
-  return sha256Hex('strap-billing-test\n'+env.AUTH_ORIGIN+'\n'+env.STRIPE_BILLING_TEST_KEY);
+  return sha256Hex('strap-billing-test\n'+env.AUTH_ORIGIN+'\n'+env.STRIPE_BILLING_TEST_KEY+'\n'+(env.STRIPE_BILLING_WEBHOOK_SECRET ?? ''));
 }
 export async function connection(env: BillingBindings): Promise<Connection> {
   const local = await env.DB.prepare("SELECT connection_id,origin,account_id,key_digest FROM st_payment_connections WHERE id='billing'").first<Connection>();

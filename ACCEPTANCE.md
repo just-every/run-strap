@@ -8,12 +8,12 @@ The primary journey: Exercise the capabilities and acceptance journeys below.
 
 | Tier | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Core | 61 | 36 | 54 | 151 |
+| Core | 63 | 36 | 52 | 151 |
 | Agent surface | 0 | 0 | 0 | 0 |
 | Later | 0 | 0 | 0 | 0 |
-| Full target | 61 | 36 | 54 | 151 |
+| Full target | 63 | 36 | 52 | 151 |
 
-Judged from the code and tests at commit `8d64e2d60a57d7634ac0b0564b022b6cb7d81235` (25 October 2026). Additional native gift and time-clock proof is named in the updated rows below. Locations are DONE; households, native cancellation and provider refund work retain their named gaps. The ct-approved native gift and time-clock acceptance now has scoped staff, independent approval, native restore and browser proof below. The 25 October 18:50Z ct ruling splits the DONE private owner appointment-offer foundation from missing client-facing offers and acceptance (SCHED-015); SCHED-013 now has finite-pack private reservations, reviewed changes, scoped front-desk booking, notices and taught-session pay; its unfinished original acceptance keeps it partial. The 27 October ct policy ruling approves the native authority default with riders; current SCHED-013 proof and remaining work are named in its clause and status row. This historical baseline does not certify the current candidate; current clause-specific assertions and exact candidate workflow results govern completion. Field proof register: 0 rows; 0 passed, 0 failed, 0 not run.
+Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). BILL-001 and BILL-010 have the clause-specific HTTP, browser, held-key Stripe TEST and native restore proof below. The landing candidate changes only generated contract metadata from that source proof; exact candidate Verify and guarded landing results govern publication. Field proof register: 0 rows; 0 passed, 0 failed, 0 not run.
 
 ## Core
 
@@ -826,15 +826,15 @@ Core · target · **done**
 
 #### BILL-001 — Studio-owned Stripe connection
 
-Core · target · **missing**
+Core · target · **done**
 
 **Requirement.** Owners connect their own Stripe merchant account, confirm account identity and readiness, restrict credential access and rotate or disconnect it without losing payment history. Every charge is tied to that studio account. MOVE-011 obligation before this capability ships: its studio records and documents must join the portable exit with stable relationships and provenance; a native restore keeps its studio billing and delivery disconnected until the human owner reviews and approves reconnection.
 
 **Acceptance.**
 1. Connect a Stripe test account, complete readiness, purchase a plan, rotate the connection and inspect the same merchant and retained transaction history; foreign-account webhooks cannot mutate it.
 
-**Evidence.** None.
-**Gap.** No implemented studio-owned stripe connection workflow or public-door acceptance coverage.
+**Evidence.** `src/strap/billing/operations.ts`; `src/strap/billing/checkout.ts`; `tests/billing-agreements.test.mjs` — Merchant readiness, hosted plan payment and signed reconciliation retain history through rotation, missing events and replay: owner MFA and account review, readiness refusal and success, hosted plan purchase, rotated credential review with the same merchant and complete payment history, private credentials and foreign-account refusal; `tests/payments-sandbox.mjs` — held-key Stripe TEST hosted purchase and signing-credential rotation, actual captured charge and paid invoice with one native receipt; `tests/payments-browser.mjs` — paymentsBrowser, connection, purchase and reconciliation forms at 1440 and 390; `tests/archive.test.mjs` — BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected, retained payment records and fresh owner reconnection.
+**Gap.** None.
 
 #### BILL-002 — Card checkout and recurring autopay
 
@@ -967,15 +967,15 @@ Core · target · **partial**
 
 #### BILL-010 — Payment event reconciliation
 
-Core · target · **missing**
+Core · target · **done**
 
 **Requirement.** Signed Stripe webhooks are validated against the connected account and processed idempotently with event history, ordering protection and a visible exception queue. Owners can reconcile missing events against Stripe without inventing settlement. MOVE-011 obligation before this capability ships: its studio records and documents must join the portable exit with stable relationships and provenance; a native restore keeps its studio billing and delivery disconnected until the human owner reviews and approves reconnection.
 
 **Acceptance.**
 1. Replay, reorder, omit and forge invoice/payment webhooks, run owner reconciliation and compare Stripe objects with Strap's invoice, access and balance; no duplicate charge or lost exception appears.
 
-**Evidence.** None.
-**Gap.** No implemented payment event reconciliation workflow or public-door acceptance coverage.
+**Evidence.** `src/strap/billing/webhooks.ts`; `src/strap/billing/checkout.ts`; `tests/billing-agreements.test.mjs` — Merchant readiness, hosted plan payment and signed reconciliation retain history through rotation, missing events and replay: signed replay and reordering, omitted-event owner reconciliation, forged signatures and invoice or payment mismatches, exact provider and native invoice, balance and access comparison, one provider session and receipt, retained and resolved exceptions; `tests/payments-sandbox.mjs` — real Stripe TEST checkout, payment and invoice objects, omitted callback, controlled signed replay of real events, paid invoice and captured charge comparison; `tests/payments-browser.mjs` — paymentsBrowser, visible comparisons and exception queue at 1440 and 390; `tests/archive.test.mjs` — BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected, portable invoice, event, exception and reconciliation history, no execution until fresh owner review.
+**Gap.** None.
 
 #### BILL-011 — Payouts fees and deposit matching
 

@@ -15,6 +15,7 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
   if(name === 'billing.connect') {
     humanOwner(tx.who); insist(input.mode === 'test' && input.confirm === true,'billing_test_connection_confirmation_required');
     text(input.accountId,'accountId',100);
+    insist(list(tx.state,'billingConnectionReview').every(r=>r.accountId === input.accountId),'billing_merchant_change_refused',409);
   } else {
     c=await connection(env);
     ({agreement,mandate}=requireMandate(tx.state,input.id,tx.who));
@@ -33,7 +34,9 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
     else insist(!input.replaceMethodId,'billing_replacement_changed',409);
     insist(!list(tx.state,'billingOperation').some(o=>o.type === 'setup.start' && o.agreementId === agreement!.id && (['pending','uncertain'].includes(o.status) || o.status === 'succeeded' && tx.state.records.get(o.resultId)?.data.status !== 'completed')),'billing_setup_already_started',409);
   }
-  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? id(),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',previousMethodId:mandate?.methodId ?? null,replacesMethodId:setup?.replacesMethodId ?? (name === 'billing.setup.start' ? input.replaceMethodId ?? null : null),resultId:null};
+  const previous=name === 'billing.connect' ? await env.DB.prepare("SELECT connection_id,account_id,origin FROM st_payment_connections WHERE id='billing'").first<{connection_id:string;account_id:string;origin:string}>() : null;
+  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? (previous?.origin === env.AUTH_ORIGIN && previous.account_id === input.accountId ? previous.connection_id : id()),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',previousMethodId:mandate?.methodId ?? null,replacesMethodId:setup?.replacesMethodId ?? (name === 'billing.setup.start' ? input.replaceMethodId ?? null : null),resultId:null};
+  if(name === 'billing.connect')tx.sql.push(tx.statement("INSERT INTO st_payment_control(id,operation_id,origin) VALUES('billing',?,?) ON CONFLICT(id) DO UPDATE SET operation_id=excluded.operation_id,origin=excluded.origin",operationId,env.AUTH_ORIGIN));
   if(c)fence(tx,c);
   tx.put('billingOperation',reservation); await tx.commit();
   let receipt: {requestId:string|null;httpStatus:number}|null=null,result: RecordData|null=null,errorCode:string|null=null,status='uncertain',launchURL:string|null=null;
@@ -57,8 +60,12 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
     insist(finish.state.records.get(operationId)?.data.status === 'pending','billing_operation_changed',409);
     if(name === 'billing.connect') {
       humanOwner(finish.who); insist(await keyDigest(env) === localKey,'billing_connection_changed',409);
+      const pending=await env.DB.prepare("SELECT operation_id FROM st_payment_control WHERE id='billing' AND origin=?").bind(env.AUTH_ORIGIN).first<{operation_id:string}>();
+      insist(pending?.operation_id === operationId,'billing_connection_review_superseded',409);
+      finish.sql.push(finish.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_payment_control WHERE id='billing' AND operation_id=? AND origin=?) THEN 1 ELSE 0 END",operationId,env.AUTH_ORIGIN));
+      insist(list(finish.state,'billingConnectionReview').every(r=>r.accountId === body.id),'billing_merchant_change_refused',409);
       finish.sql.push(finish.statement("INSERT INTO st_payment_connections(id,connection_id,origin,account_id,key_digest,approved_by,approved_at) VALUES('billing',?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET connection_id=excluded.connection_id,origin=excluded.origin,account_id=excluded.account_id,key_digest=excluded.key_digest,approved_by=excluded.approved_by,approved_at=excluded.approved_at",reservation.connectionId,env.AUTH_ORIGIN,body.id,localKey,who.id,now()));
-      result={id:'billing-connection-review:'+reservation.connectionId,accountId:body.id,mode:'test',connectionId:reservation.connectionId,approvedAt:now(),approvedBy:who.id};finish.put('billingConnectionReview',result);
+      result={id:'billing-review:'+await digest(operationId),accountId:body.id,mode:'test',connectionId:reservation.connectionId,approvedAt:now(),approvedBy:who.id,chargesEnabled:body.charges_enabled === true,payoutsEnabled:body.payouts_enabled === true,detailsSubmitted:body.details_submitted === true,cardPayments:body.capabilities?.card_payments ?? 'unavailable',ready:body.charges_enabled === true && body.payouts_enabled === true && body.details_submitted === true && body.capabilities?.card_payments === 'active',webhookConfigured:!!env.STRIPE_BILLING_WEBHOOK_SECRET,providerRequestId:receipt?.requestId};finish.put('billingConnectionReview',result);
     } else {
       const current=await connection(env); insist(current.connection_id === c!.connection_id,'billing_connection_changed',409); fence(finish,current);
       const accepted=requireMandate(finish.state,agreement!.id,finish.who);

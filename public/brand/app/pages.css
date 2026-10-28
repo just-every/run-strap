@@ -126,3 +126,8 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
   .panel-head { padding: 16px 16px 6px; }
   .form > .btn, .form > .btn-quiet { justify-self: stretch; }
 }
+
+#payments, #payment-connection { overflow-wrap: anywhere; }
+#payments section { margin-block: 18px; }
+
+.payment-reference { overflow-wrap: anywhere; }
