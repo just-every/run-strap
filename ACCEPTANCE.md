@@ -2255,7 +2255,7 @@ Core · push-further · **missing** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE
 
 Core · push-further · **missing** · Cites BASE-ROLE-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · Rules D-2
 
-**Requirement.** The agent follows accepted and declined interventions through subsequent attendance, collected renewal revenue and member feedback, separating correlation from demonstrated experiments. Agent cohort changes carry standard, incentive and spending changes carry money, and any outside outreach or binding offer adds external or commitment. The company's policy decides calls within the sponsor's current rights and grant; under the held company policy the owner approves exact cohorts, incentives and spending; small or incomplete groups stay inconclusive and members can opt out.
+**Requirement.** The agent follows accepted and declined interventions through subsequent attendance, collected renewal revenue and member feedback, separating correlation from demonstrated experiments. Agent cohort changes carry standard, incentive and spending changes carry money, and any outside outreach or binding offer adds external or commitment. The company's policy decides calls within the sponsor's current rights and grant; under the held company policy reversible cohort changes enter review and incentives or spending await the owner's approval; small or incomplete groups stay inconclusive and members can opt out.
 
 **Acceptance.**
 1. Under the held company policy, run an owner-approved attendance-recovery campaign, record later visits and one failed renewal, compare observed and collected outcomes with source events and inspect an inconclusive small cohort without a fabricated success claim.
