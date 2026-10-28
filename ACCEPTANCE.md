@@ -13,7 +13,7 @@ The primary journey: configure the studio, bring members and their original reco
 | Later | 0 | 0 | 0 | 0 |
 | Full target | 1 | 100 | 65 | 166 |
 
-Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 11 rows; 0 passed, 0 failed, 11 not run.
+Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 12 rows; 0 passed, 0 failed, 12 not run.
 
 ## Core
 
@@ -1219,17 +1219,17 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-MAIL-
 
 #### LEAD-008 — Post-visit feedback and review requests
 
-Core · target · **missing** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · Rules D-2, D-3
+Core · target · **missing** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · Rules D-2, D-3 · Register R-12
 
-**Requirement.** Feedback and review requests are marketing-class messages. Only the signed-in member may enable a separate, fully recorded feedback-requests choice, initially off; recognition consent is not feedback consent. MEM-006 marketing opt-out, MSG-008 STOP or suppression, and the booking-email opt-out for email stop queued and future requests immediately. A trigger is the first attended visit or a LEAD-006 milestone using corrected attendance only: no-shows never trigger, and correcting attendance away cancels an unsent request. Send after class and outside quiet hours, at most one request per member per 30 days and one per trigger, with no reminders. In-app and email are the initial channels; SMS waits for MSG-005/MSG-008 and member reply-confirmed opt-in, and push waits for MSG-007. Every request includes a one-click link that can only turn requests off. There is no review gating: every responder sees the same review link in the same place whatever the rating, and the link is also on the request page; no threshold, hide setting or incentive is allowed. Individual ratings and comments are visible only to the owner instructors, front desk, agents and other members see none, and no response goes to Google or marketing tools. A rating of 1–2 of 5 creates exactly one private owner task in the LEAD-002 queue and sends the member nothing. The comment box asks for no health details and comments stay private. Minors receive no requests, and guardians cannot opt in for a child. Legal adequacy under FTC review rules, Google policy, TCPA or CAN-SPAM is not asserted; implementation waits for the owner’s legal sign-off.
+**Requirement.** Feedback and review requests are marketing-class messages. Only the signed-in member may enable a separate, fully recorded feedback-requests choice, initially off; recognition consent is not feedback consent. MEM-006 marketing opt-out, MSG-008 STOP or suppression, and the booking-email opt-out for email stop queued and future requests immediately. A trigger is the first attended visit or a LEAD-006 milestone using corrected attendance only: no-shows never trigger, and correcting attendance away cancels an unsent request. Send after class and outside quiet hours, at most one request per member per 30 days and one per trigger, with no reminders. In-app and email are the initial channels; SMS waits for MSG-005/MSG-008 and member reply-confirmed opt-in, and push waits for MSG-007. Every request includes a one-click link that can only turn requests off. There is no review gating: every responder sees the same review link in the same place whatever the rating, and the link is also on the request page; no threshold, hide setting or incentive is allowed. Individual ratings and comments are visible only to the owner instructors, front desk, agents and other members see none, and no response goes to Google or marketing tools. A rating of 1–2 of 5 creates exactly one private owner task in the LEAD-002 queue and sends the member nothing. The comment box asks for no health details and comments stay private. Minors receive no requests, and guardians cannot opt in for a child. Legal review under FTC review rules, Google policy, TCPA or CAN-SPAM is non-blocking field proof in R-12; repository acceptance proves the engineering behavior without asserting legal adequacy.
 
 **Acceptance.**
 1. Using member-owned feedback opt-in, complete two first attended visits, send after class outside quiet hours, submit low and high ratings and verify the same review link for both and on the request page, with one private owner task only for the low rating and no message caused by that rating.
 2. Assert defaults off, consent provenance, refusal of staff/guardian opt-in, no requests to minors, no-show exclusion, correction cancellation, one per trigger and per 30 days, no reminders, every immediate opt-out/suppression including queued requests, the off-only one-click link, owner-only response access and no external response disclosure.
-3. SMS and push require their receiver clauses; legal adequacy remains unasserted pending owner legal sign-off.
+3. Prove SMS and push requests through the MSG-005/MSG-008 and MSG-007 sandbox or official-schema doors, including their consent and suppression outcomes; R-12 holds the separate legal-review receipt.
 
 **Evidence.** None.
-**Gap.** Blocked by the clause’s explicit owner legal sign-off prerequisite; no sign-off was supplied. Feedback requests, review links and rating follow-up remain unimplemented; the member-owned feedback preference alone is not completion.
+**Gap.** Feedback requests, review links and rating follow-up remain unimplemented; the member-owned feedback preference alone is not completion. Legal review is non-blocking R-12 field proof.
 
 ### Delivered communication and automation
 
@@ -1459,7 +1459,7 @@ Core · target · **missing** · Cites BASE-ACCESS-002, BASE-AUDIT-001, BASE-DAT
 **Requirement.** Studios connect approved ClassPass partner accounts, publish chosen sessions and allocation limits, and synchronize reservations, cancellations, attendance and settlement references. Direct and aggregator bookings share one capacity fence. MOVE-011 obligation before this capability ships: its studio records and documents must join the portable exit with stable relationships and provenance; a native restore keeps its studio billing and delivery disconnected until the human owner reviews and approves reconnection.
 
 **Acceptance.**
-1. Complete ClassPass partner onboarding, publish selected inventory, reserve the last seat concurrently from both channels, cancel and reconcile the roster and settlement report; no duplicate seat or retail pack debit occurs.
+1. Using a ClassPass partner sandbox or official-schema fixture, publish selected inventory, reserve the last seat concurrently from both channels, cancel and reconcile the roster and settlement report; no duplicate seat or retail pack debit occurs.
 
 **Evidence.** None.
 **Gap.** No implemented classpass inventory and rosters workflow or public-door acceptance coverage.
@@ -1947,7 +1947,7 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDI
 **Requirement.** The owner uploads actual Mindbody client, membership/autopay, pricing-option/remaining-session, schedule/booking, attendance and transaction exports, including documented CSV exports and Excel report files with their actual extensions verified, plus a source-labeled waiver/document bundle, or authorizes supported API capture. The adapter maps IDs, plan terms, credits, renewal dates, bookings, payments and signed-waiver provenance without treating missing fields as zero.
 
 **Acceptance.**
-1. Use a sanitized real Mindbody export set from a consenting studio, preview per-file mappings and unsupported fields, apply, reconcile every record class and opening value, then book a migrated member and run a shadow renewal.
+1. Use a documented-schema Mindbody golden export set, preview per-file mappings and unsupported fields, apply, reconcile every record class and opening value, then book a migrated member and run a shadow renewal.
 
 **Evidence.** `src/strap/movein/csv.ts`, `src/strap/movein/index.ts`, `tests/strap.test.mjs`
 **Gap.** Only a synthetic four-column member CSV is supported; actual Mindbody exports, billing, balances, bookings, waiver files and shadow renewal are unverified or absent.
@@ -1959,7 +1959,7 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-INPUT-
 **Requirement.** Owners import actual WellnessLiving client, active pass/membership, attendance, booking, sales/payment and waiver exports using its documented Excel report exports, CSV for reports that actually support it, separately obtained waiver documents and support-supplied material where the product does not expose a bulk file. The adapter names absent categories and reconciles expiry, remaining visits and upcoming auto-pay.
 
 **Acceptance.**
-1. Preview a consenting studio's real WellnessLiving files, map plans and families, resolve one unsupported field, apply and compare member/visit/due totals and future reservations before approving cutover.
+1. Preview documented-schema WellnessLiving golden files, map plans and families, resolve one unsupported field, apply and compare member/visit/due totals and future reservations before approving cutover.
 
 **Evidence.** None.
 **Gap.** No implemented wellnessliving studio migration workflow or public-door acceptance coverage.
@@ -1971,7 +1971,7 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDI
 **Requirement.** Owners move Vagaro customer-list Excel exports, calendar/attendance and membership/package/payment report exports plus signed form documents obtained through the vendor's supported export path. Source IDs, family rights, recurring dates, pack value and consent evidence remain attributable; an unavailable export becomes a named migration exception.
 
 **Acceptance.**
-1. Upload a sanitized real Vagaro data package, match clients to packages and contracts, preserve signed forms and reconcile future class seats, remaining sessions and next dues; reject a missing mandatory balance rather than silently invent it.
+1. Upload a documented-schema Vagaro golden data package, match clients to packages and contracts, preserve signed forms and reconcile future class seats, remaining sessions and next dues; reject a missing mandatory balance rather than silently invent it.
 
 **Evidence.** None.
 **Gap.** No implemented vagaro studio migration workflow or public-door acceptance coverage.
@@ -1983,7 +1983,7 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDI
 **Requirement.** The adapter ingests actual Momence customer/report spreadsheets with format and columns inspected at preview, membership and session-credit details, class/appointment bookings, transactions and individually downloaded signed-waiver PDFs, supplemented by authorized API/support exports when needed; original values and unsupported terms are reviewable.
 
 **Acceptance.**
-1. Import a real Momence export package with an intro, frozen plan and credit pack; compare the next bill, credit expiry, waiver provenance and booked class roster and require resolution of unsupported terms.
+1. Import a documented-schema Momence golden export package with an intro, frozen plan and credit pack; compare the next bill, credit expiry, waiver provenance and booked class roster and require resolution of unsupported terms.
 
 **Evidence.** None.
 **Gap.** No implemented momence studio migration workflow or public-door acceptance coverage.
@@ -1995,7 +1995,7 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-INPUT-
 **Requirement.** Owners migrate actual Arketa reporting CSV files and client exports with verified columns and authorized membership, package, booking, payment and signed-waiver data packages or API captures. Livestream and on-demand entitlements and source links retain explicit media-transfer permissions. Date-level attendance is distinguished from imported aggregate totals; a total without dates cannot become invented visits.
 
 **Acceptance.**
-1. Move a consenting Arketa studio with in-person, livestream and video memberships, reconcile its members, open credits and recurring dates and verify each migrated member's entitled services without publishing unlicensed media.
+1. Move a documented-schema Arketa golden studio package with in-person, livestream and video memberships, reconcile its members, open credits and recurring dates and verify each migrated member's entitled services without publishing unlicensed media.
 
 **Evidence.** None.
 **Gap.** No implemented arketa studio migration workflow or public-door acceptance coverage.
@@ -2007,7 +2007,7 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-DATA
 **Requirement.** Owners import actual PushPress member and plan exports, CSV/Excel transaction reports, class/appointment-credit balances, bookings, attendance and waivers with support-assisted exports as needed. The adapter reconciles external Stripe references and upcoming dues without recharging historical transactions.
 
 **Acceptance.**
-1. Import a real PushPress package, including appointment sessions and a failed invoice, compare opening balances and the next billing schedule, then repeat import and verify no duplicated credit or collection.
+1. Import a documented-schema PushPress golden package, including appointment sessions and a failed invoice, compare opening balances and the next billing schedule, then repeat import and verify no duplicated credit or collection.
 
 **Evidence.** None.
 **Gap.** No implemented pushpress studio migration workflow or public-door acceptance coverage.
@@ -2179,19 +2179,19 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-DATA-001 · Register 
 **Requirement.** Studio intake and class attendance do not diagnose or replace a clinical record, school system or competition platform. Buyers needing belt/stripe curricula, workout performance or recital/costume administration use explicit links and exports to Zen Planner, Wodify or specialist dance software; studio membership, billing and bookings remain in Strap.
 
 **Acceptance.**
-1. Export a permissioned participant and enrollment as a Zen Planner member-import CSV, import it into a Zen Planner trial account and link its progress record back; restricted intake stays private and no medical, school or specialist-progress parity is asserted.
+1. Export a permissioned participant and enrollment as a Zen Planner member-import CSV, validate and import it through a Zen Planner official-schema fixture and link its progress record back; restricted intake stays private and no medical, school or specialist-progress parity is asserted.
 
 **Evidence.** None.
 **Gap.** No implemented specialist instruction and health boundaries workflow or public-door acceptance coverage.
 
 #### BOUNDARY-004 — Partner delivery and portability evidence
 
-Core · target · **missing** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-MAIL-001 · Register R-10
+Core · target · **missing** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-MAIL-001 · Register R-7, R-8, R-10
 
-**Requirement.** Native store approval, ClassPass/Wellhub commercial access, provider delivery, legal waiver evidence and payment-method transfer must be completed and demonstrated for production. The target includes that engineering and onboarding. Provider acceptance, human receipt and business outcome remain distinct, and unsupported export fields become migration exceptions.
+**Requirement.** Strap delivers native apps, ClassPass/Wellhub integration, provider messaging, waiver evidence and payment-method transfer workflows. Repository acceptance proves native builds and the provider sandbox or official-schema workflows. Production store distribution, aggregator admission and live delivery receipts are non-blocking R-10 proof; real payment-method transfer and legal waiver review receipts are held solely in R-7 and R-8. Provider acceptance, human receipt and business outcome remain distinct, and unsupported export fields become migration exceptions.
 
 **Acceptance.**
-1. Inspect a controlled launch with store distribution, aggregator onboarding and live delivered messages; interrupt one provider and block one token transfer, then verify the unresolved states and member reauthorization path are visible.
+1. Inspect a controlled sandbox/schema launch with locally built native apps, ClassPass/Wellhub inventory and messaging workflows, distinguishing submission, provider acceptance, human receipt and business outcome; interrupt one provider and block one token transfer, then verify the unresolved states and member reauthorization path are visible.
 
 **Evidence.** None.
 **Gap.** No implemented partner delivery and portability evidence workflow or public-door acceptance coverage.
@@ -2507,8 +2507,9 @@ None.
 | R-4 | ClassPass commercial tenant and production inventory admission | CHANNEL-001 | not run | | |
 | R-5 | Wellhub commercial tenant and production access admission | CHANNEL-002 | not run | | |
 | R-6 | Licensed real export compatibility from each named incumbent | MOVE-001, MOVE-002, MOVE-003, MOVE-004, MOVE-005, MOVE-006 | not run | | |
-| R-7 | Processor-authorized transfer of real saved payment methods | MOVE-007 | not run | | |
-| R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005 | not run | | |
+| R-7 | Processor-authorized transfer of real saved payment methods | MOVE-007, BOUNDARY-004 | not run | | |
+| R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005, BOUNDARY-004 | not run | | |
 | R-9 | Zen Planner trial-tenant import and linked progress record | BOUNDARY-003 | not run | | |
-| R-10 | Production store distribution and aggregator onboarding | BOUNDARY-004 | not run | | |
+| R-10 | Production store distribution, aggregator onboarding and live provider-delivery receipts | BOUNDARY-004 | not run | | |
 | R-11 | Interoperability receipts from the Claude, ChatGPT, Codex and Copilot clients | SURFACE-013 | not run | | |
+| R-12 | Owner legal review of feedback/review requests under FTC review rules, Google policy, TCPA and CAN-SPAM | LEAD-008 | not run | | |

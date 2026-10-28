@@ -1041,6 +1041,14 @@
       "to": "clause",
       "ids": [
         "LEAD-008"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-12"
+          ]
+        }
       ]
     },
     {
@@ -1217,6 +1225,14 @@
       "to": "clause",
       "ids": [
         "CHANNEL-001"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-4"
+          ]
+        }
       ]
     },
     {
@@ -1944,6 +1960,14 @@
       "to": "clause",
       "ids": [
         "MOVE-001"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -1953,6 +1977,14 @@
       "to": "clause",
       "ids": [
         "MOVE-002"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -1962,6 +1994,14 @@
       "to": "clause",
       "ids": [
         "MOVE-003"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -1971,6 +2011,14 @@
       "to": "clause",
       "ids": [
         "MOVE-004"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -1980,6 +2028,14 @@
       "to": "clause",
       "ids": [
         "MOVE-005"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -1989,6 +2045,14 @@
       "to": "clause",
       "ids": [
         "MOVE-006"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-6"
+          ]
+        }
       ]
     },
     {
@@ -2200,6 +2264,14 @@
       "to": "clause",
       "ids": [
         "BOUNDARY-003"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-9"
+          ]
+        }
       ]
     },
     {
@@ -2209,6 +2281,14 @@
       "to": "clause",
       "ids": [
         "BOUNDARY-004"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-10"
+          ]
+        }
       ]
     },
     {
@@ -2967,6 +3047,14 @@
       "to": "gap",
       "ids": [
         "LEAD-008"
+      ],
+      "also": [
+        {
+          "to": "register",
+          "ids": [
+            "R-12"
+          ]
+        }
       ]
     },
     {

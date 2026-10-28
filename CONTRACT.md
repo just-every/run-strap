@@ -1038,14 +1038,14 @@ The primary journey: configure the studio, bring members and their original reco
 
 #### LEAD-008 — Post-visit feedback and review requests
 
-*Tier:* Core · *Cites:* BASE-ROLE-001, BASE-AUDIT-001, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · *Rules:* D-2, D-3
+*Tier:* Core · *Cites:* BASE-ROLE-001, BASE-AUDIT-001, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · *Rules:* D-2, D-3 · *Register:* R-12
 
-**Requirement.** Feedback and review requests are marketing-class messages. Only the signed-in member may enable a separate, fully recorded feedback-requests choice, initially off; recognition consent is not feedback consent. MEM-006 marketing opt-out, MSG-008 STOP or suppression, and the booking-email opt-out for email stop queued and future requests immediately. A trigger is the first attended visit or a LEAD-006 milestone using corrected attendance only: no-shows never trigger, and correcting attendance away cancels an unsent request. Send after class and outside quiet hours, at most one request per member per 30 days and one per trigger, with no reminders. In-app and email are the initial channels; SMS waits for MSG-005/MSG-008 and member reply-confirmed opt-in, and push waits for MSG-007. Every request includes a one-click link that can only turn requests off. There is no review gating: every responder sees the same review link in the same place whatever the rating, and the link is also on the request page; no threshold, hide setting or incentive is allowed. Individual ratings and comments are visible only to the owner instructors, front desk, agents and other members see none, and no response goes to Google or marketing tools. A rating of 1–2 of 5 creates exactly one private owner task in the LEAD-002 queue and sends the member nothing. The comment box asks for no health details and comments stay private. Minors receive no requests, and guardians cannot opt in for a child. Legal adequacy under FTC review rules, Google policy, TCPA or CAN-SPAM is not asserted; implementation waits for the owner’s legal sign-off.
+**Requirement.** Feedback and review requests are marketing-class messages. Only the signed-in member may enable a separate, fully recorded feedback-requests choice, initially off; recognition consent is not feedback consent. MEM-006 marketing opt-out, MSG-008 STOP or suppression, and the booking-email opt-out for email stop queued and future requests immediately. A trigger is the first attended visit or a LEAD-006 milestone using corrected attendance only: no-shows never trigger, and correcting attendance away cancels an unsent request. Send after class and outside quiet hours, at most one request per member per 30 days and one per trigger, with no reminders. In-app and email are the initial channels; SMS waits for MSG-005/MSG-008 and member reply-confirmed opt-in, and push waits for MSG-007. Every request includes a one-click link that can only turn requests off. There is no review gating: every responder sees the same review link in the same place whatever the rating, and the link is also on the request page; no threshold, hide setting or incentive is allowed. Individual ratings and comments are visible only to the owner instructors, front desk, agents and other members see none, and no response goes to Google or marketing tools. A rating of 1–2 of 5 creates exactly one private owner task in the LEAD-002 queue and sends the member nothing. The comment box asks for no health details and comments stay private. Minors receive no requests, and guardians cannot opt in for a child. Legal review under FTC review rules, Google policy, TCPA or CAN-SPAM is non-blocking field proof in R-12; repository acceptance proves the engineering behavior without asserting legal adequacy.
 
 **Acceptance.**
 1. Using member-owned feedback opt-in, complete two first attended visits, send after class outside quiet hours, submit low and high ratings and verify the same review link for both and on the request page, with one private owner task only for the low rating and no message caused by that rating.
 2. Assert defaults off, consent provenance, refusal of staff/guardian opt-in, no requests to minors, no-show exclusion, correction cancellation, one per trigger and per 30 days, no reminders, every immediate opt-out/suppression including queued requests, the off-only one-click link, owner-only response access and no external response disclosure.
-3. SMS and push require their receiver clauses; legal adequacy remains unasserted pending owner legal sign-off.
+3. Prove SMS and push requests through the MSG-005/MSG-008 and MSG-007 sandbox or official-schema doors, including their consent and suppression outcomes; R-12 holds the separate legal-review receipt.
 
 ### Delivered communication and automation
 
@@ -1230,7 +1230,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Studios connect approved ClassPass partner accounts, publish chosen sessions and allocation limits, and synchronize reservations, cancellations, attendance and settlement references. Direct and aggregator bookings share one capacity fence. MOVE-011 obligation before this capability ships: its studio records and documents must join the portable exit with stable relationships and provenance; a native restore keeps its studio billing and delivery disconnected until the human owner reviews and approves reconnection.
 
 **Acceptance.**
-1. Complete ClassPass partner onboarding, publish selected inventory, reserve the last seat concurrently from both channels, cancel and reconcile the roster and settlement report; no duplicate seat or retail pack debit occurs.
+1. Using a ClassPass partner sandbox or official-schema fixture, publish selected inventory, reserve the last seat concurrently from both channels, cancel and reconcile the roster and settlement report; no duplicate seat or retail pack debit occurs.
 
 #### CHANNEL-002 — Wellhub corporate-wellness access
 
@@ -1625,7 +1625,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** The owner uploads actual Mindbody client, membership/autopay, pricing-option/remaining-session, schedule/booking, attendance and transaction exports, including documented CSV exports and Excel report files with their actual extensions verified, plus a source-labeled waiver/document bundle, or authorizes supported API capture. The adapter maps IDs, plan terms, credits, renewal dates, bookings, payments and signed-waiver provenance without treating missing fields as zero.
 
 **Acceptance.**
-1. Use a sanitized real Mindbody export set from a consenting studio, preview per-file mappings and unsupported fields, apply, reconcile every record class and opening value, then book a migrated member and run a shadow renewal.
+1. Use a documented-schema Mindbody golden export set, preview per-file mappings and unsupported fields, apply, reconcile every record class and opening value, then book a migrated member and run a shadow renewal.
 
 #### MOVE-002 — WellnessLiving studio migration
 
@@ -1634,7 +1634,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Owners import actual WellnessLiving client, active pass/membership, attendance, booking, sales/payment and waiver exports using its documented Excel report exports, CSV for reports that actually support it, separately obtained waiver documents and support-supplied material where the product does not expose a bulk file. The adapter names absent categories and reconciles expiry, remaining visits and upcoming auto-pay.
 
 **Acceptance.**
-1. Preview a consenting studio's real WellnessLiving files, map plans and families, resolve one unsupported field, apply and compare member/visit/due totals and future reservations before approving cutover.
+1. Preview documented-schema WellnessLiving golden files, map plans and families, resolve one unsupported field, apply and compare member/visit/due totals and future reservations before approving cutover.
 
 #### MOVE-003 — Vagaro studio migration
 
@@ -1643,7 +1643,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Owners move Vagaro customer-list Excel exports, calendar/attendance and membership/package/payment report exports plus signed form documents obtained through the vendor's supported export path. Source IDs, family rights, recurring dates, pack value and consent evidence remain attributable; an unavailable export becomes a named migration exception.
 
 **Acceptance.**
-1. Upload a sanitized real Vagaro data package, match clients to packages and contracts, preserve signed forms and reconcile future class seats, remaining sessions and next dues; reject a missing mandatory balance rather than silently invent it.
+1. Upload a documented-schema Vagaro golden data package, match clients to packages and contracts, preserve signed forms and reconcile future class seats, remaining sessions and next dues; reject a missing mandatory balance rather than silently invent it.
 
 #### MOVE-004 — Momence studio migration
 
@@ -1652,7 +1652,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** The adapter ingests actual Momence customer/report spreadsheets with format and columns inspected at preview, membership and session-credit details, class/appointment bookings, transactions and individually downloaded signed-waiver PDFs, supplemented by authorized API/support exports when needed; original values and unsupported terms are reviewable.
 
 **Acceptance.**
-1. Import a real Momence export package with an intro, frozen plan and credit pack; compare the next bill, credit expiry, waiver provenance and booked class roster and require resolution of unsupported terms.
+1. Import a documented-schema Momence golden export package with an intro, frozen plan and credit pack; compare the next bill, credit expiry, waiver provenance and booked class roster and require resolution of unsupported terms.
 
 #### MOVE-005 — Arketa studio migration
 
@@ -1661,7 +1661,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Owners migrate actual Arketa reporting CSV files and client exports with verified columns and authorized membership, package, booking, payment and signed-waiver data packages or API captures. Livestream and on-demand entitlements and source links retain explicit media-transfer permissions. Date-level attendance is distinguished from imported aggregate totals; a total without dates cannot become invented visits.
 
 **Acceptance.**
-1. Move a consenting Arketa studio with in-person, livestream and video memberships, reconcile its members, open credits and recurring dates and verify each migrated member's entitled services without publishing unlicensed media.
+1. Move a documented-schema Arketa golden studio package with in-person, livestream and video memberships, reconcile its members, open credits and recurring dates and verify each migrated member's entitled services without publishing unlicensed media.
 
 #### MOVE-006 — PushPress studio migration
 
@@ -1670,7 +1670,7 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Owners import actual PushPress member and plan exports, CSV/Excel transaction reports, class/appointment-credit balances, bookings, attendance and waivers with support-assisted exports as needed. The adapter reconciles external Stripe references and upcoming dues without recharging historical transactions.
 
 **Acceptance.**
-1. Import a real PushPress package, including appointment sessions and a failed invoice, compare opening balances and the next billing schedule, then repeat import and verify no duplicated credit or collection.
+1. Import a documented-schema PushPress golden package, including appointment sessions and a failed invoice, compare opening balances and the next billing schedule, then repeat import and verify no duplicated credit or collection.
 
 #### MOVE-007 — Processor-coordinated payment-method transfer
 
@@ -1803,16 +1803,16 @@ The primary journey: configure the studio, bring members and their original reco
 **Requirement.** Studio intake and class attendance do not diagnose or replace a clinical record, school system or competition platform. Buyers needing belt/stripe curricula, workout performance or recital/costume administration use explicit links and exports to Zen Planner, Wodify or specialist dance software; studio membership, billing and bookings remain in Strap.
 
 **Acceptance.**
-1. Export a permissioned participant and enrollment as a Zen Planner member-import CSV, import it into a Zen Planner trial account and link its progress record back; restricted intake stays private and no medical, school or specialist-progress parity is asserted.
+1. Export a permissioned participant and enrollment as a Zen Planner member-import CSV, validate and import it through a Zen Planner official-schema fixture and link its progress record back; restricted intake stays private and no medical, school or specialist-progress parity is asserted.
 
 #### BOUNDARY-004 — Partner delivery and portability evidence
 
-*Tier:* Core · *Cites:* BASE-ROLE-001, BASE-DATA-001, BASE-MAIL-001 · *Register:* R-10
+*Tier:* Core · *Cites:* BASE-ROLE-001, BASE-DATA-001, BASE-MAIL-001 · *Register:* R-7, R-8, R-10
 
-**Requirement.** Native store approval, ClassPass/Wellhub commercial access, provider delivery, legal waiver evidence and payment-method transfer must be completed and demonstrated for production. The target includes that engineering and onboarding. Provider acceptance, human receipt and business outcome remain distinct, and unsupported export fields become migration exceptions.
+**Requirement.** Strap delivers native apps, ClassPass/Wellhub integration, provider messaging, waiver evidence and payment-method transfer workflows. Repository acceptance proves native builds and the provider sandbox or official-schema workflows. Production store distribution, aggregator admission and live delivery receipts are non-blocking R-10 proof; real payment-method transfer and legal waiver review receipts are held solely in R-7 and R-8. Provider acceptance, human receipt and business outcome remain distinct, and unsupported export fields become migration exceptions.
 
 **Acceptance.**
-1. Inspect a controlled launch with store distribution, aggregator onboarding and live delivered messages; interrupt one provider and block one token transfer, then verify the unresolved states and member reauthorization path are visible.
+1. Inspect a controlled sandbox/schema launch with locally built native apps, ClassPass/Wellhub inventory and messaging workflows, distinguishing submission, provider acceptance, human receipt and business outcome; interrupt one provider and block one token transfer, then verify the unresolved states and member reauthorization path are visible.
 
 ### Agent surface
 
@@ -2250,15 +2250,17 @@ Inherits BASE-AGENT-001 to BASE-AGENT-013. The company's policy decides every ca
 | R-4 | ClassPass commercial tenant and production inventory admission | CHANNEL-001 | not run | | |
 | R-5 | Wellhub commercial tenant and production access admission | CHANNEL-002 | not run | | |
 | R-6 | Licensed real export compatibility from each named incumbent | MOVE-001, MOVE-002, MOVE-003, MOVE-004, MOVE-005, MOVE-006 | not run | | |
-| R-7 | Processor-authorized transfer of real saved payment methods | MOVE-007 | not run | | |
-| R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005 | not run | | |
+| R-7 | Processor-authorized transfer of real saved payment methods | MOVE-007, BOUNDARY-004 | not run | | |
+| R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005, BOUNDARY-004 | not run | | |
 | R-9 | Zen Planner trial-tenant import and linked progress record | BOUNDARY-003 | not run | | |
-| R-10 | Production store distribution and aggregator onboarding | BOUNDARY-004 | not run | | |
+| R-10 | Production store distribution, aggregator onboarding and live provider-delivery receipts | BOUNDARY-004 | not run | | |
 | R-11 | Interoperability receipts from the Claude, ChatGPT, Codex and Copilot clients | SURFACE-013 | not run | | |
+| R-12 | Owner legal review of feedback/review requests under FTC review rules, Google policy, TCPA and CAN-SPAM | LEAD-008 | not run | | |
 
 ## Boundaries
 
 No additional boundaries are recorded.
+- Migration acceptance for MOVE-001–006 uses versioned synthetic golden packages following each vendor's documented schemas and actual CSV, Excel, PDF and supported API/export formats, including complete and missing-field cases. R-6 alone holds the consenting studios' licensed-source compatibility receipts; no licensed package or vendor tenant is needed for repository acceptance.
 
 ## Homepage claims
 
@@ -2405,7 +2407,7 @@ Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc
 | `LEAD-005` | Win-back campaigns and referrals | target | partial | `tests/leads.test.mjs`, `tests/leads-browser.mjs`, `tests/staff-actions.test.mjs` | Full staff role breadth remains STAFF-001. |
 | `LEAD-006` | Attendance milestones and recognition | target | partial | `src/strap/domain/recognition.ts`, `src/strap/domain/recognition-launch.ts`, `src/strap/ui/recognition.ts`, `tests/recognition.test.mjs`, `tests/recognition-browser.mjs`, `tests/staff-actions.test.mjs`, `tests/staff-actions-archive.test.mjs` | Current private-task option conforms; named future carriers inherit consent and once-only issuance. The carried-done audit has no qualifying outcome-level trace for Reach a 50-visit milestone; correct one attendance record; replay processing; no public sharing without permission. It traces inspect one recognition or reward. See docs/contract/DONE-AUDIT.md. |
 | `LEAD-007` | Empty-place outreach | target | partial | `tests/leads.test.mjs`, `tests/staff-actions.test.mjs`, `tests/leads-browser.mjs` | Conservative incentive default implemented; Native rights beyond the owner remain STAFF-001. |
-| `LEAD-008` | Post-visit feedback and review requests | target | missing |  | Blocked by the clause’s explicit owner legal sign-off prerequisite; no sign-off was supplied. Feedback requests, review links and rating follow-up remain unimplemented; the member-owned feedback preference alone is not completion. |
+| `LEAD-008` | Post-visit feedback and review requests | target | missing |  | Feedback requests, review links and rating follow-up remain unimplemented; the member-owned feedback preference alone is not completion. Legal review is non-blocking R-12 field proof. |
 | `MSG-001` | Two-way studio inbox | target | missing |  | No implemented two-way studio inbox workflow or public-door acceptance coverage. |
 | `MSG-002` | Booking confirmations and changes | target | partial | `src/strap/domain/notices.ts`, `src/strap/domain/message-settings.ts`, `src/strap/domain/booking-actions.ts`, `src/strap/ui/message-settings.ts`, `tests/notices.test.mjs`, `tests/notices-browser.mjs`, `tests/staff-actions.test.mjs`, `tests/staff-actions-archive.test.mjs` | The carried-done audit has no qualifying outcome-level trace for Book; reschedule; cancel through member doors; approve a substitution; inspect provider-received messages with correct dates; links; then replay events; see no duplicate notice; A front-desk cancellation sends one notice; and a suppressed courtesy cancel sends none with the suppression audited; SCHED-014 obligation before this capability ships: SCHED-014 exact action notices; template controls; preferences; assert the inherited behavior through its public doors; each native member or desk booking; waitlist entry; member or staff move; cancellation; restore; approved instructor/timetable change; class closure keeps the shared once-only in-app notice; configured Base email path; The member-owned opt-out suppresses booking/class confirmation; reminder email while in-app notices continue; only that member can reverse it; The setting discloses beforehand that sign-in/security messages; payment receipts; failed-payment notices; legally required notices continue by email; MEM-006; MSG-008 retain broader preferences; Staff can launch the ordinary sign-in door but cannot choose for the member; the launch; member-session choice retain separate provenance; The owner controls plain-text opening; closing template text (up to 500 characters each); required local start/end; year; UTC offset; IANA zone; location/room; current instructor; retained cancellation policy; authenticated self-service links remain in each message; Templates apply to every existing booking/class message; including offers; grouped closure mail; This confirmation/reminder opt-out preserves existing waitlist-offer email; broader offer preferences remain MSG-008; A courtesy early cancellation suppresses both channels only with the existing audited reason; Member rescheduling shares staff eligibility; credit; cancellation-effect; pending-waitlist fences; uses online capacity; cannot override capacity or waive fees; Matching request identities reuse effects; changed identities refuse; Reservations are unique per source kind; source identity; member; initial confirmation; later offer are distinct events; Provider acceptance never claims mailbox delivery; refused; uncertain; opted-out; unavailable; restored-paused states remain explicit; Native archives; portable exit retain templates; choices; provenance; notices; outcomes without dispatch authority; after restore; the existing member-mail origin fence pauses new email until explicit owner reconnection; never replays old mail; Done covers current class; finite-pack capabilities; Before shipping; SCHED-002/005/009/012/013 inherit their record kinds; reschedule doors; STAFF-001 inherits named booking/member-record rights-denial; revocation cases; APP-001/002/003/004 inherit native/embedded/device doors; MSG-003 inherits reminder suppression; templates; MSG-005/006/007 inherit their delivery channels; and MEM-006/MSG-008 inherit broader preferences. The cited fixtures exercise the existing workflow; its complete outcome-level trace remains unestablished. See docs/contract/DONE-AUDIT.md. |
 | `MSG-003` | Scheduled class reminders | target | partial | `tests/class-reminders.test.mjs`, `tests/class-reminders-browser.mjs`, `tests/class-reminders-archive.test.mjs` | Email and in-app scheduling, reschedule and replay fences, opt-out and private failure follow-up ship. MSG-005 TEST diagnostics are separate from reminder delivery. SMS reminder timing and provider delivery remain unproved without a verified sender and controlled real recipient; push remains the named MSG-007 dependency with app-distribution credentials and recipient installations unavailable. Broader channel preferences remain MEM-006 and MSG-008. |
