@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "119d1be2cf149137a9beedb4cb484ae0f0f9ba89f078d30c3034e7aad68a7398",
+      "sha256": "9190fa26c7e3b9a3e8c87d59c30dd9a8fd7d3a1f1fa94878233fb366b6999ec8",
       "executable": false
     },
     "AGENTS.md": {
@@ -326,7 +326,7 @@
       "executable": false
     },
     "CHANGELOG.md": {
-      "sha256": "50c6523130efbda86645e5312525ee974e30ca9854b67a22d0ea25ab802d10b8",
+      "sha256": "c931942bd4bd6b451a0a0e9eb9886d2b39f66ef6ea88a1f8d7a4fc130652919f",
       "executable": false
     },
     "composition.lock.json": {
@@ -334,7 +334,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5b2a494b78d955e6e2efe8cc6321af83da68705f954bfed1ab678a7ad973b37b",
+      "sha256": "c0ba64e564ea4f798778d0de4cbc0a6e78ba864c8c5b2ea7f4225fb922513fc8",
       "executable": false
     },
     "DEMO.md": {
@@ -374,11 +374,11 @@
       "executable": false
     },
     "docs/contract/COVERAGE.json": {
-      "sha256": "9109a33854b8be3a970ec22c8f4ae1460b4049984e4ab3b184070af8c960ae0f",
+      "sha256": "bfedf7513e389a80b1b84688060301b3a92157ad66aec6cd355880a8d67ab692",
       "executable": false
     },
     "docs/contract/DONE-AUDIT.md": {
-      "sha256": "46f6234c927a557e5bb62b444890537eea9f0ab53bf7841581479049b28439fd",
+      "sha256": "098fb7ff12cbc7045c0fb0dd04e5dba9d3bf5b93f30cc5f3fec07f0c12b176f9",
       "executable": false
     },
     "docs/contract/ID-MAP.json": {
@@ -386,7 +386,7 @@
       "executable": false
     },
     "docs/contract/MECHANISMS.md": {
-      "sha256": "ea03f7103db168fb6ac0892858c8b7ff9e87ee97a9e164c2b08241756e873fdb",
+      "sha256": "e27e5c0d2be9fc70b84dcef6040a2923fbf8b01bbebe4c2703e6b4b900e46401",
       "executable": false
     },
     "docs/COURSES.md": {
@@ -914,7 +914,7 @@
       "executable": false
     },
     "RULINGS.md": {
-      "sha256": "1b6afa1194d0b440e578c3bcd2c80b4c0dc7cb6d29125dd941d32e55f295619a",
+      "sha256": "c1f84ab3bb740737472141cf5e54df12603a4395348d28c818dbe7748cdd06c7",
       "executable": false
     },
     "RUN-LOCALLY.md": {

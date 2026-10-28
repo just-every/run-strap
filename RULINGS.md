@@ -227,6 +227,8 @@ Date: 2026-10-22 · Ruled by: ct · Governs: `BILL-005`.
 
 Semantics (ct ruling 22 Oct): the native foundation proposes an exact member-accepted studio-invoice agreement on an existing pack: one invoice, renewed entitlement and balance charge per current due period, with no stored method or provider debit.
 
+**Retained policy basis.** Current primary statute for 3-year/1-year retention remains unverified; it is product policy.
+
 ### RL-14 — BILL-014 retained product ruling
 
 Date: 2026-10-26 · Ruled by: ct · Governs: `BILL-014`.
@@ -250,3 +252,4 @@ CT policy ruling, 27 October 2026: APPROVE WITH RIDERS; STAFF-001 remains PARTIA
 Date: 2026-10-26 · Ruled by: ct · Governs: `RPT-004`.
 
 CT policy ruling, 26 October 2026: APPROVE WITH RIDERS for the provisional operational recognition default; RPT-004 remains PARTIAL.
+**Retained clarifications, 26 October 2026 (ct).** The provisional recognition default is approved with riders; policy approval is no longer an outstanding decision. The approval covers access-only finite-pack freezes that preserve original accepted consideration and credit quantity, retained known ordinary refunds against one original finite-pack charge within original unearned value without changed consideration, initiation fees or mixed charges, and bounded ordinary unlimited-service cancellation refunds. The latter retain the original service interval while stopping recognition at confirmed termination; known approved refunds reduce deferred value and create a separate payable, and recorded settlement changes cash and payable only. Unsupported classifications stay unavailable or unclassified. Policy approval does not prove missing engineering assertions. The former pending-policy statements are historical and superseded; no status is changed. Dated implementation and CI receipts are retained in CHANGELOG.md.

@@ -2675,6 +2675,15 @@
             "RL-1",
             "RL-2"
           ]
+        },
+        {
+          "to": "changelog"
+        },
+        {
+          "to": "rulings",
+          "ids": [
+            "RL-2"
+          ]
         }
       ]
     },
@@ -2778,6 +2787,11 @@
       "to": "gap",
       "ids": [
         "PLAN-011"
+      ],
+      "also": [
+        {
+          "to": "changelog"
+        }
       ]
     },
     {
@@ -2864,6 +2878,15 @@
           "to": "rulings",
           "ids": [
             "RL-9",
+            "RL-10"
+          ]
+        },
+        {
+          "to": "changelog"
+        },
+        {
+          "to": "rulings",
+          "ids": [
             "RL-10"
           ]
         }
@@ -2966,6 +2989,9 @@
           "ids": [
             "RL-13"
           ]
+        },
+        {
+          "to": "changelog"
         }
       ]
     },
@@ -3434,6 +3460,9 @@
           "ids": [
             "RL-17"
           ]
+        },
+        {
+          "to": "changelog"
         }
       ]
     },
