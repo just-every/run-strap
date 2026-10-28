@@ -8,10 +8,10 @@ The primary journey: configure the studio, bring members and their original reco
 
 | Tier | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Core | 2 | 99 | 52 | 153 |
+| Core | 1 | 100 | 52 | 153 |
 | Agent surface | 0 | 0 | 13 | 13 |
 | Later | 0 | 0 | 0 | 0 |
-| Full target | 2 | 99 | 65 | 166 |
+| Full target | 1 | 100 | 65 | 166 |
 
 Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 10 rows; 0 passed, 0 failed, 10 not run.
 
@@ -168,7 +168,7 @@ Core · published · **partial** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-DAT
 
 #### AUDIT-001 — Retained draft approval records
 
-Core · published · **done** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-DATA-001
+Core · published · **partial** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-DATA-001
 
 **Requirement.** Class, pack and reminder approvals retain the approved draft, human approver and time. These records travel with native studio archives rather than being discarded on restore. Full staff and automation auditing is SEC-002.
 
@@ -176,7 +176,7 @@ Core · published · **done** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-DATA-
 1. Approve a pack through HTTP, inspect its draft-linked approval, archive the populated studio and compare the restored approval records.
 
 **Evidence.** `src/strap/domain/drafts.ts`, `tests/strap.test.mjs`, `tests/archive.test.mjs`
-**Gap.** None.
+**Gap.** The cited pack test asserts the original draft-linked approval. The archive round trip compares exported parts but does not assert that populated approval rows occur in that export or read their restored draft, approver and time. Restored approval-record retention remains without a qualifying outcome-level assertion; see docs/contract/DONE-AUDIT.md.
 
 #### PUBLIC-001 — Run site and installed studio doors
 
