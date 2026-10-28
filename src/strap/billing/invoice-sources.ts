@@ -18,6 +18,7 @@ export function invoiceAccess(state: State,who: Actor,packId: unknown,staff=fals
   requireStaffRight(state,who,'sale',pack.personId,pack.locationId ?? 'studio');return pack;
 }
 export const invoiceVisible=(state:State,who:Actor,pack:RecordData)=>!!state.people.find(p=>p.id===pack.personId && !p.erasedAt) && (who.role==='owner' && who.isOwner || who.role==='member' && (who.personId===pack.personId || invoiceCharges(state,pack.id).some(c=>c.personId===who.personId)) || ['front-desk','manager'].includes(who.role) && hasStaffRight(state,who,'sale',pack.personId,pack.locationId ?? 'studio'));
+export const latestInvoiceReconciliation=(state:State,invoiceId:string|undefined)=>list(state,'billingReconciliation').filter(r=>r.invoiceId===invoiceId).sort((a,b)=>a.at.localeCompare(b.at)||a.id.localeCompare(b.id)).at(-1);
 export function lineAllocations(state:State,packId:string) {
   const ids=new Set(invoiceCharges(state,packId).map(c=>c.id));
   const allocations=list(state,'contractPrepayment').filter(a=>a.packId===packId && ids.has(a.chargeId));

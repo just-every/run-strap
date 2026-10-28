@@ -1,6 +1,6 @@
 import { list, person, record, type Actor, type State } from '../domain/types';
 import { studioSettings } from '../domain/studio';
-import { invoiceAccess, invoiceCharges, invoiceVisible, lineAllocations } from './invoice-sources';
+import { invoiceAccess, invoiceCharges, invoiceVisible, lineAllocations, latestInvoiceReconciliation } from './invoice-sources';
 
 export function invoiceDocument(state:State,who:Actor,packId:unknown) {
   const pack=invoiceAccess(state,who,packId),member=person(state,pack.personId,false),charges=invoiceCharges(state,pack.id),allocations=lineAllocations(state,pack.id);
@@ -8,7 +8,7 @@ export function invoiceDocument(state:State,who:Actor,packId:unknown) {
   const settings=studioSettings(state),location=state.records.get(pack.locationId ?? 'studio')?.data ?? list(state,'location').find(l=>l.id===(pack.locationId ?? 'studio'));
   const receipts=[...new Set(allocations.map(a=>a.paymentId))].map(id=>{
     const p=record(state,id,'payment'),invoice=state.records.get(p.stripeInvoiceId)?.data;
-    const last=list(state,'billingReconciliation').filter(r=>r.invoiceId===invoice?.id).at(-1);
+    const last=latestInvoiceReconciliation(state,invoice?.id);
     return {id:p.id,amountCents:allocations.filter(a=>a.paymentId===p.id).reduce((n,a)=>n+a.amountCents,0),tender:p.collection==='stripe-test-checkout'?'stripe-test-card':p.tender ?? 'external',status:p.collection==='stripe-test-checkout'?(last?.provider?.disputed?'disputed':'collected'):'externally recorded',reference:p.reference,createdAt:p.createdAt,providerInvoiceId:p.providerInvoiceId ?? null,providerChargeId:p.providerChargeId ?? null,allocations:allocations.filter(a=>a.paymentId===p.id).map(a=>({lineId:a.chargeId,amountCents:a.amountCents})).sort((a,b)=>charges.findIndex(c=>c.id===a.lineId)-charges.findIndex(c=>c.id===b.lineId))};
   }).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const lines=charges.map(c=>({id:c.id,label:c.reason==='initiation_fee'?'One-time initiation fee':c.reason==='sales_tax'?'Sales tax':c.reason==='sales_tax_reversal'?'Sales tax reversal':c.reason ?? pack.entitlement?.name ?? 'Class pack',kind:c.reason?.startsWith('sales_tax')?'tax':c.amountCents<0?'adjustment':c.reason?'fee':'service',amountCents:c.amountCents,taxCents:c.reason?.startsWith('sales_tax')?c.amountCents:0,discountCents:c.discountCents ?? 0,refundedCents:refunds.filter(r=>r.lineId===c.id && r.status==='succeeded').reduce((n,r)=>n+r.amountCents,0)}));

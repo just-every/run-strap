@@ -12,7 +12,7 @@ import { harness } from './harness.mjs'
 import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
-import { paymentEdge, paymentAuth, signedEvent, billingView } from './payment-fixtures.mjs';
+import { paymentEdge, paymentAuth, signedEvent, billingView, connectPayment } from './payment-fixtures.mjs';
 import { copyPost, evidenceCopyMailEdge } from './evidence-copy-journey.mjs'
 import { taxEdge } from './tax-edge.mjs'
 import { seedTaxArchive, assertPortableTax, assertRestoredTax } from './tax-archive.mjs'
@@ -507,11 +507,15 @@ test('Invoice copies and receipt requests survive native restore while configure
   try {
     for(const path of [source,restored])await checkout(path);
     await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6});
-    h=await harness({root:source,outbound:edge.outbound,auth:{MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-912'}});await h.confirmSetup(h.owner);
+    h=await harness({root:source,outbound:edge.outbound,auth:{...paymentAuth,MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-912'}});await h.confirmSetup(h.owner);
     await h.cmd('studio.save',{location:'Brooklyn',legalName:'Larkhill Movement LLC',timeZone:'America/New_York'});
     const member=await h.person('ArchivedInvoiceMember'),pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,initiationFeeCents:1000,expiresAt:'2099-12-31T00:00:00Z'})).id});
-    const payment=await h.cmd('payment.record',{personId:member.id,amountCents:11000,reference:'synthetic-strap-archive-external'});
-    const charges=(await h.state()).charges.filter(c=>c.packId===pack.id);for(const c of charges)await h.cmd('billing.receipt.allocate',{packId:pack.id,paymentId:payment.id,chargeId:c.id,amountCents:c.amountCents,requestId:'synthetic-strap-archive-allocate-'+c.id});
+    const payment=await h.cmd('payment.record',{personId:member.id,amountCents:4000,reference:'synthetic-strap-archive-external'});
+    const charges=(await h.state()).charges.filter(c=>c.packId===pack.id),line=charges.find(c=>!c.reason),fee=charges.find(c=>c.reason==='initiation_fee');await h.cmd('billing.receipt.allocate',{packId:pack.id,paymentId:payment.id,chargeId:line.id,amountCents:4000,requestId:'synthetic-strap-archive-allocate'});
+    await connectPayment(h);const checkout=await h.cmd('billing.checkout.start',{packId:pack.id,confirm:true,requestId:'synthetic-strap-archive-checkout'});edge.complete(checkout.providerSessionId);await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-archive-paid'});
+    const refund=await h.cmd('billing.line.refund',{packId:pack.id,lineId:fee.id,amountCents:1000,reason:'Requested original fee refund',confirm:true,requestId:'synthetic-strap-archive-refund'});assert.equal(refund.status,'succeeded');
+    edge.setChange(body=>{body.payment_intent.latest_charge.disputed=true;});await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-archive-disputed'});
+    const before=(await h.send('/api/strap/invoices',undefined,member.cookie)).value.invoices[0];assert.deepEqual([before.totalCents,before.paidCents,before.refundedCents,before.disputedCents,before.balanceCents],[11000,11000,1000,7000,0]);
     await h.cmd('mail.connect',{});const input={packId:pack.id,receiptId:payment.id,requested:true,channel:'phone',requestId:'synthetic-strap-archive-copy'};
     const delivery=await h.cmd('billing.receipt.send.staff',input);assert.equal(delivery.status,'accepted');assert.equal(edge.mail.length,1);
     const paths=['/api/strap/invoice.html?id='+pack.id,'/api/strap/receipt.html?id='+payment.id+'&packId='+pack.id],copies=[];for(const path of paths){const r=await h.send(path,undefined,member.cookie);assert.equal(r.status,200);copies.push(r.text);}

@@ -2,7 +2,7 @@ import { load, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, integer, list, now, person, record, text, type Actor, type RecordData } from '../domain/types';
 import { connection, digest, type BillingBindings, type Connection, type Json } from './model';
 import { ProviderFailure, stripe } from './provider';
-import { invoiceCharges, lineAllocations } from './invoice-sources';
+import { invoiceCharges, lineAllocations, latestInvoiceReconciliation } from './invoice-sources';
 
 function fence(tx:Transaction,c:Connection) {
   tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_payment_connections WHERE id='billing' AND connection_id=? AND origin=? AND account_id=? AND key_digest=?) THEN 1 ELSE 0 END",c.connection_id,c.origin,c.account_id,c.key_digest));
@@ -46,7 +46,7 @@ export async function refundInvoiceLine(env:BillingBindings,who:Actor,input:Reco
   const allocation=lineAllocations(tx.state,pack.id).find(a=>a.chargeId===line.id && tx.state.records.get(a.paymentId)?.data.collection==='stripe-test-checkout' && a.amountCents-reserved.filter(r=>r.lineId===line.id && r.originalPaymentId===a.paymentId).reduce((n,r)=>n+r.amountCents,0)>=amountCents);
   insist(allocation,'invoice_collected_line_required',409);
   const payment=record(tx.state,allocation.paymentId,'payment');
-  const last=list(tx.state,'billingReconciliation').filter(r=>r.invoiceId===payment.stripeInvoiceId).at(-1);
+  const last=latestInvoiceReconciliation(tx.state,payment.stripeInvoiceId);
   insist(!last?.provider?.disputed && !last?.provider?.refunded,'invoice_refund_payment_needs_review',409);
   const saved={id,packId:pack.id,personId:pack.personId,locationId:pack.locationId ?? 'studio',lineId:line.id,originalPaymentId:payment.id,accountId:payment.accountId,providerChargeId:payment.providerChargeId,paymentIntentId:payment.paymentIntentId,amountCents,reason,requestId,requestBasis:basis,actorId:who.id,status:'creating',tender:'stripe-test-card',createdAt:now()};
   authorize(tx,saved,c);tx.put('invoiceRefund',saved);await tx.commit();
