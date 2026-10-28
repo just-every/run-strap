@@ -30,8 +30,8 @@ const account=await provider('/account');
 await run(async h=>{
   const seed=await invoiceSeed(h,'SandboxInvoiceMember',recipient),{member,pack,line,fee}=seed;
   const connected=await h.cmd('billing.connect',{accountId:account.id,mode:'test',confirm:true,requestId:'synthetic-strap-live-connect'});assert.equal(connected.result.ready,true);
-  const address={line1:'920 5th Ave',city:'Seattle',state:'WA',postalCode:'98104',country:'US'};
-  await h.cmd('tax.config.save',{requestId:'synthetic-strap-live-tax',consent:true,originAddress:address,registeredStates:['WA'],products:[{id:'invoice-fitness',kind:'service',sourceId:pack.id,label:'Fitness class pack and initiation',taxCode:'txcd_50021003'}],exemptions:[]});
+  const address={line1:'354 Oyster Point Blvd',city:'South San Francisco',state:'CA',postalCode:'94080',country:'US'};
+  await h.cmd('tax.config.save',{requestId:'synthetic-strap-live-tax',consent:true,originAddress:address,registeredStates:['CA'],products:[{id:'invoice-fitness',kind:'service',sourceId:pack.id,label:'Fitness class pack and initiation',taxCode:'txcd_50021003'}],exemptions:[]});
   const taxes=[];for(const charge of [line,fee])taxes.push((await taxInvoice(h,charge.id,'invoice-fitness',address,'live-'+charge.id)).invoice.result);
   assert.ok(taxes.every(t=>t.taxCents===0),'provider confirms this controlled fitness classification');
   const external=await h.cmd('payment.record',{personId:member.id,amountCents:4000,reference:'synthetic-strap-live-external'});

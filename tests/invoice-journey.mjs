@@ -40,6 +40,7 @@ export async function invoiceJourney(h,edge) {
   assert.deepEqual([invoice.externallyRecordedCents,invoice.collectedCents,invoice.pendingCents,invoice.disputedCents],[4000,7000,0,0]);
   edge.setChange(body=>{body.payment_intent.latest_charge.disputed=true;});await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-dispute'});
   const disputed=(await invoiceView(h)).invoices[0];assert.equal(disputed.status,'disputed');assert.equal(disputed.disputedCents,7000);assert.equal(disputed.receipts[1].status,'disputed');
+  await h.cmd('billing.line.refund',{packId:pack.id,lineId:fee.id,amountCents:1000,confirm:true,reason:'Disputed line cannot be refunded',requestId:'synthetic-strap-disputed-refund'},h.owner,409);assert.equal(edge.refunds.size,0);
   edge.setChange(null);await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-dispute-reviewed'});
   const before=(await h.state()).version;
   for(const [name,input] of [['billing.receipt.allocate',allocate],['billing.line.refund',{packId:pack.id,lineId:fee.id,amountCents:1000,confirm:true,reason:'Requested line refund',requestId:'synthetic-strap-refund'}]])await h.cmd(name,input,member.cookie,403);
@@ -56,7 +57,7 @@ export async function invoiceJourney(h,edge) {
   for(const path of ['/api/strap/invoice.html?id='+pack.id,'/api/strap/receipt.html?id='+stripeReceipt.id+'&packId='+pack.id]) {
     const copy=await h.send(path,undefined,member.cookie);assert.equal(copy.status,200);assert.match(copy.headers.get('content-disposition'),/attachment/);assert.ok(copy.text.includes('Larkhill Movement LLC'));assert.ok(copy.text.includes('One-time initiation fee'));assert.ok(copy.text.includes('$110.00'));assert.ok(copy.text.includes('$10.00'));assert.ok(copy.text.includes('$0.00'));assert.equal((await h.send(path,undefined,other.cookie)).status,404);assert.equal((await h.send(path)).status,401);
   }
-  await h.setAuth({MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-mail'});await h.cmd('mail.connect',{});
+  await h.setAuth({MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-910'});await h.cmd('mail.connect',{});
   const send={packId:pack.id,receiptId:stripeReceipt.id,requestId:'synthetic-strap-own-copy'};
   const delivered=await h.cmd('billing.receipt.send',send,member.cookie);assert.equal(delivered.status,'accepted');assert.equal(edge.mail.length,1);assert.deepEqual(edge.mail[0].personalizations[0].to,[{email:member.email}]);assert.ok(edge.mail[0].content.some(p=>p.value.includes('Stripe') || p.value.includes('stripe-test-card')));
   assert.deepEqual(await h.cmd('billing.receipt.send',send,member.cookie),delivered);assert.equal(edge.mail.length,1);
@@ -82,7 +83,7 @@ export async function invoiceJourney(h,edge) {
   const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value;assert.ok(!('st_invoice_dispatches' in portable.tables));assert.ok(!('st_invoice_mail_review' in portable.tables));
   const copies=portable.manifest.documents.invoiceFiles.filter(f=>f.invoiceId===pack.id);assert.equal(copies.length,6);for(const file of copies){const contents=portable.files[file.path];assert.ok(contents.includes(file.mediaType==='text/html'?'$110.00':'11000') || contents.includes(stripeReceipt.id) || contents.includes(external.id));}
   const retained=portable.tables.st_records.map(r=>({kind:r.kind,data:JSON.parse(r.data)}));assert.equal(retained.filter(r=>r.kind==='invoiceRefund').length,1);assert.ok(retained.some(r=>r.kind==='invoiceDelivery'));assert.ok(retained.some(r=>r.kind==='contractPrepayment' && r.data.paymentId===external.id));
-  await h.setAuth({MAIL_API_KEY:'synthetic-strap-rotated'});await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-stale-mail'},member.cookie,409);assert.equal(edge.mail.length,n);await h.cmd('mail.connect',{});
+  await h.setAuth({MAIL_API_KEY:'synthetic-strap-911'});await h.cmd('billing.receipt.send',{...send,requestId:'synthetic-strap-stale-mail'},member.cookie,409);assert.equal(edge.mail.length,n);await h.cmd('mail.connect',{});
   const changedAddress=['changed-'+member.id,'studio.example'].join('@');await h.cmd('person.save',{id:member.id,name:member.name,email:changedAddress,role:'member',active:true});
   await h.cmd('billing.receipt.send.staff',{...staffSend,requestId:'synthetic-strap-changed-address'},h.owner);assert.deepEqual(edge.mail.at(-1).personalizations[0].to,[{email:changedAddress}]);const finalSends=edge.mail.length;
   await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false});await h.cmd('billing.receipt.send',send,member.cookie,403);assert.equal(edge.mail.length,finalSends);

@@ -384,7 +384,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
-  const payments=invoiceEdge(),billingAuth={...paymentAuth,MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-archive-mail'};
+  const payments=paymentEdge(),billingAuth=paymentAuth;
   const providerEdge=payments;
   try {
     for(const path of [source,restored])await checkout(path)
@@ -415,10 +415,6 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(paidCheckout.status,'open');payments.complete(paidCheckout.providerSessionId);
     const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
-    await h.cmd('mail.connect',{});
-    const invoiceSend={packId:expiryPack.id,requestId:'synthetic-strap-archive-invoice-copy',requested:true,channel:'phone'};
-    const invoiceDelivery=await h.cmd('billing.receipt.send.staff',invoiceSend);assert.equal(invoiceDelivery.status,'accepted');
-    const invoiceBefore=(await h.send('/api/strap/invoice.html?id='+expiryPack.id,undefined,member.cookie));assert.equal(invoiceBefore.status,200);
     const retainedPayments=await billingView(h);
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
@@ -434,7 +430,6 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_contract_connections'))
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_contract_connections'))
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_disclosure_connections'));
-    assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_invoice_mail_review' || t.name==='st_invoice_dispatches'));
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name==='st_payment_connections'));
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row'&&r.table==='st_payment_connections'));
     await command(restored,['import','--input',archive,'--yes','--no-queue'])
@@ -453,13 +448,6 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(restoredDisclosure.delivery.status,'paused','old delivery intent never claims a live dispatch queue');
     assert.equal(restoredDisclosure.canAccept,false,'a restored price proposal cannot revive excluded dispatch authority');
     const restoredMember=await h.signIn(member.email);
-    const invoiceAfter=await h.send('/api/strap/invoice.html?id='+expiryPack.id,undefined,restoredMember);assert.equal(invoiceAfter.status,200);assert.equal(invoiceAfter.text,invoiceBefore.text,'restored invoices retain the same original lines and settlements');
-    const sendsBefore=payments.mail.length;
-    await h.cmd('billing.receipt.send.staff',{...invoiceSend,requestId:'synthetic-strap-restored-new-copy'},restoredOwner,409);
-    assert.equal(payments.mail.length,sendsBefore,'same-origin restore does not restore receipt delivery authority');
-    await h.cmd('mail.connect',{},restoredOwner);
-    const oldCopy=await h.cmd('billing.receipt.send.staff',invoiceSend,restoredOwner);assert.equal(oldCopy.id,invoiceDelivery.id);assert.equal(payments.mail.length,sendsBefore,'reconnecting never resends retained delivery identities');
-    const freshCopy=await h.cmd('billing.receipt.send.staff',{...invoiceSend,requestId:'synthetic-strap-restored-new-copy'},restoredOwner);assert.equal(freshCopy.status,'accepted');assert.equal(payments.mail.length,sendsBefore+1);
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
     assert.equal(historicalBilling.methods.length,2);
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
@@ -512,3 +500,28 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
 
   } finally {if(h)await h.close();await rm(temporary,{recursive:true,force:true})}
 })
+
+
+test('Invoice copies and receipt requests survive native restore while configured mail authority stays disconnected',{timeout:180000},async()=>{
+  const temporary=await mkdtemp(join(tmpdir(),'strap-invoice-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored'),edge=invoiceEdge();let h;
+  try {
+    for(const path of [source,restored])await checkout(path);
+    await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6});
+    h=await harness({root:source,outbound:edge.outbound,auth:{MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-912'}});await h.confirmSetup(h.owner);
+    await h.cmd('studio.save',{location:'Brooklyn',legalName:'Larkhill Movement LLC',timeZone:'America/New_York'});
+    const member=await h.person('ArchivedInvoiceMember'),pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,initiationFeeCents:1000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+    const payment=await h.cmd('payment.record',{personId:member.id,amountCents:11000,reference:'synthetic-strap-archive-external'});
+    const charges=(await h.state()).charges.filter(c=>c.packId===pack.id);for(const c of charges)await h.cmd('billing.receipt.allocate',{packId:pack.id,paymentId:payment.id,chargeId:c.id,amountCents:c.amountCents,requestId:'synthetic-strap-archive-allocate-'+c.id});
+    await h.cmd('mail.connect',{});const input={packId:pack.id,receiptId:payment.id,requested:true,channel:'phone',requestId:'synthetic-strap-archive-copy'};
+    const delivery=await h.cmd('billing.receipt.send.staff',input);assert.equal(delivery.status,'accepted');assert.equal(edge.mail.length,1);
+    const paths=['/api/strap/invoice.html?id='+pack.id,'/api/strap/receipt.html?id='+payment.id+'&packId='+pack.id],copies=[];for(const path of paths){const r=await h.send(path,undefined,member.cookie);assert.equal(r.status,200);copies.push(r.text);}
+    const identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:edge.outbound};await h.close();h=null;
+    const archive=join(temporary,'invoice.rer');await command(source,['export','--output',archive,'--no-queue']);
+    const archived=(await readFile(archive,'utf8')).split('\n').filter(Boolean).map(JSON.parse);assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>['st_invoice_mail_review','st_invoice_dispatches'].includes(t.name)));
+    await command(restored,['import','--input',archive,'--yes','--no-queue']);h=await harness({root:restored,...identity});const owner=await h.signIn(h.auth.OWNER_EMAIL);await h.confirmSetup(owner);await h.enroll(owner);const cookie=await h.signIn(member.email);
+    for(let i=0;i<paths.length;i++){const r=await h.send(paths[i],undefined,cookie);assert.equal(r.status,200);assert.equal(r.text,copies[i],'native restore retains each original invoice and receipt');}
+    const n=edge.mail.length;await h.cmd('billing.receipt.send.staff',{...input,requestId:'synthetic-strap-new-restored-copy'},owner,409);assert.equal(edge.mail.length,n);
+    await h.cmd('mail.connect',{},owner);assert.equal((await h.cmd('billing.receipt.send.staff',input,owner)).id,delivery.id);assert.equal(edge.mail.length,n,'review cannot resend a retained request');
+    const fresh=await h.cmd('billing.receipt.send.staff',{...input,requestId:'synthetic-strap-new-restored-copy'},owner);assert.equal(fresh.status,'accepted');assert.equal(edge.mail.length,n+1);
+  }finally{if(h)await h.close();await rm(temporary,{recursive:true,force:true});}
+});

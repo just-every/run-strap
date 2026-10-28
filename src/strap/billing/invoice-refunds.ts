@@ -46,6 +46,8 @@ export async function refundInvoiceLine(env:BillingBindings,who:Actor,input:Reco
   const allocation=lineAllocations(tx.state,pack.id).find(a=>a.chargeId===line.id && tx.state.records.get(a.paymentId)?.data.collection==='stripe-test-checkout' && a.amountCents-reserved.filter(r=>r.lineId===line.id && r.originalPaymentId===a.paymentId).reduce((n,r)=>n+r.amountCents,0)>=amountCents);
   insist(allocation,'invoice_collected_line_required',409);
   const payment=record(tx.state,allocation.paymentId,'payment');
+  const last=list(tx.state,'billingReconciliation').filter(r=>r.invoiceId===payment.stripeInvoiceId).at(-1);
+  insist(!last?.provider?.disputed && !last?.provider?.refunded,'invoice_refund_payment_needs_review',409);
   const saved={id,packId:pack.id,personId:pack.personId,locationId:pack.locationId ?? 'studio',lineId:line.id,originalPaymentId:payment.id,accountId:payment.accountId,providerChargeId:payment.providerChargeId,paymentIntentId:payment.paymentIntentId,amountCents,reason,requestId,requestBasis:basis,actorId:who.id,status:'creating',tender:'stripe-test-card',createdAt:now()};
   authorize(tx,saved,c);tx.put('invoiceRefund',saved);await tx.commit();
   let body:Json|null=null,error:string|null=null;

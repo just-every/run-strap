@@ -564,7 +564,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
     };
     actions['billing.receipt.send']=async door=>{
-      await h.setAuth({MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-mail'});await h.cmd('mail.connect',{});
+      await h.setAuth({MAIL_PROVIDER:'sendgrid',MAIL_FROM:['receipts','studio.example'].join('@'),MAIL_API_KEY:'synthetic-strap-910'});await h.cmd('mail.connect',{});
       const pack=(await h.state()).packs.find(p=>p.personId===ana.id),own=await h.cmd('billing.receipt.send',{packId:pack.id,requestId:randomUUID()},ana.cookie);assert.equal(own.status,'accepted');
       const input={packId:pack.id,requestId:randomUUID(),requested:true,channel:'phone'},r=await checkAudit(door,input);assert.equal(r.result.status,own.status);assert.equal(r.event.personId,ana.id);
       await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
