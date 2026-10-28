@@ -1,5 +1,12 @@
 # Agent preparations
 
+Strap currently exposes the native preparation-key interface described below.
+The shared Base agent-door and Business settings runtime source is pinned in
+`base-copies.json`, with additive schemas in migrations 0042–0044. Those modules
+are not mounted in the production Worker. There is no active MCP registry or
+signed company-policy receiver, and the source copies do not establish agent
+conformance or extend a preparation key's authority.
+
 The owner creates a preparation key in **Agent access**. It expires after 30 days and can be revoked immediately. Save the one-time value privately; never put it in chat, logs or source.
 
 `GET /api/strap/agent/context` and `POST /api/strap/agent/command` require `Authorization: Bearer VALUE`. POST accepts JSON `{ "name": "pack.prepare", "input": { "personId": "MEMBER_ID", "credits": 5, "amountCents": 10000, "expiresAt": "2027-01-01T00:00:00Z" } }`.
