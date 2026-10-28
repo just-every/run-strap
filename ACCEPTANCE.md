@@ -1959,7 +1959,7 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDI
 1. Use a documented-schema Mindbody golden export set, preview per-file mappings and unsupported fields, apply, reconcile every record class and opening value, then book a migrated member and run a shadow renewal.
 
 **Evidence.** `src/strap/movein/csv.ts`, `src/strap/movein/index.ts`, `tests/strap.test.mjs`
-**Gap.** Only a synthetic four-column member CSV is supported; actual Mindbody exports, billing, balances, bookings, waiver files and shadow renewal are unverified or absent.
+**Gap.** Only a synthetic four-column member CSV is supported; documented Mindbody export formats, billing, balances, bookings, waiver files and shadow renewal remain unverified or absent. R-6 separately records licensed real-source compatibility.
 
 #### MOVE-002 — WellnessLiving studio migration
 
@@ -2145,7 +2145,7 @@ The first factor needs fresh native sign-in verification; adding or removing a f
 2. Before enrollment, attempt an owner export, a teaching-pay adjustment, a staff role change and an integration-key creation (each refused with nothing written); verify a replayed authenticator code, excess wrong attempts during the documented pause, a self-reset and an agent or integration key on a gated door are refused, factor data is absent from a native archive and the exit, and a member who opts in is asked for the factor at each new sign-in.
 
 **Evidence.** `src/strap/security/mfa.ts`, `src/strap/security/crypto.ts`, `src/strap/security/webauthn.ts`, `src/strap/security/gate.ts`, `src/strap/security/auth-gate.ts`, `src/strap/security/finance.ts`, `src/strap/ui/security.ts`, `public/brand/app/security.js`, `migrations/core/0027-mfa-finance.sql`, `tests/mfa-helpers.mjs`, `tests/security.test.mjs`, `tests/archive.test.mjs`, `tests/security-browser.mjs`
-**Gap.** — The carried-done audit has no qualifying outcome-level trace for Enroll a passkey; a TOTP app; sign in with each; have one owner reset another's factor; inspect the audit record; Before enrollment; attempt an owner export; a teaching-pay adjustment; a staff role change; an integration-key creation (each refused with nothing written); verify a replayed TOTP code; a sixth wrong code within 15 minutes; a self-reset; an agent or integration key on a gated door are refused; factor data is absent from a native archive; the exit; and a member who opts in is asked for the factor at each new sign-in. The cited fixtures exercise the existing workflow; its complete outcome-level trace remains unestablished. See docs/contract/DONE-AUDIT.md.
+**Gap.** The carried-done audit has no qualifying outcome-level trace for Enroll a passkey; a TOTP app; sign in with each; have one owner reset another's factor; inspect the audit record; Before enrollment; attempt an owner export; a teaching-pay adjustment; a staff role change; an integration-key creation (each refused with nothing written); verify a replayed authenticator code; excess wrong attempts during the documented pause; a self-reset; an agent or integration key on a gated door are refused; factor data is absent from a native archive; the exit; and a member who opts in is asked for the factor at each new sign-in. The cited fixtures exercise the existing workflow; its complete outcome-level trace remains unestablished. See docs/contract/DONE-AUDIT.md.
 
 #### SEC-005 — Multi-factor sign-in for privileged roles: managers, finance staff and payouts
 
