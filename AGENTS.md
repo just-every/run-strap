@@ -7,3 +7,5 @@ Read README.md and ACCEPTANCE.md. Product HTTP routes live in src/strap/http.ts,
 Run pnpm run test:strap and pnpm run test:archive for changed flows, pnpm run typecheck for source, and rer verify for the full local plan. GitHub Verify shards the same plan. Build and deploy do not run tests. Tests stay below the cap in test-budget.json. No mock application data or fallback behavior.
 
 The app pins @runeditrun/rer in package mode. Do not vendor or patch its internals locally. Keep deploy, project, edition, Worker, D1 and package identities stable. Data backups and real deploy use rer export/import and rer deploy; read README.md. No secrets or private exports in source. Native sessions, credentials and outboxes never travel in backups. Use Base publication scan on the exact tree before a public push, zero findings and no exclusions.
+
+Lander-Regenerate: `node scripts/contract-docs.mjs write`, then `node scripts/contract-docs.mjs check`. CONTRACT.md is the source; ACCEPTANCE.md and docs/CLAIMS.md are generated without changing clause IDs or acceptance. The local generator preserves the existing contract form until ct performs its judged structural rewrite.

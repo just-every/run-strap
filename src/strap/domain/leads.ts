@@ -1,3 +1,4 @@
+import { validateLeadCampaign } from './lead-campaigns';
 import { humanOwner, instant, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { addDays, localDate } from '../zone';
@@ -84,10 +85,12 @@ export async function createLead(tx: Transaction, input: Record<string,unknown>)
   insist(input.id === undefined && input.version === undefined,'new_lead_required');
   insist(input.stage === undefined || input.stage === 'inquiry','new_lead_starts_at_inquiry');
   const personId = member(tx,input.personId), ownerId = await assignment(tx,input.ownerId);
+  const campaign = validateLeadCampaign(tx.state,input.campaignId);
+  if (campaign) tx.future(campaign.endsAt);
   const at = now(), note = input.note === undefined ? null : text(input.note,'note',4000);
   const source = input.source === undefined || input.source === '' ? null : text(input.source,'source',100);
   const lead = {id:req.key.replace('lead-event:','lead:'),personId,ownerId,stage:'inquiry',version:1,
-    source,
+    source,campaignId:campaign?.id ?? null,
     ...nextTask(input,'inquiry'),bookingId:null,lostReason:null,externalMembershipReference:null,externalMembershipNote:null,externalOutcomeLabel:null,
     createdAt:at,createdBy:tx.who.id,updatedAt:at,updatedBy:tx.who.id};
   insist(!tx.state.records.has(lead.id),'lead_exists',409);
@@ -126,6 +129,7 @@ export async function updateLead(tx: Transaction, input: Record<string,unknown>)
   insist(before.version === integer(input.version,'version',1,Number.MAX_SAFE_INTEGER),'lead_changed',409);
   insist(input.personId === undefined || input.personId === before.personId,'lead_member_cannot_change');
   insist(input.source === undefined || input.source === before.source,'lead_source_cannot_change',409);
+  insist(input.campaignId === undefined || input.campaignId === before.campaignId,'lead_campaign_cannot_change',409);
   member(tx,before.personId);
   const stage = text(input.stage ?? before.stage,'stage',30);
   insist((leadStages as readonly string[]).includes(stage),'invalid_lead_stage');
