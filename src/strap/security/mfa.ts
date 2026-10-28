@@ -283,7 +283,7 @@ const self = { 'mfa.totp.start': startTotp, 'mfa.totp.confirm': confirmTotp, 'mf
 export const selfService = [...Object.keys(self), 'mfa.recovery.renew', 'mfa.remove', 'mfa.step-up']
 
 export async function mfaCommand(request: Request, env: Bindings, who: Actor, name: string, input: Record<string, unknown>) {
-  const run = self[name as keyof typeof self]
+  const run = Object.hasOwn(self, name) ? self[name as keyof typeof self] : undefined
   if (run) return run(env, who, input, request)
   if (name === 'mfa.step-up') {
     requirePerson(who)

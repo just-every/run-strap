@@ -37,6 +37,21 @@ test('native invitations, role isolation, CSRF, input validation and immediate r
   await h.cmd('person.erase', { id: sam.id }, h.owner, 409)
   const malformed = await h.mf.dispatchFetch(h.origin + '/api/strap/command', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/json' }, body: '{' })
   assert.equal(malformed.status, 400)
+
+  // Request-supplied names must select registered commands only, including for signed-in members.
+  const unknown = await h.send('/api/strap/command', { name: 'not-a-command', input: {} }, sam.cookie)
+  assert.equal(unknown.status, 404)
+  assert.equal(JSON.stringify(unknown.value) === JSON.stringify({ error: 'unknown_command' }), true, 'unknown command has only its public error')
+  const inherited = await Promise.all(['constructor', '__proto__', 'hasOwnProperty'].map(async name => {
+    const response = await h.send('/api/strap/command', { name, input: {} }, sam.cookie)
+    assert.equal(['SESSION_SECRET', 'SETUP_TOKEN', 'MFA_KEY', 'OWNER_EMAIL', 'AUTH_ORIGIN'].some(key => response.text.includes(h.auth[key])), false, 'command response excludes binding values')
+    return { name, response }
+  }))
+  const waiver = await h.cmd('waiver.publish', { text: 'Studio safety briefing.' })
+  const acknowledged = await h.send('/api/strap/command', { name: 'waiver.acknowledge', input: { id: waiver.id } }, sam.cookie)
+  assert.equal(acknowledged.status, 200, 'registered member command still works')
+  assert.deepEqual(inherited.map(({ name, response }) => [name, response.status]), inherited.map(({ name }) => [name, unknown.status]))
+  assert.equal(inherited.every(({ response }) => response.text === unknown.text), true, 'inherited names have the same public error without response bodies in failures')
 }))
 
 test('published week, atomic credit booking, FIFO waitlist promotion and attendance', () => run(async h => {

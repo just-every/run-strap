@@ -29,7 +29,7 @@ const names = (value: unknown, field: string) => {
 }
 function eventsFor(scopes: Scope[], value: unknown) {
   const events = value === undefined ? [] : names(value, 'events')
-  for (const event of events) if (!scopes.some(scope => (scopeCatalogue[scope].events as readonly string[]).includes(event))) fail('event_not_permitted')
+  for (const event of events) if (!scopes.some(scope => Object.hasOwn(scopeCatalogue, scope) && (scopeCatalogue[scope].events as readonly string[]).includes(event))) fail('event_not_permitted')
   return events
 }
 const subscriptions = (events: string[]) => events.map(name => ({ name, delivery: eventDelivery }))
@@ -48,7 +48,7 @@ export async function integrationCommand(env: Bindings, who: Actor, name: string
     const label = String(input.label ?? '').trim()
     if (!label || label.length > 80) fail('Enter a label of at most 80 characters')
     const scopes = names(input.scopes, 'scopes') as Scope[]
-    if (!scopes.length || scopes.some(scope => !(scope in scopeCatalogue))) fail('scope_not_in_catalogue')
+    if (!scopes.length || scopes.some(scope => !Object.hasOwn(scopeCatalogue, scope))) fail('scope_not_in_catalogue')
     // STUDIO-002: a key names the locations it reads, fixed with its scopes. `location` alone (the original key shape) names one.
     const known = await knownLocations(env), named = input.locations === undefined ? [String(input.location)] : names(input.locations, 'locations')
     if (!named.length || named.some(value => !known.includes(value))) fail('unknown_location')

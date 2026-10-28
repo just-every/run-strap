@@ -25,3 +25,13 @@ export function lineAllocations(state:State,packId:string) {
   for(const payment of list(state,'payment').filter(p=>p.amountCents>0 && ids.has(p.chargeId) && !allocations.some(a=>a.paymentId===p.id)))allocations.push({id:'direct:'+payment.id,paymentId:payment.id,chargeId:payment.chargeId,amountCents:payment.amountCents,packId,personId:payment.personId});
   return allocations;
 }
+
+/** Tax credits are already invoice lines; only recorded returns count as refunds. */
+export function invoiceTaxRefunds(state:State,packId:string):RecordData[] {
+  const reversals=new Map(invoiceCharges(state,packId).filter(c=>c.reason==='sales_tax_reversal').map(c=>[c.id,c]));
+  return list(state,'payment').filter(p=>p.amountCents<0 && p.taxReversalId && reversals.has(p.chargeId)).map(p=>({
+    id:p.id,lineId:reversals.get(p.chargeId)!.reversesChargeId,amountCents:-p.amountCents,
+    tender:p.tender,status:'succeeded',createdAt:p.createdAt,reference:p.reference,
+    taxReversalId:p.taxReversalId,refundPaymentId:p.id,
+  }));
+}

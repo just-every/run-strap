@@ -1,10 +1,10 @@
 import { list, person, record, type Actor, type State } from '../domain/types';
 import { studioSettings } from '../domain/studio';
-import { invoiceAccess, invoiceCharges, invoiceVisible, lineAllocations, latestInvoiceReconciliation } from './invoice-sources';
+import { invoiceAccess, invoiceCharges, invoiceVisible, lineAllocations, latestInvoiceReconciliation, invoiceTaxRefunds } from './invoice-sources';
 
 export function invoiceDocument(state:State,who:Actor,packId:unknown) {
   const pack=invoiceAccess(state,who,packId),member=person(state,pack.personId,false),charges=invoiceCharges(state,pack.id),allocations=lineAllocations(state,pack.id);
-  const refunds=list(state,'invoiceRefund').filter(r=>r.packId===pack.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+  const refunds=[...list(state,'invoiceRefund').filter(r=>r.packId===pack.id),...invoiceTaxRefunds(state,pack.id)].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const settings=studioSettings(state),location=state.records.get(pack.locationId ?? 'studio')?.data ?? list(state,'location').find(l=>l.id===(pack.locationId ?? 'studio'));
   const receipts=[...new Set(allocations.map(a=>a.paymentId))].map(id=>{
     const p=record(state,id,'payment'),invoice=state.records.get(p.stripeInvoiceId)?.data;
