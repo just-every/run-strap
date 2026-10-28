@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test';
 
 export async function clientAppointmentsBrowser(h,{coach}) {
   const browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
@@ -44,7 +44,7 @@ export async function clientAppointmentsBrowser(h,{coach}) {
       let saved=(await h.state(member.cookie)).appointments.find(r=>r.clientOfferId);
       assert.equal(saved.occurrences[0].status,'booked');assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,4);await shot(mine,'member-booked');
       await owner.goto(h.origin+back);panel=owner.locator('#client-appointments');await panel.getByText('Record received deposit',{exact:true}).click();await panel.getByLabel('External receipt reference').fill('synthetic-strap-browser-'+width);await shot(owner,'owner-deposit');
-      await panel.getByRole('button',{name:'Record external deposit receipt',exact:true}).click();await panel.getByText('Receipt recorded',{exact:false}).waitFor();await shot(owner,'owner-receipt');
+      await panel.getByRole('button',{name:'Record external deposit receipt',exact:true}).click();assert.equal((await h.state()).appointments.find(r=>r.id===saved.id).deposit.status,'recorded',await owner.locator('body').innerText());assert.ok((await owner.locator('body').innerText()).includes('Receipt recorded'),await owner.locator('body').innerText());await shot(owner,'owner-receipt');
       await mine.reload();panel=mine.locator('#client-appointments');await panel.getByText('Move this appointment',{exact:true}).click();await panel.getByLabel('New local start time').fill('11:00');await panel.getByRole('button',{name:'Preview appointment move',exact:true}).click();await shot(mine,'member-move-preview');
       await panel.getByRole('button',{name:'Confirm appointment move',exact:true}).click();await shot(mine,'member-moved');
       saved=(await h.state(member.cookie)).appointments.find(r=>r.id===saved.id);assert.equal(saved.occurrences[0].start,date+'T15:00:00.000Z');

@@ -3990,7 +3990,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "81112d014f74a9b7ae1ec2bf23b4426432c7b0d85bcba1cd9ca61e73bc068572",
+      "sha256": "8d5a7dcfddbe2f70fbdc49b5a5588649d617fe033a384b7d19bd0f4ef6178ff3",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4146,7 +4146,7 @@
       "executable": false
     },
     "tests/client-appointments-browser.mjs": {
-      "sha256": "46ccb78619ea1d0806bb90e5d8e83c3582f2fffb51e2fc244cecef2a0d573568",
+      "sha256": "1e6e2998a6e5f78b2e9b0f4ee20e91c912da3ff102a6381b003d5090874553a4",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4502,7 +4502,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "1fb1cd02b9a2a6555059f4c17a2ee635f9ee490c01465268b06735f13db26918",
+      "sha256": "97d194ea228428a1a2f5e0c5e5f9ec2359414c6d1f569dbc1e47d063f139d30e",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
