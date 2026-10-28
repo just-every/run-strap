@@ -5,6 +5,7 @@ import { appointmentsPanel } from './appointments'
 import { memberHistoryPanel, memberRecordAccess, memberRecordDesk } from './member-records'
 import { reservationsPanel } from './reservations'
 import { feesPanel } from './fees'
+import { invoiceDocumentsPanel } from './invoice-documents'
 // People: members and instructors in a searchable list beside one person's own
 // card (credits, balance, visits and bookings), editing, invitations and erasure.
 import { draftRecords } from './drafts'
@@ -33,6 +34,7 @@ function card(s: any, p: any, back: string) {
   const contact = p.role === 'member' ? `<p class="meta" data-emergency-contact>Emergency contact: ${h(contactText(p.emergencyContact))}</p>` : ''
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(phoneText(p.phone))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${contact}${packLines}${actions}</div>${upcomingList}`
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? invoiceDocumentsPanel(s,p.id,back,true) : '')
     + personCheckin(s, p, back)
     + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')

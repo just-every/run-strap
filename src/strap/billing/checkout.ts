@@ -1,4 +1,5 @@
 import { balance } from '../domain/money';
+import { invoiceCharges, lineAllocations } from './invoice-sources';
 import { load, loadSystem, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
 import { connection, digest, keyDigest, type BillingBindings, type Connection, type Json } from './model';
@@ -17,18 +18,18 @@ function fence(tx: Transaction,c: Connection) {
 }
 function retained(state: State,invoiceId: string) { return record(state,invoiceId,'stripeInvoice'); }
 function packDebt(state: State,pack: RecordData) {
-  const charges = list(state,'charge').filter(r=>r.packId === pack.id);
-  insist(charges.length > 0 && charges.every(r=>r.personId === pack.personId && !r.forPersonId && Number.isSafeInteger(r.amountCents) && r.amountCents >= 0 && (!r.reason || r.reason === 'initiation_fee')),'billing_pack_charge_mismatch',409);
-  insist(!list(state,'household').some(h=>h.payerId === pack.personId || h.participantIds.includes(pack.personId) && h.payerId),'billing_household_payer_unsupported',409);
-  const amountCents = charges.reduce((n,c)=>n+c.amountCents,0);
-  insist(Number.isSafeInteger(amountCents) && amountCents > 0 && amountCents <= 100_000_000 && amountCents === pack.amountCents+(pack.initiationFeeCents ?? 0),'billing_pack_amount_mismatch',409);
+  const all=invoiceCharges(state,pack.id),charges=all.filter(c=>c.amountCents>0);
+  insist(all.length>0 && all.every(c=>c.personId===pack.personId && !c.forPersonId && Number.isSafeInteger(c.amountCents) && c.amountCents>=0 && (!c.reason || ['initiation_fee','sales_tax'].includes(c.reason))),'billing_pack_charge_mismatch',409);
+  insist(!list(state,'household').some(h=>h.payerId===pack.personId || h.participantIds.includes(pack.personId) && h.payerId),'billing_household_payer_unsupported',409);
+  const amountCents=charges.reduce((n,c)=>n+c.amountCents,0);
+  insist(amountCents>0 && amountCents<=100_000_000 && charges.filter(c=>c.reason!=='sales_tax').reduce((n,c)=>n+c.amountCents,0)===pack.amountCents+(pack.initiationFeeCents ?? 0),'billing_pack_amount_mismatch',409);
   return {amountCents,chargeIds:charges.map(c=>c.id).sort()};
 }
 function noReceipts(state: State,invoice: RecordData) {
-  const allocations = list(state,'contractPrepayment');
-  insist(!allocations.some(a=>a.packId === invoice.packId || invoice.chargeIds.includes(a.chargeId)),'billing_pack_already_paid',409);
-  insist(!list(state,'payment').some(p=>p.personId === invoice.personId && p.amountCents > 0 &&
-    (p.packId === invoice.packId || invoice.chargeIds.includes(p.chargeId) || !p.chargeId && allocations.filter(a=>a.paymentId === p.id).reduce((n,a)=>n+a.amountCents,0) < p.amountCents)),'billing_receipts_need_reconciliation',409);
+  const allocations=lineAllocations(state,invoice.packId).filter(a=>a.paymentId!==invoice.paymentId).map(a=>({paymentId:a.paymentId,chargeId:a.chargeId,amountCents:a.amountCents})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  insist(JSON.stringify(allocations)===JSON.stringify(invoice.priorAllocations ?? []),'billing_receipts_changed',409);
+  const all=list(state,'contractPrepayment');
+  insist(!list(state,'payment').some(p=>p.personId===invoice.personId && p.amountCents>0 && !p.chargeId && all.filter(a=>a.paymentId===p.id).reduce((n,a)=>n+a.amountCents,0)<p.amountCents),'billing_receipts_need_reconciliation',409);
 }
 function source(state: State,invoice: RecordData) {
   person(state,invoice.personId,false); // Erasure must never recreate member-linked records.
@@ -38,7 +39,7 @@ function source(state: State,invoice: RecordData) {
 }
 function unchangedDebt(state: State,invoice: RecordData) {
   const debt = packDebt(state,source(state,invoice));
-  insist(debt.amountCents === invoice.amountCents && JSON.stringify(debt.chargeIds) === JSON.stringify(invoice.chargeIds),'billing_pack_source_changed',409);
+  insist(debt.amountCents === (invoice.originalAmountCents ?? invoice.amountCents) && JSON.stringify(debt.chargeIds) === JSON.stringify(invoice.chargeIds),'billing_pack_source_changed',409);
 }
 function native(state: State,invoice: RecordData) {
   const pack=source(state,invoice), member=person(state,invoice.personId,false);
@@ -85,7 +86,11 @@ export async function startCheckout(env: BillingBindings,who: Actor,input: Recor
   const invoiceId='stripe-invoice:'+await digest({accountId:c.account_id,packId:pack.id});
   const prior=tx.state.records.get(invoiceId);
   if(prior) { insist(prior.kind === 'stripeInvoice' && prior.data.personId === member.id,'billing_invoice_source_mismatch',409);return prior.data; }
-  const debt=packDebt(tx.state,pack),invoice={id:invoiceId,personId:member.id,packId:pack.id,...debt,accountId:c.account_id,connectionId:c.connection_id,origin:c.origin,providerSessionId:null,status:'creating',providerInvoiceId:null,paymentIntentId:null,paymentId:null,requestId,createdBy:tx.who.id,createdAt:now()};
+  const debt=packDebt(tx.state,pack),priorAllocations=lineAllocations(tx.state,pack.id).map(a=>({paymentId:a.paymentId,chargeId:a.chargeId,amountCents:a.amountCents})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const remainingCharges=debt.chargeIds.map(chargeId=>({chargeId,amountCents:record(tx.state,chargeId,'charge').amountCents-priorAllocations.filter(a=>a.chargeId===chargeId).reduce((n,a)=>n+a.amountCents,0)}));
+  insist(remainingCharges.every(c=>c.amountCents>=0),'billing_receipt_overallocated',409);
+  const remainingCents=remainingCharges.reduce((n,c)=>n+c.amountCents,0);insist(remainingCents>0,'billing_pack_already_paid',409);
+  const invoice={id:invoiceId,personId:member.id,packId:pack.id,...debt,originalAmountCents:debt.amountCents,amountCents:remainingCents,priorAllocations,remainingCharges,accountId:c.account_id,connectionId:c.connection_id,origin:c.origin,providerSessionId:null,status:'creating',providerInvoiceId:null,paymentIntentId:null,paymentId:null,requestId,createdBy:tx.who.id,createdAt:now()};
   noReceipts(tx.state,invoice); fence(tx,c);tx.future(pack.expiresAt);tx.put('stripeInvoice',invoice);await tx.commit();
   try {
     const form=new URLSearchParams({mode:'payment','payment_method_types[0]':'card',client_reference_id:invoice.id,success_url:env.AUTH_ORIGIN+'/app/packs?billing=returned',cancel_url:env.AUTH_ORIGIN+'/app/packs?billing=canceled',
@@ -144,7 +149,7 @@ async function reconcile(env: BillingBindings,invoiceId: string,trigger: Trigger
           unchangedDebt(tx.state,saved);noReceipts(tx.state,saved);insist(!existing,'billing_provider_payment_already_recorded',409);
           const payment={id:paymentId,personId:saved.personId,packId:saved.packId,invoiceId:saved.id,stripeInvoiceId:saved.id,chargeIds:saved.chargeIds,locationId:source(tx.state,saved).locationId ?? 'studio',accountId:saved.accountId,amountCents:saved.amountCents,reference:'stripe:'+saved.accountId+':'+settled.paymentIntentId,...settled,createdAt:now(),recordedBy:tx.who.id,collection:'stripe-test-checkout'};
           // Allocate this actual receipt to the original charges; credits and access are untouched.
-          const allocations=await Promise.all(saved.chargeIds.map(async (chargeId:string)=>({id:'stripe-allocation:'+await digest({paymentId,chargeId}),personId:saved.personId,payerId:saved.personId,packId:saved.packId,paymentId,chargeId,amountCents:record(tx.state,chargeId,'charge').amountCents,reference:'stripe:'+await digest({paymentId,chargeId}),createdAt:now(),createdBy:tx.who.id})));
+          const allocations=await Promise.all(saved.chargeIds.map(async (chargeId:string)=>({id:'stripe-allocation:'+await digest({paymentId,chargeId}),personId:saved.personId,payerId:saved.personId,packId:saved.packId,paymentId,chargeId,amountCents:saved.remainingCharges?.find((c:RecordData)=>c.chargeId===chargeId)?.amountCents ?? record(tx.state,chargeId,'charge').amountCents,reference:'stripe:'+await digest({paymentId,chargeId}),createdAt:now(),createdBy:tx.who.id})));
           tx.put('payment',payment);for(const allocation of allocations)if(allocation.amountCents > 0)tx.put('contractPrepayment',allocation);paymentRecorded=true;
         }
         tx.put('stripeInvoice',{...saved,...settled,providerSessionId:sessionId,paymentId,status:'paid',paidAt:saved.paidAt ?? now(),reconciledAt:now()});

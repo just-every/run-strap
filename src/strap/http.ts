@@ -1,3 +1,6 @@
+import { invoiceDocument, invoiceDocuments } from './billing/invoice-documents';
+import { renderInvoiceCopy } from './ui/invoice-copy';
+import { insist } from './domain/types';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { hasStaffRight } from './domain/staff-rights';
@@ -82,14 +85,19 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
-  if(url.pathname === '/app/people' && who.staffAccess && ['front-desk','manager'].includes(who.role))return {...await state(env,who),billingHandoffs:await billingStaffHandoffs(env,who)}
+  if(url.pathname === '/app/people' && ['owner','front-desk','manager'].includes(who.role)) {
+    const base=await state(env,who);if(!await cleared(env,who))return base;
+    const loaded=await load(env.DB,who),documents=invoiceDocuments(loaded.state,loaded.who);
+    const extra=documents.invoices.filter(i=>!base.people.some((p:any)=>p.id===i.personId)).map(i=>({id:i.personId,name:i.memberName,role:'member',billingOnly:true}));
+    return {...base,people:[...base.people,...extra],invoiceDocuments:documents,billingHandoffs:who.staffAccess?await billingStaffHandoffs(env,who):[]};
+  }
   if (who.role === 'instructor' && who.staffAccess && url.pathname !== '/app/people') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN,false),mfa:await mfaView(env,who),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? ''}
   if (who.role === 'manager' && ['/app/revenue','/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
   if (url.pathname === '/app/classes' && who.role==='owner') {
     const loaded=await load(env.DB,who)
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
   }
-  if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) return {...await state(env,who),billing:await cleared(env,who) ? await billingState(env,who) : null}
+  if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) {const loaded=await load(env.DB,who);return {...await state(env,who),invoiceDocuments:await cleared(env,who)?invoiceDocuments(loaded.state,loaded.who):null,billing:await cleared(env,who) ? await billingState(env,who) : null}}
   if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null,billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
@@ -136,7 +144,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/invoices','/api/strap/invoice.html','/api/strap/receipt.html','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
   if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !delegatedBillingRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !(who.staffAccess && delegatedBillingRight(name) === 'collection' && ['/api/strap/command','/app/action'].includes(path)) && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
@@ -187,6 +195,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(['/api/strap/invoices','/api/strap/invoice.html','/api/strap/receipt.html'].includes(path)) {
+        const loaded=await load(env.DB,who);
+        if(path==='/api/strap/invoices')return json(invoiceDocuments(loaded.state,loaded.who,url.searchParams.get('personId') ?? undefined));
+        const invoice=invoiceDocument(loaded.state,loaded.who,path.endsWith('/invoice.html')?url.searchParams.get('id'):url.searchParams.get('packId'));
+        const receipt=path.endsWith('/receipt.html')?invoice.receipts.find(r=>r.id===url.searchParams.get('id')):undefined;
+        insist(!path.endsWith('/receipt.html') || receipt,'invoice_receipt_not_found',404);
+        return new Response(renderInvoiceCopy(invoice as any,receipt),{headers:{...headers,'content-type':'text/html; charset=utf-8','content-disposition':'attachment; filename=strap-'+(receipt?'receipt':'invoice')+'.html','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"}});
+      }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
         const loaded=await load(env.DB,who)

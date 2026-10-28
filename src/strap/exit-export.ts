@@ -33,6 +33,8 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'pack', when: 'kind=invoiceDelivery' },
+  { from: 'st_records.data.packId and lineId and originalPaymentId', to: 'st_records.id', when: 'kind=invoiceRefund', note: 'Original invoice, line and tender identities; historical references grant no execution authority.' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },

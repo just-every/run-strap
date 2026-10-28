@@ -1,3 +1,7 @@
+import type { Bindings } from '../../auth.server';
+import { allocateInvoiceReceipt } from './invoice-allocations';
+import { refundInvoiceLine, reconcileInvoiceRefund } from './invoice-refunds';
+import { sendInvoiceDocument } from './invoice-mail';
 import { hasStaffRight } from '../domain/staff-rights';
 import { load, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, type Actor } from '../domain/types';
@@ -32,6 +36,11 @@ const handlers = {
     tx.sql.push(tx.statement("DELETE FROM st_payment_connections WHERE id='billing'"),tx.statement("DELETE FROM st_payment_control WHERE id='billing'"));
     tx.put('billingConnectionEvent',event);return event;
   }),['owner']),
+  'billing.receipt.allocate':defineBilling(native(allocateInvoiceReceipt),['owner']),
+  'billing.line.refund':defineBilling(refundInvoiceLine,['owner']),
+  'billing.refund.reconcile':defineBilling(reconcileInvoiceRefund,['owner']),
+  'billing.receipt.send':defineBilling((env,who,input)=>sendInvoiceDocument(env as Bindings,who,input),['member'],{member:{staff:'billing.receipt.send.staff',right:'sale'}}),
+  'billing.receipt.send.staff':defineBilling((env,who,input)=>sendInvoiceDocument(env as Bindings,who,input,true),['owner','manager','front-desk'],{staffRight:'sale'}),
   'billing.checkout.start':defineBilling(startCheckout,['owner']),
   'billing.reconcile':defineBilling(reconcileCheckout,['owner']),
   'billing.agreement.prepare':defineBilling(native(prepareAgreement),['owner','manager','front-desk'],{staffRight:'membership-sale'}),

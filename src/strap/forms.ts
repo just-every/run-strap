@@ -39,7 +39,9 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
   if(name.startsWith('billing.')) {
-    for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
+    if(['billing.line.refund','billing.receipt.allocate'].includes(name) && 'amount' in input){input.amountCents=cents(input.amount,'the amount');delete input.amount;}
+    if('requested' in input)input.requested=input.requested==='true' || input.requested==='yes';
+    for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes' || input[key]==='true'
     return input
   }
   if(name === 'tax.config.save') {

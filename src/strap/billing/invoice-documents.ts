@@ -1,0 +1,24 @@
+import { list, person, record, type Actor, type State } from '../domain/types';
+import { studioSettings } from '../domain/studio';
+import { invoiceAccess, invoiceCharges, invoiceVisible, lineAllocations } from './invoice-sources';
+
+export function invoiceDocument(state:State,who:Actor,packId:unknown) {
+  const pack=invoiceAccess(state,who,packId),member=person(state,pack.personId,false),charges=invoiceCharges(state,pack.id),allocations=lineAllocations(state,pack.id);
+  const refunds=list(state,'invoiceRefund').filter(r=>r.packId===pack.id);
+  const settings=studioSettings(state),location=state.records.get(pack.locationId ?? 'studio')?.data ?? list(state,'location').find(l=>l.id===(pack.locationId ?? 'studio'));
+  const receipts=[...new Set(allocations.map(a=>a.paymentId))].map(id=>{
+    const p=record(state,id,'payment'),invoice=state.records.get(p.stripeInvoiceId)?.data;
+    const last=list(state,'billingReconciliation').filter(r=>r.invoiceId===invoice?.id).at(-1);
+    return {id:p.id,amountCents:allocations.filter(a=>a.paymentId===p.id).reduce((n,a)=>n+a.amountCents,0),tender:p.collection==='stripe-test-checkout'?'stripe-test-card':p.tender ?? 'external',status:p.collection==='stripe-test-checkout'?(last?.provider?.disputed?'disputed':'collected'):'externally recorded',reference:p.reference,createdAt:p.createdAt,providerInvoiceId:p.providerInvoiceId ?? null,providerChargeId:p.providerChargeId ?? null,allocations:allocations.filter(a=>a.paymentId===p.id).map(a=>({lineId:a.chargeId,amountCents:a.amountCents}))};
+  });
+  const lines=charges.map(c=>({id:c.id,label:c.reason==='initiation_fee'?'One-time initiation fee':c.reason==='sales_tax'?'Sales tax':c.reason==='sales_tax_reversal'?'Sales tax reversal':c.reason ?? pack.entitlement?.name ?? 'Class pack',kind:c.reason?.startsWith('sales_tax')?'tax':c.amountCents<0?'discount':c.reason?'fee':'service',amountCents:c.amountCents,taxCents:c.reason?.startsWith('sales_tax')?c.amountCents:0,discountCents:c.amountCents<0 && !c.reason?.startsWith('sales_tax')?-c.amountCents:0,refundedCents:refunds.filter(r=>r.lineId===c.id && r.status==='succeeded').reduce((n,r)=>n+r.amountCents,0)}));
+  const taxCents=lines.reduce((n,l)=>n+l.taxCents,0),subtotalCents=lines.filter(l=>l.kind!=='tax').reduce((n,l)=>n+l.amountCents,0),totalCents=subtotalCents+taxCents;
+  const paidCents=receipts.reduce((n,r)=>n+r.amountCents,0),creditedCents=refunds.reduce((n,r)=>n+(r.creditChargeId?r.amountCents:0),0),refundedCents=refunds.filter(r=>r.status==='succeeded').reduce((n,r)=>n+r.amountCents,0),balanceCents=totalCents-creditedCents-paidCents+refundedCents;
+  const pending=list(state,'stripeInvoice').find(i=>i.packId===pack.id && ['creating','open','uncertain'].includes(i.status));
+  return {id:pack.id,packId:pack.id,personId:pack.personId,memberName:member.name,studio:{legalName:settings?.legalName ?? settings?.location ?? '',receiptDetails:settings?.receiptDetails ?? '',address:location?.address ?? null,phone:location?.phone ?? null,locationName:location?.name ?? settings?.location ?? '',timeZone:location?.timeZone ?? settings?.timeZone ?? 'UTC'},createdAt:pack.createdAt,currency:'usd',lines,subtotalCents,taxCents,taxStatus:list(state,'taxInvoice').some(t=>charges.some(c=>c.id===t.originalChargeId))?'retained_provider_evidence':'not_assessed',discountCents:lines.reduce((n,l)=>n+l.discountCents,0),totalCents,paidCents,refundedCents,balanceCents,status:receipts.some(r=>r.status==='disputed')?'disputed':refunds.some(r=>['creating','pending','uncertain'].includes(r.status))?'refund pending':refundedCents>0?'refunded':pending?'pending':paidCents>=totalCents?'collected':paidCents>0?'partly paid':'invoiced',receipts,refunds:refunds.map(({requestBasis,...r})=>r),canSend:who.role==='member' && who.personId===pack.personId || who.role==='owner' || ['front-desk','manager'].includes(who.role),canRefund:who.role==='owner',canAllocate:who.role==='owner'};
+}
+export function invoiceDocuments(state:State,who:Actor,personId?:string) {
+  const invoices=list(state,'pack').filter(p=>(!personId || p.personId===personId) && invoiceVisible(state,who,p)).map(p=>invoiceDocument(state,who,p.id));
+  const ids=new Set(invoices.map(i=>i.id));
+  return {invoices,deliveries:list(state,'invoiceDelivery').filter(d=>ids.has(d.invoiceId)).map(({requestBasis,...d})=>d)};
+}
