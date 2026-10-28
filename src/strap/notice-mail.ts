@@ -18,6 +18,8 @@ type Row = { id: string; recipient: string; subject: string; body: string }
  * and never retried. */
 export async function sendNotices(env: Bindings, ids: string[]) {
   if (!ids.length || !memberMailConfigured(env)) return
+  const connection=await env.DB.prepare("SELECT origin FROM st_member_mail_connections WHERE id='member-mail'").first<{origin:string}>()
+  if(connection?.origin!==env.AUTH_ORIGIN)return
   const sender = createMailSender({ provider: env.MAIL_PROVIDER, mode: 'production', apiKey: env.MAIL_API_KEY, ...(env.MAIL_PROVIDER === 'rer' ? { relayUrl: env.MAIL_RELAY_URL } : {}), ...(env.MAIL_PROVIDER === 'cloudflare' ? { accountId: env.MAIL_ACCOUNT_ID } : {}) })
   for (const id of ids) {
     const row = await env.DB.prepare("UPDATE st_notice_deliveries SET status='sending',attempted_at=? WHERE id=? AND status='queued' RETURNING id,recipient,subject,body").bind(Date.now(), id).first<Row>()

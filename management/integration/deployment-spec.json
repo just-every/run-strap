@@ -210,6 +210,54 @@
       "name": "0034_dependency_keys_sealed.sql",
       "sha256": "9c8fa5f94c48a230f326cd4d666cbc2bd1e7d5a18327b89e65b339ac6a533d9a",
       "sql": "ALTER TABLE rer_dependency_installation ADD COLUMN keys_sealed INTEGER NOT NULL DEFAULT 0 CHECK(keys_sealed IN (0,1));\n-- Nonsecret version history lets restored rows name an unavailable retired key\n-- without confusing ciphertext tampering or a wrong current secret with restore.\nALTER TABLE rer_dependency_installation ADD COLUMN key_ids TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(key_ids) AND json_type(key_ids)='array');\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0035-sms-test.sql",
+      "sha256": "24400da96b5f1c9e4e01ba33d174b6b3d677cd95f28d2bf569a70204d61d196f",
+      "sql": "-- Connection authority stays installation-local and never enters an archive.\nCREATE TABLE st_sms_connections (\n  id TEXT PRIMARY KEY CHECK (id = 'twilio-test'),\n  origin TEXT NOT NULL,\n  account_hash TEXT NOT NULL,\n  configuration_hash TEXT NOT NULL,\n  connected_at TEXT NOT NULL,\n  connected_by TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0036-waiver-renewal.sql",
+      "sha256": "984996ffade4a53bd2b2a0a35f12a48af57578e5cc29b415d03b3e7a10abdb3d",
+      "sql": "-- Retain each expiring personal completion as an immutable receipt.\nDROP INDEX st_acknowledgement;\nCREATE UNIQUE INDEX st_acknowledgement ON st_records(\n  json_extract(data,'$.personId'),\n  json_extract(data,'$.waiverId'),\n  COALESCE(json_extract(data,'$.validUntil'),'')\n) WHERE kind='acknowledgement';\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0037-tax-connection.sql",
+      "sha256": "00a3440110181c2cb02ec85694f1e92e7330a94d92fffe88c845580406b752d2",
+      "sql": "-- Provider execution authority stays local; restored records require owner reconnection.\nCREATE TABLE st_tax_connections (\n  id TEXT PRIMARY KEY,\n  connection_hash TEXT NOT NULL,\n  connected_by TEXT NOT NULL,\n  connected_at TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0038-payment-connection.sql",
+      "sha256": "f446a90dbbb3fe2ec6b629cd3a27c10db9a9196fd9644ae57598052cc1cbf07c",
+      "sql": "-- Provider execution authority is installation-local and never restored.\nCREATE TABLE st_payment_connections (\n  id TEXT PRIMARY KEY,\n  connection_id TEXT NOT NULL,\n  origin TEXT NOT NULL,\n  account_id TEXT NOT NULL,\n  key_digest TEXT NOT NULL,\n  approved_by TEXT NOT NULL,\n  approved_at TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0039-evidence-copy.sql",
+      "sha256": "4fc73e691db160deeac97dfdcebf78c49ecd0309a1ed625720b9eea4457c5b09",
+      "sql": "-- Copy-mail review and bearer credentials stay installation-local; never archive them.\nCREATE TABLE st_evidence_copy_mail (\n  id TEXT PRIMARY KEY CHECK(id='mail'),\n  connection_id TEXT NOT NULL,\n  origin TEXT NOT NULL,\n  review_hash TEXT NOT NULL,\n  provider_hash TEXT NOT NULL,\n  approved_by TEXT NOT NULL,\n  approved_at TEXT NOT NULL\n);\nCREATE TABLE st_evidence_copies (\n  id TEXT PRIMARY KEY,\n  receipt_id TEXT NOT NULL UNIQUE,\n  document_id TEXT NOT NULL,\n  document_hash TEXT NOT NULL,\n  receipt_hash TEXT NOT NULL,\n  person_id TEXT NOT NULL,\n  person_version INTEGER NOT NULL,\n  recipient TEXT NOT NULL,\n  origin TEXT NOT NULL,\n  connection_id TEXT NOT NULL,\n  token_hash TEXT NOT NULL UNIQUE,\n  created_at TEXT NOT NULL,\n  expires_at TEXT NOT NULL,\n  consumed_at TEXT,\n  delivery_status TEXT NOT NULL CHECK(delivery_status IN ('queued','sending','accepted','rejected','rate_limited','uncertain','blocked')),\n  attempted_at TEXT,\n  finished_at TEXT,\n  provider TEXT,\n  provider_message_id TEXT,\n  code TEXT\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0040-staff-rights.sql",
+      "sha256": "e1954b41e96c096da96132a93fe96fede5feebd21da0d5230146cf455f455b71",
+      "sql": "-- Canonical grants retain each old door independently. Audit events remain unchanged.\nWITH legacy AS (\n  SELECT kind,data,\n    json_extract(data,'$.personId') AS person_id,\n    CASE kind WHEN 'memberRecordGrant' THEN 'member-record'\n      WHEN 'appointmentBookingGrant' THEN 'appointment'\n      WHEN 'attendanceBookingGrant' THEN 'attendance-plan' ELSE 'retail' END AS door\n  FROM st_records\n  WHERE kind IN ('memberRecordGrant','appointmentBookingGrant','attendanceBookingGrant','retailStaffGrant')\n), entries AS (\n  SELECT person_id,door,data,\n    CASE kind WHEN 'memberRecordGrant' THEN 'member-record'\n      WHEN 'retailStaffGrant' THEN 'sale' ELSE 'booking' END AS right_name,\n    CASE WHEN json_extract(data,'$.enabled')=1 AND (kind!='retailStaffGrant' OR json_extract(data,'$.sale')=1) THEN 1 ELSE 0 END AS enabled\n  FROM legacy\n  UNION ALL\n  SELECT person_id,door,data,'refund',\n    CASE WHEN json_extract(data,'$.enabled')=1 AND json_extract(data,'$.refund')=1 THEN 1 ELSE 0 END\n  FROM legacy WHERE kind='retailStaffGrant'\n), scoped AS (\n  SELECT *,json_object(\n    'memberIds',json(COALESCE(json_extract(data,'$.memberIds'),'[]')),\n    'locationIds',json(COALESCE(json_extract(data,'$.locationIds'),'[]')),\n    'doors',json_array(door)) AS scope\n  FROM entries\n), permissions AS (\n  SELECT person_id,right_name,\n    CASE WHEN right_name='member-record' THEN json_object(\n      'enabled',json(CASE WHEN max(enabled)=1 THEN 'true' ELSE 'false' END),\n      'scopes',json((SELECT json_group_array(json(scope)) FROM scoped s WHERE s.person_id=p.person_id AND s.right_name=p.right_name AND s.enabled=1)),\n      'canCreate',json(CASE WHEN max(CASE WHEN json_extract(data,'$.canCreate')=1 THEN 1 ELSE 0 END)=1 THEN 'true' ELSE 'false' END),\n      'version',max(COALESCE(json_extract(data,'$.version'),0)))\n    ELSE json_object(\n      'enabled',json(CASE WHEN max(enabled)=1 THEN 'true' ELSE 'false' END),\n      'scopes',json((SELECT json_group_array(json(scope)) FROM scoped s WHERE s.person_id=p.person_id AND s.right_name=p.right_name AND s.enabled=1)),\n      'version',max(COALESCE(json_extract(data,'$.version'),0))) END AS permission\n  FROM scoped p GROUP BY person_id,right_name\n), people AS (\n  SELECT person_id,max(COALESCE(json_extract(data,'$.version'),0)) AS grant_version,\n    max(CASE WHEN json_extract(data,'$.enabled')=1 THEN 1 ELSE 0 END) AS enabled,\n    max(json_extract(data,'$.updatedAt')) AS updated_at,\n    json_group_object(door,json(data)) AS old_inputs\n  FROM legacy GROUP BY person_id\n)\nINSERT INTO st_records(id,kind,data,version)\nSELECT 'staff-access:'||p.person_id,'staffAccess',json_object(\n  'id','staff-access:'||p.person_id,'personId',p.person_id,\n  'role',CASE WHEN EXISTS(SELECT 1 FROM st_finance_users f WHERE f.person_id=p.person_id) THEN 'finance'\n    WHEN EXISTS(SELECT 1 FROM st_managers m WHERE m.person_id=p.person_id) THEN 'manager' ELSE 'front-desk' END,\n  'enabled',json(CASE WHEN p.enabled=1 THEN 'true' ELSE 'false' END),\n  'version',max(1,p.grant_version),\n  'rights',json((SELECT json_group_object(right_name,json(permission)) FROM permissions r WHERE r.person_id=p.person_id)),\n  'legacyGrants',json(p.old_inputs),'updatedAt',p.updated_at,\n  'updatedBy',(SELECT json_extract(l.data,'$.updatedBy') FROM legacy l WHERE l.person_id=p.person_id ORDER BY json_extract(l.data,'$.updatedAt') DESC LIMIT 1)\n),(SELECT version+1 FROM st_meta WHERE id=1)\nFROM people p;\nDELETE FROM st_records WHERE kind IN ('memberRecordGrant','appointmentBookingGrant','attendanceBookingGrant','retailStaffGrant');\nUPDATE st_meta SET version=version+1 WHERE id=1;\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0041-payment-control.sql",
+      "sha256": "70ae4bcade4fc4f700334048e96adb6bb1e8cc863626d2d193e4e2615df67f2d",
+      "sql": "-- Fresh connection reviews are invalidated by a later disconnect or review.\n-- This installation authority is excluded from native and portable archives.\nCREATE TABLE st_payment_control (\n  id TEXT PRIMARY KEY,\n  operation_id TEXT NOT NULL,\n  origin TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0042-member-mail-connection.sql",
+      "sha256": "91e1e8d54425b2a1f010d961b7af3e40e1a40fb24eae0ec71ab57c278416b89b",
+      "sql": "-- Member delivery authority belongs to this installation and never restores.\nCREATE TABLE st_member_mail_connections (\n id TEXT PRIMARY KEY CHECK(id='member-mail'),\n origin TEXT NOT NULL,\n connected_by TEXT NOT NULL,\n connected_at TEXT NOT NULL\n);\n-- Existing installations retain authority. Fresh restores import records after migrations.\nINSERT INTO st_member_mail_connections(id,origin,connected_by,connected_at)\n SELECT id,json_extract(data,'$.origin'),json_extract(data,'$.connectedBy'),json_extract(data,'$.connectedAt')\n FROM st_records WHERE kind='mailConnection' AND id='member-mail' AND json_type(data,'$.origin')='text';\n"
     }
   ],
   "compatibilityDate": "2026-09-08",

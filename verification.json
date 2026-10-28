@@ -52,10 +52,10 @@
     },
     {
       "name": "portability",
-      "browser": false,
+      "browser": true,
       "hosted": false,
       "commands": [
-        "pnpm run test:archive"
+        "STRAP_TAX_RESTORE_PROOF_DIR=logs/proof/tax-restore pnpm run test:archive"
       ]
     },
     {

@@ -8,12 +8,21 @@ import { messagePreference, messageTemplates } from './message-settings';
 // reserved email is sent only after that commit (notice-mail.ts) through the
 // installation's configured Base mail provider; with none configured the row
 // says so and the member has the in-app notice only.
-// The first reservation records the installation (its origin) that member email
-// belongs to. A native restore into another installation (MOVE-011) keeps that
-// record, so its reservations are 'paused' and nothing is sent until the human
-// owner reviews and reconnects member email there.
+// Historical connection records travel; the local execution grant never does.
+// A native restore pauses member email even at the original origin (MOVE-011).
 export interface NoticeContext { mailConfigured?: boolean; origin?: string; queued?: string[] }
-export const memberMail = (state: State) => state.records.get('member-mail')?.data ?? null;
+export const memberMail = (state: State): (RecordData & {connected:boolean}) | null => {
+  const connection=state.records.get('member-mail')?.data;
+  return connection ? {...connection,connected:state.memberMailOrigin===connection.origin} : null;
+};
+function bindMemberMail(tx: Transaction, connection: RecordData) {
+  tx.sql.push(tx.statement("INSERT INTO st_member_mail_connections(id,origin,connected_by,connected_at) VALUES('member-mail',?,?,?) ON CONFLICT(id) DO UPDATE SET origin=excluded.origin,connected_by=excluded.connected_by,connected_at=excluded.connected_at",connection.origin,connection.connectedBy,connection.connectedAt));
+  tx.state.memberMailOrigin=connection.origin;
+  tx.put('mailConnection',connection);
+}
+export function initializeMemberMail(tx: Transaction, origin?: string) {
+  if(!memberMail(tx.state)&&origin)bindMemberMail(tx,{id:'member-mail',origin,connectedAt:now(),connectedBy:'first-use'});
+}
 export const mailNotConfigured = 'email not configured; members see an in-app notice only';
 
 const zoneOf = (state: State) => studioSettings(state)?.timeZone ?? 'UTC';
@@ -49,8 +58,8 @@ export function confirmBooking(tx: Transaction, booking: RecordData) {
 export function reserveMail(tx: Transaction, context: NoticeContext, mail: {id: string; sourceKind: 'closure' | 'booking' | 'booking_action' | 'confirmation' | 'reminder'; sourceId: string; personId: string; bookingIds: string[]; subject: string; body: string; prepared?: boolean; category?: 'waitlist_offer' | 'required_contract'}) {
   const member = tx.state.people.find(p => p.id === mail.personId);
   const connection = memberMail(tx.state);
-  if (!connection && context.origin) tx.put('mailConnection',{id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:'first-use'});
-  const status = mail.category !== 'waitlist_offer' && mail.category !== 'required_contract' && messagePreference(tx.state,mail.personId).optedOut ? 'opted_out' : connection && connection.origin !== context.origin ? 'paused' : !context.mailConfigured ? 'not_configured' : member?.email && !member.erasedAt ? 'queued' : 'no_address';
+  initializeMemberMail(tx,context.origin);
+  const status = mail.category !== 'waitlist_offer' && mail.category !== 'required_contract' && messagePreference(tx.state,mail.personId).optedOut ? 'opted_out' : connection && (!connection.connected || connection.origin !== context.origin) ? 'paused' : !context.mailConfigured ? 'not_configured' : member?.email && !member.erasedAt ? 'queued' : 'no_address';
   // UNIQUE(source_kind, source_id, person_id) refuses a second reservation for the same source.
   tx.sql.push(tx.statement('INSERT INTO st_notice_deliveries(id,source_kind,source_id,person_id,booking_ids,recipient,subject,body,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
     mail.id,mail.sourceKind,mail.sourceId,mail.personId,JSON.stringify(mail.bookingIds),status === 'queued' ? member!.email : null,mail.subject,(mail.prepared ? mail.body : messageBody(tx.state,mail.body,mail.bookingIds)) + (context.origin ? `\n\nOpen Strap: ${context.origin}/app` : ''),status,Date.parse(now())));
@@ -64,5 +73,5 @@ export function connectMemberMail(tx: Transaction, _input: Record<string,unknown
   humanOwner(tx.who);
   const previous = memberMail(tx.state);
   const connection = {id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:tx.who.id,...(previous ? {previousOrigin:previous.origin} : {})};
-  tx.put('mailConnection',connection); return connection;
+  bindMemberMail(tx,connection); return connection;
 }

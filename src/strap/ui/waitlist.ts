@@ -10,7 +10,7 @@ const lateText: Record<string, string> = { promote: 'follow the policy above', o
 
 /** After a restore into this installation, member email waits for the owner. */
 export function memberMailPanel(s: any) {
-  if (!s.memberMail || s.memberMail.origin === s.origin) return ''
+  if (!s.memberMail || (s.memberMail.connected && s.memberMail.origin === s.origin)) return ''
   return panel('Member email paused', body(`<p class="notice">This studio was restored from ${h(s.memberMail.origin)}. Member emails (waitlist offers, closures) are paused and members see in-app notices only until you review and reconnect member email here, through this installation’s mail settings.</p>${form('mail.connect', '/app/studio', '', 'Reconnect member email')}`), { id: 'member-mail', icon: 'alert' })
 }
 

@@ -4,7 +4,7 @@ import { humanOwner, id, insist, list, now, person, record, text, type RecordDat
 import type { Transaction } from './store';
 import { latestWaiver, currentWaiver, currentWaiverReceipt } from './bookings';
 import { memberCheckin } from './checkin';
-import { memberMail } from './notices';
+import { initializeMemberMail, memberMail } from './notices';
 
 export const staffChannel = (input: Record<string,unknown>) => { const channel = text(input.channel ?? 'desk','channel',20); insist(['desk','phone','inbox'].includes(channel),'invalid_channel'); return channel; };
 export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade && (!a.parentActionId || !['staffAction','bookingAction'].includes(state.records.get(a.parentActionId)?.kind ?? ''))),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
@@ -70,13 +70,13 @@ export function dismissForMember(tx: Transaction, input: Record<string,unknown>)
 export function launchWaiver(tx: Transaction, input: Record<string,unknown>, context: {origin?: string} = {}) {
   requireSigningLaunch(tx.state,tx.who,input.personId,String(input.locationId??'studio'));
   const connection = memberMail(tx.state);
-  insist(!connection || connection.origin === context.origin,'member_email_reconnect_required',409);
+  insist(!connection || (connection.connected && connection.origin === context.origin),'member_email_reconnect_required',409);
   const member = person(tx.state,input.personId), waiver = currentWaiver(tx.state,input.waiverId);
   insist(member.role === 'member','member_required');
   insist(member.email,'member_email_required',409);
   insist(waiver && input.waiverId === waiver.id,'not_latest_version',409);
   const requestId = text(input.requestId,'requestId',100), channel = staffChannel(input);
-  if (!connection && context.origin) tx.put('mailConnection',{id:'member-mail',origin:context.origin,connectedAt:now(),connectedBy:'first-use'});
+  initializeMemberMail(tx,context.origin);
   const launch = {id:id(),personId:member.id,waiverId:waiver.id,requestId,channel,status:'requested',createdAt:now(),createdBy:tx.who.id};
   tx.put('waiverLaunch',launch);
   tx.sql.push(tx.statement("INSERT INTO st_waiver_launch_dispatches(id,status,origin) VALUES(?,'queued',?)",launch.id,context.origin ?? ''));

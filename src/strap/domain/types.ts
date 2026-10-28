@@ -9,6 +9,7 @@ export interface Person {
 // Records are JSON documents; every write is fenced by the shared domain revision.
 export type RecordData = { id: string; [key: string]: any };
 export interface State {
+  memberMailOrigin?: string | null;
   version: number; people: Person[]; records: Map<string, { kind: string; data: RecordData }>;
   operator: { id: string; email: string; role: string; status: string; version: number };
 }

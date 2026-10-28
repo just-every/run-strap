@@ -28,7 +28,7 @@ export async function reviewEvidenceCopyMail(tx: Transaction,env: Bindings,input
   insist(input.confirm===true,'copy_mail_review_confirmation_required');
   insist(memberMailConfigured(env),'copy_mail_provider_not_configured',409);
   const connection=memberMail(tx.state);
-  insist(connection?.origin===env.AUTH_ORIGIN && connection.connectedBy && connection.connectedBy!=='first-use','copy_mail_review_required',409);
+  insist(connection?.connected && connection.origin===env.AUTH_ORIGIN && connection.connectedBy && connection.connectedBy!=='first-use','copy_mail_review_required',409);
   tx.sql.push(tx.statement("INSERT INTO st_evidence_copy_mail(id,connection_id,origin,review_hash,provider_hash,approved_by,approved_at) VALUES('mail',?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET connection_id=excluded.connection_id,origin=excluded.origin,review_hash=excluded.review_hash,provider_hash=excluded.provider_hash,approved_by=excluded.approved_by,approved_at=excluded.approved_at",
     id(),env.AUTH_ORIGIN,await reviewHash(connection),await providerHash(env),tx.who.id,now()));
   return {available:true,reviewedAt:now()};
@@ -36,7 +36,7 @@ export async function reviewEvidenceCopyMail(tx: Transaction,env: Bindings,input
 async function reviewedMail(env: Bindings,state: State): Promise<MailReview|null> {
   if(!memberMailConfigured(env))return null;
   const connection=memberMail(state);
-  if(!connection || connection.origin!==env.AUTH_ORIGIN || connection.connectedBy==='first-use')return null;
+  if(!connection?.connected || connection.origin!==env.AUTH_ORIGIN || connection.connectedBy==='first-use')return null;
   const review=await env.DB.prepare("SELECT connection_id,origin,review_hash,provider_hash,approved_by FROM st_evidence_copy_mail WHERE id='mail'").first<MailReview>();
   return review && review.origin===env.AUTH_ORIGIN && review.review_hash===await reviewHash(connection) && review.provider_hash===await providerHash(env) ? review : null;
 }

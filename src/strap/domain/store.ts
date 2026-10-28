@@ -2,6 +2,8 @@ import { DomainError, insist, type Actor, type Person, type RecordData, type Sta
 import type { NoticeContext } from './notices';
 
 type Native = State['operator'];
+type Meta = {version:number;member_mail_origin:string|null};
+const metaQuery="SELECT version,(SELECT origin FROM st_member_mail_connections WHERE id='member-mail') AS member_mail_origin FROM st_meta WHERE id=1";
 type PersonRow = Omit<Person, 'active' | 'erasedAt'> & { active: number; erased_at: number | null };
 const asPerson = (p: PersonRow): Person => ({ id:p.id,name:p.name,email:p.email,role:p.role,active:!!p.active,version:p.version,erasedAt:p.erased_at });
 function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = [], managers: Map<string,string[]> = new Map(), staff: RecordData[] = []): Actor {
@@ -26,7 +28,7 @@ export async function actor(db: D1Database, input: { userId: string; email: stri
 }
 export async function load(db: D1Database, who: Actor): Promise<{ state: State; who: Actor }> {
   const rows = await db.batch([
-    db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
+    db.prepare(metaQuery), db.prepare('SELECT * FROM st_people'),
     db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
     db.prepare('SELECT id,email,role,status,version FROM oa_operators WHERE id=?').bind(who.id), db.prepare('SELECT person_id FROM st_finance_users'), db.prepare('SELECT person_id,location_ids FROM st_managers'), db.prepare("SELECT data FROM st_records WHERE kind='staffAccess'"),
   ]);
@@ -34,20 +36,20 @@ export async function load(db: D1Database, who: Actor): Promise<{ state: State; 
   const current = resolve(rows[3].results[0] as Native | undefined, people, who.role === 'agent', financeIds(rows[4].results), managerScopes(rows[5].results), rows[6].results.map((r: any) => JSON.parse(r.data)));
   insist(current.role === who.role && current.personId === who.personId && current.email === who.email && JSON.stringify(current.locationIds) === JSON.stringify(who.locationIds), 'actor_changed', 403);
   current.sessionId = who.sessionId;
-  const meta = rows[0].results[0] as {version:number};
-  const state: State = {version:Number(meta.version),people,operator:rows[3].results[0] as Native,records:new Map()};
+  const meta = rows[0].results[0] as Meta;
+  const state: State = {version:Number(meta.version),memberMailOrigin:meta.member_mail_origin,people,operator:rows[3].results[0] as Native,records:new Map()};
   for (const row of rows[2].results as {id:string;kind:string;data:string}[]) state.records.set(row.id, {kind:row.kind,data:JSON.parse(row.data)});
   return {state,who:current};
 }
 /** A paired kiosk reads the studio's records through its own door only. */
 export async function loadKiosk(db: D1Database, kioskId: string): Promise<{ state: State; who: Actor }> {
   const rows = await db.batch([
-    db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'),
+    db.prepare(metaQuery), db.prepare('SELECT * FROM st_people'),
     db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid'),
     db.prepare('SELECT id FROM st_kiosks WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL').bind(kioskId),
   ]);
   insist(rows[3].results.length === 1,'kiosk_not_paired',401);
-  const state: State = {version:Number((rows[0].results[0] as {version:number}).version),people:(rows[1].results as unknown as PersonRow[]).map(asPerson),
+  const state: State = {version:Number((rows[0].results[0] as Meta).version),memberMailOrigin:(rows[0].results[0] as Meta).member_mail_origin,people:(rows[1].results as unknown as PersonRow[]).map(asPerson),
     operator:{id:kioskId,email:'',role:'kiosk',status:'active',version:0},records:new Map()};
   for (const row of rows[2].results as {id:string;kind:string;data:string}[]) state.records.set(row.id, {kind:row.kind,data:JSON.parse(row.data)});
   return {state,who:{id:kioskId,email:'',role:'kiosk',isOwner:false,kioskId}};
@@ -55,8 +57,8 @@ export async function loadKiosk(db: D1Database, kioskId: string): Promise<{ stat
 /** The scheduled sweep acts as the system: it only applies time-based rules
  * (MSG-004 offer expiry and the promotion that follows); no request reaches it. */
 export async function loadSystem(db: D1Database): Promise<{ state: State; who: Actor }> {
-  const rows = await db.batch([db.prepare('SELECT version FROM st_meta WHERE id=1'), db.prepare('SELECT * FROM st_people'), db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid')]);
-  const state: State = {version:Number((rows[0].results[0] as {version:number}).version),people:(rows[1].results as unknown as PersonRow[]).map(asPerson),
+  const rows = await db.batch([db.prepare(metaQuery), db.prepare('SELECT * FROM st_people'), db.prepare('SELECT id,kind,data FROM st_records ORDER BY rowid')]);
+  const state: State = {version:Number((rows[0].results[0] as Meta).version),memberMailOrigin:(rows[0].results[0] as Meta).member_mail_origin,people:(rows[1].results as unknown as PersonRow[]).map(asPerson),
     operator:{id:'system',email:'',role:'system',status:'active',version:0},records:new Map()};
   for (const row of rows[2].results as {id:string;kind:string;data:string}[]) state.records.set(row.id, {kind:row.kind,data:JSON.parse(row.data)});
   return {state,who:{id:'system',email:'',role:'system',isOwner:false}};

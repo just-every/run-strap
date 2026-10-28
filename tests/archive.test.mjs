@@ -186,6 +186,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     // Installation-local provider authority is a credential edge, never portable studio data.
     const taxProof=await seedTaxArchive(h);
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,1);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_member_mail_connections').first()).count,1);
     const originalMail={MAIL_PROVIDER:h.auth.MAIL_PROVIDER,MAIL_FROM:h.auth.MAIL_FROM},copyMail={MAIL_PROVIDER:'sendgrid',MAIL_FROM:'copies@studio.example',MAIL_API_KEY:'synthetic-strap-1'}
     await h.setAuth(copyMail)
     await h.cmd('waiver.copy.mail.review',{confirm:true})
@@ -204,6 +205,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(download.headers.get('cache-control'),'no-store')
     const portable=download.value
     assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_TAX_TEST_KEY),'portable exit excludes the configured tax provider credential');
+    assert.ok(!('st_member_mail_connections' in portable.tables),'portable exit contains delivery history without its execution grant');
     assertPortableTax(portable,taxProof);
     reconstructExit(portable,csv,taxProof)
     assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
@@ -255,6 +257,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(copyEdge.calls.length,1,'export, import and refused old capabilities send no copy mail')
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0,'native restore leaves stored methods disconnected');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_tax_connections').first()).count,0,'native restore cannot reactivate excluded tax execution authority');
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_member_mail_connections').first()).count,0,'same-origin native restore removes member delivery execution authority');
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
@@ -333,7 +336,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.deepEqual(restoredState.noticeDeliveries.filter(d=>d.sourceKind!=='confirmation').map(d=>[d.sourceKind,d.personId,d.status]),[['booking_action',introMember.id,'not_configured'],['booking_action',member.id,'not_configured'],['booking_action',member.id,'paused'],['booking_action',member.id,'paused'],['booking',lee.id,'paused']], 'series changes, cancellation and promotion email stay paused after restore')
     assert.match((await h.state(lee.cookie)).notices.map(n=>n.subject).join(),/You're booked: Restored Reformer/)
     await h.setAuth(originalMail)
-    await h.cmd('mail.connect',{},restoredOwner)
+    if(process.env.STRAP_TAX_RESTORE_PROOF_DIR)await(await import('./tax-restore-browser.mjs')).taxRestoreBrowser(h,restoredOwner)
+    else await h.cmd('mail.connect',{},restoredOwner)
     assert.doesNotMatch((await h.send('/app/studio',undefined,restoredOwner)).text,/Member email paused/)
     const closing=await h.cmd('closure.prepare',{scope:'class',classId:seat.id,reason:'Restored test'},restoredOwner)
     await h.cmd('closure.confirm',{id:closing.id,impact:closing.impact.key},restoredOwner)
