@@ -19,13 +19,20 @@ test('Owner tax treatment preserves real sale prices, exact retail and service p
     assert.equal(retail.invoice.result.taxCents,400); assert.equal(service.invoice.result.taxCents,0);
     assert.deepEqual((await h.state()).charges.find(c=>c.id === original.id),original);
     const paymentsBefore = (await h.state()).payments.length;
+    const paid={requestId:'tax-receipt',invoiceId:retail.invoice.result.id,amountCents:400,reference:'synthetic-strap-tax-receipt',reason:'Owner records an external tax receipt'};
+    const receipt=await h.cmd('tax.payment.record',paid),receiptCalls=e.calls.length;
+    assert.equal(receipt.amountCents,400);assert.equal(receipt.chargeId,retail.invoice.result.taxChargeId);
+    assert.equal(receipt.providerTransactionId,retail.invoice.result.providerTransactionId);
+    assert.deepEqual(await h.cmd('tax.payment.record',paid),receipt);assert.equal(e.calls.length,receiptCalls);
+    assert.equal((await h.send('/api/strap/command',{name:'tax.payment.record',input:{...paid,amountCents:399}},h.owner)).status,409);
+    assert.equal((await h.send('/api/strap/command',{name:'tax.payment.record',input:{...paid,requestId:'tax-receipt-over',reference:'synthetic-strap-tax-over'}},h.owner)).status,409);
     const returned = await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:false,reason:'Damaged mat partial return',requestId:'partial-return'});
     const refund = {requestId:'partial-tax',invoiceId:retail.invoice.result.id,retailReturnId:returned.id,expectedTaxCents:200,reference:'-1+2',reason:'Tax follows partial original-price return'};
     const reverse = await succeeded(h,'tax.refund',refund), count = e.calls.length;
     assert.equal(reverse.result.priceCents,-2000); assert.equal(reverse.result.taxCents,-200);
     assert.deepEqual(await h.cmd('tax.refund',refund),reverse); assert.equal(e.calls.length,count);
     const state = await h.state();
-    assert.equal(state.payments.length,paymentsBefore+1,'Only the existing native retail return creates a payment record');
+    assert.equal(state.payments.length,paymentsBefore+2,'The source-linked tax receipt and the existing native retail return each create one payment record');
     const taxCharges = state.charges.filter(c=>c.taxInvoiceId === retail.invoice.result.id);
     assert.deepEqual(taxCharges.map(c=>c.amountCents),[400,-200]);
     assert.ok(taxCharges.every(c=>c.parentChargeId === original.id));
@@ -59,9 +66,30 @@ test('Owner tax treatment preserves real sale prices, exact retail and service p
     const credit = await succeeded(h,'tax.refund',{requestId:'tax-only',invoiceId:retail.invoice.result.id,taxOnly:true,taxCreditCents:50,refundBusinessReference:'synthetic-strap-213',expectedTaxCents:50,reference:'synthetic-strap-214',reason:'Explicit tax-only original refund adjustment'});
     assert.equal(credit.result.priceCents,0); assert.equal(credit.result.taxCents,-50);
     assert.equal((await h.state()).payments.length,state.payments.length);
+    const refundPayment={requestId:'tax-refund-paid',invoiceId:retail.invoice.result.id,reversalId:reverse.result.id,amountCents:200,reference:'synthetic-strap-tax-refund-paid',reason:'Owner records the externally returned tax'};
+    const settled=await h.cmd('tax.payment.record',refundPayment),refundCalls=e.calls.length;
+    assert.equal(settled.amountCents,-200);assert.equal(settled.chargeId,reverse.result.taxChargeId);
+    assert.equal(settled.originalChargeId,original.id);assert.equal(settled.providerTransactionId,reverse.result.providerTransactionId);
+    assert.deepEqual(await h.cmd('tax.payment.record',refundPayment),settled);assert.equal(e.calls.length,refundCalls);
+    for(const input of [{...refundPayment,requestId:'tax-refund-over',reference:'synthetic-strap-tax-refund-over'},
+      {...refundPayment,requestId:'tax-refund-wrong-invoice',invoiceId:service.invoice.result.id,reference:'synthetic-strap-tax-refund-wrong'},
+      {...paid,requestId:'tax-receipt-reference-reused'}])assert.equal((await h.send('/api/strap/command',{name:'tax.payment.record',input},h.owner)).status,409);
+    const taxPayments=(await h.send('/api/strap/tax',undefined,h.owner)).value.payments;
+    assert.deepEqual(taxPayments.map(payment=>payment.id),[receipt.id,settled.id]);
+    assert.deepEqual(taxPayments.map(payment=>payment.amountCents),[400,-200]);
     const finalFinance = (await h.send('/api/strap/reports/finance',undefined,h.owner)).value;
     assert.equal(finalFinance.knownTaxCents,150); assert.equal(finalFinance.taxCents,150); assert.equal(finalFinance.closing.taxLiabilityCents,150);
     assert.equal(finalFinance.closing.reconciliationDifferenceCents,0);
+    const unreceivedSale=await h.cmd('retail.sell',{personId:seed.member.id,skuId:seed.sku.id,quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-unreceived-sale',requestId:'synthetic-strap-unreceived-sale'});
+    const unreceivedTax=await taxInvoice(h,unreceivedSale.chargeId,'mat',taxAddress,'unreceived');
+    const unreceivedReturn=await h.cmd('retail.return',{saleId:unreceivedSale.id,quantity:1,restock:true,reason:'Return before any tax receipt',requestId:'synthetic-strap-unreceived-return'});
+    const unreceivedReversal=await succeeded(h,'tax.refund',{invoiceId:unreceivedTax.invoice.result.id,retailReturnId:unreceivedReturn.id,expectedTaxCents:200,reference:'synthetic-strap-unreceived-reversal',reason:'No tax payment was received',requestId:'synthetic-strap-unreceived-reversal'});
+    const beforeRefusal=(await h.state()).version,providerBeforeRefusal=e.calls.length;
+    const unreceivedPayout=await h.send('/api/strap/command',{name:'tax.payment.record',input:{...refundPayment,requestId:'synthetic-strap-unreceived-payout',invoiceId:unreceivedTax.invoice.result.id,reversalId:unreceivedReversal.result.id,reference:'synthetic-strap-unreceived-payout'}},h.owner);
+    assert.equal(unreceivedPayout.status,409);assert.equal(unreceivedPayout.value.error,'tax_refund_payment_not_received');
+    const zeroTaxPayment=await h.send('/api/strap/command',{name:'tax.payment.record',input:{...paid,requestId:'synthetic-strap-zero-tax-receipt',invoiceId:service.invoice.result.id,amountCents:1,reference:'synthetic-strap-zero-tax-receipt'}},h.owner);
+    assert.equal(zeroTaxPayment.status,409);assert.equal(zeroTaxPayment.value.error,'tax_receipt_payment_exceeded');
+    assert.equal((await h.state()).version,beforeRefusal);assert.equal(e.calls.length,providerBeforeRefusal);
     if(process.env.STRAP_PROOF_DIR)await(await import('./tax-browser.mjs')).taxBrowser(h,seed,process.env.STRAP_TAX_WIDTHS?.split(',').map(Number));
   },{auth:{STRIPE_TAX_TEST_KEY:'synthetic-strap-999'},outbound:e.outbound});
 });
@@ -70,19 +98,20 @@ test('Owner MFA and exact tax approvals deny unclassified prices, unauthorized a
   const e = edge();
   await run(async h=>{
     await h.confirmSetup(h.owner);
-    assert.equal((await h.send('/api/strap/command',{name:'tax.config.save',input:{}},h.owner)).status,403);
+    for(const name of ['tax.config.save','tax.calculate','tax.confirm','tax.refund','tax.payment.record'])assert.equal((await h.send('/api/strap/command',{name,input:{}},h.owner)).status,403);
     for (const path of ['/api/strap/tax','/api/strap/tax/filing.csv']) assert.equal((await h.send(path,undefined,h.owner)).status,403);
     await h.enroll(h.owner);
     const seed = await taxSeed(h);
+    await h.enroll(seed.member.cookie);
     const key = await h.cmd('agent.create',{label:'Synthetic tax denial'});
     for (const cookie of [seed.member.cookie,'']) {
-      for(const name of ['tax.config.save','tax.calculate','tax.confirm','tax.refund']) {
+      for(const name of ['tax.config.save','tax.calculate','tax.confirm','tax.refund','tax.payment.record']) {
         const r = await h.send('/api/strap/command',{name,input:seed.config},cookie); assert.ok([401,403].includes(r.status),'unauthorized '+name);
       }
       assert.ok([401,403].includes((await h.send('/api/strap/tax',undefined,cookie)).status));
       assert.ok([401,403].includes((await h.send('/api/strap/tax/filing.csv',undefined,cookie)).status));
     }
-    for(const name of ['tax.config.save','tax.calculate','tax.confirm','tax.refund'])assert.equal((await h.send('/api/strap/agent/command',{name,input:seed.config},'',{authorization:'Bearer '+key.token})).status,403);
+    for(const name of ['tax.config.save','tax.calculate','tax.confirm','tax.refund','tax.payment.record'])assert.equal((await h.send('/api/strap/agent/command',{name,input:seed.config},'',{authorization:'Bearer '+key.token})).status,403);
     await h.cmd('agent.revoke',{id:key.id});
     assert.equal((await h.send('/api/strap/agent/command',{name:'tax.config.save',input:seed.config},'',{authorization:'Bearer '+key.token})).status,401);
     assert.equal(e.calls.length,0);

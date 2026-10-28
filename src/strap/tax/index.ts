@@ -6,6 +6,7 @@ import { parseConfig, readiness, saveConfig } from './config';
 import { complete, stripe } from './provider';
 import { reversalRequest, saveReversal } from './reversals';
 import { taxSnapshot } from './reports';
+import { recordTaxPayment } from './payments';
 export { taxSnapshot, taxEvidence, taxFilingCsv } from './reports';
 export type { TaxBindings } from './model';
 
@@ -14,9 +15,10 @@ export type { TaxBindings } from './model';
 export async function taxCommand(env: TaxBindings, who: Actor, name: string, raw: Record<string,unknown>) {
   humanOwner(who);
   const input = object(raw,'tax_input');
-  insist(['tax.config.save','tax.calculate','tax.confirm','tax.refund'].includes(name),'unknown_command',404);
+  insist(['tax.config.save','tax.calculate','tax.confirm','tax.refund','tax.payment.record'].includes(name),'unknown_command',404);
   const loaded = await load(env.DB,who); humanOwner(loaded.who);
   const tx = new Transaction(env.DB,loaded.state,loaded.who);
+  if(name==='tax.payment.record')return recordTaxPayment(env,tx,input);
   const connectionHash = await identity(env), requestId = text(input.requestId,'requestId',100);
   const inputFingerprint = await fingerprint(input), operationId = 'tax-operation:' + await fingerprint({actorId:who.id,name,requestId});
   const prior = tx.state.records.get(operationId)?.data;

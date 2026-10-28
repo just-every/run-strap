@@ -45,7 +45,9 @@ export function reconstructExit(bundle, expectedCsv, tax) {
     const allMoney=kind=>records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind===kind).reduce((sum,record)=>sum+record.amountCents,0);
     if(tax) {
       assert.equal(allMoney('charge'),19100,'original balances plus the independent 5200-cent net taxed-sale fixture reconstruct');
-      assert.equal(allMoney('payment'),7000,'original receipts plus the independent 2000-cent net retail tender reconstruct');
+      assert.equal(allMoney('payment'),7200,'original receipts plus the independent 2200-cent net retail and tax tenders reconstruct');
+      assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='packCreditEvent').reduce((sum,record)=>sum+record.credits,0),6,'all original credits plus the separately purchased class remain');
+      assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='pack').reduce((sum,record)=>sum+record.remaining,0),6,'all reconstructed pack balances equal the complete credit ledger');
     }
     const money = kind => originalRecords.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === kind).reduce((sum, r) => sum + r.amountCents, 0)
     assert.equal(money('charge'), 13900);
