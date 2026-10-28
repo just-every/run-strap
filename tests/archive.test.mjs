@@ -518,7 +518,7 @@ test('Invoice copies and receipt requests survive native restore while configure
     const before=(await h.send('/api/strap/invoices',undefined,member.cookie)).value.invoices[0];assert.deepEqual([before.totalCents,before.paidCents,before.refundedCents,before.disputedCents,before.balanceCents],[11000,11000,1000,7000,0]);
     await h.cmd('mail.connect',{});const input={packId:pack.id,receiptId:payment.id,requested:true,channel:'phone',requestId:'synthetic-strap-archive-copy'};
     const delivery=await h.cmd('billing.receipt.send.staff',input);assert.equal(delivery.status,'accepted');assert.equal(edge.mail.length,1);
-    const paths=['/api/strap/invoice.html?id='+pack.id,'/api/strap/receipt.html?id='+payment.id+'&packId='+pack.id],copies=[];for(const path of paths){const r=await h.send(path,undefined,member.cookie);assert.equal(r.status,200);copies.push(r.text);}
+    const paths=['/api/strap/invoice.html?id='+pack.id,...before.receipts.map(r=>'/api/strap/receipt.html?id='+r.id+'&packId='+pack.id)],copies=[];for(const path of paths){const r=await h.send(path,undefined,member.cookie);assert.equal(r.status,200);copies.push(r.text);}
     const identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:edge.outbound};await h.close();h=null;
     const archive=join(temporary,'invoice.rer');await command(source,['export','--output',archive,'--no-queue']);
     const archived=(await readFile(archive,'utf8')).split('\n').filter(Boolean).map(JSON.parse);assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>['st_invoice_mail_review','st_invoice_dispatches'].includes(t.name)));

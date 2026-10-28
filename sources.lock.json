@@ -4118,7 +4118,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "26f6240d966258ab2fa1aa9ef947a9e6556b15d3940089f8cc5a5c584fddaf34",
+      "sha256": "43a4824832e2df17418a876312127396565b4745a69a48658b5773ca91469879",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
