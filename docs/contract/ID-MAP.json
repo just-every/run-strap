@@ -591,9 +591,10 @@
       ]
     },
     "STAFF-001": {
-      "how": "kept",
+      "how": "split",
       "to": [
-        "STAFF-001"
+        "STAFF-001",
+        "STAFF-007"
       ]
     },
     "STAFF-002": {
@@ -639,9 +640,10 @@
       ]
     },
     "RPT-003": {
-      "how": "kept",
+      "how": "split",
       "to": [
-        "RPT-003"
+        "RPT-003",
+        "RPT-008"
       ]
     },
     "RPT-004": {

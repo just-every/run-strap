@@ -1245,3 +1245,103 @@ Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc
 | `SUCCESS-008` | Resolve routine member inquiries | push-further | missing |  | No implemented resolve routine member inquiries workflow or public-door acceptance coverage. |
 
 Current raw clause inventory: 61 done, 36 partial, 54 missing; 151 total. This inventory is not a new judgment or landing receipt. STAFF-001 remains PARTIAL under the 27 October 2026 CT ruling.
+
+## 28 October 2026 — Contract record separation
+
+**MEM-001.** Conservative policy default adopted pending ct approval; STAFF-001, MEM-006, SEC-002, SEC-003 and MOVE-009 inherit these source, scope and privacy fences before new doors ship.
+
+**MEM-002.**  The payer's own stored payment-method authorization on the studio device or by secure link (BILL-004) is not implemented, so the clause stays partial.
+
+**MEM-003.** Ct approved these native semantics with riders on 23 October 2026; 
+
+**MEM-004.** Ct approved these native semantics with riders on 23 October 2026; 
+
+**MEM-005.** CT policy ruling, 26 October 2026: APPROVE WITH RIDERS 
+
+**MEM-005.**  The conservative adult-only financial authority default awaits ct; full MEM-005 remains PARTIAL.
+
+**MEM-005.** This ruling does not decide the separately pending MEM-005 account-less personal-copy delivery policy or guest-owned signing.
+
+**MEM-005.**  MEM-005 remains PARTIAL and every original acceptance sentence remains unchanged.
+
+**MEM-005.**  for the bounded account-less personal-copy default; MEM-005 remains PARTIAL.
+
+**PLAN-004.** Policy default adopted pending ct approval: deny unverified identity/household eligibility; owner-only additive verified links and exceptions, no authority transfer or new exposure, no automatic renewal or collection.
+
+**SCHED-002.** Ct ruling of 25 October 2026, 18:
+
+**SCHED-008.**  With no provider configured (development, demo, or missing key or sender) the preview says "email not configured; members see an in-app notice only" and only the in-app notice is written, and SCHED-008 stays partial for that installation.
+
+**SCHED-013.** CT policy ruling, 27 October 2026: APPROVE WITH RIDERS; 
+
+**SCHED-013.**  SCHED-013 remains PARTIAL.
+
+**SCHED-013.**  SCHED-013 remains PARTIAL; no original acceptance or inherited duty is removed.
+
+**BILL-014.** CT policy ruling, 26 October 2026: APPROVE WITH RIDERS 
+
+**BILL-014.** for the additional immutable agreement and Stripe TEST card method-authorization foundation; BILL-014 remains PARTIAL.
+
+**MSG-003.**  SMS timing and delivery (MSG-005), push timing and delivery (MSG-007) and broader channel preferences (MEM-006 and MSG-008) remain unimplemented; this clause stays partial.
+
+**STAFF-001.** Implementation evidence, 27 October 2026: `tests/billing-agreements.test.mjs` “Personal membership signatures bind immutable originals and separate payment consent; staff and household status confer no financial signing power” now exercises delegated front-desk agreement preparation, scoped finance and front-desk collection handoffs, wrong-member and wrong-location refusals, canonical audit, member-owned signature and immediate revoked replay refusal. “Stripe-hosted method setup uses durable once-only reservations, exact member consent, masked evidence and immediate revocation and reconnect fences” exercises member-confirmed card replacement, pending preservation of the old method, one newly authorized default, immutable agreement and debt, historical supersession and once-only replay. `tests/billing-browser.mjs` “billingBrowser” loads the replacement forms, pending and masked completed states at 1440 and 390 in push Verify. `tests/staff-rights-cases.mjs` “populatedLegacyRights”, loaded by `tests/strap.test.mjs` “Manager and assigned-instructor private grants preserve personal views and revoke reviewed changes and replays immediately”, upgrades populated product-created legacy grants with the actual forward migration and asserts retained independent door, member and location scopes, disabled refund and creation rights, preserved legacy provenance and public-door refusals. These assertions close the migration and bounded delegated agreement and collection foundation gaps; they do not complete the original membership sale, autopay activation or every role workflow. Controlled Stripe TEST replacement admission must be recorded at the exact candidate separately; network-edge success alone is not a live-provider receipt. `tests/collection-browser.mjs` “collectionBrowser” retains the scoped personal handoff and member replacement review, pending and confirmed screens at 1440 and 390. Current STAFF-001 proof update, 27 October 2026: the dated Remaining proof paragraph records the CT review baseline. Populated legacy migration is now asserted, and the billing registration exercises manager, front-desk, finance and instructor permissions at each of two locations. All four personal billing handoff pairs now run through delegated front desk, with denied and revoked rights and canonical audit, in the 1440 and 390 browser journey. Actual member-owned TEST card replacement is an additional controlled-provider journey, not automatic collection or an original membership sale. All remaining non-billing role workflows and inherited duties remain required. The existing “Separate membership-sale and contract-change rights preserve personal acceptance and refuse revoked termination previews” registration also exercises permitted manager and front-desk terminations at each location, absent rights, wrong participant and location, revoked previews and committed replays, once-only canonical audit, and refused finance and instructor contract-change grants. The controlled card-replacement foundation also extends `tests/archive.test.mjs` “BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected” (retains both replaced-method records and the selected default as history, excludes payment execution authority, refuses provider replay and preserves original debt).
+
+**STAFF-001.** CT policy ruling, 27 October 2026: APPROVE WITH RIDERS; 
+
+**STAFF-001.**  STAFF-001 remains PARTIAL.
+
+**RPT-001.** The full destination and acceptance journey remain required; this clause stays partial until their remaining points are asserted.
+
+**RPT-003.** The original acceptance remains unchanged.
+
+**RPT-004.** CT policy ruling, 26 October 2026: APPROVE WITH RIDERS 
+
+**RPT-004.** Conservative recognition and tax defaults are adopted pending ct approval; BILL-012 inherits classified tax and reversal evidence and the report remains PARTIAL.
+
+**RPT-004.**  for the provisional operational recognition default; RPT-004 remains PARTIAL.
+
+**RPT-004.**  This conservative additional classification is ADOPTED pending ct confirmation; RPT-004 remains PARTIAL.
+
+**RPT-004.**  Default ADOPTED pending ct for this bounded time-based classification; RPT-004 stays PARTIAL, and PLAN-006, PLAN-007, PLAN-011, PLAN-012 and BILL-008 retain their original policy, entitlement and refund duties.
+
+**RPT-004.**  CT scope ruling, 26 October 2026, reviewed at bd4f6e0c8d8ca2e2889cac760bbd536025da1447: APPROVE WITH RIDERS for the bounded ordinary unlimited-service cancellation-refund classification; RPT-004 remains PARTIAL.
+
+**RPT-007.**  The full clause remains partial.
+
+**MEM-005.** Legal sufficiency and authority-ending rules remain unproved.
+
+**MEM-005.** Legal sufficiency and authority-ending rules remain unproved.
+
+**PLAN-003.** Until STAFF-001 adds staff rights, the human owner makes adjustments.
+
+**SCHED-003.** Until STAFF-001 adds managers, the human owner acts for the manager on these doors.
+
+**SCHED-006.** Until STAFF-001 the human owner acts for front desk and holds the fee-waiver right: after the cutoff the owner must choose a late cancel or an early cancel that returns the credit and assesses no fee, recording a required reason;
+
+**SCHED-006.** Until STAFF-001 the human owner acts for front desk and holds the fee-waiver right: after the cutoff the owner must choose a late cancel or an early cancel that returns the credit and assesses no fee, recording a required reason;
+
+**SCHED-007.** until STAFF-001 the human owner acts for front desk with the booking right to assign a spot at a desk booking or move any member's spot, before the class starts;
+
+**SCHED-008.** until STAFF-001 the human owner acts for the manager (pattern 2);
+
+**SCHED-008.** until STAFF-001 the human owner acts for the manager (pattern 2);
+
+**SCHED-010.** until STAFF-001 adds front-desk and manager roles, the human owner operates the desk and alone holds the booking and override rights;
+
+**SCHED-011.** Until STAFF-001 adds front-desk and manager roles, the human owner acts for front desk;
+
+**SCHED-014.** until STAFF-001 the native owner acts for front desk and manager and holds booking, override and fee-waiver rights;
+
+**ATT-001.** until STAFF-001 the human owner acts for front desk and manager (pattern 2).
+
+**ATT-003.** until STAFF-001 the human owner acts for the permitted manager;
+
+**LEAD-008.** until STAFF-001 adds a named right;
+
+**MSG-003.** Until STAFF-001 the native owner acts for the manager;
+
+**MSG-003.** Until STAFF-001 the native owner acts for the manager;
+
+**MOVE-011.** The manifest labels signed waivers and media as not implemented; acknowledgments are version receipts, never signatures.
+
+**MOVE-011.** No studio billing or delivery provider connections exist today and none travel with either export; native access recovery mail is separate from studio delivery.

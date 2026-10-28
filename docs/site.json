@@ -3,38 +3,125 @@
     {
       "title": "Start here",
       "pages": [
-        { "slug": "getting-started", "file": "getting-started.md", "title": "Getting started", "summary": "Run Strap on your own computer, finish setup and find your way around the studio." },
-        { "slug": "put-strap-online", "file": "put-strap-online.md", "title": "Put Strap online", "summary": "Deploy Strap to your own account so members and instructors can sign in from anywhere." }
+        {
+          "slug": "getting-started",
+          "file": "getting-started.md",
+          "title": "Getting started",
+          "summary": "Run Strap on your own computer, finish setup and find your way around the studio."
+        },
+        {
+          "slug": "put-strap-online",
+          "file": "put-strap-online.md",
+          "title": "Put Strap online",
+          "summary": "Deploy Strap to your own account so members and instructors can sign in from anywhere."
+        }
       ]
     },
     {
       "title": "Run your studio",
       "pages": [
-        { "slug": "classes", "file": "classes.md", "title": "Classes and the waitlist", "summary": "Prepare and publish the week, let members book, fill cancellations from the waitlist and check people in." },
-        { "slug": "courses", "file": "COURSES.md", "title": "Courses and tuition", "summary": "Publish a course, review tuition with its payer, record received installments and preview a withdrawal." },
-        { "slug": "packs-and-payments", "file": "packs-and-payments.md", "title": "Packs, credits and payments", "summary": "Give members class credits, record the payments you receive and see what every member owes." },
-        { "slug": "people", "file": "people.md", "title": "People and access", "summary": "Add members and instructors, invite them to sign in, and end someone's access at once." },
-        { "slug": "waivers", "file": "waivers.md", "title": "Waivers", "summary": "Publish a waiver version that members acknowledge before they book." },
-        { "slug": "agent-access", "file": "AGENT-COMMANDS.md", "title": "Agent access", "summary": "Let an assistant prepare next week's classes, packs and reminders for you to approve." },
-        { "slug": "integrations", "file": "INTEGRATIONS.md", "title": "Integrations", "summary": "Give another application read-only access to your class rosters, then rotate, revoke and watch its key." }
+        {
+          "slug": "classes",
+          "file": "classes.md",
+          "title": "Classes and the waitlist",
+          "summary": "Prepare and publish the week, let members book, fill cancellations from the waitlist and check people in."
+        },
+        {
+          "slug": "courses",
+          "file": "COURSES.md",
+          "title": "Courses and tuition",
+          "summary": "Publish a course, review tuition with its payer, record received installments and preview a withdrawal."
+        },
+        {
+          "slug": "packs-and-payments",
+          "file": "packs-and-payments.md",
+          "title": "Packs, credits and payments",
+          "summary": "Give members class credits, record the payments you receive and see what every member owes."
+        },
+        {
+          "slug": "people",
+          "file": "people.md",
+          "title": "People and access",
+          "summary": "Add members and instructors, invite them to sign in, and end someone's access at once."
+        },
+        {
+          "slug": "waivers",
+          "file": "waivers.md",
+          "title": "Waivers",
+          "summary": "Publish a waiver version that members acknowledge before they book."
+        },
+        {
+          "slug": "agent-access",
+          "file": "AGENT-COMMANDS.md",
+          "title": "Agent access",
+          "summary": "Let an assistant prepare next week's classes, packs and reminders for you to approve."
+        },
+        {
+          "slug": "integrations",
+          "file": "INTEGRATIONS.md",
+          "title": "Integrations",
+          "summary": "Give another application read-only access to your class rosters, then rotate, revoke and watch its key."
+        }
       ]
     },
     {
       "title": "Your data",
       "pages": [
-        { "slug": "move-in", "file": "MOVE-IN.md", "title": "Move in from Mindbody", "summary": "Bring your members across from a CSV: preview it, apply it, and undo it later if you need to." },
-        { "slug": "backup-and-restore", "file": "backup-and-restore.md", "title": "Backup and restore", "summary": "Export the whole studio to one archive and restore it into a fresh copy of Strap." }
+        {
+          "slug": "move-in",
+          "file": "MOVE-IN.md",
+          "title": "Move in from Mindbody",
+          "summary": "Bring your members across from a CSV: preview it, apply it, and undo it later if you need to."
+        },
+        {
+          "slug": "backup-and-restore",
+          "file": "backup-and-restore.md",
+          "title": "Backup and restore",
+          "summary": "Export the whole studio to one archive and restore it into a fresh copy of Strap."
+        }
       ]
     }
   ],
   "githubOnly": [
-    { "file": "CLAIMS.md", "reason": "Generated contract status and evidence for maintainers" },
-    { "file": "BILLING-AGREEMENTS.md", "reason": "Personal additional membership agreements, test hosted card setup and disconnected restored payment authority" },
-    { "file": "TAX.md", "reason": "Stripe Tax test operations, immutable original prices, provider evidence and guarded reconnection for maintainers" },
-    { "file": "TWILIO-SMS.md", "reason": "Twilio TEST runtime bindings, explicit owner diagnostic and the boundary between synthetic callbacks and real provider delivery" },
-    { "file": "LEAD-FUNNEL.md", "reason": "Native inquiry-source and attendance funnel definitions and HTTP report for maintainers and API users" },
-    { "file": "RETENTION-REPORT.md", "reason": "Native owner HTTP/CSV retention report schema and metric definitions for maintainers and API users" },
-    { "file": "EXIT-EXPORT.md", "reason": "Portable exit schema and reconstruction instructions for independent receivers and maintainers" },
-    { "file": "SOURCES.md", "reason": "Where Strap's code was adapted from, for maintainers" }
+    {
+      "file": "CLAIMS.md",
+      "reason": "Generated contract status and evidence for maintainers"
+    },
+    {
+      "file": "BILLING-AGREEMENTS.md",
+      "reason": "Personal additional membership agreements, test hosted card setup and disconnected restored payment authority"
+    },
+    {
+      "file": "TAX.md",
+      "reason": "Stripe Tax test operations, immutable original prices, provider evidence and guarded reconnection for maintainers"
+    },
+    {
+      "file": "TWILIO-SMS.md",
+      "reason": "Twilio TEST runtime bindings, explicit owner diagnostic and the boundary between synthetic callbacks and real provider delivery"
+    },
+    {
+      "file": "LEAD-FUNNEL.md",
+      "reason": "Native inquiry-source and attendance funnel definitions and HTTP report for maintainers and API users"
+    },
+    {
+      "file": "RETENTION-REPORT.md",
+      "reason": "Native owner HTTP/CSV retention report schema and metric definitions for maintainers and API users"
+    },
+    {
+      "file": "EXIT-EXPORT.md",
+      "reason": "Portable exit schema and reconstruction instructions for independent receivers and maintainers"
+    },
+    {
+      "file": "SOURCES.md",
+      "reason": "Where Strap's code was adapted from, for maintainers"
+    },
+    {
+      "file": "contract/DONE-AUDIT.md",
+      "reason": "Outcome-level carried-done contract audit"
+    },
+    {
+      "file": "contract/MECHANISMS.md",
+      "reason": "Detailed studio transport and record semantics"
+    }
   ]
 }

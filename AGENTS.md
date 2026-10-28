@@ -8,4 +8,7 @@ Run pnpm run test:strap and pnpm run test:archive for changed flows, pnpm run ty
 
 The app pins @runeditrun/rer in package mode. Do not vendor or patch its internals locally. Keep deploy, project, edition, Worker, D1 and package identities stable. Data backups and real deploy use rer export/import and rer deploy; read README.md. No secrets or private exports in source. Native sessions, credentials and outboxes never travel in backups. Use Base publication scan on the exact tree before a public push, zero findings and no exclusions.
 
-Lander-Regenerate: `node scripts/contract-docs.mjs write`, then `node scripts/contract-docs.mjs check`. CONTRACT.md remains the only source for acceptance, evidence and Status rows. Regenerate the edition source lock after generation.
+Lander-Regenerate: node src/base/contract-docs.mjs write
+Lander-Regenerate: node scripts/edition-authoring/cli.mjs lock
+
+CONTRACT.md is the acceptance and status source. Run node src/base/contract-docs.mjs check after regeneration.
