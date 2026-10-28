@@ -322,7 +322,11 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "39b03858ed0247057e9c0a1b030ac02f4cc700eec4880dc46072e211ee6dfa62",
+      "sha256": "3e17a681379e21b2ecc0268cc59e2d9f39229b92a752e7d05d8394acd73de743",
+      "executable": false
+    },
+    "CHANGELOG.md": {
+      "sha256": "fe5cd802fbc3df558ceae7eb08bbe0698dcac81cc894351b8fcea74992e8cfc2",
       "executable": false
     },
     "composition.lock.json": {
@@ -361,8 +365,20 @@
       "sha256": "29e606571cc8f3b40aebadb813156f5411a4e032ebc3e6f2900e1a83f9f57578",
       "executable": false
     },
+    "docs/CLAIMS.md": {
+      "sha256": "327235369e2fa0d55a52c44f8fb0644870680a5224d6cc547f2616c9d567cb23",
+      "executable": false
+    },
     "docs/classes.md": {
       "sha256": "3907766b31a24b9618e6465103d5a3c68c72646ede4e5b0ede993e06cea18b2a",
+      "executable": false
+    },
+    "docs/contract/COVERAGE.json": {
+      "sha256": "38a4442d63b8c06564912c78a7da9aa271607f7bd2f71a50eb0822774ef38f4d",
+      "executable": false
+    },
+    "docs/contract/ID-MAP.json": {
+      "sha256": "95f09a6916f46563f0efa993d4ce419e1ee9d05fcabe0de7d8ba5a413f053268",
       "executable": false
     },
     "docs/COURSES.md": {
@@ -419,6 +435,10 @@
     },
     "docs/TWILIO-SMS.md": {
       "sha256": "c01759cad332c95200e1d8272effc2cf7e6d4ff7c1036f736c90c43db2fed8cb",
+      "executable": false
+    },
+    "docs/verify.md": {
+      "sha256": "dc91728b919e833160817f9977d0c1f9ecd084507d0499a4e504fecf6926081c",
       "executable": false
     },
     "docs/waivers.md": {
@@ -1099,6 +1119,10 @@
     },
     "src/auth.server.ts": {
       "sha256": "be83fdfece53d79f1d03df83974a96a13aeaff3ce46157fbddc260c764734269",
+      "executable": false
+    },
+    "src/base/contract-docs.mjs": {
+      "sha256": "d98e14f489c57f60446c2cc68310db09f298f7974d77026dbaa2c62868cc4838",
       "executable": false
     },
     "src/base/contract-filter.ts": {
