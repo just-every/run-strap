@@ -383,7 +383,16 @@
     {
       "file": "CONTRACT.md",
       "line": 78,
-      "text": "Staff launch or resend only within separately granted member-record and check-in scopes for the named member and location, behind MFA; staff never affirm for the participant. Revocation takes effect on the next request, including replay and issued handoffs. A signed-out tablet handoff expires after 15 minutes, is consumed once, shows only the assigned current document and completion controls, never reads back prior submissions or private records, and returns to a neutral lock screen. Launch, dispatch and participant completion remain distinct events. Evidence is readable only by the human owner, participant and currently authorized guardian by default; launch rights grant no evidence read.",
+      "text": "Staff launch or resend only within separately granted member-record and check-in scopes for the named member and location, behind MFA; staff never affirm for the participant. Revocation takes effect on the next request, including replay and issued handoffs.",
+      "to": "clause",
+      "ids": [
+        "STAFF-007"
+      ]
+    },
+    {
+      "file": "CONTRACT.md",
+      "line": 78,
+      "text": "A signed-out tablet handoff expires after 15 minutes, is consumed once, shows only the assigned current document and completion controls, never reads back prior submissions or private records, and returns to a neutral lock screen. Launch, dispatch and participant completion remain distinct events. Evidence is readable only by the human owner, participant and currently authorized guardian by default; launch rights grant no evidence read.",
       "to": "clause",
       "ids": [
         "MEM-005"
