@@ -54,6 +54,26 @@ export async function clientAppointmentsBrowser(h,{coach}) {
       const review=panel.locator('[data-client-appointment-preview]').last();await review.getByLabel('Request received by').selectOption('phone');await review.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click();await shot(phone,'staff-cancelled');
       assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,5);
       await mine.reload();await shot(mine,'member-cancelled');
+      const nextDate=width===1440?'2093-10-21':'2093-10-28';
+      const nextSource=await h.cmd('appointment.series.offer.save',{requestId:randomUUID(),service:'Private Pilates',instructorId:coach.id,room:'Reformer studio',startDate:nextDate,endDate:nextDate,time:'09:00',minutes:50});
+      const nextOffer=await h.cmd('appointment.client.deliver',{personId:member.id,offerId:nextSource.id,depositCents:0,requestId:randomUUID()});
+      await phone.reload();panel=phone.locator('#client-appointments');
+      const offered=panel.locator(`[data-client-appointment-offer="${nextOffer.id}"]`);
+      await offered.getByRole('checkbox').check();await offered.getByLabel('Request received by').selectOption('phone');await shot(phone,'staff-accept-review');
+      await offered.getByRole('button',{name:'Accept exact appointment terms',exact:true}).click();
+      const next=(await h.state(member.cookie)).appointments.find(r=>r.clientOfferId===nextOffer.id);assert.equal(next.acceptedByRole,'front-desk');await shot(phone,'staff-accepted');
+      let row=panel.locator(`[data-client-appointment="${next.id}"]`);await row.getByText('Move this appointment',{exact:true}).click();
+      const moving=row.locator('form').filter({has:phone.getByRole('button',{name:'Preview appointment move',exact:true})});
+      await moving.getByLabel('New local start time').fill('13:00');await moving.getByLabel('Request received by').selectOption('phone');await moving.getByRole('button',{name:'Preview appointment move',exact:true}).click();await shot(phone,'staff-move-preview');
+      await panel.locator('[data-client-appointment-preview]').getByRole('button',{name:'Confirm appointment move',exact:true}).click();await shot(phone,'staff-moved');
+      await mine.reload();panel=mine.locator('#client-appointments');row=panel.locator(`[data-client-appointment="${next.id}"]`);
+      await row.getByText('Cancel this appointment',{exact:true}).click();await row.getByLabel('Cancellation reason').fill('My plans changed');await row.getByRole('button',{name:'Preview appointment cancellation',exact:true}).click();await shot(mine,'member-cancel-preview');
+      await panel.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click();await shot(mine,'member-confirmed-cancellation');
+      const result=await h.state();assert.equal(result.packs.find(p=>p.personId===member.id).remaining,5);
+      const events=result.staffActions.filter(a=>a.personId===member.id&&['appointment.client.accept','appointment.client.change.confirm'].includes(a.command));
+      assert.deepEqual(events.map(e=>e.action).sort(),['appointment.cancel','appointment.move','appointment.save']);
+      assert.ok(events.every(e=>e.actorRole==='front-desk'&&e.right==='booking'&&e.channel==='phone'));
+
     } finally {for(const context of contexts)await context.close();}
   }} finally {await browser.close();}
 }

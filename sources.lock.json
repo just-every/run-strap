@@ -3218,7 +3218,7 @@
       "executable": false
     },
     "src/strap/domain/client-appointments.ts": {
-      "sha256": "53deb8da861c1f9504a1c270470df0e0e0173bc467ae66b46f05c3eadf527617",
+      "sha256": "ec9fff0921f6a197fa7b668293e978440824e8ec658de36f80675e5a104757fc",
       "executable": false
     },
     "src/strap/domain/closures.ts": {
@@ -3770,7 +3770,7 @@
       "executable": false
     },
     "src/strap/ui/client-appointments.ts": {
-      "sha256": "b1adc9ab38f66a8fd9ce0f54cff08f2716b994ebc1362a6040f161ce54ac2ef6",
+      "sha256": "c4c3f28b95d8ed85a576b88a1eb4b255735edfa02fff17144a0b3756f5a02b12",
       "executable": false
     },
     "src/strap/ui/closures.ts": {
@@ -4142,11 +4142,11 @@
       "executable": false
     },
     "tests/client-appointment-cases.mjs": {
-      "sha256": "d0328b9afdc812c369d343c87c39ed075500fdb4568d9188b6eb2e3ea7b72abc",
+      "sha256": "bc5ce5ae4b0e1de51125e1da57e39b1fc78c67425b4b3e2a12e35a26c98c0d31",
       "executable": false
     },
     "tests/client-appointments-browser.mjs": {
-      "sha256": "1e6e2998a6e5f78b2e9b0f4ee20e91c912da3ff102a6381b003d5090874553a4",
+      "sha256": "e2575d055711f8bc591472a7f7720975eba8f89a565dd12a195a08ed9dfc27ee",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4430,7 +4430,7 @@
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "62fe0df3505f68dc2e97c60cdc17cf7a013303f43cc6150b2a72ef1ba0a49040",
+      "sha256": "45c94dbdf7c47185ffb7e4f0644968bd98370ca0eabdfd3135a5ed18cf46ffe4",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {

@@ -46,6 +46,8 @@ export async function clientCampaign(h) {
   const payment=state.payments.find(p=>p.appointmentReservationId===saved.id);
   assert.deepEqual([payment.personId,payment.amountCents,payment.reference],[member.id,2500,'synthetic-strap-deposit-1']);
   assert.equal(state.balances.find(b=>b.personId===member.id).balanceCents,7500);
+  await h.cmd('appointment.client.deposit.record',{...receipt,requestId:randomUUID()});
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='appointment.client.deposit.record').length,1,'a new transport identity cannot record or audit the same capture twice');
   await clientRefused(h,'appointment.client.deposit.record',{...receipt,reference:'synthetic-strap-deposit-2',requestId:randomUUID()},h.owner,409);
   const move=await h.cmd('appointment.client.move.prepare',{reservationId:saved.id,classId:saved.occurrences[0].id,startDate:'2091-10-23',time:'11:00'},member.cookie);
   assert.equal(move.policy[0].feeCents,0);assert.equal((await h.state()).classes.find(c=>c.id===saved.occurrences[0].id).start,saved.occurrences[0].start);
@@ -64,6 +66,10 @@ export async function clientCampaign(h) {
   assert.equal((await h.state()).packs.find(p=>p.personId===member.id).remaining,9);
   const exit=(await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records.map(r=>({kind:r.kind,...JSON.parse(r.data)}));
   assert.equal(exit.find(r=>r.id===saved.id).deposit.paymentId,payment.id);assert.equal(exit.find(r=>r.id===accepted.id).status,'accepted');
+  const losingOffer=member.id===ana.id?second:first;
+  const otherSaved=await clientAccept(h,losingOffer,loser.cookie);
+  await clientRefused(h,'appointment.client.deposit.record',{reservationId:otherSaved.id,amountCents:2500,reference:payment.reference,requestId:randomUUID()},h.owner,409);
+  assert.equal((await h.state()).payments.length,1,'one external capture cannot fund two appointments');
   if(process.env.STRAP_PROOF_DIR) await (await import('./client-appointments-browser.mjs')).clientAppointmentsBrowser(h,{coach});
 }
 
@@ -120,6 +126,8 @@ export async function clientRights(h) {
   const actions=(await h.state()).staffActions.filter(a=>a.command==='appointment.client.accept');
   assert.equal(actions.length,1);assert.deepEqual([actions[0].actorRole,actions[0].right,actions[0].channel,actions[0].personId],['front-desk','booking','phone',ana.id]);
   assert.equal(actions[0].before,null);assert.equal(actions[0].after.id,saved.id);
+  await h.cmd('appointment.client.accept',{...input,requestId:randomUUID()},desk.cookie);
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='appointment.client.accept').length,1);
   const move=await h.cmd('appointment.client.move.prepare',{personId:ana.id,reservationId:saved.id,classId:saved.occurrences[0].id,startDate:'2094-02-17',time:'11:00',channel:'phone',requestId:randomUUID()},desk.cookie);
   await grant(['member-record']);
   await clientRefused(h,'appointment.client.change.confirm',{id:move.id,key:move.key,personId:ana.id,channel:'phone',requestId:randomUUID()},desk.cookie);
@@ -141,4 +149,37 @@ export async function clientRights(h) {
   const denied=await h.send('/api/strap/command',{name:'appointment.client.change.confirm',input:{id:changed.id,key:changed.key}},ana.cookie);
   assert.equal(denied.status,403);
   assert.deepEqual((await h.state()).clientAppointmentOffers.filter(o=>o.personId===ana.id),[]);
+  const unusedInput={name:'Unused appointment identity',email:ben.email.replace('scopedclientben','unusedclient'),role:'member',active:true};
+  const unused=await h.cmd('person.save',unusedInput);await h.cmd('person.erase',{id:unused.id});
+  await clientRefused(h,'appointment.client.deliver',{personId:unused.id,offerId:invitation.sourceOfferId,requestId:randomUUID()},h.owner,404);
+  await clientRefused(h,'person.save',unusedInput,h.owner,409);
+}
+
+export async function clientNoticePolicy(h,sent) {
+  const {ana,offer}=await clientSeed(h,'NoticeClient');
+  await h.cmd('bookingRule.save',{cancelCutoffHours:12,lateCancelReturnsCredit:false,lateCancelFeeCents:1500,noShowFeeCents:2000});
+  const time=new Date(Math.ceil((Date.now()+6*3600000)/60000)*60000).toISOString();
+  const coach=(await h.state()).people.find(p=>p.role==='instructor');
+  const source=await h.cmd('appointment.offer.save',{requestId:randomUUID(),service:'Private Pilates',instructorId:coach.id,room:'Late private',start:time,durationMinutes:50});
+  const invitation=await h.cmd('appointment.client.deliver',{personId:ana.id,offerId:source.id,requestId:randomUUID()});
+  assert.equal(sent.length,0,'delivery uses only in-app notices');
+  const saved=await clientAccept(h,invitation,ana.cookie);assert.equal(sent.length,1);
+  assert.deepEqual(saved.occurrences[0].cancelTerms.lateFeeCents,1500);
+  const move=await h.cmd('appointment.client.move.prepare',{reservationId:saved.id,classId:saved.occurrences[0].id,startDate:'2095-01-12',time:'11:00'},ana.cookie);
+  assert.equal(move.policy[0].feeCents,1500);assert.equal((await h.state()).charges.filter(c=>c.reason==='late_move_fee').length,0);
+  await clientRefused(h,'appointment.client.move.prepare',{reservationId:saved.id,classId:saved.occurrences[0].id,startDate:'2095-01-12',time:'11:00',mode:'early',waiverReason:'Unapproved'},ana.cookie);
+  await clientConfirm(h,move,ana.cookie);await clientConfirm(h,move,ana.cookie);
+  assert.equal(sent.length,2);let state=await h.state();
+  assert.deepEqual(state.charges.filter(c=>c.reason==='late_move_fee').map(c=>c.amountCents),[1500]);
+  assert.equal(state.packs.find(p=>p.personId===ana.id).remaining,9);
+  await h.cmd('mail.preference.save',{optedOut:true,requestId:randomUUID()},ana.cookie);
+  const cancel=await h.cmd('appointment.client.cancel.prepare',{reservationId:saved.id,classId:saved.occurrences[0].id,reason:'Travel'},ana.cookie);
+  assert.equal(cancel.policy[0].feeCents,0);await clientConfirm(h,cancel,ana.cookie);assert.equal(sent.length,2);
+  state=await h.state();assert.equal(state.noticeDeliveries.filter(d=>d.personId===ana.id&&d.status==='opted_out').length,1);
+  assert.equal((await h.state(ana.cookie)).notices.filter(n=>n.appointmentReservationId===saved.id).length,3);
+  assert.ok(sent.every(m=>m.to[0]===ana.email&&m.text.includes('Private Pilates')));
+  assert.equal(state.bookings.find(b=>b.id===saved.occurrences[0].bookingId).status,'cancelled');
+  const stale=await offer(ana,{date:'2095-01-13',depositCents:0});
+  await h.cmd('bookingRule.save',{cancelCutoffHours:24,lateCancelFeeCents:3000});
+  await clientRefused(h,'appointment.client.accept',{id:stale.id,key:stale.key,confirm:true},ana.cookie,409);
 }

@@ -3,8 +3,8 @@ import { clock, dayOf, money, when, whenLabel } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, rows, select, statusPill, textarea } from './shared'
 
 const request = () => hidden('requestId', crypto.randomUUID())
-const staffFields = (s: any, personId: string) => s.actor.role === 'member' ? '' : hidden('personId', personId) + select('channel', 'Request received by', [['desk', 'At the desk'], ['phone', 'Phone'], ['inbox', 'Email or inbox']], 'desk')
-const identity = (s: any, personId: string) => request() + staffFields(s, personId)
+const staffFields = (s: any, personId: string, channel = 'desk') => s.actor.role === 'member' ? '' : hidden('personId', personId) + select('channel', 'Request received by', [['desk', 'At the desk'], ['phone', 'Phone'], ['inbox', 'Email or inbox']], channel)
+const identity = (s: any, personId: string, channel = 'desk') => request() + staffFields(s, personId, channel)
 const scope = () => select('scope', 'Occurrences to change', [['this', 'This occurrence'], ['future', 'This and following occurrences']], 'this')
 
 function occurrenceTerms(s: any, o: any) {
@@ -60,7 +60,7 @@ function preview(s: any, personId: string, back: string, entry: any) {
     + entry.occurrences.map((o: any) => (o.before ? `<p>Originally: ${when(s, o.before.start, o.timeZone)}</p>` : '') + occurrenceTerms(s, o)).join('')
     + (entry.policy ?? []).map((p: any) => `<p>${when(s, entry.occurrences.find((o: any) => o.id === p.id)?.start, entry.occurrences.find((o: any) => o.id === p.id)?.timeZone)} · Policy fee: ${money(p.effect.feeCents)}. Fee owed: ${money(p.feeCents)}. ${moving ? 'Original funding allocation carries to the new time.' : p.creditReturned ? 'Original funding allocation returns.' : 'Original visit stays used; no allocation returns.'}</p>`).join('')
     + '<p>No payment is charged or refunded by this confirmation.</p>'
-    + form('appointment.client.change.confirm', back, hidden('id', entry.id) + hidden('key', entry.key) + identity(s, personId), moving ? 'Confirm appointment move' : 'Confirm appointment cancellation') + '</div></details>'
+    + form('appointment.client.change.confirm', back, hidden('id', entry.id) + hidden('key', entry.key) + identity(s, personId, entry.channel), moving ? 'Confirm appointment move' : 'Confirm appointment cancellation') + '</div></details>'
 }
 
 export function clientAppointmentsPanel(s: any, personId: string, back: string) {

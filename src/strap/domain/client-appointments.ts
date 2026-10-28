@@ -54,7 +54,7 @@ function allocate(tx: Transaction, offer: RecordData, reservationId: string, cha
     tx.put('class',entry);
     const booking = seat(tx,{id:id(),classId:entry.id,personId:offer.personId,status:'booked',capacityPool:channel === 'online' ? 'online' : 'desk',
       bookingChannel:channel,madeBy:tx.who.id,madeByRole:tx.who.role,appointmentReservationId:reservationId,cancelTerms:terms,createdAt:now()},entry,pack);
-    return {...entry,bookingId:booking.id,packId:pack.id,packLabel:pack.entitlement?.name ?? 'Session pack',cancelTerms:terms,status:'booked'};
+    return {...entry,bookingId:booking.id,packId:pack.id,packLabel:pack.entitlement?.name ?? `${pack.credits}-session pack · expires ${pack.expiresAt.slice(0,10)}`,cancelTerms:terms,status:'booked'};
   });
 }
 
