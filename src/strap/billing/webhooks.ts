@@ -22,7 +22,7 @@ async function signedBody(request: Request,secret: string) {
   insist(valid,'billing_webhook_signature_invalid',400);
   let body;
   try {body=JSON.parse(raw);}catch {throw new DomainError('billing_webhook_json_invalid');}
-  insist(body && body.object==='event' && body.livemode===false && typeof body.id==='string' && body.id.length<=100 && typeof body.type==='string' && body.type.length<=100,'billing_webhook_event_invalid');
+  insist(body && body.object==='event' && body.livemode===false && typeof body.id==='string' && body.id.length<=100 && typeof body.type==='string' && body.type.length<=100 && Number.isSafeInteger(body.created) && body.created>=0,'billing_webhook_event_invalid');
   return {body,hash:await digest(raw)};
 }
 

@@ -369,7 +369,7 @@ test('Merchant readiness, hosted plan payment and signed reconciliation retain h
     const bad=await paymentSeed(h,'MismatchMember'),pending=await h.cmd('billing.checkout.start',{...start,packId:bad.pack.id,requestId:'synthetic-strap-mismatch'});edge.complete(pending.providerSessionId);
     const malformed=[
       b=>b.amount_total=1,b=>b.livemode=true,b=>b.metadata.strapInvoiceId='synthetic-strap-other',
-      b=>b.payment_intent.amount_received=1,b=>b.payment_intent.status='processing',b=>b.payment_intent.latest_charge.amount_refunded=1,b=>b.payment_intent.latest_charge.disputed=true,b=>b.invoice.amount_paid=1,b=>b.invoice.status='open',
+      b=>b.payment_intent.amount_received=1,b=>b.payment_intent.status='processing',b=>b.payment_intent.latest_charge.amount_refunded=1,b=>b.payment_intent.latest_charge.disputed=true,b=>b.invoice.amount_paid=1,b=>b.invoice.status='open',b=>b.invoice=null,
     ];
     for(const [i,change] of malformed.entries()){
       edge.setChange(change);await h.cmd('billing.reconcile',{id:pending.id,requestId:'synthetic-strap-mismatch-'+i});

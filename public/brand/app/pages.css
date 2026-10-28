@@ -129,3 +129,5 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
 
 #payments, #payment-connection { overflow-wrap: anywhere; }
 #payments section { margin-block: 18px; }
+
+.payment-reference { overflow-wrap: anywhere; }

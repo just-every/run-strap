@@ -47,8 +47,17 @@ await run(async h=>{
       await page.waitForURL(url=>url.origin===h.origin,{waitUntil:'commit',timeout:60000});
       assert.equal((await billingView(h)).invoices[0].status,'open','omitted callbacks cannot invent payment');assert.equal((await h.state()).payments.length,0);
       await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-live-reconcile'});
-      const paid=(await billingView(h)).invoices[0];assert.equal(paid.status,'paid');assert.equal(paid.balanceCents,0);assert.equal(paid.access,5);
-      const providerSession=await provider('/checkout/sessions/'+checkout.providerSessionId+'?expand[]=payment_intent.latest_charge&expand[]=invoice');
+      // Checkout can return before Stripe has finished generating its invoice.
+      // Observe the provider's actual state, then explicitly reconcile again.
+      let providerSession;
+      for(let observation=0;observation<30;observation++) {
+        providerSession=await provider('/checkout/sessions/'+checkout.providerSessionId+'?expand[]=payment_intent.latest_charge&expand[]=invoice');
+        if(providerSession.invoice?.status==='paid')break;
+        await new Promise(resolve=>setTimeout(resolve,1000));
+      }
+      assert.equal(providerSession.invoice?.status,'paid','Stripe must finish its real invoice before settlement can be proven');
+      await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-live-issued-invoice'});
+      const paid=(await billingView(h)).invoices[0];assert.equal(paid.status,'paid',JSON.stringify((await billingView(h)).exceptions.map(e=>({code:e.code,status:e.status}))));assert.equal(paid.balanceCents,0);assert.equal(paid.access,5);
       assert.equal(providerSession.payment_intent.amount_received,5000);assert.equal(providerSession.invoice.amount_paid,5000);assert.equal(providerSession.payment_intent.latest_charge.paid,true);
       const events=(await provider('/events?limit=100&created[gte]='+started)).data.filter(e=>[checkout.providerSessionId,paid.paymentIntentId,paid.providerInvoiceId].includes(e.data?.object?.id)&&['checkout.session.completed','payment_intent.succeeded','invoice.paid','invoice.payment_succeeded'].includes(e.type)).sort((a,b)=>b.created-a.created);
       assert.ok(events.some(e=>e.type==='checkout.session.completed'));assert.ok(events.some(e=>e.type==='payment_intent.succeeded'));assert.ok(events.some(e=>e.type.startsWith('invoice.')));

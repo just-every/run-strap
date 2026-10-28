@@ -54,6 +54,10 @@ export async function paymentsBrowser(h,{checkout}) {
       await page.goto(h.origin+'/app/packs#payments');
       await page.locator('#payments').getByText('Signed event history',{exact:true}).click();
       await page.locator('#payments').getByText('Reconciliation history',{exact:true}).click();
+      const comparison=page.locator('[data-reconciliation]').first();
+      assert.ok((await comparison.innerText()).includes('Stripe $50.00 USD'));
+      assert.ok((await comparison.innerText()).includes('Studio balance $50.00 before, $0.00 after'));
+      assert.ok((await comparison.innerText()).includes('Plan credits 5 before, 5 after'));
       await capture('retained-history',page.locator('#payments'));
     } finally {await context.close();}
   } finally {await browser.close();}

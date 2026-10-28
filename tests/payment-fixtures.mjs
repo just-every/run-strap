@@ -39,7 +39,7 @@ export function paymentEdge() {
   };
   const event=(sessionId,type='checkout.session.completed',suffix=events.size)=>{
     const s=sessions.get(sessionId),object=type.startsWith('payment_intent.')?s.payment_intent:type.startsWith('invoice.')?s.invoice:s;
-    assert.ok(object);const e={id:'synthetic-strap-event-'+suffix,object:'event',type,created:Math.floor(Date.now()/1000)-Number(suffix||0),livemode:false,data:{object:structuredClone(object)}};
+    assert.ok(object);const e={id:'synthetic-strap-event-'+suffix,object:'event',type,created:Math.floor(Date.now()/1000)-(Number.isFinite(Number(suffix))?Number(suffix):0),livemode:false,data:{object:structuredClone(object)}};
     events.set(e.id,e);return e;
   };
   return {...setup,outbound,calls,sessions,events,complete,event,setReady:v=>ready=v,setAccount:v=>accountId=v,setFailCreate:v=>failCreate=v,setChange:v=>change=v};
