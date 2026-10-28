@@ -28,6 +28,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "CLAIMS.md", "reason": "Generated contract status and evidence for maintainers" },
     { "file": "BILLING-AGREEMENTS.md", "reason": "Personal additional membership agreements, test hosted card setup and disconnected restored payment authority" },
     { "file": "TAX.md", "reason": "Stripe Tax test operations, immutable original prices, provider evidence and guarded reconnection for maintainers" },
     { "file": "TWILIO-SMS.md", "reason": "Twilio TEST runtime bindings, explicit owner diagnostic and the boundary between synthetic callbacks and real provider delivery" },

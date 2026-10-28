@@ -307,11 +307,15 @@ test('SCHED-009: eligible absences issue one linked expiring makeup; participant
   assert.deepEqual(afterRebooking.noticeDeliveries.filter(d=>d.sourceId===`makeup-booked:${rebooked.id}`).map(d=>d.personId),[child.id],'the new makeup notice goes only to its participant')
   const monthly=await h.person('Lena')
   const periodPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:monthly.id,kind:'visits',visits:2,period:'month',rollover:0,amountCents:10000,expiresAt:'2099-12-31T00:00:00Z'})).id})
-  const periodOriginal=await h.cmd('booking.book',{classId:original.id},monthly.cookie)
-  await h.cmd('booking.book',{classId:secondOriginal.id},monthly.cookie)
+  // Keep all three visits in one explicit future studio month. Relative day
+  // offsets cross a month boundary near month end and grant a new allowance.
+  const periodAnchor=new Date(),periodClasses=[]
+  for(const day of [1,2,3])periodClasses.push(await publish('Youth Mat',new Date(Date.UTC(periodAnchor.getUTCFullYear(),periodAnchor.getUTCMonth()+1,day,16)).toISOString()))
+  const periodOriginal=await h.cmd('booking.book',{classId:periodClasses[0].id},monthly.cookie)
+  await h.cmd('booking.book',{classId:periodClasses[1].id},monthly.cookie)
   const periodAbsence=await h.cmd('absence.report',{id:periodOriginal.id,reason:'Course absence',requestId:'synthetic-strap-period-absence'},monthly.cookie)
-  await refused(h,'booking.book',{classId:otherTarget.id},monthly.cookie,409,'plan_visits_used')
-  const periodMakeup=await h.cmd('makeup.book',{creditId:periodAbsence.creditId,classId:otherTarget.id,requestId:'synthetic-strap-period-makeup'},monthly.cookie)
+  await refused(h,'booking.book',{classId:periodClasses[2].id},monthly.cookie,409,'plan_visits_used')
+  const periodMakeup=await h.cmd('makeup.book',{creditId:periodAbsence.creditId,classId:periodClasses[2].id,requestId:'synthetic-strap-period-makeup'},monthly.cookie)
   const periodState=(await h.state(monthly.cookie)).packs.find(p=>p.id===periodPack.id).summary.plan
   assert.equal(periodState.periods.reduce((n,p)=>n+p.used,0),2)
   assert.equal(periodState.absent,1);assert.equal(periodState.attended,0)

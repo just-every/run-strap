@@ -410,7 +410,7 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "66e62fa8abc4d6f4d4e363d0f8d3b50e03c825553a3c13498cae19a3d968c8f1",
+      "sha256": "d854a0689989a488c3662ec8a1c78fcb77d1e6dce6a9d30e215804fae31f97eb",
       "executable": false
     },
     "docs/SOURCES.md": {
@@ -3906,7 +3906,7 @@
       "executable": false
     },
     "src/strap/ui/packs.ts": {
-      "sha256": "444562510708a6a151235b32252cfefa9c8d9b165e16ed92fcd35c1af8f05317",
+      "sha256": "13505baf2aa0e22b8795c5124b9a45f84f23638024e59fb98bcaea8ae29b88d1",
       "executable": false
     },
     "src/strap/ui/payment-connection.ts": {
@@ -4086,7 +4086,7 @@
       "executable": false
     },
     "tests/attendance.test.mjs": {
-      "sha256": "4b3336df0cee308df9c5099542b9f9aeffbee1b161d4b01c97bcbfbf49b95e28",
+      "sha256": "368b1d32841f39eb931e8d9ea4f32899f37a42b545d6049732db101ea7b0fea2",
       "executable": false
     },
     "tests/billing-agreements.test.mjs": {
