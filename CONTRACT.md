@@ -1920,9 +1920,9 @@ Inherits BASE-AGENT-001 to BASE-AGENT-013. The company's policy decides every ca
 | `strap.success.make_cutover_reconcile` | Make cutover reconcile | SUCCESS-007 | standard (+ commitment, money) | No MCP tool asserted |
 | `strap.success.resolve_routine_member_inquiries` | Resolve routine member inquiries | SUCCESS-008 | standard (+ external) | No MCP tool asserted |
 
-**Resources.** `strap://members/{id}`, `strap://households/{id}`, `strap://classes/{id}`, `strap://bookings/{id}`, `strap://plans/{id}`, `strap://agreements/{id}`, `strap://invoices/{id}`, `strap://payments/{id}`, `strap://waivers/{id}`, `strap://campaigns/{id}`, `strap://reports/{id}` and `strap://imports/{id}` retain their studio record relationships.
+**Resources.** `strap://members/{id}`, `strap://households/{id}`, `strap://locations/{id}`, `strap://rooms/{id}`, `strap://classes/{id}`, `strap://series/{id}`, `strap://bookings/{id}`, `strap://reservations/{id}`, `strap://spots/{id}`, `strap://intake-forms/{id}`, `strap://intake-answers/{id}`, `strap://notes/{id}`, `strap://plans/{id}`, `strap://intro-offers/{id}`, `strap://credits/{id}`, `strap://agreements/{id}`, `strap://invoices/{id}`, `strap://payments/{id}`, `strap://payment-methods/{id}`, `strap://tax-records/{id}`, `strap://waivers/{id}`, `strap://gift-cards/{id}`, `strap://products/{id}`, `strap://inventory/{id}`, `strap://drawers/{id}`, `strap://leads/{id}`, `strap://tasks/{id}`, `strap://campaigns/{id}`, `strap://messages/{id}`, `strap://consents/{id}`, `strap://instructors/{id}`, `strap://pay-rules/{id}`, `strap://pay-runs/{id}`, `strap://time-shifts/{id}`, `strap://reports/{id}`, `strap://imports/{id}`, `strap://audit/{id}`, `strap://integrations/{id}`, `strap://grants/{id}`, `strap://settings/{id}` retain their studio record relationships.
 
-**Events.** Member, household, entitlement, booking, attendance, agreement, invoice, payment, campaign, import and studio-configuration changes accompany the Base policy, approval and review events. **Prompts.** `run-studio-week` covers scheduling and staff operations; `retain-members` covers LEAD and SUCCESS jobs; `recover-payment` covers BILL jobs; `reconcile-cutover` covers MOVE jobs.
+**Events.** `member.changed`, `household.changed`, `plan.changed`, `booking.changed`, `attendance.changed`, `agreement.changed`, `invoice.changed`, `payment.changed`, `campaign.changed`, `import.changed` and `studio.changed`, alongside `approval.pending`, `approval.decided`, `review.flagged` and `policy.adopted`. **Prompts.** `run-studio-week` covers SCHED-001, SCHED-004, BOOK-001, BOOK-002, STAFF-002 and STAFF-003; `retain-members` covers LEAD-002 through LEAD-008 and SUCCESS-001 through SUCCESS-004; `recover-payment` covers BILL-007 and SUCCESS-005; `reconcile-cutover` covers MOVE-001 through MOVE-010 and SUCCESS-007.
 
 **Not tools, and why.**
 - `DATA-001`: Transactional consistency is an installation fact; the booking and ledger tools exercise it.
@@ -2099,7 +2099,7 @@ Inherits BASE-AGENT-001 to BASE-AGENT-013. The company's policy decides every ca
 
 #### SURFACE-013 — A studio week under two company policies
 
-*Tier:* Agent surface · *From:* new · *Cites:* BASE-AGENT-001, BASE-AGENT-007, BASE-AGENT-013
+*Tier:* Agent surface · *From:* new · *Cites:* BASE-AGENT-001, BASE-AGENT-007, BASE-AGENT-013 · *Register:* R-11
 
 **Requirement.** A stranger specialist completes one seeded studio week through MCP under the company's all-autonomous and held policies.
 
@@ -2206,6 +2206,7 @@ Inherits BASE-AGENT-001 to BASE-AGENT-013. The company's policy decides every ca
 | R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005 | not run | | |
 | R-9 | Zen Planner trial-tenant import and linked progress record | BOUNDARY-003 | not run | | |
 | R-10 | Production store distribution and aggregator onboarding | BOUNDARY-004 | not run | | |
+| R-11 | Interoperability receipts from the Claude, ChatGPT, Codex and Copilot clients | SURFACE-013 | not run | | |
 
 ## Boundaries
 

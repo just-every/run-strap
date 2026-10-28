@@ -13,7 +13,7 @@ The primary journey: configure the studio, bring members and their original reco
 | Later | 0 | 0 | 0 | 0 |
 | Full target | 1 | 100 | 65 | 166 |
 
-Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 10 rows; 0 passed, 0 failed, 10 not run.
+Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 11 rows; 0 passed, 0 failed, 11 not run.
 
 ## Core
 
@@ -2431,7 +2431,7 @@ Agent surface · target · **missing** · From new · Cites BASE-AGENT-013
 
 #### SURFACE-013 — A studio week under two company policies
 
-Agent surface · target · **missing** · From new · Cites BASE-AGENT-001, BASE-AGENT-007, BASE-AGENT-013
+Agent surface · target · **missing** · From new · Cites BASE-AGENT-001, BASE-AGENT-007, BASE-AGENT-013 · Register R-11
 
 **Requirement.** A stranger specialist completes one seeded studio week through MCP under the company's all-autonomous and held policies.
 
@@ -2463,3 +2463,4 @@ None.
 | R-8 | Legal review of studio waiver and guardian signing sufficiency | MEM-005 | not run | | |
 | R-9 | Zen Planner trial-tenant import and linked progress record | BOUNDARY-003 | not run | | |
 | R-10 | Production store distribution and aggregator onboarding | BOUNDARY-004 | not run | | |
+| R-11 | Interoperability receipts from the Claude, ChatGPT, Codex and Copilot clients | SURFACE-013 | not run | | |
