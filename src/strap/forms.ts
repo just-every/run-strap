@@ -38,6 +38,11 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('appointment.client.')) {
+    if('confirm' in input) input.confirm=input.confirm==='yes';
+    if('depositAmount' in input) {input[name.endsWith('.deposit.record')?'amountCents':'depositCents']=cents(input.depositAmount,'the deposit');delete input.depositAmount;}
+    return input;
+  }
   if(name.startsWith('billing.')) {
     for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
     return input

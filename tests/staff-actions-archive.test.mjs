@@ -18,6 +18,10 @@ async function archive(root,args) {
 }
 const setup=async(h,cookie)=>assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
 
+test('Client appointment acceptance, linked external deposit and original funding survive native restore while old sessions and capture replay have no authority',{timeout:240_000},async()=>{
+  await (await import('./client-appointments-archive.mjs')).clientAppointmentArchive({checkout,archive,exec});
+});
+
 test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 / STAFF-006 / MOVE-011: native restore carries waiver launch history without dispatch authority, pauses new staff links until explicit reconnect, and preserves member-owned sign-in', {timeout:240_000},async()=>{
   const temp=await mkdtemp(join(tmpdir(),'strap-staff-restore-')),source=join(temp,'source'),restored=join(temp,'restored'),file=join(temp,'studio.rer')
   let h

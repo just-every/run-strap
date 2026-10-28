@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5970091ff4aff9a271bec04b08b101d783f1c24d1459e5689d3d9ff9774b7ada",
+      "sha256": "0d8c952f84d8c67e4d6f4858c342c6e4298d40f81ce10a4cfa2e9869294b0dad",
       "executable": false
     },
     "AGENTS.md": {
@@ -326,7 +326,7 @@
       "executable": false
     },
     "CHANGELOG.md": {
-      "sha256": "c931942bd4bd6b451a0a0e9eb9886d2b39f66ef6ea88a1f8d7a4fc130652919f",
+      "sha256": "afa774b103f05f3e080c62917b4e0e3b83df1c13af612128e09678d0e882da80",
       "executable": false
     },
     "composition.lock.json": {
@@ -334,7 +334,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "1f6907306fbcb413b6fa00ec81e236fb197c1f02d957dd139647afcb61585acd",
+      "sha256": "7d7148f0035bbc447b5bc5ef7c6604358fa45fc9e2e2aeecc546eb97dba32582",
       "executable": false
     },
     "DEMO.md": {
@@ -374,15 +374,15 @@
       "executable": false
     },
     "docs/contract/COVERAGE.json": {
-      "sha256": "aff4140abef1bf1cadcb6ab6581e0023e30e8c6690059b5745abf214d4a0adc6",
+      "sha256": "17b5a9f85802997143090a9c86df944d22e0430ff8a718a940e6c53259e62ed1",
       "executable": false
     },
     "docs/contract/DONE-AUDIT.md": {
-      "sha256": "098fb7ff12cbc7045c0fb0dd04e5dba9d3bf5b93f30cc5f3fec07f0c12b176f9",
+      "sha256": "d663b726c94f7d7144fd074907a351d5f4615359b5561ef272f6006eafcb350e",
       "executable": false
     },
     "docs/contract/ID-MAP.json": {
-      "sha256": "7c50d867a399884163930bd3ee5390eaabfbb25decea29d0213dc8ec9ddfb13b",
+      "sha256": "15614b32308a859c3583e97a8fb3ab2bcecbfc0eaf7d98b66ccf77315da0c44a",
       "executable": false
     },
     "docs/contract/MECHANISMS.md": {
@@ -646,7 +646,7 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "d66a575ae1b5f8975a82417214a257c2137116681ce3df2ec6853ff561a568db",
+      "sha256": "1057f8983d1b8602befe04f56c4ad7ead1f92c6a9adca00be900d28b989e7ae0",
       "executable": false
     },
     "packaging.json": {
@@ -3265,6 +3265,14 @@
       "sha256": "9b7e9a976e89fbc8e4611d8d81ff5d0cd753fdd8cdc74f7a5bb8d8b598af4c8e",
       "executable": false
     },
+    "src/strap/domain/client-appointment-changes.ts": {
+      "sha256": "b8cd7124325e7f117d63d3dc6cc45fece5d86af6ec94871e5b70d83d2ae4eb4c",
+      "executable": false
+    },
+    "src/strap/domain/client-appointments.ts": {
+      "sha256": "27c99680dfff8ea143fd03104090d64208e7b0627551414a0c46d51469d1c460",
+      "executable": false
+    },
     "src/strap/domain/closures.ts": {
       "sha256": "3f1d13bfd735e267ddc216386e6a3d5b36fd81d47ad6ab176637efdcd6605731",
       "executable": false
@@ -3378,7 +3386,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "7ab6945d04babf7834c8d7ee6b85657120c95dc48af920da5b7cbd6f9430b27e",
+      "sha256": "4c84a077200b3f8cbed81a8ac38f9ac45a38edd4c625bd1004cf8243d539ef23",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3570,7 +3578,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "75d9cceb74cc3c2c18cc0f6e76e67c60015071784035b2de677a384198ba17e8",
+      "sha256": "10a9e605bd788a719e883592ec13d08b1b4a104e51250292010bf724e85c9d24",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3594,11 +3602,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "acc8008e2151e3c8138ce492c82765c8089a1abc3229450240de597b497b5e96",
+      "sha256": "b4a1a38b80e6f6e9a8c86aff58463dadc346e9d52eae7d966aab13514291733d",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "73ed7efd97682b379240f5892587dc984d034bab52c6466fb8221003e5f87645",
+      "sha256": "ecf0b9448f4d74a520144ef11d8d606db894f5c69cf5895d89e4b3f1598d8fa5",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3817,6 +3825,10 @@
       "sha256": "80f91b93524c43e3dec429bbb4b40f32c84a8a58ea598de1fc625bcf2bd4be29",
       "executable": false
     },
+    "src/strap/ui/client-appointments.ts": {
+      "sha256": "1f43d153781967d0fb8cfbd27687de6ee9287657a30ca327e3215702f6870880",
+      "executable": false
+    },
     "src/strap/ui/closures.ts": {
       "sha256": "c12bcac2743eee973f2249cb446fdbf497fbdc68e85ff83ef328fdc6ddda9f9e",
       "executable": false
@@ -3926,11 +3938,11 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "d4a7341873f72f64ca8a7aa456a8ddb480d9cabc44b8e81e493d2ee4aa9b248f",
+      "sha256": "40bf4713c5d1f5615849fd55067c70a3a9dc99c59ba9eef75e2e2910c339cbd4",
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "bbc7d0109a4dcac74e45a071afe576a298c465d013f8053abf49d92428bc00db",
+      "sha256": "c3b9a713b7db7aa9563958e0afe9620c52a14ee3d6bd5c273ead91306a12d8fe",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {
@@ -3950,7 +3962,7 @@
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "e15a731b0520f066ae13ba33ec3f1129187d66fdf2d286981b131fee0d6a9e10",
+      "sha256": "c01019cb9e065f4325f73e6589e2483dbfe9d9f879780aeb752737392796d2bb",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -4038,7 +4050,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "81112d014f74a9b7ae1ec2bf23b4426432c7b0d85bcba1cd9ca61e73bc068572",
+      "sha256": "8d5a7dcfddbe2f70fbdc49b5a5588649d617fe033a384b7d19bd0f4ef6178ff3",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4187,6 +4199,22 @@
     },
     "tests/class-reminders.test.mjs": {
       "sha256": "aa3b36a1fdc4e4fa1006281fe1901c418a3819d0d7a921b50caf3698f0f92c37",
+      "executable": false
+    },
+    "tests/client-appointment-cases.mjs": {
+      "sha256": "bc5ce5ae4b0e1de51125e1da57e39b1fc78c67425b4b3e2a12e35a26c98c0d31",
+      "executable": false
+    },
+    "tests/client-appointment-series.mjs": {
+      "sha256": "e2de9b9f7f0d96a3a54efc378fe00dabd60d53b034595aaf965f4bff19e6ce86",
+      "executable": false
+    },
+    "tests/client-appointments-archive.mjs": {
+      "sha256": "25794d0a8f5fdccab5217dbfdf40ecfbafa0561ee51b94fa351293d867383606",
+      "executable": false
+    },
+    "tests/client-appointments-browser.mjs": {
+      "sha256": "216ef0ee9c80dce8aa1b74443ff8f6691f263ea35b7c50c7fb0dea10c9f59f3c",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4482,7 +4510,7 @@
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "10102b0280823faa541169fea8b194ebd0737f8637da480dee101e860914f4a7",
+      "sha256": "735bbc58701d323a6ece035f0956b6e97cc7fd325be01d2a6bc98e312f09a022",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
@@ -4546,7 +4574,7 @@
       "executable": false
     },
     "tests/staff-actions-archive.test.mjs": {
-      "sha256": "9f4ea0bcc3b61c69483eb9cd359f1d413da706d112ff0a5a9015251ad7bb6cc2",
+      "sha256": "75a277a347c8160c65cb6a123020cd048b966b5aec2507dc8d53963ec75396b2",
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
@@ -4554,7 +4582,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "30fd77886dee5b0a76382464a27a2899fa6805f88e1f3bc0b110881869263c11",
+      "sha256": "97d194ea228428a1a2f5e0c5e5f9ec2359414c6d1f569dbc1e47d063f139d30e",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {

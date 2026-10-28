@@ -8,10 +8,10 @@ The primary journey: configure the studio, bring members and their original reco
 
 | Tier | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Core | 1 | 100 | 52 | 153 |
+| Core | 1 | 101 | 51 | 153 |
 | Agent surface | 0 | 0 | 13 | 13 |
 | Later | 0 | 0 | 0 | 0 |
-| Full target | 1 | 100 | 65 | 166 |
+| Full target | 1 | 101 | 64 | 166 |
 
 Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). Field proof register: 12 rows; 0 passed, 0 failed, 12 not run.
 
@@ -744,9 +744,9 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDI
 
 #### SCHED-015 — Client-facing appointment offers and acceptance
 
-Core · target · **missing** · Cites BASE-ROLE-001, BASE-ACCESS-002
+Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002
 
-**Requirement.** Members book private sessions from service duration, staff availability, location, equipment and buffers; deposits, packages, rescheduling and cancellation use the same entitlement and billing rules as classes. Staff move or cancel a member's appointment on the member's behalf under SCHED-014. Client-facing offers and acceptance remain unimplemented; SCHED-002 private owner alternatives are not an invitation, a booking, a hold or authority to charge. Every obligation elsewhere in this contract that names SCHED-002 for future appointment booking also binds SCHED-015. This clause inherits SCHED-002's original member booking, deposits, packages, rescheduling, cancellation and concurrent resource fence, SCHED-014's change previews, STAFF-006's matching staff doors and SCHED-005's per-occurrence reservation fences before those capabilities ship.
+**Requirement.** Members book private sessions from service duration, staff availability, location, equipment and buffers; deposits, packages, rescheduling and cancellation use the same entitlement and billing rules as classes. Staff move or cancel a member's appointment on the member's behalf under SCHED-014. SCHED-002 private owner alternatives alone do not establish a client-facing invitation, a booking, a hold or authority to charge. Every obligation elsewhere in this contract that names SCHED-002 for future appointment booking also binds SCHED-015. This clause inherits SCHED-002's original member booking, deposits, packages, rescheduling, cancellation and concurrent resource fence, SCHED-014's change previews, STAFF-006's matching staff doors and SCHED-005's per-occurrence reservation fences before those capabilities ship.
 
 **Acceptance.**
 1. Offer two overlapping appointment slots using one instructor and room, book concurrently, collect a deposit and reschedule; only one conflicting reservation commits.
@@ -754,8 +754,8 @@ Core · target · **missing** · Cites BASE-ROLE-001, BASE-ACCESS-002
 3. Staff-created reservations or native balance obligations do not establish the member’s acceptance, a deposit mandate or collection.
 4. These member-facing capabilities retain SCHED-013’s saved-resource and original-funding fences.
 
-**Evidence.** None.
-**Gap.** No client-facing appointment offer delivery or acceptance exists; the original concurrent reservation, deposit and reschedule journey and inherited member and staff doors remain unimplemented.
+**Evidence.** `tests/reservations.test.mjs`, `tests/staff-actions.test.mjs`, `tests/client-appointments-browser.mjs`, `tests/staff-actions-archive.test.mjs`
+**Gap.** PARTIAL: adopted conservative invitation and deposit default awaits ct approval: owner-only sanitized in-app delivery; own-member exact package and external-deposit acceptance; current separately scoped booking and member-record staff authority; only an actual owner-recorded external receipt against existing debt; the deposit creates no new debt or guest or household deposit authority, processor mandate, automatic collection or invented outbound. The six native campaign points have public-door assertions, but the full inherited appointment obligations remain required: recurring private waitlist and FIFO outcomes, exact household priced-visit authority and future widget, aggregator, provider collection and other named appointment doors are not proved here. No original acceptance is narrowed.
 
 #### ATT-001 — Member kiosk and staff check-in
 

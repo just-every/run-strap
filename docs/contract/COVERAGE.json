@@ -2,7 +2,7 @@
   "schema": 1,
   "seed": "strap-product",
   "old": {
-    "commit": "01e1d1455db0f7d04654af10b772debc1198ada4",
+    "commit": "620e1b9e22574ad6d93626f9aaa67c615beb362a",
     "files": [
       "CONTRACT.md"
     ]
@@ -2917,16 +2917,6 @@
     },
     {
       "file": "CONTRACT.md",
-      "line": 516,
-      "cell": "gap",
-      "text": "No client-facing appointment offer delivery or acceptance exists; the original concurrent reservation, deposit and reschedule journey and inherited member and staff doors remain unimplemented.",
-      "to": "gap",
-      "ids": [
-        "SCHED-015"
-      ]
-    },
-    {
-      "file": "CONTRACT.md",
       "line": 517,
       "cell": "gap",
       "text": "Member self check-in, owner-paired revocable kiosk with privacy-limited name/phone lookup, opaque QR check-in codes scanned at kiosk or desk, owner and assigned-instructor roster check-in, once-only credit use and role-scoped alerts; one ATT-001 public-door journey with 1440/390 browser proof.",
@@ -3896,6 +3886,16 @@
         {
           "to": "changelog"
         }
+      ]
+    },
+    {
+      "file": "CONTRACT.md",
+      "line": 516,
+      "cell": "gap",
+      "text": "PARTIAL: adopted conservative invitation and deposit default awaits ct approval: owner-only sanitized in-app delivery; own-member exact package and external-deposit acceptance; current separately scoped booking and member-record staff authority; only an actual owner-recorded external receipt against existing debt; the deposit creates no new debt or guest or household deposit authority, processor mandate, automatic collection or invented outbound. The six native campaign points have public-door assertions, but the full inherited appointment obligations remain required: recurring private waitlist and FIFO outcomes, exact household priced-visit authority and future widget, aggregator, provider collection and other named appointment doors are not proved here. No original acceptance is narrowed.",
+      "to": "gap",
+      "ids": [
+        "SCHED-015"
       ]
     }
   ]

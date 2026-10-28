@@ -500,3 +500,24 @@ test('Private changes disclose late policy, carry allocations, require separate 
 test('Published private visit prices require sale authority, reject stale quotes and preserve original obligations through cancellation and restore',()=>run(async h=>{
   await (await import('./appointment-policy-cases.mjs')).privatePayment(h);
 }));
+
+test('Client appointment invitations race one resource, reserve a package, record one external deposit and preserve funding through member reschedule and cancellation',()=>run(async h=>{
+  await (await import('./client-appointment-cases.mjs')).clientCampaign(h);
+}));
+
+test('Client appointment scope, member ownership, changed eligibility and revoked staff rights fence pending changes and committed replay',()=>run(async h=>{
+  await (await import('./client-appointment-cases.mjs')).clientRights(h);
+}));
+
+test('Member appointment series preserve local DST, explicit skipped dates and occurrence funding through moves and future cancellation',()=>run(async h=>{
+  await (await import('./client-appointment-series.mjs')).clientAppointmentSeries(h);
+}));
+
+test('Client appointments disclose retained late fees, send configured confirmations once and preserve in-app changes after member opt-out',async()=>{
+  const sent=[];
+  await run(async h=>{
+    await (await import('./client-appointment-cases.mjs')).clientNoticePolicy(h,sent);
+  },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-1'},outbound:async request=>{
+    assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-message-'+sent.length});
+  }});
+});

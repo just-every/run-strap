@@ -1,4 +1,4 @@
-Old reference: `01e1d1455db0f7d04654af10b772debc1198ada4`.
+Old reference: `620e1b9e22574ad6d93626f9aaa67c615beb362a`.
 
 | Clause | Point | Outcome | Asserting test | Result |
 | --- | --- | --- | --- | --- |
