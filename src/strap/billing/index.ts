@@ -1,11 +1,13 @@
 import { hasStaffRight } from '../domain/staff-rights';
 import { load, Transaction } from '../domain/store';
-import { DomainError, insist, list, type Actor } from '../domain/types';
+import { DomainError, humanOwner, insist, list, now, type Actor } from '../domain/types';
 import { acceptAgreement, prepareAgreement, revokeMandate } from './agreements';
 import { connection, type BillingBindings } from './model';
 import { providerCommand } from './operations';
 import { launchBillingAction } from './launch';
 import type { MemberDoor } from '../domain/command-catalogue';
+import { startCheckout, reconcileCheckout } from './checkout';
+import { balance } from '../domain/money';
 export { agreementEvidence, assembleAgreementEvidence, renderAgreementCopy } from './agreements';
 export type { BillingBindings } from './model';
 
@@ -24,6 +26,14 @@ const launch = (name: string,right: string)=>defineBilling(native((tx,input)=>la
 const member = (name: string,right: string)=>({member:{staff:name+'.launch',right,ownStep:true}});
 const handlers = {
   'billing.connect':defineBilling(hosted('billing.connect'),['owner']),
+  'billing.disconnect':defineBilling(native((tx,input)=>{
+    humanOwner(tx.who);insist(input.confirm===true,'billing_disconnect_confirmation_required');
+    const event={id:crypto.randomUUID(),type:'disconnect',actorId:tx.who.id,at:now()};
+    tx.sql.push(tx.statement("DELETE FROM st_payment_connections WHERE id='billing'"));
+    tx.put('billingConnectionEvent',event);return event;
+  }),['owner']),
+  'billing.checkout.start':defineBilling(startCheckout,['owner']),
+  'billing.reconcile':defineBilling(reconcileCheckout,['owner']),
   'billing.agreement.prepare':defineBilling(native(prepareAgreement),['owner','manager','front-desk'],{staffRight:'membership-sale'}),
   'billing.agreement.accept':defineBilling(native(acceptAgreement),['member'],member('billing.agreement.accept','membership-sale')),
   'billing.agreement.accept.launch':launch('billing.agreement.accept','membership-sale'),
@@ -53,7 +63,11 @@ export async function billingState(env: BillingBindings,who: Actor) {
     // invalid live credential or unexpected validator failure must remain visible.
     if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured'].includes(error.code))throw error;
   }
-  return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id} : null,
+  const reviews=list(loaded.state,'billingConnectionReview');
+  return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id,review:reviews.filter(r=>r.connectionId===c.connection_id).at(-1)} : null,
+    reviews:who.role === 'owner'?reviews:[],connectionEvents:who.role === 'owner'?list(loaded.state,'billingConnectionEvent'):[],
+    invoices:list(loaded.state,'stripeInvoice').filter(visible).map(r=>({...r,balanceCents:balance(loaded.state,r.personId),access:loaded.state.records.get(r.packId)?.data.remaining ?? null})),
+    events:who.role === 'owner'?list(loaded.state,'stripeEvent'):[],exceptions:who.role === 'owner'?list(loaded.state,'billingException'):[],reconciliations:who.role === 'owner'?list(loaded.state,'billingReconciliation'):[],
     launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,available:!!c && m.status === 'authorized' && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
 }
 

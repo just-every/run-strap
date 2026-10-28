@@ -1,3 +1,4 @@
+import { planPaymentsPanel } from './payment-connection';
 import { body, field, form, h, hidden, owner, panel, person, select, textarea } from './shared'
 import { money, when } from './format'
 
@@ -8,15 +9,13 @@ const check=(name: string,label: string)=>`<label class="check"><input type="che
 /** Personal agreement and payment consent remain separate from staff preparation. */
 export function billingPanel(s: any) {
   if(!['owner','member'].includes(s.actor.role))return ''
-  if(!s.billing)return panel('Membership agreements',body('<p><a href="/app/security">Complete second-factor verification</a> to open membership agreements.</p>'),{id:'billing'})
+  if(!s.billing)return planPaymentsPanel(s)+panel('Membership agreements',body('<p><a href="/app/security">Complete second-factor verification</a> to open membership agreements.</p>'),{id:'billing'})
   const b=s.billing,mine=!owner(s)
   const terms=(s.recurring?.terms ?? []).filter((t: any)=>t.status==='active'&&t.acceptedAt&&!b.agreements.some((a: any)=>a.termsId===t.id&&a.status!=='payment-permission-revoked'))
   const prepare=!mine&&terms.length ? `<details><summary>Prepare an additional membership agreement</summary><p>The member must already have accepted their studio invoice terms. Preparing this document does not sign for them or authorize a payment.</p>`
     +form('billing.agreement.prepare',back,request()+select('termsId','Accepted membership',[['','Choose a membership'],...terms.map((t: any)=>[t.id,person(s,t.personId)+' · '+money(t.amountCents)+' every '+t.intervalMonths+' month(s)'])],'','required')
       +field('title','Agreement title','','text','required maxlength="160"')+textarea('documentText','Exact additional agreement text','','required maxlength="20000"')
       +field('adultEvidenceReference','Adult eligibility evidence reference','','text','required maxlength="200"')+check('adultVerified','I verified this member is an adult signing for themselves.'),'Prepare for personal signing')+'</details>' : ''
-  const connect=!mine ? `<details><summary>${b.connected?'Review test payment connection':'Connect test payment setup'}</summary><p>Connect your Stripe test account to let members authorize a card through Stripe. This does not collect money.</p>`
-    +(b.configured ? form('billing.connect',back,request()+hidden('mode','test')+field('accountId','Stripe test account ID',b.connection?.accountId ?? '','text','required maxlength="100"')+check('confirm','I reviewed this test account and authorize this connection.'),'Connect test account') : '<p>The test payment connection is not configured for this installation.</p>')+'</details>' : ''
   const agreements=b.agreements.map((a: any)=>{
     const mandate=b.mandates.find((m: any)=>m.agreementId===a.id),setups=b.setups.filter((v: any)=>v.agreementId===a.id),methods=b.methods.filter((m: any)=>m.agreementId===a.id)
     const financial=a.financialTerms
@@ -43,7 +42,7 @@ export function billingPanel(s: any) {
       +outcome+signature+setup+revoke+(personalSteps?`<details><summary>Member personal steps</summary><p>Open the sign-in link on the member’s own device. Only they can sign, authorize or revoke.</p>${personalSteps}</details>`:'')+`<p><a href="/api/strap/billing/agreement.json?id=${encodeURIComponent(a.id)}">Download exact agreement evidence</a> · <a href="/api/strap/billing/agreement.html?id=${encodeURIComponent(a.id)}">Download readable agreement</a></p></section>`
   }).join('')
   const history=b.operations.length?`<details><summary>Payment setup history</summary>${b.operations.map((o: any)=>`<p>${h(o.type)} · ${h(o.status)}${o.errorCode?' · '+h(o.errorCode.replaceAll('_',' ')):''} · ${when(s,o.createdAt)}</p>`).join('')}</details>`:''
-  return panel('Membership agreements',body('<p>Personal typed agreements and separate recurring-payment permission. Stripe test card setup collects no payment; automatic collection is not available.</p>'+connect+prepare+(agreements||'<p>No additional membership agreements yet.</p>')+history),{id:'billing'})
+  return planPaymentsPanel(s)+panel('Membership agreements',body('<p>Personal typed agreements and separate recurring-payment permission. Stripe test card setup collects no payment; automatic collection is not available.</p>'+prepare+(agreements||'<p>No additional membership agreements yet.</p>')+history),{id:'billing'})
 }
 
 export function billingStaffControls(s: any,personId: string,back: string) {

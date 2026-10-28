@@ -1,6 +1,7 @@
 import { billingBrowser } from './billing-browser.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { paymentAuth, paymentEdge, paymentSeed, billingView, connectPayment, signedEvent } from './payment-fixtures.mjs';
 import { createHash } from 'node:crypto';
 import { run } from './harness.mjs';
 import { acceptance, billingEdge, billingSeed, billingSucceeded } from './billing-sandbox.mjs';
@@ -313,4 +314,89 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     assert.equal(edge.calls.length,attempts);
     if(process.env.STRAP_BILLING_BROWSER === '1' || process.env.STRAP_PROOF_DIR)await billingBrowser(h,edge);
   },{auth:{STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'},outbound});
+});
+
+test('Merchant readiness, hosted plan payment and signed reconciliation retain history through rotation, missing events and replay',{timeout:180000},async()=>{
+  const edge=paymentEdge();
+  await run(async h=>{
+    const view=()=>billingView(h),posts=()=>edge.calls.filter(c=>c.method==='POST').length;
+    const refuse=async(name,input,cookie,status=403)=>{const before=(await h.state()).version,calls=edge.calls.length;await h.cmd(name,input,cookie,status);assert.equal((await h.state()).version,before);assert.equal(edge.calls.length,calls);};
+    await refuse('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-1'},h.owner);
+    await h.enroll(h.owner);
+    const seed=await paymentSeed(h);
+    const start={packId:seed.pack.id,requestId:'synthetic-strap-checkout',confirm:true};
+    edge.setReady(false);assert.equal((await connectPayment(h)).result.ready,false);
+    await refuse('billing.checkout.start',start,h.owner,409);
+    edge.setReady(true);assert.equal((await connectPayment(h,'synthetic-strap-ready')).result.ready,true);
+    const connected=(await view()).connection;assert.equal(connected.accountId,'synthetic-strap-10');assert.equal(connected.review.webhookConfigured,true);
+    for(const cookie of [seed.member.cookie,seed.other.cookie])for(const [name,input] of [['billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-denied'}],['billing.disconnect',{confirm:true}],['billing.checkout.start',start],['billing.reconcile',{id:'synthetic-strap-none',requestId:'synthetic-strap-none'}]])await refuse(name,input,cookie);
+    await refuse('billing.checkout.start',{...start,confirm:false},h.owner,400);
+    const checkout=await h.cmd('billing.checkout.start',start);
+    assert.equal(checkout.status,'open');assert.equal(new URL(checkout.launchURL).hostname,'checkout.stripe.com');
+    assert.equal(checkout.amountCents,5000);assert.deepEqual(checkout.chargeIds,(await h.state()).charges.filter(c=>c.packId===seed.pack.id).map(c=>c.id).sort());
+    const postCount=posts();assert.ok(postCount>0);
+    for(const requestId of [start.requestId,'synthetic-strap-other-request'])assert.equal((await h.cmd('billing.checkout.start',{...start,requestId})).id,checkout.id);
+    assert.equal(posts(),postCount);assert.equal((await view()).invoices.length,1);assert.equal((await h.state()).payments.length,0);
+    const before=await h.state(),older=edge.event(checkout.providerSessionId,'checkout.session.completed','old');
+    const version=before.version;
+    for(const options of [{signature:'0'.repeat(64)},{stamp:1}])assert.equal((await signedEvent(h,older,options)).status,400);
+    assert.equal((await signedEvent(h,{...older,account:'synthetic-strap-foreign'})).status,403);
+    assert.equal((await h.state()).version,version);assert.equal((await view()).events.length,0);
+    const forged={...older,id:'synthetic-strap-forged'};
+    assert.equal((await signedEvent(h,forged)).value.status,'exception');
+    assert.deepEqual((await view()).exceptions.map(e=>e.code),['billing_webhook_provider_unavailable']);
+    const paid=edge.complete(checkout.providerSessionId),success=edge.event(paid.id),invoiceEvent=edge.event(paid.id,'invoice.paid'),intentEvent=edge.event(paid.id,'payment_intent.succeeded');
+    assert.equal((await signedEvent(h,success)).status,200);
+    let current=await view(),financial=await h.state();
+    assert.equal(current.invoices[0].status,'paid');assert.equal(current.invoices[0].balanceCents,0);assert.equal(current.invoices[0].access,5);
+    assert.equal(financial.payments.length,1);assert.equal(financial.payments[0].amountCents,5000);assert.equal(financial.payments[0].accountId,connected.accountId);assert.equal(financial.payments[0].paymentIntentId,paid.payment_intent.id);assert.equal(current.invoices[0].providerInvoiceId,paid.invoice.id);
+    assert.deepEqual(financial.packs,before.packs,'payment observation cannot manufacture or revoke access');assert.deepEqual(financial.charges,before.charges);
+    const receivedCalls=edge.calls.length;
+    assert.equal((await signedEvent(h,success)).status,200);assert.equal(edge.calls.length,receivedCalls);
+    for(const event of [older,invoiceEvent,intentEvent])assert.equal((await signedEvent(h,event)).status,200);
+    assert.equal((await h.state()).payments.length,1);assert.equal(posts(),postCount);
+    assert.equal((await signedEvent(h,{...success,data:{object:{...success.data.object,id:'synthetic-strap-changed'}}})).status,409);
+    const comparison=(await view()).reconciliations.find(r=>r.paymentRecorded);
+    assert.equal(comparison.native.balanceBeforeCents,5000);assert.equal(comparison.native.balanceAfterCents,0);assert.equal(comparison.native.balanceMatches,true);assert.equal(comparison.native.accessBefore.remaining,5);assert.equal(comparison.native.accessAfter.remaining,5);assert.equal(comparison.native.accessMatches,true);
+    const memberView=await billingView(h,seed.member.cookie),otherView=await billingView(h,seed.other.cookie);
+    assert.deepEqual(memberView.invoices.map(i=>i.id),[checkout.id]);assert.deepEqual(otherView.invoices,[]);assert.deepEqual(otherView.events,[]);assert.deepEqual(otherView.exceptions,[]);
+    assert.equal(JSON.stringify(current).includes('synthetic-strap-901'),false);assert.equal(JSON.stringify(current).includes('synthetic-strap-902'),false);assert.equal(JSON.stringify(current).includes('checkout.stripe.com'),false);
+    const omitted=await paymentSeed(h,'OmittedMember'),missing=await h.cmd('billing.checkout.start',{...start,packId:omitted.pack.id,requestId:'synthetic-strap-missing'});edge.complete(missing.providerSessionId);
+    assert.equal((await h.state()).payments.length,1,'omitted callbacks leave settlement unclaimed');
+    await h.cmd('billing.reconcile',{id:missing.id,requestId:'synthetic-strap-reconcile'});
+    assert.deepEqual((await view()).invoices.map(i=>[i.status,i.balanceCents,i.access]),[['paid',0,5],['paid',0,5]]);
+    await h.cmd('billing.reconcile',{id:missing.id,requestId:'synthetic-strap-reconcile'});assert.equal((await h.state()).payments.length,2);
+    const bad=await paymentSeed(h,'MismatchMember'),pending=await h.cmd('billing.checkout.start',{...start,packId:bad.pack.id,requestId:'synthetic-strap-mismatch'});edge.complete(pending.providerSessionId);
+    const malformed=[
+      b=>b.amount_total=1,b=>b.livemode=true,b=>b.metadata.strapInvoiceId='synthetic-strap-other',
+      b=>b.payment_intent.amount_received=1,b=>b.payment_intent.status='processing',b=>b.payment_intent.latest_charge.amount_refunded=1,b=>b.payment_intent.latest_charge.disputed=true,b=>b.invoice.amount_paid=1,b=>b.invoice.status='open',
+    ];
+    for(const [i,change] of malformed.entries()){
+      edge.setChange(change);await h.cmd('billing.reconcile',{id:pending.id,requestId:'synthetic-strap-mismatch-'+i});
+      current=await view();assert.equal(current.invoices.find(i=>i.id===pending.id).status,'open');assert.equal((await h.state()).payments.length,2);assert.ok(current.exceptions.some(e=>e.invoiceId===pending.id&&e.status==='open'));
+    }
+    edge.setChange(null);await h.cmd('billing.reconcile',{id:pending.id,requestId:'synthetic-strap-correct'});assert.equal((await h.state()).payments.length,3);
+    current=await view();const exceptionCount=current.exceptions.length;assert.ok(current.exceptions.filter(e=>e.invoiceId===pending.id).every(e=>e.status==='resolved'));assert.ok(current.exceptions.some(e=>e.eventId&&e.status==='open'),'unmatched event evidence is retained');
+    edge.setChange(b=>{b.status='open';b.payment_status='unpaid';b.payment_intent=null;});
+    await h.cmd('billing.reconcile',{id:pending.id,requestId:'synthetic-strap-regression'});assert.equal((await view()).invoices.find(i=>i.id===pending.id).status,'paid');assert.equal((await h.state()).payments.length,3);assert.ok((await view()).exceptions.length>exceptionCount);
+    edge.setChange(null);
+    const uncertain=await paymentSeed(h,'UncertainPaymentMember');edge.setFailCreate(true);
+    const lost=await h.cmd('billing.checkout.start',{...start,packId:uncertain.pack.id,requestId:'synthetic-strap-lost'});assert.equal(lost.status,'uncertain');
+    const uncertainPosts=posts();await h.cmd('billing.checkout.start',{...start,packId:uncertain.pack.id,requestId:'synthetic-strap-lost-new'});assert.equal(posts(),uncertainPosts);
+    edge.setFailCreate(false);await h.cmd('billing.reconcile',{id:lost.id,requestId:'synthetic-strap-discover'});const found=(await view()).invoices.find(i=>i.id===lost.id);assert.ok(found.providerSessionId);edge.complete(found.providerSessionId);
+    await h.cmd('billing.reconcile',{id:lost.id,requestId:'synthetic-strap-found'});assert.equal((await h.state()).payments.length,4);
+    const retainedPayments=(await h.state()).payments;
+    await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-904',STRIPE_BILLING_WEBHOOK_SECRET:'synthetic-strap-905'});
+    assert.equal((await view()).connected,false);const callCount=edge.calls.length;await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-before-review'},h.owner,409);assert.equal(edge.calls.length,callCount);
+    await connectPayment(h,'synthetic-strap-rotate');assert.equal((await view()).connection.connectionId,connected.connectionId);assert.deepEqual((await h.state()).payments,retainedPayments);assert.equal((await view()).invoices[0].accountId,connected.accountId);
+    assert.equal((await signedEvent(h,success)).status,400,'revoked signing credential is refused');
+    await h.cmd('billing.connect',{accountId:'synthetic-strap-foreign',mode:'test',confirm:true,requestId:'synthetic-strap-replace'},h.owner,409);
+    const bundle=(await h.send('/api/strap/exit.json',undefined,h.owner)).value;
+    const records=bundle.tables.st_records.map(r=>({kind:r.kind,data:JSON.parse(r.data)}));
+    assert.deepEqual(records.filter(r=>r.kind==='stripeInvoice').map(r=>r.data.id).sort(),(await view()).invoices.map(i=>i.id).sort());assert.equal(records.filter(r=>r.kind==='stripeEvent').length,(await view()).events.length);assert.equal(records.filter(r=>r.kind==='billingException').length,(await view()).exceptions.length);assert.ok(!bundle.manifest.schema.some(t=>t.name==='st_payment_connections'));
+    if(process.env.STRAP_PROOF_DIR)await(await import('./payments-browser.mjs')).paymentsBrowser(h,{seed,checkout,edge});
+    await h.cmd('billing.disconnect',{confirm:true});assert.equal((await view()).connected,false);assert.deepEqual((await h.state()).payments,retainedPayments);
+    assert.equal((await signedEvent(h,success,{secret:'synthetic-strap-905'})).status,409);
+    await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-disconnected'},h.owner,409);
+  },{auth:paymentAuth,outbound:edge.outbound,mfa:false});
 });
