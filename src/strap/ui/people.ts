@@ -1,3 +1,4 @@
+import { clientAppointmentsPanel } from './client-appointments'
 import { attendanceBookingAccess } from './attendance-access'
 import { attendancePlanControls } from './attendance-plan'
 import { appointmentBookingAccess } from './appointment-access'
@@ -34,7 +35,7 @@ function card(s: any, p: any, back: string) {
   return `<section class="panel person-card" id="person"><div class="person-top">${avatar(p.name, 'large')}<div><h2>${h(p.name)}</h2><p>${h(p.email)}${p.phone ? ` · ${h(phoneText(p.phone))}` : ''} · ${p.role === 'member' ? 'Member' : 'Instructor'} · ${p.active ? 'Active' : 'Inactive'}</p></div></div>${stats}<div class="panel-body">${contact}${packLines}${actions}</div>${upcomingList}`
     + (p.role === 'member' ? feesPanel(s,p.id,back) : '')
     + personCheckin(s, p, back)
-    + (p.role === 'member' ? reservationsPanel(s,p.id,back) : '')
+    + (p.role === 'member' ? reservationsPanel(s,p.id,back) + clientAppointmentsPanel(s,p.id,back+'#client-appointments') : '')
     + (p.role === 'member' ? memberHistoryPanel(s,p,back) : '')
     + (p.role === 'member' ? attendancePlanControls(s,p.id,back+'#attendance-plan') : '')
     + staffProfileEditor(s, p, back)

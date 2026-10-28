@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "003fbb3d20417f778ca62ba780678c848b06ddc5c7fad21a05f65466fd8cfd4c",
+      "sha256": "7869ebe65a24077240103d57c905a9f06cd0c6103782d2a4004f210a9461fa06",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "04c073a7c24d0f2ff903df415d73854175b535ffb1bcaffbd350d425ebe86a58",
+      "sha256": "b9f5f24e5b643a2366c888859d792aa92bcad0e9006bfe26fc370e23d94ec122",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "4877ea4317815a22e649776b52e025b02f07efa96c7fcdd228af319545a40d35",
+      "sha256": "9f283177551745b59026b00f1cd16f5176e7fa0aaf3ca3b7f9849e3cd155ba5d",
       "executable": false
     },
     "docs/classes.md": {
@@ -3233,6 +3233,14 @@
       "sha256": "9b7e9a976e89fbc8e4611d8d81ff5d0cd753fdd8cdc74f7a5bb8d8b598af4c8e",
       "executable": false
     },
+    "src/strap/domain/client-appointment-changes.ts": {
+      "sha256": "b8cd7124325e7f117d63d3dc6cc45fece5d86af6ec94871e5b70d83d2ae4eb4c",
+      "executable": false
+    },
+    "src/strap/domain/client-appointments.ts": {
+      "sha256": "27c99680dfff8ea143fd03104090d64208e7b0627551414a0c46d51469d1c460",
+      "executable": false
+    },
     "src/strap/domain/closures.ts": {
       "sha256": "3f1d13bfd735e267ddc216386e6a3d5b36fd81d47ad6ab176637efdcd6605731",
       "executable": false
@@ -3346,7 +3354,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "7ab6945d04babf7834c8d7ee6b85657120c95dc48af920da5b7cbd6f9430b27e",
+      "sha256": "4c84a077200b3f8cbed81a8ac38f9ac45a38edd4c625bd1004cf8243d539ef23",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3538,7 +3546,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "75d9cceb74cc3c2c18cc0f6e76e67c60015071784035b2de677a384198ba17e8",
+      "sha256": "10a9e605bd788a719e883592ec13d08b1b4a104e51250292010bf724e85c9d24",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3562,11 +3570,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "acc8008e2151e3c8138ce492c82765c8089a1abc3229450240de597b497b5e96",
+      "sha256": "b4a1a38b80e6f6e9a8c86aff58463dadc346e9d52eae7d966aab13514291733d",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "73ed7efd97682b379240f5892587dc984d034bab52c6466fb8221003e5f87645",
+      "sha256": "ecf0b9448f4d74a520144ef11d8d606db894f5c69cf5895d89e4b3f1598d8fa5",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3785,6 +3793,10 @@
       "sha256": "80f91b93524c43e3dec429bbb4b40f32c84a8a58ea598de1fc625bcf2bd4be29",
       "executable": false
     },
+    "src/strap/ui/client-appointments.ts": {
+      "sha256": "1f43d153781967d0fb8cfbd27687de6ee9287657a30ca327e3215702f6870880",
+      "executable": false
+    },
     "src/strap/ui/closures.ts": {
       "sha256": "c12bcac2743eee973f2249cb446fdbf497fbdc68e85ff83ef328fdc6ddda9f9e",
       "executable": false
@@ -3894,11 +3906,11 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "d4a7341873f72f64ca8a7aa456a8ddb480d9cabc44b8e81e493d2ee4aa9b248f",
+      "sha256": "40bf4713c5d1f5615849fd55067c70a3a9dc99c59ba9eef75e2e2910c339cbd4",
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "bbc7d0109a4dcac74e45a071afe576a298c465d013f8053abf49d92428bc00db",
+      "sha256": "c3b9a713b7db7aa9563958e0afe9620c52a14ee3d6bd5c273ead91306a12d8fe",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {
@@ -3918,7 +3930,7 @@
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "e15a731b0520f066ae13ba33ec3f1129187d66fdf2d286981b131fee0d6a9e10",
+      "sha256": "c01019cb9e065f4325f73e6589e2483dbfe9d9f879780aeb752737392796d2bb",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -4006,7 +4018,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "81112d014f74a9b7ae1ec2bf23b4426432c7b0d85bcba1cd9ca61e73bc068572",
+      "sha256": "8d5a7dcfddbe2f70fbdc49b5a5588649d617fe033a384b7d19bd0f4ef6178ff3",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4155,6 +4167,22 @@
     },
     "tests/class-reminders.test.mjs": {
       "sha256": "aa3b36a1fdc4e4fa1006281fe1901c418a3819d0d7a921b50caf3698f0f92c37",
+      "executable": false
+    },
+    "tests/client-appointment-cases.mjs": {
+      "sha256": "bc5ce5ae4b0e1de51125e1da57e39b1fc78c67425b4b3e2a12e35a26c98c0d31",
+      "executable": false
+    },
+    "tests/client-appointment-series.mjs": {
+      "sha256": "c0f15f550a6752c7cc9483f8c5a35281c4fe9e458a10af0275d707fee9f53a33",
+      "executable": false
+    },
+    "tests/client-appointments-archive.mjs": {
+      "sha256": "25794d0a8f5fdccab5217dbfdf40ecfbafa0561ee51b94fa351293d867383606",
+      "executable": false
+    },
+    "tests/client-appointments-browser.mjs": {
+      "sha256": "c2872fd8a904255e3fd089497427eec1e236d4c0d9d192853b65100f5c530c45",
       "executable": false
     },
     "tests/closures-browser.mjs": {
@@ -4450,7 +4478,7 @@
       "executable": false
     },
     "tests/reservations.test.mjs": {
-      "sha256": "10102b0280823faa541169fea8b194ebd0737f8637da480dee101e860914f4a7",
+      "sha256": "735bbc58701d323a6ece035f0956b6e97cc7fd325be01d2a6bc98e312f09a022",
       "executable": false
     },
     "tests/retail-archive.test.mjs": {
@@ -4514,7 +4542,7 @@
       "executable": false
     },
     "tests/staff-actions-archive.test.mjs": {
-      "sha256": "9f4ea0bcc3b61c69483eb9cd359f1d413da706d112ff0a5a9015251ad7bb6cc2",
+      "sha256": "75a277a347c8160c65cb6a123020cd048b966b5aec2507dc8d53963ec75396b2",
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
@@ -4522,7 +4550,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "30fd77886dee5b0a76382464a27a2899fa6805f88e1f3bc0b110881869263c11",
+      "sha256": "97d194ea228428a1a2f5e0c5e5f9ec2359414c6d1f569dbc1e47d063f139d30e",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
