@@ -2029,9 +2029,9 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-AUDIT-001, BASE-DATA-
 
 #### SEC-001 — Private records and operational recovery
 
-Core · target · **partial** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-SECRET-001, BASE-BACKUP-001, BASE-INSTALL-001
+Core · target · **partial** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-SECRET-001, BASE-BACKUP-001, BASE-INSTALL-001, BASE-DATA-006
 
-**Requirement.** Logs redact member notes and payment secrets and every export requires explicit rights.
+**Requirement.** The studio controls its deployment and records. Studio doors use encrypted transport; provider diagnostics identify the failing integration and retain actionable stale or error states. Logs redact member notes and payment secrets, and studio exports use the separately granted export right.
 
 **Acceptance.**
 1. Deploy to a controlled studio account, exercise role-separated exports and provider failure diagnostics, inspect logs for planted secrets and restore a backup to a recovery installation.
@@ -2041,9 +2041,9 @@ Core · target · **partial** · Cites BASE-ROLE-001, BASE-DATA-001, BASE-SECRET
 
 #### SEC-002 — Durable staff and automation audit
 
-Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDIT-001, BASE-DATA-001, BASE-DATA-006, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008 · Rules D-2, D-1
+Core · target · **partial** · Cites BASE-ROLE-001, BASE-ACCESS-002, BASE-AUDIT-001, BASE-DATA-001, BASE-DATA-006, BASE-MAIL-001, BASE-AGENT-005, BASE-AGENT-007, BASE-AGENT-008, BASE-SECRET-001 · Rules D-2, D-1
 
-**Requirement.** Record actor, role, policy/version, time, source and before/after effect for staff access, member changes, billing attempts, autopay skips and postponements, staff-made contract freezes, freeze ends, terminations and canceled terminations with their type or reason code and comment, cash drawer adjustments, refunds, entitlements, attendance corrections, imports, exports, messages and agent execution. Every staff action on a member's behalf through a STAFF-006 staff door is recorded as staff-made with the acting staff member, role, STAFF-001 right used, member, channel (desk, phone, inbox or staff device) and any reason: bookings, cancellations with their early or late type, fee waiver and notice suppression, moves, restores, waitlist actions, spot and guest bookings, makeups, check-ins, sales and card-on-file charges, invoices and receipts sent, payment collections, retries and payment-method changes, plan changes, freezes and terminations, signing sessions launched, and profile, household, intake, preference, referral and privacy-request records. The member/staff pair follows D-1.
+**Requirement.** Record actor, role, policy/version, time, source and before/after effect for staff access, member changes, billing attempts, autopay skips and postponements, staff-made contract freezes, freeze ends, terminations and canceled terminations with their type or reason code and comment, cash drawer adjustments, refunds, entitlements, attendance corrections, imports, exports, messages and agent execution. Every staff action on a member's behalf through a STAFF-006 staff door is recorded as staff-made with the acting staff member, role, STAFF-001 right used, member, channel (desk, phone, inbox or staff device) and any reason: bookings, cancellations with their early or late type, fee waiver and notice suppression, moves, restores, waitlist actions, spot and guest bookings, makeups, check-ins, sales and card-on-file charges, invoices and receipts sent, payment collections, retries and payment-method changes, plan changes, freezes and terminations, signing sessions launched, and profile, household, intake, preference, referral and privacy-request records. The member/staff pair follows D-1. Studio audit filters include the named staff right and studio action; financial audit evidence follows SEC-003's permitted pseudonymous retention classes.
 
 **Acceptance.**
 1. Change staff rights, correct attendance, run a renewal and approved refund, export and erase a member; inspect the complete ordered audit and verify agents and staff cannot rewrite it.
