@@ -4,10 +4,10 @@ import { join, extname } from 'node:path'
 import { chromium } from '@playwright/test'
 import { taxAddress } from './tax-sandbox.mjs'
 
-export async function taxBrowser(h,seed) {
+export async function taxBrowser(h,seed,widths=[1440,390]) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
-  try {for(const width of [1440,390]){
+  try {for(const width of widths){
     const context=await browser.newContext({viewport:{width,height:1000},acceptDownloads:true})
     try {
       await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})

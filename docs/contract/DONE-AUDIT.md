@@ -1,4 +1,4 @@
-Old reference: `6184d1d30c67986c339dcb08f492cec41ee2f4e9`.
+Old reference: `01e1d1455db0f7d04654af10b772debc1198ada4`.
 
 | Clause | Point | Outcome | Asserting test | Result |
 | --- | --- | --- | --- | --- |
@@ -91,7 +91,7 @@ Old reference: `6184d1d30c67986c339dcb08f492cec41ee2f4e9`.
 | ERASE-001 | 1. Erase an unused person through person.erase, inspect absence of their email, refuse recreation and CSV reimport, and run the CLI older-backup/later-journal refusal. | CSV reimport. | none | none |
 | ERASE-001 | 1. Erase an unused person through person.erase, inspect absence of their email, refuse recreation and CSV reimport, and run the CLI older-backup/later-journal refusal. | and run the CLI older-backup/later-journal refusal. | none | none |
 | AUDIT-001 | 1. Approve a pack through HTTP, inspect its draft-linked approval, archive the populated studio and compare the restored approval records. | Approve a pack through HTTP and retain its draft-linked approval. | `tests/strap.test.mjs:89` | asserted |
-| AUDIT-001 | 1. Approve a pack through HTTP, inspect its draft-linked approval, archive the populated studio and compare the restored approval records. | Compare the restored approval records after the populated archive round trip. | `tests/archive.test.mjs:246` | asserted |
+| AUDIT-001 | 1. Approve a pack through HTTP, inspect its draft-linked approval, archive the populated studio and compare the restored approval records. | Compare the restored approval records after the populated archive round trip. | `tests/archive.test.mjs:248` | asserted |
 | PUBLIC-001 | 1. Build the run site, open its homepage, /run and /docs; open the installed Worker Lobby signed out and attempt /app before and after sign-in. | Build the run site. | none | none |
 | PUBLIC-001 | 1. Build the run site, open its homepage, /run and /docs; open the installed Worker Lobby signed out and attempt /app before and after sign-in. | open its homepage. | none | none |
 | PUBLIC-001 | 1. Build the run site, open its homepage, /run and /docs; open the installed Worker Lobby signed out and attempt /app before and after sign-in. | /run. | none | none |
