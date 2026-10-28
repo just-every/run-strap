@@ -455,7 +455,7 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from the code and tests at commit `5fba667b39bcdbd39e8a401f72c104509a2f8b48` (28 October 2026). BILL-001 and BILL-010 have the clause-specific HTTP, browser, held-key Stripe TEST and native restore proof below. The landing candidate changes only generated contract metadata from that source proof; exact candidate Verify and guarded landing results govern publication.
+Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). BILL-001 and BILL-010 have the clause-specific HTTP, browser, held-key Stripe TEST and native restore proof below. The landing candidate changes only generated contract metadata from that source proof; exact candidate Verify and guarded landing results govern publication.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
