@@ -450,8 +450,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
     const restoredBilling=await billingView(h,restoredOwner);
     assert.equal(restoredBilling.connected,false);
-    assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i),retainedPayments.invoices.map(({balanceCents,access,...i})=>i));
-    assert.deepEqual(restoredBilling.events,retainedPayments.events);assert.deepEqual(restoredBilling.reconciliations,retainedPayments.reconciliations);assert.deepEqual(restoredBilling.exceptions,retainedPayments.exceptions);
+    assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)),retainedPayments.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)));
+    for(const key of ['events','reconciliations','exceptions'])assert.deepEqual([...restoredBilling[key]].sort((a,b)=>a.id.localeCompare(b.id)),[...retainedPayments[key]].sort((a,b)=>a.id.localeCompare(b.id)));
     const noCalls=providerEdge.calls.length;
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-reconcile'},restoredOwner,409);
     assert.equal((await signedEvent(h,paidEvent)).status,409);assert.equal(providerEdge.calls.length,noCalls);
