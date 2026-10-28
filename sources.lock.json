@@ -642,7 +642,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "bf08960a15f8977675ab05b7526388f2d2ca5f7011a03849aa1164bb82c8f966",
+      "sha256": "9530df23d09ae5da3e3f767793c22ca57c5535ca6a46e41cc057e00f0fdb2f6d",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -4041,6 +4041,10 @@
       "sha256": "421f11e42281ad43c7610c07165294d931ffe85b63cd704deff1cf5f6f63b765",
       "executable": false
     },
+    "src/strap/ui/tax-payments.ts": {
+      "sha256": "0441124508bd62d55b3820547b504bb0e66ce4f5127152de7ecceeeead307880",
+      "executable": false
+    },
     "src/strap/ui/tax-settings.ts": {
       "sha256": "d190351a68576d7721e95807b475d31c2b3c303272479176473f13596a806a7f",
       "executable": false
@@ -4570,7 +4574,7 @@
       "executable": false
     },
     "tests/tax-sandbox.mjs": {
-      "sha256": "190659322d529b0148ed44d3dfb0cc009052a89f41a242b791669504420deccd",
+      "sha256": "59c109868f936e378025d70abd9a187772b7baf92ca954d1f467ebe030f150b3",
       "executable": false
     },
     "tests/tax.test.mjs": {

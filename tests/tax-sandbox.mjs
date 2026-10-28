@@ -88,7 +88,10 @@ async function sandbox() {
   const edge = [],responses=[];
   await run(async h=>{
     const seed = await taxSeed(h);
-    await succeeded(h,'tax.config.save',seed.config);
+    const configured=await succeeded(h,'tax.config.save',seed.config);
+    assert.deepEqual(configured.result.registeredStates,['WA','CA']);
+    const exempt=await succeeded(h,'tax.calculate',{requestId:'sandbox-exempt',chargeId:seed.sale.chargeId,productId:'mat',address:taxAddress,exemptionId:'synthetic-exemption'});
+    assert.equal(exempt.result.taxCents,0);assert.equal(exempt.result.exemption.reference,'synthetic-strap-205');
     const retail = await taxInvoice(h,seed.sale.chargeId,'mat',taxAddress,'retail');
     assert.equal(retail.calculation.result.providerCalculation.line_items.data[0].quantity,seed.sale.quantity);
     assert.equal(retail.invoice.result.providerTransaction.line_items.data[0].quantity,seed.sale.quantity);
@@ -116,7 +119,7 @@ async function sandbox() {
     const filing=await assertTaxFiling(h,[{...retail.invoice,priceCents:4000,taxCents:retail.invoice.result.taxCents},
       {...service.invoice,priceCents:3000,taxCents:service.invoice.result.taxCents},
       {...reversal,invoice:retail.invoice.result,priceCents:-2000,taxCents:-expectedTaxCents}]);
-    for(const operation of [retail.calculation,retail.invoice,service.calculation,service.invoice,reversal]) {
+    for(const operation of [exempt,retail.calculation,retail.invoice,service.calculation,service.invoice,reversal]) {
       const received=responses.find(response=>response.requestId===operation.providerResponse.requestId);
       assert.ok(received); assert.deepEqual(operation.providerResponse.body,received.body,'retained evidence is the actual provider response');
     }
@@ -127,11 +130,11 @@ async function sandbox() {
     assert.deepEqual(await h.cmd('retail.return',{saleId:seed.sale.id,quantity:1,restock:true,reason:'Synthetic partial retail return',requestId:'tax-return'}),returned);
     assert.equal((await h.state()).payments.length,4);
     const posts = edge.filter(request=>request.method === 'POST');
-    assert.deepEqual(posts.map(request=>request.path),['/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/transactions/create_reversal']);
+    assert.deepEqual(posts.map(request=>request.path),['/v1/tax/calculations','/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/calculations','/v1/tax/transactions/create_from_calculation','/v1/tax/transactions/create_reversal']);
     console.log(JSON.stringify({head,cleanTree:true,sourceTree,nativeBookkeeping:{receiptCents:taxReceipt.amountCents,refundCents:taxPayout.amountCents,processorSettlementVerified:false},filingRows:filing,at:new Date().toISOString(),provider:'Stripe Tax TEST',accountSettingsWritten:false,registrationsWritten:false,
-      edge,retail:{calculationId:retail.calculation.result.providerCalculationId,transactionId:retail.invoice.result.providerTransactionId,priceCents:4000,taxCents:retail.invoice.result.taxCents},
+      edge,exemption:{calculationId:exempt.result.providerCalculationId,priceCents:4000,taxCents:exempt.result.taxCents},retail:{calculationId:retail.calculation.result.providerCalculationId,transactionId:retail.invoice.result.providerTransactionId,priceCents:4000,taxCents:retail.invoice.result.taxCents},
       service:{calculationId:service.calculation.result.providerCalculationId,transactionId:service.invoice.result.providerTransactionId,priceCents:3000,taxCents:service.invoice.result.taxCents},
-      reversal:{transactionId:reversal.result.providerTransactionId,originalTransactionId:reversal.result.providerOriginalTransactionId,priceCents:reversal.result.priceCents,taxCents:reversal.result.taxCents},replayProviderPosts:posts.length-5,filing:'Evidence CSV only; no filing or payment collected'}));
+      reversal:{transactionId:reversal.result.providerTransactionId,originalTransactionId:reversal.result.providerOriginalTransactionId,priceCents:reversal.result.priceCents,taxCents:reversal.result.taxCents},replayProviderPosts:posts.length-6,filing:'Evidence CSV only; no filing or payment collected'}));
   },{auth:{STRIPE_TAX_TEST_KEY:key},outbound:async request=>{
     const url = new URL(request.url);
     assert.equal(url.origin,'https://api.stripe.com');
