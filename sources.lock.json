@@ -4350,7 +4350,7 @@
       "executable": false
     },
     "tests/invoice-browser.mjs": {
-      "sha256": "b5a4e0f3b526918c79f0aaebab7d4e4cad850b7314db7b96eee99310ef790af6",
+      "sha256": "cabacd6e36baee53ef58dd4551eb474abf0a1e697eb1b9df5888b71c58b3857c",
       "executable": false
     },
     "tests/invoice-edge.mjs": {

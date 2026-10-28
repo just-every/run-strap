@@ -4,7 +4,7 @@ import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
 
 export async function invoiceBrowser(h,{member,other,pack,desk,stripeReceipt,payerPack}) {
-  const proof=process.env.STRAP_PROOF_DIR ?? 'logs/proof/invoices';await mkdir(proof,{recursive:true});
+  const proof=process.env.STRAP_PROOF_DIR ?? './logs/proof/invoices';await mkdir(proof,{recursive:true});
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
   try {
     const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
