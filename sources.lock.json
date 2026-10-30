@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0bd321d66c10141a01d3643d130801be5ef420f4bee8d8be84b5b153563fe8a9",
+      "sha256": "58fe9043f9cf14ff7ce2a8df6bf1a0753276b185e9a438a38b2beb398fc3d945",
       "executable": false
     },
     "DEMO.md": {
@@ -622,7 +622,7 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "1057f8983d1b8602befe04f56c4ad7ead1f92c6a9adca00be900d28b989e7ae0",
+      "sha256": "afad18fb8e5e2e48903464c21d695c5d09dca3d4bf6b52b9fa8563117735f6f6",
       "executable": false
     },
     "packaging.json": {
@@ -630,7 +630,7 @@
       "executable": false
     },
     "pnpm-lock.yaml": {
-      "sha256": "1978f7642941424bd63d9cbd420bb8ce58337ec820f8d7cb2bf507bd4854993b",
+      "sha256": "544e846a40d115a92a18d8715387094cd0f2e06c6b49f18e8cdd59781571e2e7",
       "executable": false
     },
     "public/apple-touch-icon.png": {
@@ -642,7 +642,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "bf08960a15f8977675ab05b7526388f2d2ca5f7011a03849aa1164bb82c8f966",
+      "sha256": "52c983fcfeb008948639c0e58501929cd1e5587ab1aefba736989730ba35ab13",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -650,11 +650,11 @@
       "executable": false
     },
     "public/brand/app/shell.css": {
-      "sha256": "3eb52f9f0aed2d77f60dd69a48474af665283edc6a536c42be86d9b6252e47e4",
+      "sha256": "96745b3016fbe4962edda38c629f1bfe38108f5a6edb115e8c45d3fc80067a32",
       "executable": false
     },
     "public/brand/app/today.css": {
-      "sha256": "fff0d98fd1bfcfbcd76a98cdce0a83d1be512a15a424f5863c3ec2f791bab905",
+      "sha256": "f02e6b917b3eebdbd53879d40b23179a64418117752b09f73792f6c610de6fc3",
       "executable": false
     },
     "public/brand/favicon-16.png": {
@@ -689,8 +689,12 @@
       "sha256": "203fb688db7853887877f2964e83e4fd53d8fe81142d5b63136de57e33ccad9b",
       "executable": false
     },
+    "public/brand/profile-save.js": {
+      "sha256": "99efaad9802f3213685983334b80ba43f321140de4b698973b31eee6de7e3483",
+      "executable": false
+    },
     "public/brand/strap.css": {
-      "sha256": "d864f7714f6e5c99329decbc5d1a9ad98f2c00cfa766f47c810ad1ee8efa009c",
+      "sha256": "522c0587ccc0783141929ad37d980d432843352bf3577fc2d96dd6e61a57b8b1",
       "executable": false
     },
     "public/favicon.ico": {
@@ -3354,7 +3358,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "9cdff50d94df8b1cdff42c68826efdf1bfa095ddbee0ee4bdc3f2890bc5c3497",
+      "sha256": "ead472a50f1ef7ef119d4d6541e1fdf9a72b598c0381249d4f446a405f15bb3d",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3426,7 +3430,7 @@
       "executable": false
     },
     "src/strap/domain/profiles.ts": {
-      "sha256": "3546ce2bb814da54943d3e019a7a8b1acee3b83e5c8e027e413450b50e51f7ad",
+      "sha256": "27bba436f2f5567b07c8a86c40d14f93473dbd0449b4b6002dc74ef7c269c8a2",
       "executable": false
     },
     "src/strap/domain/recognition-launch.ts": {
@@ -3574,7 +3578,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "0beedcd9db0a36c01f42d83ad07790791f22f958ed29e827d1fb241e5f377763",
+      "sha256": "8a816c830f68fc317833f974ad9a6ac9cb8708e631ae2ff4aace86278945aba2",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3886,7 +3890,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "f9a29fb067f60fc4cd145f62af3675e6db3a5c394222091c60cb4ea87935f089",
+      "sha256": "d9b475e2e4aacfb7f36e414aa800f14fef01a3608da3921b69041892977183c1",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -3926,11 +3930,11 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "40bf4713c5d1f5615849fd55067c70a3a9dc99c59ba9eef75e2e2910c339cbd4",
+      "sha256": "91c85e7af464e663a886edb4b99584a1ee8b3cf41d106adc468bba86ce0b626c",
       "executable": false
     },
     "src/strap/ui/member.ts": {
-      "sha256": "c3b9a713b7db7aa9563958e0afe9620c52a14ee3d6bd5c273ead91306a12d8fe",
+      "sha256": "d372ebde4e3f297e651fb93797185969e6d33f8db3c511e878b6c00e7fa753f9",
       "executable": false
     },
     "src/strap/ui/message-settings.ts": {
@@ -4022,11 +4026,11 @@
       "executable": false
     },
     "src/strap/ui/shared.ts": {
-      "sha256": "9ad121eecb5f41bd2a05dea927ca3e28f0922292d0562d4e591afd4932f6b06b",
+      "sha256": "2e99b5f5fc7eda7e62ca93bb8df52680fd1f753d68b1d5c622d21f9bad1b4240",
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "ab69c03a707b8c224d71a7d1e9d53c331b6acc8579a969517463fe7f58db25aa",
+      "sha256": "e9dc9f9c4e6f52dc77b77e9c412889132057492b3cd59ad681add44089148af8",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -4111,6 +4115,10 @@
     },
     "test-budget.json": {
       "sha256": "4758319395811bd0a063f5f67ef499c43b57ffc43377f2da178e761f6d6448be",
+      "executable": false
+    },
+    "tests/accessibility-browser.mjs": {
+      "sha256": "10f95fbc9991921b9709114ae24bf00042a344c4996daddb710320894afa8603",
       "executable": false
     },
     "tests/appointment-policy-cases.mjs": {
@@ -4486,11 +4494,11 @@
       "executable": false
     },
     "tests/profiles-browser.mjs": {
-      "sha256": "54c62eafe76213dec38a36772aaae580895d22a4cfc71aa93afb9a08c41c132e",
+      "sha256": "e2cd82f77d09bc121adc4303c40f1bb8ae3f9faff0889c1bf268e712e2a651af",
       "executable": false
     },
     "tests/profiles.test.mjs": {
-      "sha256": "5378e4fb7774bd5260a3a08121f87c21a73e939e84490a3c101df7489a4bd51c",
+      "sha256": "2ce674300c99c36497dd27e97ae59fd5927684f5c59b7e45773928dd0823772b",
       "executable": false
     },
     "tests/recognition-browser.mjs": {
@@ -4618,7 +4626,7 @@
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
-      "sha256": "abb10432c5a1bd7a23101fa60e53b4045a0b900745b70dc0f6f57e11fddf8ba6",
+      "sha256": "fab1a7eef389ebeea029743bab09c6292b8733b76f09f203c52e4a16aef4e620",
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {

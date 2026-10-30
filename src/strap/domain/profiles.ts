@@ -87,6 +87,22 @@ export function saveMemberProfile(tx: Transaction, input: Record<string, unknown
   return applyProfile(tx, member, input, { command: 'profile.save.staff', channel: staffChannel(input), staffMade: true });
 }
 
+/** A lost response is not a save receipt. Recheck present authority and the
+ * actor's durable request, then compare it with the current profile revision. */
+export function profileSaveStatus(state: State, who: Actor, input: Record<string, unknown>) {
+  const staff = input.command === 'profile.save.staff';
+  insist(staff || input.command === 'profile.save', 'invalid_profile_command');
+  const personId = staff ? input.personId : who.personId;
+  if (staff) requireMemberRecord(state, who, personId);
+  else insist(who.role === 'member' && personId && (input.personId === undefined || input.personId === personId), 'own_profile_required', 403);
+  const member = person(state, personId);
+  insist(member.role === 'member', 'member_required', 403);
+  const requestId = text(input.requestId, 'requestId', 100);
+  const receipt = list(state, 'profileChange').find(c => c.actorId === who.id && c.personId === member.id && c.command === input.command && c.requestId === requestId);
+  if (!receipt) return { status: 'not_saved', requestId };
+  return { status: receipt.revision === (memberProfile(state, member.id)?.revision ?? 0) ? 'saved' : 'changed', requestId };
+}
+
 /** Owners (and their preparation keys) read every profile; a member reads only their own. */
 export function profileSnapshot(state: State, who: Actor) {
   const owner = who.role === 'owner' || who.role === 'agent';

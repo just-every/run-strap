@@ -208,3 +208,8 @@ html.rer-themed main .notice { border: 1px solid var(--strap-line); border-left:
   html.rer-themed body > main { padding: 28px 20px 24px; }
   html.rer-themed main h1 { font-size: 32px; }
 }
+
+/* Standalone document links need a target separate from the adjacent form. */
+.panel-body > p > a:only-child { display: inline-block; min-height: 24px; }
+[data-save-status]:empty { display: none; }
+.panel summary { min-height: 32px; }

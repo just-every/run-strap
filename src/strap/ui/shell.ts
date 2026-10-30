@@ -66,7 +66,7 @@ export function shell(s: any, current: string, title: string, top: string, conte
     + `<details class="menu"><summary>${icon('menu')}Menu</summary><div class="menu-sheet">${location}${nav}${account}</div></details></aside>`
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${h(title)} · ${name}</title><link rel="icon" href="/favicon.ico" sizes="32x32"><link rel="icon" type="image/svg+xml" href="/brand/favicon-32.svg"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`
     + `<link rel="stylesheet" href="/rer-theme.css">${fontHead}<link rel="stylesheet" href="/brand/app/shell.css"><link rel="stylesheet" href="/brand/app/today.css"><link rel="stylesheet" href="/brand/app/pages.css"></head>`
-    + `<body>${sprite}<a class="skip" href="#content">Skip to content</a><div class="app">${sidebar}<main class="workspace" id="content"><div class="topbar">${top}</div>${notices}${content}</main></div></body></html>`
+    + `<body>${sprite}<a class="skip" href="#content">Skip to content</a><div class="app">${sidebar}<main class="workspace" id="content" tabindex="-1"><div class="topbar">${top}</div>${notices}${content}</main></div><script src="/brand/profile-save.js" defer></script></body></html>`
 }
 
 /** The top bar: the day on the left; member search, Check in and Add person for the owner. */
