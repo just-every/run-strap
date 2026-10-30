@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "0002140e7ceb88562cca793dfaa5b376d8b0dd83e445e22a92d9257829fdfe36",
+      "sha256": "704cb14ecbfcd9c56dad085e9ffd3ef5d8ef39fede6fb7fda2e0fe394e3e0215",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0bd321d66c10141a01d3643d130801be5ef420f4bee8d8be84b5b153563fe8a9",
+      "sha256": "c98848ff71e3d0ccdf8c66fdaba67ee56ceaf5d3563dede85d7bfcc7b2234a7b",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "8e93939a26f4cbc47bd436010daf836f2dfd845db5b12036c4f564a21507cdcd",
+      "sha256": "3247012fb830d45315da1516fa726b26941dcf415219954a9c11bcb5c05afa8b",
       "executable": false
     },
     "docs/classes.md": {
@@ -3638,7 +3638,7 @@
       "executable": false
     },
     "src/strap/privacy-access.ts": {
-      "sha256": "866164e6ccc340bb607bd99078719fda09e08b2ed3515669b442b1bebd0928e1",
+      "sha256": "a6dc3f25efd87c70333fbcc97ad2167aac923771dac064fb4382581021d087a9",
       "executable": false
     },
     "src/strap/privacy-billing.ts": {
@@ -4458,7 +4458,7 @@
       "executable": false
     },
     "tests/privacy-courses.mjs": {
-      "sha256": "8c05acccb5443e27de5ce81fc9c42a3aedcd2a546bb82003e0c49d088824e285",
+      "sha256": "87710a66fd475b590d3c2e89adffb5098df2439e9d05467ed9029673a84b3b61",
       "executable": false
     },
     "tests/privacy-journey.mjs": {
