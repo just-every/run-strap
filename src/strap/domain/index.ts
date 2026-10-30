@@ -48,7 +48,7 @@ import { demandEvidence, demandAvailability, prepareRecommendation, approveRecom
 import { collectFee, waiveFee, fees } from './fees';
 import { saveQualification, requestSubstitution, prepareSubstitution, approveSubstitution, substitutionSnapshot } from './substitutions';
 import { requestPlanChange, preparePlanChange, acceptPlanChange, applyDuePlanChanges, planChangeSnapshot } from './plan-changes';
-import { createLead, updateLead, appendLeadNote, leadSnapshot, saveRecoveryRule, processRecovery, completeRecovery, prepareEmptyPlaces, approveEmptyPlaces, acceptEmptyPlace, settleEmptyPlace, emptyPlaceSnapshot, saveNurtureSequence, pauseNurtureSequence, reviewNurture, purchaseNurture, suppressNurture, nurtureSnapshot, recordReferral, prepareWinback, approveWinback, purchaseWinback, reviewReferralReward, suppressWinback, winbackSnapshot } from './leads';
+import { createLead, updateLead, appendLeadNote, leadSnapshot, saveSuccessRule, prepareSuccess, confirmSuccess, saveRecoveryRule, processRecovery, completeRecovery, prepareEmptyPlaces, approveEmptyPlaces, acceptEmptyPlace, settleEmptyPlace, emptyPlaceSnapshot, saveNurtureSequence, pauseNurtureSequence, reviewNurture, purchaseNurture, suppressNurture, nurtureSnapshot, recordReferral, prepareWinback, approveWinback, purchaseWinback, reviewReferralReward, suppressWinback, winbackSnapshot } from './leads';
 import { saveMilestone, saveRecognitionPreference, processRecognition, completeRecognition, recognitionSnapshot } from './recognition';
 import { launchRecognition } from './recognition-launch';
 import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
@@ -231,6 +231,9 @@ export const handlers = {
   'plan.change.request':defineCommand(requestPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change'}}),
   'plan.change.accept':defineCommand(acceptPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change',ownStep:true}}),
   'plan.change.prepare':defineCommand(preparePlanChange,['owner'],{staffRight:'contract-change'}),
+  'lead.success.rule.save':defineCommand(saveSuccessRule,['owner']),
+  'lead.success.prepare':defineCommand(prepareSuccess,['owner','agent']),
+  'lead.success.confirm':defineCommand(confirmSuccess,['owner']),
   'lead.recovery.rule.save':defineCommand(saveRecoveryRule,['owner']),
   'lead.recovery.process':defineCommand(processRecovery,['owner']),
   'lead.recovery.complete':defineCommand(completeRecovery,['owner']),
@@ -352,7 +355,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
-  if (who.role === 'agent') insist(['attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
+  if (who.role === 'agent') insist(['lead.success.prepare','attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   if (name.startsWith('booking.')) {
     const target = tx.state.records.get(String(input.id))?.data;

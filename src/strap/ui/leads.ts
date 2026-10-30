@@ -39,7 +39,7 @@ export function leadsPage(s: any,query: URLSearchParams) {
   }
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Lead follow-up</h1><p>Assigned next actions and a retained history from inquiry to membership.</p></div>`
     +panel('Staff queue',body(`<form method="get" action="${path}" class="form">${select('stage','Filter stage',[['','All stages'],...stages],stage,'')}${select('overdue','Due filter',[['false','All leads'],['true','Overdue only']],String(onlyOverdue))}<button class="btn-quiet">Filter follow-up</button></form><p><a href="${path}?overdue=true">${h(r.overdue.length)} overdue follow-ups</a></p>`)+`<div class="table-wrap">${table(['Person','Stage','Assigned owner','Next action'],list||'<tr><td colspan="4">No leads in this view.</td></tr>')}</div>`)
-    +recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+winbackPanel(s)+referralPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
+    +recoveryPanel(s)+successPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+winbackPanel(s)+referralPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
     +'</div><aside class="rail">'+panel('Record an inquiry',body(form('lead.create',path,request()+select('personId','Person',[['','Choose a person'],...s.people.filter((p: any)=>p.role==='member').map((p: any)=>[p.id,p.name])])+taskFields(s)+field('source','Inquiry source (optional)','','text','maxlength="100"')+textarea('note','Inquiry note','','maxlength="2000"'),'Add inquiry')))
     +panel('Recorded conversations',body('<p>Record calls, emails or conversations that actually happened. Saving a note does not send a message. The studio owner manages this queue until staff roles ship.</p>'))+'</aside></div>'
 }
@@ -108,4 +108,28 @@ function winbackPanel(s:any) {
       +`<p>Observed redemptions: ${h(r.totals.redemptions)}. Later visits using renewed plans: ${h(r.totals.laterVisits)}. Reward reservations $${(r.totals.reservedCents/100).toFixed(2)}; recorded reward cost $${(r.totals.rewardCostCents/100).toFixed(2)}. Visits are observed outcomes, not a claim of causal recovery or collected payments.</p>`;
   }
   return panel('Win-back memberships',body('<p>Explicitly approved in-app invitations for eligible former members. Opt-out suppresses an existing offer permanently; fresh enrollment requires a new human-approved audience and the cadence cap. Referral rewards require verified attribution, an actual renewal, completed attendance and owner review.</p>'+controls+offers+(!owner && !offers?'<p>No win-back membership offer.</p>':'')));
+}
+
+export function successSettingsPanel(s:any) {
+  const rule=s.pipeline?.successRule;
+  return panel('Attendance outreach review',body('<p>Agents prepare explanations. Only the owner can queue private review tasks, after current sources, channel permission and this per-member cap are checked again. No message is sent.</p>'
+    +form('lead.success.rule.save','/app/studio#success-review',hidden('version',rule?.version ?? 0)
+      +select('enabled','Attendance review',[['false','Paused'],['true','Enabled']],String(rule?.enabled ?? false))
+      +field('maxPer30Days','Review task cap per member per 30 days',rule?.maxPer30Days ?? 1,'number','required min="1" max="30"'),'Save attendance review limit','quiet')),{id:'success-review'});
+}
+function successDetails(s:any,row:any) {
+  return `<p>${h(row.uncertainty)}</p><p>Prepared ${when(s,row.asOf)}. Channel: ${h(row.permission.channel)} · ${h(row.permission.state)}${row.permission.reason ? ' · '+h(row.permission.reason) : ''}. Permission revision ${h(row.permission.revision)}.</p>`
+    +'<p>Completed routine:</p><ul>'+row.visits.map((v:any)=>`<li><a href="/app?booking=${encodeURIComponent(v.bookingId)}">${when(s,v.start)} · ${h(v.attendance)}</a> · Class ${h(v.classId)} · Booking ${h(v.bookingId)}</li>`).join('')+'</ul>'
+    +'<p>Missed available opportunities:</p><ul>'+row.opportunities.map((o:any)=>`<li>${when(s,o.at)} · Classes ${h(o.classIds.join(', '))} · ${o.bookingIds.length ? 'Recorded no-show: '+h(o.bookingIds.join(', ')) : 'No booking recorded'}</li>`).join('')+'</ul>'
+    +'<p>Excluded opportunities:</p><ul>'+(row.excluded.map((e:any)=>`<li>${when(s,e.at)} · ${h(e.reason)}</li>`).join('') || '<li>No excluded elapsed opportunity.</li>')+'</ul>'
+    +'<p>Membership sources:</p><ul>'+row.memberships.map((m:any)=>`<li>Plan ${h(m.packId)} · ${when(s,m.startsAt)} to ${when(s,m.expiresAt)} · ${h(m.remaining)} recorded credits · Freezes ${h(m.freezeIds.join(', ') || 'none')} · Cancellations ${h(m.cancellationIds.join(', ') || 'none')}</li>`).join('')+'</ul>';
+}
+function successPanel(s:any) {
+  const r=s.pipeline;
+  const proposals=r.successProposals.map((p:any)=>`<article data-success-proposal="${h(p.id)}"><h3>${h(person(s,p.personId))} · ${h(p.status)}</h3><p>Prepared by ${h(p.createdByRole)}. Limit: ${h(p.cap.maxPer30Days)} private tasks per 30 days.</p><details><summary>Dated routine explanation</summary>${successDetails(s,p)}</details>${p.status==='proposed' ? form('lead.success.confirm',path+'#attendance-review',hidden('id',p.id)+hidden('key',p.key)+request()+textarea('note','Owner review note','','required maxlength="2000"'),'Confirm private review task','quiet') : ''}</article>`).join('');
+  const tasks=r.successTasks.map((t:any)=>`<article data-success-task="${h(t.id)}"><h3>${h(person(s,t.personId))} · Private review queued</h3><p>${h(t.nextAction)}</p><p>${h(t.note)} · ${when(s,t.createdAt)}</p><details><summary>Confirmed routine evidence</summary>${successDetails(s,t)}</details></article>`).join('');
+  return panel('Attendance success review',body('<p>Prepare a dated explanation of a member’s own routine. Frozen and unavailable opportunities are excluded. Confirmation rechecks current sources, channel permission and the owner’s cap; it queues private work and sends nothing.</p><p><a href="/app/studio#success-review">Attendance review settings</a></p>'
+    +(r.successRule?.enabled ? form('lead.success.prepare',path+'#attendance-review',select('personId','Member to review',s.people.filter((p:any)=>p.role==='member'&&p.active).map((p:any)=>[p.id,p.name]))
+      +select('channel','Proposed contact channel',[['inApp','In-app'],['email','Email'],['sms','SMS']]),'Prepare attendance explanation','quiet') : '<p>Attendance review is paused in Studio settings.</p>')
+    +proposals+tasks+(!proposals&&!tasks?'<p>No attendance explanations prepared.</p>':'')),{id:'attendance-review'});
 }

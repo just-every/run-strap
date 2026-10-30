@@ -1,3 +1,4 @@
+import { successSettingsPanel } from './leads';
 import { paymentConnectionPanel } from './payment-connection';
 import { privacyRetentionPanel } from './privacy';
 import { appointmentPricesPanel } from './appointment-prices';
@@ -27,6 +28,7 @@ export function studioPage(s: any, notice: any = {}) {
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
     + locationsPanel(s)
     + appointmentPricesPanel(s)
+    + successSettingsPanel(s)
     + classRemindersPanel(s)
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)
