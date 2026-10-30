@@ -637,6 +637,7 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
       }
       await grant(actor,role,rights,[member.id],[locationId]);
       await refused('freeze.type.save',{...type,revision:type.revision,name:'Unapproved type change'},actor.cookie);
+      await refused('freeze.prepare',{...input,feeCents:0,exceptionReason:'Requested fee adjustment',requestId:randomUUID()},actor.cookie,403,'staff_right_required');
       const stale=await h.cmd('freeze.prepare',{...input,requestId:randomUUID()},actor.cookie);
       const staleLaunch={id:stale.id,requestId:randomUUID(),channel:'phone'};await h.cmd('freeze.accept.launch',staleLaunch,actor.cookie);
       await h.cmd('person.save',{id:member.id,name:member.name+' '+captures.length,email:member.email,role:'member',active:true});
@@ -725,6 +726,16 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
     const events=after.staffActions.filter(a=>a.command==='freeze.withdraw'&&a.requestId===withdraw.requestId);assert.equal(events.length,1);assert.equal(events[0].right,'contract-change');assert.equal(events[0].personId,member.id);
     await grant(actor,role,['member-record'],[member.id],[west.id]);await refused('freeze.withdraw',withdraw,actor.cookie);await grant(actor,role,rights,[member.id],[west.id]);
   }
+  const priceAck=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:12000,locationId:west.id,expiresAt:midnight(day(today,90))})).id});
+  await grant(manager,'manager',[...rights,'price'],[member.id],[west.id]);
+  const priceInput={packId:priceAck.id,freezeTypeId:type.id,startAt:day(today,2),endAt:day(today,32),feeCents:0,exceptionReason:'Reviewed Medical fee adjustment',channel:'phone',requestId:crypto.randomUUID()};
+  const adjusted=await h.cmd('freeze.prepare',priceInput,manager.cookie),adjustedLaunch={id:adjusted.id,channel:'phone',requestId:crypto.randomUUID()},adjustedConfirm={id:adjusted.id,key:adjusted.key,channel:'phone',requestId:crypto.randomUUID()};
+  await h.cmd('freeze.accept.launch',adjustedLaunch,manager.cookie);await h.cmd('freeze.accept',{id:adjusted.id,key:adjusted.key},member.cookie);
+  await grant(manager,'manager',rights,[member.id],[west.id]);
+  for(const [name,input] of [['freeze.prepare',priceInput],['freeze.accept.launch',adjustedLaunch],['freeze.confirm',adjustedConfirm]])await refused(name,input,manager.cookie,403,'staff_right_required');
+  await grant(manager,'manager',[...rights,'price'],[member.id],[west.id]);await h.cmd('freeze.confirm',adjustedConfirm,manager.cookie);
+  assert.equal((await h.state()).charges.filter(c=>c.freezeId===adjusted.id).length,0,'the exact personally accepted fee adjustment is honored');
+  await grant(manager,'manager',rights,[member.id],[west.id]);await refused('freeze.confirm',adjustedConfirm,manager.cookie,403,'staff_right_required');
   console.log('PROBE PLAN-011 scoped authority: manager and front desk at two locations -> 30-day Medical freeze, one 1000-cent fee, exact personal acceptance, day-20 end, one native renewal invoice; wrong member, location, missing MFA and revoked previews or replays -> refused with no writes or notices.');
   if(process.env.STRAP_RIGHTS_PROOF_DIR||process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).scopedFreezesBrowser(h,{member,desk,manager,type,grant,rights,day,today,midnight,west});
 }

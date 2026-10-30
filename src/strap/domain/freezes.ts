@@ -25,6 +25,14 @@ export function authorizeFreezeCommand(tx: Transaction, name: string, input: Rec
       : ['freeze.decline','freeze.request.withdraw'].includes(name) ? 'freezeRequest' : 'freeze');
   requireFreezeStaff(tx.state,tx.who,target?.packId ?? input.packId);
   if (input.packId) requireFreezeStaff(tx.state,tx.who,input.packId);
+  const pack = record(tx.state,target?.packId ?? input.packId,'pack');
+  if (name === 'freeze.prepare') {
+    const type = record(tx.state,input.freezeTypeId ?? target?.freezeTypeId,'freezeType');
+    if ((input.feeCents ?? target?.feeCents ?? type.feeCents) !== type.feeCents)
+      requireStaffRight(tx.state,tx.who,'price',pack.personId,pack.locationId ?? 'studio');
+  } else if (['freeze.confirm','freeze.accept.launch'].includes(name) && target?.exceptions?.includes('fee')) {
+    requireStaffRight(tx.state,tx.who,'price',pack.personId,pack.locationId ?? 'studio');
+  }
 }
 
 const live = (f: RecordData) => ['scheduled','active'].includes(f.status);
