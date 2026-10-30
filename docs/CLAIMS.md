@@ -2,13 +2,13 @@
 
 # Strap contract claims
 
-Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc2c` (28 October 2026). BILL-001 and BILL-010 have the clause-specific HTTP, browser, held-key Stripe TEST and native restore proof below. The landing candidate changes only generated contract metadata from that source proof; exact candidate Verify and guarded landing results govern publication.
+Judged from the code and tests at commit `ea298d25a1e5460f4c9d3ef4212c162f83ddece6` (30 October 2026). SUCCESS-001 uses the source-bound HTTP and browser journey below. The candidate also isolates private success commands from unrelated due billing, notices and entitlement processing. Exact candidate public-door proof governs this status; the guarded lander owns generated views, exact candidate Verify, publication scanning and main site results.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 14 | 0 | 0 | 14 |
-| Target and push further | 49 | 38 | 50 | 137 |
-| All | 63 | 38 | 50 | 151 |
+| Target and push further | 50 | 38 | 49 | 137 |
+| All | 64 | 38 | 49 | 151 |
 
 | Clause | Status | Evidence | Gap |
 | --- | --- | --- | --- |
@@ -155,7 +155,7 @@ Judged from the code and tests at commit `8245508b82129e433902f4ee84f9c6e7903cbc
 | `BOUNDARY-002` | missing |  | No implemented studio scope and neighboring products workflow or public-door acceptance coverage. |
 | `BOUNDARY-003` | missing |  | No implemented specialist instruction and health boundaries workflow or public-door acceptance coverage. |
 | `BOUNDARY-004` | missing |  | No implemented partner delivery and portability evidence workflow or public-door acceptance coverage. |
-| `SUCCESS-001` | missing |  | No implemented detect explainable attendance drop-off workflow or public-door acceptance coverage. |
+| `SUCCESS-001` | done | `tests/leads.test.mjs` “LEAD-004: completed weekly routines produce private justified recovery tasks, with exclusions and retained evidence” with “successReviewCases” (public booking and attendance doors, dated routine loss, frozen and unavailable members, cancellation exclusions, uncertainty and channel permission, changed consent and sources, owner-only confirmation, concurrent frequency cap, exact replay, revoked preparation key, erasure and zero outbound messages); `tests/leads-clock.mjs` “leadsClock” (fixed native elapsed-week clock loaded by the ordinary studio Verify command); `tests/leads-browser.mjs` “successBrowser” (visible cited proposal, private task, cap refusal and Studio settings at 1440, with candidate proof at 1440 and 390) |  |
 | `SUCCESS-002` | done | `tests/leads.test.mjs` “Attendance offers respect member windows and entitlements and recheck concurrent capacity before member or desk acceptance” proves narrow availability, exclusion of reformer and out-of-window classes, connected-agent preparation, human-only acceptance, a feasible remaining seat after another booking, full-choice refusal with no writes, a simultaneous final-seat race, changed-availability refusal, actual attended source citations, private member reads, separate member and location staff scope, canonical once-only audit, replay revocation and portable retained sources. `tests/campaign-browser.mjs` “attendancePlanBrowser” proves member-owned availability, scoped front-desk preparation and acceptance, member acceptance after another booking, readable outcomes and icon-control tooltips at 1440 and 390. `tests/staff-actions.test.mjs` “STAFF-006 / SEC-002: every current member command has a real staff door, identical member outcome and one canonical named-right audit entry; unauthorized users and agents cannot act for members” proves the dispatch-derived preference-launch and booking pairs, member-owned choices, canonical audits and refusal of unauthorized actors. |  |
 | `SUCCESS-003` | missing |  | No implemented book accepted help under human control workflow or public-door acceptance coverage. |
 | `SUCCESS-004` | missing |  | No implemented measure recovered visits and renewals workflow or public-door acceptance coverage. |
