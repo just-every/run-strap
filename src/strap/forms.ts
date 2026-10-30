@@ -40,8 +40,9 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   const input = { ...raw }
   if(name.startsWith('automation.')) {
     if(name==='automation.prepare') {const [trigger,sequenceId]=String(input.source).split(':');input.trigger=trigger;input.sequenceId=sequenceId;delete input.source;}
-    for(const key of ['intervalMinutes','maxTasks','days','lowCredits'])if(key in input)input[key]=Number(input[key]);
+    for(const key of ['intervalMinutes','maxTasks','maxMessages','days','lowCredits'])if(key in input)input[key]=Number(input[key]);
     for(const key of ['startAt','endAt'])if(input[key])input[key]=String(input[key])+'Z';
+    if(name==='automation.delivery.confirm')input.confirm=input.confirm === 'true';
     if(name==='automation.pause')input.enabled=false;
     return input;
   }

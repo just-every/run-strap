@@ -77,7 +77,7 @@ export async function renewalQueueBrowser(h,{member,pack}) {
   })
 }
 
-export async function automationBrowser(h,{rule,introRule}) {
+export async function automationBrowser(h,{rule,introRule,deliveryFixture}) {
   await proof(h,h.owner,async(page,width,capture)=>{
     await page.goto(h.origin+'/app/studio#automation');
     const panel=page.locator('#automation');await panel.getByRole('heading',{name:'Private automation settings',exact:true}).waitFor();
@@ -93,6 +93,21 @@ export async function automationBrowser(h,{rule,introRule}) {
       assert.ok((await h.state()).automation.runs.some(r=>r.ruleId===rule.id));
     }
     await capture('AUTO-001-settings');
+    if(deliveryFixture) {
+      await page.goto(h.origin+'/app/leads');
+      if(width===1440) {
+        const row=page.locator('[data-automation-task="'+deliveryFixture.task.id+'"]');
+        await row.getByRole('button',{name:'Preview member messages',exact:true}).click();
+        const review=page.locator('[data-automation-delivery]').filter({has:page.getByText(deliveryFixture.member.name,{exact:false})});
+        await review.getByRole('heading',{name:'Review exact member messages',exact:true}).waitFor();
+        assert.equal((await h.state(deliveryFixture.member.cookie)).memberMessages.length,0);
+        await capture('AUTO-001-exact-message-preview');
+        await review.getByRole('button',{name:'Approve exact in-app messages',exact:true}).click();
+        assert.equal((await h.state(deliveryFixture.member.cookie)).memberMessages.length,2);
+      }
+      await page.getByRole('heading',{name:'Approved message history',exact:true}).waitFor();
+      await capture('AUTO-001-approved-messages');
+    }
     for(const [path,name] of [['/app/leads','AUTO-001-intro-history'],['/app/renewals','AUTO-001-renewal-history']]) {
       await page.goto(h.origin+path);
       const review=page.locator('section').filter({has:page.getByRole('heading',{name:'Private automation review',exact:true})});

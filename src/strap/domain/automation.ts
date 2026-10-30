@@ -1,6 +1,8 @@
 import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { humanOwner, id, insist, instant, integer, list, now, record, text, type Actor, type RecordData, type State } from './types';
-import type { Transaction } from './store';
+import { Transaction } from './store';
+import { reviewNurtureSource } from './leads';
+import { enrollRenewalSource, reviewRenewalQueue } from './renewal-sequences';
 import { permission, preferencesOf, type MarketingChannel } from './preferences';
 import { renewalCandidates } from './renewals';
 
@@ -33,6 +35,7 @@ export function prepareAutomation(tx: Transaction,input: Record<string,unknown>)
   const startAt = instant(input.startAt,'startAt'), endAt = instant(input.endAt,'endAt');
   insist(startAt < endAt && endAt > now(),'invalid_schedule');
   const rule = {id:id(),name:text(input.name,'name',100),trigger,sequenceId:sequence.id,channel,startAt,endAt,
+    maxMessages:integer(input.maxMessages ?? Number(input.maxTasks)*(trigger === 'intro' ? 3 : 1),'maxMessages',1,3000),
     intervalMinutes:integer(input.intervalMinutes,'intervalMinutes',1,10080),maxTasks:integer(input.maxTasks,'maxTasks',1,1000),
     days:integer(input.days ?? 30,'days',1,366),lowCredits:integer(input.lowCredits ?? 1,'lowCredits',0,10000),
     stopConditions,escalation:'private-owner-review',effect:'private-task-only',status:'preview',createdAt:now(),createdBy:tx.who.id};
@@ -150,10 +153,73 @@ export async function completeAutomationTask(tx: Transaction,input: Record<strin
   const saved = {...task,status:'reviewed',reviewedAt:now(),reviewedBy:tx.who.id};tx.put('automationTask',saved);
   tx.put('automationEvent',{id:id(),ruleId:rule.id,personId:task.personId,sourceId:task.sourceId,action:'reviewed',at:now(),actorId:tx.who.id});return saved;
 }
+/** Review authority is installation-local; an archive retains evidence but no capability. */
+async function deliveryTask(tx: Transaction,taskId: unknown) {
+  humanOwner(tx.who);
+  const task=record(tx.state,taskId,'automationTask'),rule=record(tx.state,task.ruleId,'automationRule');
+  insist(await connected(tx,rule) && !scheduleReason(rule,now()),'automation_not_authorized',409);
+  const source=sources(tx.state,rule).find(s=>s.sourceId === task.sourceId);
+  insist(source && !source.reason && ['queued','reviewed'].includes(task.status),'automation_task_no_longer_eligible',409);
+  insist(rule.channel === 'inApp','provider_delivery_unavailable',409);
+  return {task,rule,source};
+}
+function applyDelivery(tx: Transaction,task: RecordData,rule: RecordData) {
+  if(rule.trigger === 'intro')reviewNurtureSource(tx,task.sourceId,rule.sequenceId);
+  else {
+    const query=new URLSearchParams({days:String(rule.days),lowCredits:String(rule.lowCredits)});
+    const message=enrollRenewalSource(tx,rule.sequenceId,task.sourceId,query);
+    reviewRenewalQueue(tx,new Set([message.id]),query);
+  }
+}
+/** Preview uses the real native source operation on an isolated transaction, without writes. */
+function deliveryPlan(tx: Transaction,task: RecordData,rule: RecordData) {
+  const scratch=new Transaction(tx.db,structuredClone(tx.state),tx.who);
+  applyDelivery(scratch,task,rule);
+  return list(scratch.state,'memberMessage').filter(m=>!tx.state.records.has(m.id)).map(m=>{
+    const offer=m.nurtureOfferId ? record(scratch.state,m.nurtureOfferId,'nurtureOffer') : null;
+    return {step:m.step ?? 'renewal',text:m.text,channel:m.channel,terms:offer?.terms ?? null,bookingId:offer?.bookingId ?? null};
+  });
+}
+const messageLimit=(rule: RecordData)=>rule.maxMessages ?? rule.maxTasks*(rule.trigger === 'intro' ? 3 : 1);
+const usedMessages=(state: State,rule: RecordData)=>list(state,'automationDelivery').filter(d=>d.ruleId === rule.id).reduce((sum,d)=>sum+d.messageCount,0);
+function deliveryBasis(rule: RecordData,source: {basis:string},messages: unknown[]) {
+  return sha256(JSON.stringify([rule.epoch,source.basis,messages]));
+}
+export async function previewAutomationDelivery(tx: Transaction,input: Record<string,unknown>) {
+  const {task,rule,source}=await deliveryTask(tx,input.id),messages=deliveryPlan(tx,task,rule);
+  insist(messages.length,'automation_no_pending_messages',409);
+  insist(usedMessages(tx.state,rule)+messages.length <= messageLimit(rule),'automation_message_budget_exhausted',409);
+  const preview={id:id(),taskId:task.id,ruleId:rule.id,sourceId:source.sourceId,personId:task.personId,key:id(),messages,
+    basis:deliveryBasis(rule,source,messages),status:'preview',createdAt:now(),createdBy:tx.who.id};
+  tx.sql.push(tx.statement('INSERT INTO st_automation_reviews(id,rule_id,review_key) VALUES(?,?,?)',preview.id,rule.id,preview.key));
+  tx.put('automationDeliveryPreview',preview);return preview;
+}
+export async function confirmAutomationDelivery(tx: Transaction,input: Record<string,unknown>) {
+  humanOwner(tx.who);const preview=record(tx.state,input.id,'automationDeliveryPreview');
+  insist(preview.createdBy === tx.who.id && preview.key === input.key && input.confirm === true,'automation_delivery_confirmation_required',409);
+  const {task,rule,source}=await deliveryTask(tx,preview.taskId);
+  await requireReview(tx,preview);
+  if(preview.status === 'approved')return record(tx.state,preview.deliveryId,'automationDelivery');
+  const messages=deliveryPlan(tx,task,rule);
+  insist(messages.length && preview.basis === deliveryBasis(rule,source,messages),'automation_delivery_changed',409);
+  insist(usedMessages(tx.state,rule)+messages.length <= messageLimit(rule),'automation_message_budget_exhausted',409);
+  tx.future(rule.endAt);
+  const before=new Set(list(tx.state,'memberMessage').map(m=>m.id));
+  applyDelivery(tx,task,rule);
+  const delivered=list(tx.state,'memberMessage').filter(m=>!before.has(m.id));
+  const receipt={id:id(),ruleId:rule.id,taskId:task.id,sourceId:task.sourceId,personId:task.personId,trigger:rule.trigger,
+    messageIds:delivered.map(m=>m.id),messageCount:delivered.length,at:now(),approvedBy:tx.who.id,previewId:preview.id};
+  tx.put('automationDelivery',receipt);
+  tx.put('automationDeliveryPreview',{...preview,status:'approved',deliveryId:receipt.id});
+  tx.put('automationTask',{...task,status:'reviewed',reviewedAt:receipt.at,reviewedBy:tx.who.id});
+  tx.put('automationEvent',{id:id(),ruleId:rule.id,sourceId:task.sourceId,personId:task.personId,action:'messages_approved',messageCount:receipt.messageCount,at:receipt.at,actorId:tx.who.id});
+  return receipt;
+}
 export async function automationSnapshot(db: D1Database,state: State,who: Actor) {
   if (who.role !== 'owner') return null;
   const connections = (await db.prepare('SELECT rule_id,epoch FROM st_automation_connections').all<{rule_id:string;epoch:string}>()).results;
-  return {rules:list(state,'automationRule').map(r => ({...r,connected:connections.some(c => c.rule_id === r.id && c.epoch === r.epoch)})),
+  return {rules:list(state,'automationRule').map(r => ({...r,maxMessages:messageLimit(r),usedMessages:usedMessages(state,r),connected:connections.some(c => c.rule_id === r.id && c.epoch === r.epoch)})),
+    deliveryPreviews:list(state,'automationDeliveryPreview'),deliveries:list(state,'automationDelivery'),
     previews:list(state,'automationPreview').map(p => ({...p,audience:sources(state,p),stale:p.basis !== audienceBasis(state,p)})),
     resumes:list(state,'automationResume').map(p => ({...p,audience:sources(state,state.records.get(p.ruleId)!.data)})),
     tasks:list(state,'automationTask').map(t => {const rule = state.records.get(t.ruleId)?.data;return open(t) && !connections.some(c => c.rule_id === rule?.id && c.epoch === rule?.epoch) ? {...t,status:'held',reason:rule?.enabled ? 'execution_disconnected' : 'rule_paused'} : t;}),runs:list(state,'automationRun'),outcomes:list(state,'automationOutcome'),events:list(state,'automationEvent')};
