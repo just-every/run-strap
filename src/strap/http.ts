@@ -370,7 +370,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
     }
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
-    if (pages.has(path) && status === 403) return unavailablePage('/app', 'denied')
+    if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
     if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
     return json({ error: message }, status)
   }
