@@ -1,3 +1,4 @@
+import { seedAutomationArchive, assertRestoredAutomation } from './automation-archive.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -163,6 +164,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const renewalRow=renewalReport.rows.find(r=>r.personId===member.id)
     const renewalInput={packId:renewalRow.packId,basis:renewalRow.basis,lowCredits:10000,ownerId:(await h.state()).actor.id,nextAction:'Review next pack',dueAt:'2099-11-01T00:00:00Z'}
     const renewalTask=await h.cmd('renewal.followup.create',renewalInput)
+    const automationProof=await seedAutomationArchive(h,member)
     assert.equal((await h.send('/api/strap/exit.json')).status,401)
     for(const cookie of [member.cookie,coach.cookie]) assert.equal((await h.send('/api/strap/exit.json',undefined,cookie)).status,403)
     assert.equal((await h.send('/api/strap/exit.json',undefined,'',{authorization:`Bearer ${key.token}`})).status,401)
@@ -321,6 +323,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
     assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')
     assert.equal((await h.state(restoredOwner)).pipeline.leads.filter(l=>l.id===renewalTask.leadId).length,1)
+    await assertRestoredAutomation(h,restoredOwner,automationProof)
     const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox').all()).results.map(r=>JSON.parse(r.message))
     assert.ok(mail.length>0)
     assert.ok(mail.every(m=>m.text.includes('/auth/confirm?token=')), 'restoration/download produced no studio message or collection; only fresh access mail')

@@ -1,3 +1,4 @@
+import {seedAutomationArchive} from './automation-archive.mjs';
 import assert from 'node:assert/strict'
 import {privacyDecision} from './privacy-journey.mjs'
 
@@ -25,7 +26,9 @@ export async function seedPrivacyArchive(h,waiver) {
   await h.cmd('course.payment.record',{id:enrolled.id,installmentId:'deposit',amountCents:1000,reference:'synthetic-strap-archive-shared-payment'})
   const withdrawal=await h.cmd('course.withdraw.prepare',{id:enrolled.id,reason:'Synthetic archive course withdrawal',requestId:'synthetic-strap-archive-shared-withdraw'})
   const sharedCourse=await h.cmd('course.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,confirm:true,requestId:'synthetic-strap-archive-shared-withdraw-confirm'})
-  return {members:[native,imported],jobId:job.job.id,csv,sharedCourse,participant}
+  await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:native.id,kind:'unlimited',planName:'Private review eligibility',amountCents:0,expiresAt:new Date(Date.now()+20*86400000).toISOString()})).id});
+  const automation=await seedAutomationArchive(h,native);
+  return {members:[native,imported],jobId:job.job.id,csv,sharedCourse,participant,automation}
 
 }
 export async function erasePrivacyArchive(h,owner,fixture) {
@@ -45,6 +48,9 @@ export function assertPrivacyArchive(bytes,fixture) {
   assert.ok(parts.length,'the erasure check reads a populated archive')
 }
 export async function assertPrivacyRestored(db,fixture) {
+  const automationTask=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE id=? AND kind='automationTask'").bind(fixture.automation.task.id).first()).data);
+  assert.equal(automationTask.status,'suppressed');assert.equal(automationTask.reason,'member_erased');assert.equal(automationTask.erased,true);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM st_automation_connections').first()).n,0,'restored erasure history has no execution authority');
   const shared=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='courseEnrollment' AND id=?").bind(fixture.sharedCourse.id).first()).data)
   for(const key of ['personId','payerId','amountCents','status','installments','acceptedAt','acceptedBy','previewId','withdrawalId'])assert.deepEqual(shared[key],fixture.sharedCourse[key],'restored shared course keeps original '+key)
   assert.equal(shared.erased,true)

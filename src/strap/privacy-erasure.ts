@@ -11,6 +11,7 @@ import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
 const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview absencePreview'.split(' '));
+const automationKinds=new Set(['automationTask','automationOutcome','automationEvent']);
 const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit courseEnrollment courseEnrollmentPreview courseWithdrawalPreview'.split(' '));
 const auditKinds=new Set(['profileChange','staffAction','bookingAction','staffAccessEvent']);
 const scopeKinds=new Set('staffAccess memberRecordGrant waiverSigningGrant appointmentBookingGrant attendanceBookingGrant intakeSensitiveGrant retailStaffGrant'.split(' '));
@@ -39,7 +40,7 @@ function sharedSubjectRecord(state: State, kind: string, data: RecordData, membe
 }
 function supportedRecords(state: State, member: Person) {
   const records=subjectRecords(state,member);
-  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&!privacyBillingKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
+  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!automationKinds.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&!privacyBillingKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
   insist(!unsupported.length,'privacy_related_work_requires_review:'+ [...new Set(unsupported.map(r=>r.kind))].sort().join(','),409);
   const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !sharedSubjectRecord(state,kind,data,member.id) && !(kind==='charge'&&data.forPersonId===member.id));
   insist(!shared,'privacy_shared_member_work_requires_review',409);
@@ -135,7 +136,9 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
       put('privacyRetention',retained);
     }
     if(kind==='acknowledgement')sql('DELETE FROM st_evidence_copies WHERE receipt_id=?',data.id);
-    if(privacyBillingKinds.has(kind)) {
+    if(automationKinds.has(kind)) {
+      put(kind,{id:data.id,ruleId:data.ruleId,trigger:data.trigger ?? null,sourceId:data.sourceId ?? null,personId:member.id,status:'suppressed',reason:'member_erased',at,erased:true});
+    } else if(privacyBillingKinds.has(kind)) {
       put(kind,retireBilling(kind,data,{...redact(data,identities),privacyReceiptId:receipt.id},at,tx.who.id));
     } else if(relationshipKinds.has(kind)) {
       put(kind,redactRelationship(kind,data,member,identities,tx.state,at,tx.who.id));

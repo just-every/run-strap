@@ -3,7 +3,7 @@ import { readFile,mkdir } from 'node:fs/promises'
 import { join,extname } from 'node:path'
 import { chromium } from '@playwright/test'
 async function proof(h,cookie,run) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM_PATH ? {executablePath:process.env.STRAP_CHROMIUM_PATH} : {}),args:[...(process.env.STRAP_CHROMIUM_PATH ? ['--no-sandbox'] : []),'--use-mock-keychain','--password-store=basic']})
   try {for(const width of [1440,390]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
     try {
@@ -75,4 +75,33 @@ export async function renewalQueueBrowser(h,{member,pack}) {
     assert.equal(message.status,'delivered')
     await capture('RPT-007-native-queue-outcomes')
   })
+}
+
+export async function automationBrowser(h,{rule,introRule}) {
+  await proof(h,h.owner,async(page,width,capture)=>{
+    await page.goto(h.origin+'/app/studio#automation');
+    const panel=page.locator('#automation');await panel.getByRole('heading',{name:'Private automation settings',exact:true}).waitFor();
+    const retained=panel.locator('[data-automation-rule="'+rule.id+'"]');await retained.getByRole('heading',{name:rule.name,exact:true}).waitFor();
+    if(width===1440) {
+      await retained.getByRole('button',{name:'Pause private review rule',exact:true}).click();
+      await retained.getByText('Execution disconnected',{exact:false}).waitFor();
+      await retained.getByRole('button',{name:'Preview current audience',exact:true}).click();
+      const resume=panel.locator('[data-automation-resume="'+rule.id+'"]');
+      await resume.getByRole('heading',{name:'Resume reviewed rule',exact:true}).waitFor();
+      await resume.getByRole('button',{name:'Confirm reviewed resumption',exact:true}).click();
+      await retained.getByRole('button',{name:'Evaluate private work',exact:true}).click();
+      assert.ok((await h.state()).automation.runs.some(r=>r.ruleId===rule.id));
+    }
+    await capture('AUTO-001-settings');
+    for(const [path,name] of [['/app/leads','AUTO-001-intro-history'],['/app/renewals','AUTO-001-renewal-history']]) {
+      await page.goto(h.origin+path);
+      const review=page.locator('section').filter({has:page.getByRole('heading',{name:'Private automation review',exact:true})});
+      await review.getByRole('heading',{name:'Run, skip and exception history',exact:true}).waitFor();
+      if(width===1440)assert.ok(await review.locator('[data-automation-run]').count()>0,'populated run history');
+      await capture(name);
+    }
+    for(const control of await page.locator('button,a').all()) {
+      if(await control.isVisible() && await control.locator('svg').count() && !(await control.innerText()).trim()) assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips');
+    }
+  });
 }

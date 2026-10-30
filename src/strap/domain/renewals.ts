@@ -15,6 +15,9 @@ function number(query: URLSearchParams, name: string, fallback: number, min: num
 /** Native term events share one row per pack; payment evidence alone supplies value. */
 export function renewalWorklist(state: State, who: Actor, query: URLSearchParams) {
   humanOwner(who);
+  return renewalCandidates(state,query);
+}
+export function renewalCandidates(state: State, query: URLSearchParams) {
   const days = number(query,'days',30,1,366), lowCredits = number(query,'lowCredits',1,0,10_000);
   const asOf = now(), through = new Date(Date.parse(asOf)+days*day).toISOString();
   const changes = list(state,'planChange'), packs = list(state,'pack');

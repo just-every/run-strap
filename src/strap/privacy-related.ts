@@ -2,7 +2,7 @@ import { localDate } from './zone';
 import { studioSettings } from './domain/studio';
 import type { Person, RecordData, State } from './domain/types';
 
-export const relationshipKinds=new Set('household householdPayerChange familyTuition familyBillPreview familyInvoice familyTuitionWithdrawal memberMerge memberMergePreview makeupGuardian'.split(' '));
+export const relationshipKinds=new Set('renewalSequencePreview household householdPayerChange familyTuition familyBillPreview familyInvoice familyTuitionWithdrawal memberMerge memberMergePreview makeupGuardian'.split(' '));
 /** Shared ledgers keep their original allocations. Erasure never changes another payer's balance or authority. */
 export function redactRelationship(kind:string,data:RecordData,member:Person,identities:string[],state:State,at:string,actorId:string) {
   const scrub=(value:any):any=>Array.isArray(value)?value.map(scrub):value&&typeof value==='object'
@@ -10,6 +10,7 @@ export function redactRelationship(kind:string,data:RecordData,member:Person,ide
       value.personId===member.id&&['name','reason','authorizationEvidence','adultOn','adultAt'].includes(key)?null:scrub(item)]))
     :typeof value==='string'&&identities.some(identity=>value.toLowerCase().includes(identity.toLowerCase()))?'[erased]':value;
   const saved={...scrub(data),privacyRedactedAt:at};
+  if(kind==='renewalSequencePreview')Object.assign(saved,{audience:data.audience.filter((row:RecordData)=>row.personId!==member.id),status:'retired',key:null});
   if(kind==='household') {
     saved.name=saved.name||'Retained household';
     saved.guardianIds=data.guardianIds.filter((key:string)=>key!==member.id);

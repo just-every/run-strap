@@ -1,3 +1,4 @@
+import { automationHistory } from './automation';
 import type { renewalWorklist } from '../domain/renewals'
 import { money, when } from './format'
 import { body, cell, field, form, h, hidden, panel, select, table, textarea } from './shared'
@@ -35,6 +36,7 @@ export function renewalsPage(s: any, query: URLSearchParams) {
       + `</div><button class="btn" type="submit">Apply worklist filters</button></form><p><a href="/api/strap/reports/renewals.csv?${h(filters.toString())}">Download worklist CSV</a> · <a href="/api/strap/reports/renewals.xlsx?${h(filters.toString())}">Download worklist XLSX</a></p>`
       + `<p>Expiring after ${when(s,report.asOf)} through ${when(s,report.through)}, or currently at or below ${h(report.lowCredits)} credits. Expired and renewed packs are excluded.</p>`))
     + task + panel('Plans needing review',`<div class="table-wrap">${table(['Member / plan','Expires','Remaining','Last visit','Renewal / contact','Follow-up','Approved sequence'],rows || '<tr><td colspan="7">No packs match these filters.</td></tr>')}</div>`)
+    + automationHistory(s,'renewal',back)
     + sequencesPanel(s,back)
     + panel('Coverage',body(`<p>${h(report.coverage)}</p><p>Accepted renewals leave this list without claiming payment collection. Existing follow-ups remain in <a href="/app/leads">Lead follow-up</a>. Native renewal sequences need an exact owner approval and per-row enrollment. Queue review is explicit; SMS and email remain held without a provider transport. Provider autopay is not available. Remaining value comes from recorded prepaid receipt allocations, with the same elapsed-access calculation as cancellation previews; it does not imply marketing permission.</p>`))
     + '</div></div>'
