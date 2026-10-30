@@ -1,5 +1,6 @@
 import { automationSettings } from './automation';
 import { terminationReasonsPanel } from './termination-reasons';
+import { successSettingsPanel } from './leads';
 import { paymentConnectionPanel } from './payment-connection';
 import { privacyRetentionPanel } from './privacy';
 import { appointmentPricesPanel } from './appointment-prices';
@@ -31,6 +32,7 @@ export function studioPage(s: any, notice: any = {}) {
     + terminationReasonsPanel(s)
     + locationsPanel(s)
     + appointmentPricesPanel(s)
+    + successSettingsPanel(s)
     + classRemindersPanel(s)
     + reminderTasksPanel(s)
     + messageTemplatesPanel(s)
