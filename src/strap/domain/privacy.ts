@@ -1,4 +1,5 @@
 import { profileOf } from './profiles';
+import { assembleWaiverEvidence } from '../waiver-evidence';
 import { staffChannel } from './staff-actions';
 import { requireStaffRight } from './staff-rights';
 import { humanOwner, id, insist, list, now, person, record, text, type RecordData } from './types';
@@ -57,8 +58,10 @@ export async function exportPrivacyAccess(tx: Transaction,input: Record<string,u
   const owned=new Set(list(tx.state,'pack').filter(r=>r.personId===member.id).map(r=>r.id));
   const records=[...tx.state.records.values()].filter(r=>kinds.includes(r.kind)&&(r.data.personId===member.id||r.kind==='packCreditEvent'&&owned.has(r.data.packId)))
     .map(({kind,data})=>({kind,data:kind==='profileChange'?Object.fromEntries(Object.entries(data).filter(([key])=>!['result','requestBasis'].includes(key))):structuredClone(data)}));
-  const bundle={format:'strap-native-member-access-v1',personId:member.id,profile:profileOf(tx.state,member),records,
-    boundary:'Native member records for private owner review. Shared household records, original import artifacts, provider copies and complete signed-document packages require separate review; no external delivery is performed.'};
+  const documents=list(tx.state,'acknowledgement').filter(row=>row.personId===member.id).map(row=>assembleWaiverEvidence(row,record(tx.state,row.waiverId,'waiver')));
+  const forms=[...new Set(records.filter(row=>row.kind==='intakeResponse').map(row=>row.data.formId))].map(formId=>structuredClone(record(tx.state,formId,'intakeForm')));
+  const bundle={format:'strap-native-member-access-v1',personId:member.id,profile:profileOf(tx.state,member),records,documents,forms,
+    boundary:'Native member records for private owner review. Shared household records, original import artifacts, provider copies and membership agreement packages and shared signing evidence require separate review; no external delivery is performed.'};
   const exported={id:id(),digest:await privacyHash(JSON.stringify(bundle)),generatedAt:now(),personVersion:member.version};
   tx.put('privacyRequest',{...request,status:'exported',export:exported});
   return {id:request.id,personId:member.id,status:'exported',export:exported,bundle};

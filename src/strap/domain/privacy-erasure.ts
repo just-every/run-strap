@@ -3,12 +3,13 @@ import { createPortability } from '@runeditrun/rer/modules/portability';
 // @ts-ignore The CLI and Worker share the JavaScript archive policy.
 import archivePolicy from '../archive-policy.mjs';
 import { balance } from './money';
+import { assembleWaiverEvidence } from '../waiver-evidence';
 import { privacyAuthority, privacyHash, verifiedPrivacyRequest } from './privacy';
 import { id, insist, instant, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
 
 const removable=new Set(['memberProfile','memberCheckin','memberPreference','memberPreferenceEvent','messagePreference','messagePreferenceEvent',
-  'memberNote','memberMessage','intakeResponse','acknowledgement','notice','waiverLaunch','memberInvitation']);
+  'memberNote','memberMessage','intakeResponse','acknowledgement','notice','waiverLaunch','memberInvitation','intakeTabletLaunch','waiverTabletLaunch']);
 const auditFields='id action command personId actorId actorRole staffMade right channel at changed revision'.split(' ');
 const retained: Record<string,string[]>={
   pack:'id personId locationId eligibleLocations eligibleServices priorityBooking proration credits remaining amountCents purchaseAmountCents initiationFeeCents expiresAt termStartAt createdAt creditLedgerVersion creditRevision draftId'.split(' '),
@@ -32,7 +33,11 @@ const emails=(value: unknown): string[]=>!value||typeof value!=='object'?[]:Obje
  * never infers authority to erase another participant or execute a provider. */
 async function erasureScope(tx: Transaction,personId: string) {
   const member=person(tx.state,personId,false);
-  const operators=(await tx.db.prepare('SELECT id,role,version FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).all()).results;
+  const originals=(await tx.db.prepare("SELECT record_json FROM ik_provenance WHERE destination='strap:members' AND target_kind='member' AND target_id=? UNION SELECT record_json FROM ik_d1_history WHERE destination='strap:members' AND target_kind='member' AND target_id=?").bind(member.id,member.id).all()).results;
+  const historicalAliases=[...new Set([member.email!.toLowerCase(),
+    ...list(tx.state,'profileChange').filter(row=>row.personId===member.id).flatMap(emails),
+    ...originals.flatMap(row=>emails(JSON.parse(String(row.record_json))))])].sort();
+  const operators=(await tx.db.prepare(`SELECT id,role,version FROM oa_operators WHERE lower(email) IN (${historicalAliases.map(()=>'?').join(',')}) ORDER BY id`).bind(...historicalAliases).all()).results;
   const identities=new Set([member.id,...operators.map(row=>String(row.id))]),selected=new Map<string,{kind:string;data:RecordData}>();
   let changed=true;
   while(changed) {
@@ -53,9 +58,8 @@ async function erasureScope(tx: Transaction,personId: string) {
   }
   const deliveries=(await tx.db.prepare('SELECT * FROM st_notice_deliveries WHERE person_id=? ORDER BY id').bind(member.id).all()).results;
   const holds=(await tx.db.prepare('SELECT * FROM st_privacy_retained WHERE person_id=? ORDER BY id').bind(member.id).all()).results;
-  const originals=(await tx.db.prepare("SELECT record_json FROM ik_provenance WHERE destination='strap:members' AND target_kind='member' AND target_id=? UNION SELECT record_json FROM ik_d1_history WHERE destination='strap:members' AND target_kind='member' AND target_id=?").bind(member.id,member.id).all()).results;
   const snapshots=[...selected].sort(([a],[b])=>a.localeCompare(b));
-  const aliases=[...new Set([member.email!,...snapshots.flatMap(([,row])=>emails(row.data)),...originals.flatMap(row=>emails(JSON.parse(String(row.record_json))))])].sort();
+  const aliases=[...new Set([...historicalAliases,...snapshots.flatMap(([,row])=>emails(row.data))])].sort();
   if(tx.state.people.some(peer=>peer.id!==member.id&&!peer.erasedAt&&peer.email&&aliases.includes(peer.email.toLowerCase())))unsupported.add('historical_identity_reused');
   return {member,operators,selected,unsupported:[...unsupported].sort(),balanceCents:balance(tx.state,member.id),
     aliases,basis:await privacyHash(JSON.stringify({member,operators,snapshots,deliveries,holds,originals})),
@@ -93,6 +97,7 @@ export async function confirmPrivacyErasure(tx: Transaction,input: Record<string
   const erasedAt=Date.now();
   for(const [key,{kind,data}] of scope.selected) {
     if(removable.has(kind)) {
+      if(kind==='intakeTabletLaunch'||kind==='waiverTabletLaunch')tx.sql.push(tx.statement('DELETE FROM st_intake_tablets WHERE id=?',key));
       if(kind==='waiverLaunch')tx.sql.push(tx.statement('DELETE FROM st_waiver_launch_dispatches WHERE id=?',key));
       tx.state.records.delete(key);tx.sql.push(tx.statement('DELETE FROM st_records WHERE id=?',key));
     } else tx.put(kind,{...pick(data,retained[kind]),erased:true});
@@ -102,9 +107,10 @@ export async function confirmPrivacyErasure(tx: Transaction,input: Record<string
   tx.sql.push(tx.statement('DELETE FROM st_notice_deliveries WHERE person_id=?',member.id));
   tx.sql.push(tx.statement('DELETE FROM st_evidence_copies WHERE person_id=?',member.id));
   for(const operator of scope.operators) {
+    tx.sql.push(tx.statement('DELETE FROM oa_provider_session_pins WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?)',operator.id));
     tx.sql.push(tx.statement('DELETE FROM oa_provider_sessions WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?)',operator.id));
     tx.sql.push(tx.statement('DELETE FROM oa_step_up_challenges WHERE operator_id=?',operator.id));
-    for(const table of ['oa_sessions','oa_tokens','oa_external_identities','st_mfa_factors','st_mfa_recovery','st_mfa_sessions','st_mfa_challenges'])
+    for(const table of ['oa_sessions','oa_tokens','oa_credentials','oa_external_identities','st_mfa_factors','st_mfa_recovery','st_mfa_sessions','st_mfa_challenges'])
       tx.sql.push(tx.statement(`DELETE FROM ${table} WHERE operator_id=?`,operator.id));
     tx.sql.push(tx.statement("UPDATE st_security_audit SET actor_email=CASE WHEN actor_id=? THEN '' ELSE actor_email END,subject_email=NULL,detail='{}' WHERE actor_id=? OR subject_id=?",operator.id,operator.id,operator.id));
     tx.sql.push(tx.statement("UPDATE oa_auth_audit SET value='{}' WHERE actor_id=?",operator.id));
@@ -139,7 +145,7 @@ export function retainPrivacyDocument(tx: Transaction,input: Record<string,unkno
     releaseConditions:input.hold?text(input.releaseConditions,'releaseConditions',1000):null,
     recordedBy:tx.who.id,recordedAt:now()};
   tx.sql.push(tx.statement('INSERT INTO st_privacy_retained(id,person_id,kind,data,reason,retain_until,hold_basis,release_conditions,recorded_by,recorded_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
-    receipt.id,member.id,receipt.kind,JSON.stringify(document),receipt.reason,retainUntil,receipt.holdBasis,receipt.releaseConditions,tx.who.id,receipt.recordedAt));
+    receipt.id,member.id,receipt.kind,JSON.stringify({...document,evidence:assembleWaiverEvidence(document,record(tx.state,document.waiverId,'waiver'))}),receipt.reason,retainUntil,receipt.holdBasis,receipt.releaseConditions,tx.who.id,receipt.recordedAt));
   return receipt;
 }
 
