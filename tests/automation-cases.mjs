@@ -68,12 +68,33 @@ export async function automationCases(h) {
   const changed=await h.cmd('automation.evaluate',{id:introRule.id,requestId:'synthetic-strap-membership'});
   assert.equal(changed.queued,0);assert.ok((await h.state()).automation.outcomes.some(o=>o.ruleId===introRule.id&&o.reason==='membership_purchased'));
   await h.cmd('automation.task.complete',{id:introTask.id},h.owner,409);
+  const remaining=target.id===member.id?other:member,remainingPack=remaining.id===member.id?firstPack:secondPack;
+  const renewalPreview=await h.cmd('automation.prepare',{...config,name:'Changed renewal source',maxTasks:10});
+  const renewalRule=await h.cmd('automation.enable',{id:renewalPreview.id,key:renewalPreview.key});
+  await h.cmd('automation.evaluate',{id:renewalRule.id,requestId:'synthetic-strap-current-source'});
+  const renewalTask=(await h.state()).automation.tasks.find(t=>t.sourceId===remainingPack.id);assert.equal(renewalTask.status,'queued');
+  const renewal=await h.cmd('plan.change.prepare',{packId:remainingPack.id,mode:'renewal',credits:5,amountCents:5000,expiresAt:new Date(Date.now()+50*86400000).toISOString(),requestId:'synthetic-strap-renewal-change'});
+  await h.cmd('plan.change.accept',{id:renewal.id,key:renewal.key},remaining.cookie);
+  assert.equal((await h.state()).automation.tasks.find(t=>t.id===renewalTask.id).reason,'source_no_longer_eligible');
+  await h.cmd('automation.task.complete',{id:renewalTask.id},h.owner,409);
+  console.log('PROBE AUTO-001 renewal stop: personally accept native plan renewal while review is queued -> source removed, queued task suppressed, completion refused');
   const future=await h.cmd('automation.prepare',{...config,name:'Future evaluation',startAt:new Date(Date.now()+2*86400000).toISOString()});
   const futureRule=await h.cmd('automation.enable',{id:future.id,key:future.key});
   assert.equal((await h.cmd('automation.evaluate',{id:futureRule.id,requestId:'synthetic-strap-future'})).reason,'schedule_not_started');
   assert.equal(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n'),mailBefore+1,'only the new intro member invitation adds mail');
   assert.equal((await h.state(member.cookie)).automation,null);
   for (const path of ['/app/leads','/app/renewals']) {const page=await h.send(path,undefined,h.owner);assert.equal(page.status,200);assert.match(page.text,/Run, skip and exception history/);}
+  await h.cmd('agent.revoke',{id:agent.id});
+  assert.equal((await h.send('/api/strap/agent/context',undefined,'',{authorization:'Bearer '+agent.token})).status,401);
+  const {privacyDecision,verifiedPrivacyRequest}=await import('./privacy-journey.mjs');
+  const erasure=await verifiedPrivacyRequest(h,target,'erasure','-automation');
+  const erasurePreview=await h.cmd('privacy.erase.prepare',{id:erasure.id,...privacyDecision,obligations:'cancel'});
+  await h.cmd('privacy.erase.confirm',{id:erasurePreview.id,confirm:true});
+  await evaluate('erased');
+  const erased=(await h.state()).automation.tasks.find(t=>t.id===task.id);assert.equal(erased.reason,'member_erased');assert.equal(erased.status,'suppressed');
+  await h.cmd('automation.task.complete',{id:task.id},h.owner,409);
+  assert.ok(!(await h.send('/api/strap/exit.json',undefined,h.owner)).text.includes(target.email));
+  console.log('PROBE AUTO-001 erasure and revoked authority: verified owner erasure and revoked agent key -> retained suppressed trigger, replay refused and no private identity in exit');
   console.log('PROBE AUTO-001 intro and schedule: preview retained purchase, enable and tick twice, review privately, buy native membership -> one durable trigger and visible membership stop; future schedule held');
   if(process.env.CI || process.env.STRAP_PROOF_DIR) await(await import('./preferences-browser.mjs')).automationBrowser(h,{rule,introRule});
 }

@@ -86,8 +86,9 @@ export async function automationBrowser(h,{rule,introRule}) {
       await retained.getByRole('button',{name:'Pause private review rule',exact:true}).click();
       await retained.getByText('Execution disconnected',{exact:false}).waitFor();
       await retained.getByRole('button',{name:'Preview current audience',exact:true}).click();
-      await panel.getByRole('heading',{name:'Resume reviewed rule',exact:true}).waitFor();
-      await panel.getByRole('button',{name:'Confirm reviewed resumption',exact:true}).click();
+      const resume=panel.locator('[data-automation-resume="'+rule.id+'"]');
+      await resume.getByRole('heading',{name:'Resume reviewed rule',exact:true}).waitFor();
+      await resume.getByRole('button',{name:'Confirm reviewed resumption',exact:true}).click();
       await retained.getByRole('button',{name:'Evaluate private work',exact:true}).click();
       assert.ok((await h.state()).automation.runs.some(r=>r.ruleId===rule.id));
     }
@@ -100,7 +101,7 @@ export async function automationBrowser(h,{rule,introRule}) {
       await capture(name);
     }
     for(const control of await page.locator('button,a').all()) {
-      if(await control.locator('svg').count() && !(await control.innerText()).trim()) assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips');
+      if(await control.isVisible() && await control.locator('svg').count() && !(await control.innerText()).trim()) assert.ok(await control.getAttribute('aria-describedby'),'icon-only controls have tooltips');
     }
   });
 }

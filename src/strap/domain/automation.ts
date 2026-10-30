@@ -1,7 +1,7 @@
 import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { humanOwner, id, insist, instant, integer, list, now, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { permission, type MarketingChannel } from './preferences';
+import { permission, preferencesOf, type MarketingChannel } from './preferences';
 import { renewalCandidates } from './renewals';
 
 const open = (task: RecordData) => ['queued','held'].includes(task.status);
@@ -20,7 +20,7 @@ function sources(state: State, rule: RecordData) {
       else if (list(state,'memberMessage').some(m => m.personId === source.personId && m.actorRole === 'member' && m.at >= source.createdAt)) reason = 'member_replied';
     }
     if (!reason && rule.trigger === 'renewal' && !renewal.some(r => r.packId === source.id)) reason = 'source_no_longer_eligible';
-    return {sourceId:source.id,personId:source.personId,reason};
+    return {sourceId:source.id,personId:source.personId,reason,basis:sha256(JSON.stringify([source,member?.version,preferencesOf(state,source.personId).revision]))};
   }).sort((a,b) => a.sourceId.localeCompare(b.sourceId));
 }
 function audienceBasis(state: State, rule: RecordData) { return sha256(JSON.stringify(sources(state,rule))); }
@@ -37,11 +37,13 @@ export function prepareAutomation(tx: Transaction,input: Record<string,unknown>)
     days:integer(input.days ?? 30,'days',1,366),lowCredits:integer(input.lowCredits ?? 1,'lowCredits',0,10000),
     stopConditions,escalation:'private-owner-review',effect:'private-task-only',status:'preview',createdAt:now(),createdBy:tx.who.id};
   const saved = {...rule,key:id(),basis:audienceBasis(tx.state,rule)};
+  tx.sql.push(tx.statement('INSERT INTO st_automation_reviews(id,rule_id,review_key) VALUES(?,?,?)',saved.id,saved.id,saved.key));
   tx.put('automationPreview',saved);return {...saved,audience:sources(tx.state,rule)};
 }
 export async function enableAutomation(tx: Transaction,input: Record<string,unknown>) {
   humanOwner(tx.who);const preview = record(tx.state,input.id,'automationPreview');
   insist(preview.createdBy === tx.who.id && preview.key === input.key,'automation_preview_changed',409);
+  await requireReview(tx,preview);
   insist(preview.basis === audienceBasis(tx.state,preview) && preview.endAt > now(),'automation_audience_changed',409);
   const prior = list(tx.state,'automationRule').find(r => r.previewId === preview.id);
   if (prior) return prior;
@@ -64,17 +66,24 @@ export async function setAutomation(tx: Transaction,input: Record<string,unknown
 export function previewAutomationResume(tx: Transaction,input: Record<string,unknown>) {
   humanOwner(tx.who);const rule = record(tx.state,input.id,'automationRule');
   const saved = {id:id(),ruleId:rule.id,key:id(),basis:audienceBasis(tx.state,rule),createdBy:tx.who.id,createdAt:now(),status:'preview'};
+  for (const prior of list(tx.state,'automationResume').filter(p => p.ruleId === rule.id && p.status === 'preview')) tx.put('automationResume',{...prior,status:'superseded'});
+  tx.sql.push(tx.statement('DELETE FROM st_automation_reviews WHERE rule_id=?',rule.id));
+  tx.sql.push(tx.statement('INSERT INTO st_automation_reviews(id,rule_id,review_key) VALUES(?,?,?)',saved.id,rule.id,saved.key));
   tx.put('automationResume',saved);return {...saved,audience:sources(tx.state,rule)};
 }
 export async function resumeAutomation(tx: Transaction,input: Record<string,unknown>) {
   humanOwner(tx.who);const preview = record(tx.state,input.id,'automationResume'),rule = record(tx.state,preview.ruleId,'automationRule');
   insist(preview.createdBy === tx.who.id && preview.key === input.key && preview.basis === audienceBasis(tx.state,rule),'automation_audience_changed',409);
+  await requireReview(tx,preview);
   insist(rule.endAt > now(),'schedule_ended',409);
   if (preview.status === 'approved') return rule;
   const saved = {...rule,enabled:true,epoch:id(),approvedAt:now(),approvedBy:tx.who.id};
   tx.sql.push(tx.statement('INSERT INTO st_automation_connections(rule_id,epoch) VALUES(?,?) ON CONFLICT(rule_id) DO UPDATE SET epoch=excluded.epoch',rule.id,saved.epoch));
   tx.put('automationRule',saved);tx.put('automationResume',{...preview,status:'approved'});
   tx.put('automationEvent',{id:id(),ruleId:rule.id,action:'resumed',at:now(),actorId:tx.who.id});return saved;
+}
+async function requireReview(tx: Transaction,preview: RecordData) {
+  insist(await tx.db.prepare('SELECT id FROM st_automation_reviews WHERE id=? AND review_key=?').bind(preview.id,preview.key).first(),'automation_review_disconnected',409);
 }
 async function connected(tx: Transaction,rule: RecordData) {
   return !!await tx.db.prepare('SELECT rule_id FROM st_automation_connections WHERE rule_id=? AND epoch=?').bind(rule.id,rule.epoch).first();
@@ -147,5 +156,5 @@ export async function automationSnapshot(db: D1Database,state: State,who: Actor)
   return {rules:list(state,'automationRule').map(r => ({...r,connected:connections.some(c => c.rule_id === r.id && c.epoch === r.epoch)})),
     previews:list(state,'automationPreview').map(p => ({...p,audience:sources(state,p),stale:p.basis !== audienceBasis(state,p)})),
     resumes:list(state,'automationResume').map(p => ({...p,audience:sources(state,state.records.get(p.ruleId)!.data)})),
-    tasks:list(state,'automationTask'),runs:list(state,'automationRun'),outcomes:list(state,'automationOutcome'),events:list(state,'automationEvent')};
+    tasks:list(state,'automationTask').map(t => {const rule = state.records.get(t.ruleId)?.data;return open(t) && !connections.some(c => c.rule_id === rule?.id && c.epoch === rule?.epoch) ? {...t,status:'held',reason:rule?.enabled ? 'execution_disconnected' : 'rule_paused'} : t;}),runs:list(state,'automationRun'),outcomes:list(state,'automationOutcome'),events:list(state,'automationEvent')};
 }

@@ -261,7 +261,7 @@ export const handlers = {
   'recognition.milestone.save':defineCommand(saveMilestone,['owner']),
   'recognition.preference.save':defineCommand(saveRecognitionPreference,['member'],{member:{staff:'recognition.launch',right:'member-record',ownStep:true}}),
   'recognition.launch':defineCommand(launchRecognition,['owner'],{staffRight:'member-record'}),
-  'recognition.process':defineCommand((tx) => { insist(tx.who.role === 'owner' && tx.who.isOwner,'owner_required',403); return processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); },['owner']),
+  'recognition.process':defineCommand((tx) => { insist(tx.who.role === 'owner' && tx.who.isOwner,'owner_required',403); return processRecognition(tx); suppressNurture(tx); suppressWinback(tx); },['owner']),
   'recognition.complete':defineCommand(completeRecognition,['owner']),
   'pay.rule.save':defineCommand(savePayRule,['owner']),
   'pay.adjust':defineCommand(adjustTeachingPay,['owner']),
