@@ -13,9 +13,9 @@ async function proof(h,cookie,run) {
         return route.continue()
       })
       const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}])
-      const page=await context.newPage(),capture=async name=>{
+      const page=await context.newPage(),capture=async (name,proofWidth=width)=>{
         await page.evaluate(() => document.fonts.ready)
-        if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-${width}.png`),fullPage:true})}
+        if(process.env.STRAP_PROOF_DIR){await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`${name}-${proofWidth}.png`),fullPage:true})}
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} fits ${width}: `+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(e=>e.getBoundingClientRect().right>innerWidth).slice(-5).map(e=>({tag:e.tagName,class:e.className,text:e.textContent.slice(0,80),right:e.getBoundingClientRect().right})))) )
       }
       await run(page,width,capture)
@@ -102,6 +102,9 @@ export async function automationBrowser(h,{rule,introRule,deliveryFixture}) {
         await review.getByRole('heading',{name:'Review exact member messages',exact:true}).waitFor();
         assert.equal((await h.state(deliveryFixture.member.cookie)).memberMessages.length,0);
         await capture('AUTO-001-exact-message-preview');
+        await page.setViewportSize({width:390,height:1000});
+        await capture('AUTO-001-exact-message-preview',390);
+        await page.setViewportSize({width:1440,height:1000});
         await review.getByRole('button',{name:'Approve exact in-app messages',exact:true}).click();
         assert.equal((await h.state(deliveryFixture.member.cookie)).memberMessages.length,2);
       }
