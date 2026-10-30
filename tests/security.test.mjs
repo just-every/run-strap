@@ -36,6 +36,11 @@ test('SEC-004: a finance user is refused the revenue report before enrolling, th
   const pageHold = await h.send('/app/revenue', undefined, fiona.cookie)
   assert.equal(pageHold.status, 403); assert.equal(pageHold.headers.get('x-strap-refusal'), 'mfa_enrollment_required'); assert.match(pageHold.text, /Confirm your email/)
   for (const path of ['/api/strap/state', '/api/strap/reports/attendance', '/api/strap/teaching-pay', '/app/people', '/app/integrations']) await get(h, path, fiona.cookie, 403, 'finance_reports_only')
+  const browserRefusal = await h.send('/app/people', undefined, fiona.cookie, { accept: 'text/html' })
+  assert.equal(browserRefusal.status, 403); assert.match(browserRefusal.headers.get('content-type'), /^text\/html/)
+  assert.match(browserRefusal.text, /role="alert"/)
+  const clientRefusal = await h.send('/app/people', undefined, fiona.cookie, { accept: 'application/json' })
+  assert.equal(clientRefusal.status, 403); assert.equal(clientRefusal.value.error, 'finance_reports_only')
   for (const [name, input] of [['person.save', { name: 'Eve', email: 'eve@studio.example', role: 'member', active: true }], ['booking.cancel', { id: 'x' }], ['integration.create', { label: 'x' }], ['finance.grant', { id: fiona.id }]]) await refused(h, name, input, fiona.cookie, 403, 'finance_reports_only')
   // An authenticator app: enroll (the session is then checked), recovery codes shown once.
   const app = await enrollTotp(h, fiona.cookie)

@@ -6,6 +6,7 @@ import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
 import { run } from './harness.mjs';
 import { paymentSeed,billingView,signedEvent } from './payment-fixtures.mjs';
+import { auditPage } from './accessibility-browser.mjs';
 
 const key=process.env.STRAP_STRIPE_TEST_KEY;
 assert.ok(key,'A held Stripe TEST credential is required through the injector');
@@ -27,7 +28,7 @@ await run(async h=>{
     const context=await browser.newContext({viewport:{width:390,height:1000}});
     try {
       await context.route(h.origin+'/**',async route=>{
-        const path=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'};
+        const path=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon','.js':'text/javascript'};
         if(!path.includes('..')&&types[extname(path)])return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:types[extname(path)]});return route.continue();
       });
       const at=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,at),value:h.owner.slice(at+1),url:h.origin}]);
@@ -43,10 +44,31 @@ await run(async h=>{
       const country=page.locator('#billingCountry, select[name="billingCountry"]').first();if(await country.count()&&await country.isVisible())await country.selectOption('US');
       await fill('#billingPostalCode, input[name="billingPostalCode"]','98104',false);
       const link=page.locator('#enableStripePass');if(await link.count()&&await link.isVisible()&&await link.isChecked())await link.uncheck();
+      // Interrupt the real hosted confirmation before it reaches Stripe. The
+      // retained checkout and visible payer choices must still describe one payment.
+      await context.setOffline(true);
       await page.locator('button[type="submit"]').click();
-      await page.waitForURL(url=>url.origin===h.origin,{waitUntil:'commit',timeout:60000});
+      await page.getByText(/connection issues/).waitFor();
+      if(process.env.STRAP_PROOF_DIR) {await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'APP-005-hosted-interruption-390.png'),fullPage:true});}
+      const unconfirmed=await provider('/checkout/sessions/'+checkout.providerSessionId);
+      assert.equal(unconfirmed.payment_status,'unpaid');assert.equal(unconfirmed.status,'open');
+      assert.equal(await page.locator('#email, input[name="email"]').first().inputValue(),seed.member.email,'interrupted payment retains payer choice');
+      assert.equal((await h.state()).payments.length,0);
+      await context.setOffline(false);
+      // Lose the return navigation after the provider commits. A fresh Strap
+      // read remains pending until explicit reconciliation checks Stripe itself.
+      const returned=page.waitForEvent('requestfailed',{predicate:r=>new URL(r.url()).origin===h.origin&&r.isNavigationRequest()});
+      const failedNavigation=page.waitForEvent('framenavigated',{predicate:frame=>frame===page.mainFrame()&&new URL(frame.url()).origin!==new URL(checkout.launchURL).origin});
+      await page.route(h.origin+'/**',route=>route.abort('failed'));
+      await page.locator('button[type="submit"]').click();
+      await returned;
+      await failedNavigation;await page.waitForLoadState('domcontentloaded');
+      await page.unroute(h.origin+'/**');
+      await page.goto(h.origin+'/app/packs#payments');
       assert.equal((await billingView(h)).invoices[0].status,'open','omitted callbacks cannot invent payment');assert.equal((await h.state()).payments.length,0);
-      await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-live-reconcile'});
+      const invoice=page.locator('[data-stripe-invoice="'+checkout.id+'"]');
+      assert.match(await invoice.innerText(),/open/);
+      await invoice.getByRole('button',{name:'Reconcile with Stripe',exact:true}).click();
       // Checkout can return before Stripe has finished generating its invoice.
       // Observe the provider's actual state, then explicitly reconcile again.
       let providerSession;
@@ -56,9 +78,14 @@ await run(async h=>{
         await new Promise(resolve=>setTimeout(resolve,1000));
       }
       assert.equal(providerSession.invoice?.status,'paid','Stripe must finish its real invoice before settlement can be proven');
-      await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-live-issued-invoice'});
+      await invoice.getByRole('button',{name:'Reconcile with Stripe',exact:true}).click();
       const paid=(await billingView(h)).invoices[0];assert.equal(paid.status,'paid',JSON.stringify((await billingView(h)).exceptions.map(e=>({code:e.code,status:e.status}))));assert.equal(paid.balanceCents,0);assert.equal(paid.access,5);
       assert.equal(providerSession.payment_intent.amount_received,5000);assert.equal(providerSession.invoice.amount_paid,5000);assert.equal(providerSession.payment_intent.latest_charge.paid,true);
+      assert.match(await invoice.innerText(),/paid/);assert.match(await invoice.innerText(),/\$0\.00/);
+      await invoice.getByRole('button',{name:'Reconcile with Stripe',exact:true}).click();
+      assert.equal((await h.state()).payments.length,1,'recovery and a repeated reconciliation record one real payment');
+      await auditPage(page,'real payment recovered from interrupted confirmation and lost return');
+      console.log('PROBE APP-005 payment: real Stripe TEST confirmation interrupted before commit and return lost after commit -> retained payer choice, pending until authoritative reconciliation, one payment and zero balance');
       const events=(await provider('/events?limit=100&created[gte]='+started)).data.filter(e=>[checkout.providerSessionId,paid.paymentIntentId,paid.providerInvoiceId].includes(e.data?.object?.id)&&['checkout.session.completed','payment_intent.succeeded','invoice.paid','invoice.payment_succeeded'].includes(e.type)).sort((a,b)=>b.created-a.created);
       assert.ok(events.some(e=>e.type==='checkout.session.completed'));assert.ok(events.some(e=>e.type==='payment_intent.succeeded'));assert.ok(events.some(e=>e.type.startsWith('invoice.')));
       for(const event of [...events,...events.reverse()])assert.equal((await signedEvent(h,event,{secret:signing})).status,200);
@@ -77,12 +104,20 @@ await run(async h=>{
         }
       }
       const summary=await billingView(h);
-      console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST',accountId:account.id,ready:true,sessionId:checkout.providerSessionId,invoiceId:paid.providerInvoiceId,paymentIntentId:paid.paymentIntentId,chargeId:providerSession.payment_intent.latest_charge.id,amountPaid:providerSession.invoice.amount_paid,nativePayments:financial.payments.length,balanceCents:paid.balanceCents,credits:paid.access,realEventIds:events.map(e=>e.id),signedReplay:'controlled replay of real Stripe events, not external endpoint delivery',signingCredentialRotated:true,merchantHistoryRetained:true,oldSigningCredentialRefused:true,reconciliations:summary.reconciliations.map(r=>({status:r.status,provider:r.provider,native:r.native})),exceptions:summary.exceptions.map(e=>({code:e.code,status:e.status})),edge}));
+      console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST',interruptedBeforeCommit:true,lostReturnAfterCommit:true,payerChoiceRetained:true,authoritativeRecovery:true,accountId:account.id,ready:true,sessionId:checkout.providerSessionId,invoiceId:paid.providerInvoiceId,paymentIntentId:paid.paymentIntentId,chargeId:providerSession.payment_intent.latest_charge.id,amountPaid:providerSession.invoice.amount_paid,nativePayments:financial.payments.length,balanceCents:paid.balanceCents,credits:paid.access,realEventIds:events.map(e=>e.id),signedReplay:'controlled replay of real Stripe events, not external endpoint delivery',signingCredentialRotated:true,merchantHistoryRetained:true,oldSigningCredentialRefused:true,reconciliations:summary.reconciliations.map(r=>({status:r.status,provider:r.provider,native:r.native})),exceptions:summary.exceptions.map(e=>({code:e.code,status:e.status})),edge}));
     } finally {await context.close();}
   } finally {await browser.close();}
 },{auth:{STRIPE_BILLING_TEST_KEY:key,STRIPE_BILLING_WEBHOOK_SECRET:signing},outbound:async request=>{
   const u=new URL(request.url);assert.equal(u.origin,'https://api.stripe.com');assert.ok(['/v1/account','/v1/checkout/sessions','/v1/events'].some(p=>u.pathname===p||u.pathname.startsWith(p+'/')));
-  const response=await fetch(request.url,{method:request.method,headers:request.headers,...(request.method==='POST'?{body:await request.text()}:{}),redirect:'manual'});
+  // The real HTTP client computes framing for the forwarded body. Workerd's
+  // chunked transfer header is not a valid Undici request option.
+  const forwardHeaders=new Headers(request.headers);
+  for(const name of ['connection','transfer-encoding','content-length'])forwardHeaders.delete(name);
+  let response;
+  try {response=await fetch(request.url,{method:request.method,headers:forwardHeaders,...(request.method==='POST'?{body:await request.text()}:{}),redirect:'manual'});}
+  catch(error) {console.log(JSON.stringify({providerTransport:error.name,causeCode:error.cause?.code??null,bodyUsed:request.bodyUsed,method:request.method}));throw error;}
   edge.push({method:request.method,path:u.pathname,status:response.status,requestId:response.headers.get('request-id')});
-  return new Response(await response.text(),{status:response.status,headers:{'content-type':'application/json','request-id':response.headers.get('request-id')??''}});
+  const body=await response.text();
+  if(!response.ok) {const error=JSON.parse(body).error;console.log(JSON.stringify({providerStatus:response.status,providerError:error?.code,providerParameter:error?.param}));}
+  return new Response(body,{status:response.status,headers:{'content-type':'application/json','request-id':response.headers.get('request-id')??''}});
 }});

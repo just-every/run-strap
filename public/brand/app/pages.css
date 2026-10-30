@@ -10,7 +10,7 @@
 
 /* Tables: the roster's density, for packs, payments, people and the week. */
 .data { width: 100%; border-collapse: collapse; font-size: 14px; }
-.data th { padding: 12px 10px 8px; color: var(--strap-quiet); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.data th { padding: 12px 10px 8px; color: var(--strap-quiet); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; white-space: nowrap; }
 .data td { padding: 11px 10px; border-top: 1px solid var(--strap-line-soft); vertical-align: middle; }
 .data td.right, .data th.right { text-align: right; }
 .data tr.current td { background: var(--strap-plum-wash); }
@@ -29,7 +29,7 @@
 .inline-form { display: inline-flex; margin: 0; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .week-editor { width: 100%; border-collapse: collapse; }
-.week-editor th { padding: 0 6px 6px; color: var(--strap-quiet); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+.week-editor th { padding: 0 6px 6px; color: var(--strap-quiet); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
 .week-editor td { padding: 4px 6px; vertical-align: top; }
 .week-editor td:first-child { width: 30px; padding-top: 16px; color: var(--strap-quiet); font-size: 13px; }
 .week-editor .field input, .week-editor .field select { min-height: 42px; }
@@ -77,7 +77,7 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
 .stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 18px; }
 .stat { padding: 10px 12px; border: 1px solid var(--strap-line); border-radius: 10px; }
 .stat b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat small { color: var(--strap-quiet); font-size: 12px; }
+.stat small { color: var(--strap-quiet); font-size: 13px; }
 .credits-big { display: flex; align-items: baseline; gap: 10px; margin: 0; }
 .credits-big b { color: var(--strap-plum); font: 800 44px/1 var(--rer-font-heading); }
 
@@ -104,7 +104,7 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
   .data.stack td.right { text-align: left; }
   .data.stack td small { display: inline; margin-left: 6px; }
   .data.stack td .who small { display: block; margin-left: 0; }
-  .data.stack td[data-label]::before { content: attr(data-label); margin-right: 6px; color: var(--strap-quiet); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .data.stack td[data-label]::before { content: attr(data-label); margin-right: 6px; color: var(--strap-quiet); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .data.stack td:first-child::before, .data.stack td[data-label=""]::before, .data.stack td.bare::before { content: none; }
   .table-wrap { padding: 0 16px 8px; }
   .week-editor, .week-editor tbody, .week-editor tr, .week-editor td { display: block; width: 100%; }

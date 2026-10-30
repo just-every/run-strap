@@ -27,7 +27,7 @@ export async function publicDoors(site) {
   let browser
   try {
     await h.mf.ready
-    browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
+    browser = await chromium.launch({ headless: true, executablePath: process.env.STRAP_CHROMIUM_PATH, args: ['--use-mock-keychain', '--password-store=basic'] })
     for (const width of [1440, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 960 } })
       const page = await context.newPage()

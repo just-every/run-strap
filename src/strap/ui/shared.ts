@@ -21,7 +21,7 @@ export const personSelect = (s: any, selected: unknown = '', label = 'Member') =
  * button; `quiet` is the white button for reviewing, undoing and revoking.
  */
 export const form = (command: string, path: string, body: string, button: string, style: 'primary' | 'quiet' = 'primary', size = '') =>
-  `<form class="${/<(label|textarea|select|table)\b/.test(body) ? 'form' : 'inline-form'}" method="post" action="/app/action?name=${encodeURIComponent(command)}&amp;returnTo=${encodeURIComponent(path)}">${body}<button class="${style === 'primary' ? 'btn' : 'btn-quiet'}${size ? ' ' + size : ''}" type="submit">${h(button)}</button></form>`
+  `<form${['profile.save','profile.save.staff'].includes(command) ? ' data-profile-save' : ''} class="${/<(label|textarea|select|table)\b/.test(body) ? 'form' : 'inline-form'}" method="post" action="/app/action?name=${encodeURIComponent(command)}&amp;returnTo=${encodeURIComponent(path)}">${body}<button class="${style === 'primary' ? 'btn' : 'btn-quiet'}${size ? ' ' + size : ''}" type="submit">${h(button)}</button>${['profile.save','profile.save.staff'].includes(command) ? '<p data-save-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>' : ''}</form>`
 
 /** A white panel with a serif heading, an optional icon, count and right-hand note. */
 export const panel = (title: string, body: string, options: { id?: string; icon?: string; count?: number; note?: string; className?: string } = {}) =>
@@ -43,7 +43,7 @@ export function statusPill(value: unknown) {
 export const result = (notice: any) => notice.result?.result ?? notice.result
 /** A table with a header row; `stack` cells carry their column name for phones. */
 export const table = (heads: string[], body: string, stack = true) =>
-  `<table class="data${stack ? ' stack' : ''}"><thead><tr>${heads.map(head => `<th${head.startsWith('>') ? ' class="right"' : ''}>${h(head.replace(/^>/, ''))}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`
+  `<table class="data${stack ? ' stack' : ''}"><thead><tr>${heads.map(head => `<th scope="col"${head.startsWith('>') ? ' class="right"' : ''}>${h(head.replace(/^>/, '') || 'Actions')}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`
 export const cell = (label: string, html: string, className = '') => `<td data-label="${h(label)}"${className ? ` class="${className}"` : ''}>${html}</td>`
 
 /** An icon link has a named tooltip after a short hover, immediately on keyboard focus. */

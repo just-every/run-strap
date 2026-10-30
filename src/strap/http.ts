@@ -16,6 +16,7 @@ import { smsTestCommand, smsTestState } from './twilio/test-transport'
 import { smsTestWebhook } from './twilio/webhooks'
 import { preferenceExport } from './domain/preferences'
 import { memberHistory, requireMemberRecord } from './domain/member-records'
+import { profileSaveStatus } from './domain/profiles'
 import { historyExport, historyCsv } from './staff-history'
 import { retentionReport } from './retention-report'
 import { leadReport } from './lead-report'
@@ -36,6 +37,7 @@ import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { inAppOnly, integrationCommand, integrationKeys } from './integrations'
 import { integrationResponse } from './integration-api'
 import { renderApp } from './ui'
+import { unavailablePage } from './ui/unavailable'
 import { formInput } from './forms'
 import { exitExport } from './exit-export'
 import { privacyCommand,privacyCommandCatalogue } from './privacy'
@@ -138,7 +140,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/profile-save','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
   if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !delegatedBillingRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.client.accept','appointment.client.move.prepare','appointment.client.cancel.prepare','appointment.client.change.confirm','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !(who.staffAccess && delegatedBillingRight(name) === 'collection' && ['/api/strap/command','/app/action'].includes(path)) && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
@@ -289,7 +291,23 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
       if (path === '/api/strap/mfa') return json(await mfaView(env, who))
       if (path === '/api/strap/exit.json') return await exitExport(env.DB, who)
-      if (pages.has(path)) return renderApp(await appState(env, who, path + url.search), path + url.search)
+      if (path === '/api/strap/profile-save') {
+        const loaded = await load(env.DB, who);
+        return json(profileSaveStatus(loaded.state, loaded.who, Object.fromEntries(url.searchParams)));
+      }
+      if (pages.has(path)) {
+        let notice = {};
+        if (['/app/profile','/app/people'].includes(path) && url.searchParams.has('profileSave')) {
+          const loaded = await load(env.DB, who);
+          const receipt = profileSaveStatus(loaded.state, loaded.who, {
+            command: path === '/app/profile' ? 'profile.save' : 'profile.save.staff',
+            personId: path === '/app/profile' ? who.personId : url.searchParams.get('person'),
+            requestId: url.searchParams.get('profileSave'),
+          });
+          notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
+        }
+        return renderApp(await appState(env, who, path + url.search), path + url.search, notice);
+      }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
       const reminderFile = path.match(/^\/api\/strap\/reminders\/([\w-]+)\.txt$/)
@@ -314,6 +332,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
+        if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
         if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
@@ -337,8 +356,12 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
     if (path === '/app/action' && who) {
+      if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
+      if (status >= 500) return unavailablePage(back, 'uncertain')
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
-      const page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') })
+      let page: Response
+      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      catch { return unavailablePage(back, 'uncertain') }
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }
     if (pages.has(path) && held && who) {
@@ -347,6 +370,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
     }
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
+    if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
+    if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
     return json({ error: message }, status)
   }
 }
