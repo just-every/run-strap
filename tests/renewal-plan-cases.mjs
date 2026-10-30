@@ -14,6 +14,7 @@ export async function renewalPlanCases(h) {
   const preview=await h.cmd('plan.cancellation.prepare',{packId:term.id,effectiveAt:at(15),reason:'Member is relocating',reasonCode:'relocation',requestId:'synthetic-strap-termination'})
   await h.cmd('plan.cancellation.confirm',{id:preview.id,key:preview.key,requestId:'synthetic-strap-confirm'})
   await h.cmd('plan.cancellation.reason.save',{code:'relocation',label:'Relocated elsewhere',active:false,revision:1})
+  await h.cmd('plan.cancellation.reason.save',{code:'price',label:'Price',active:true,revision:0})
   const type=await h.cmd('freeze.type.save',{name:'Agreed travel',reason:'Member requested travel',feeCents:0,defaultLengthDays:5,maxLengthDays:30,allowedStartDays:[1,2,3,4,5,6,7]})
   const freeze=await h.cmd('freeze.prepare',{packId:frozen.id,freezeTypeId:type.id,startAt:at(2).slice(0,10),endAt:at(7).slice(0,10),requestId:'synthetic-strap-freeze'})
   await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,requestId:'synthetic-strap-freeze-confirm'})

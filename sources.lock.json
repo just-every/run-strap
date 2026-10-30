@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0b0f176b288c594058b07231a2be87a2bac4879448db53ae71c2191cd9cb3c57",
+      "sha256": "9b9c4c340ff957ed5a24f9d42c8f82bfe905645800b62318e88bb28153e7fcaa",
       "executable": false
     },
     "DEMO.md": {
@@ -3490,7 +3490,7 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "286b024f357e0828e729798e685b711ec2ffb833441e9613d659cf329ef73fa4",
+      "sha256": "b7c0560f2d51d61b79eee1254fe9dad32223e066e11aa8be25dcf7b039f66d2b",
       "executable": false
     },
     "src/strap/domain/staff-command-access.ts": {
@@ -4046,7 +4046,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "265e6233a1cb286df24eca50ed4d696364cea711b0d463097169b321880071b7",
+      "sha256": "14cf45066b337c6bfccc68ea4552afef03e271c1ef58a1009368fe97a487aa47",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4126,7 +4126,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "cb921ab865137bb37e109a1f0777e56087168aa8cb46c9c1dbcf6b95e7b04af7",
+      "sha256": "d0db765f1506236210fd979035d25503d45ab64d7572fc09e6646b1dfc9e6199",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4170,7 +4170,7 @@
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
-      "sha256": "b50a5de06cb632a05992d1ccc4b84b056ce8a3d18567db884c993cc2c8a699ea",
+      "sha256": "bc34f951b70450e8c906d2757d527ace34339af0ceeb796f6c8778ac03411d16",
       "executable": false
     },
     "tests/capacity-browser.mjs": {
@@ -4518,15 +4518,15 @@
       "executable": false
     },
     "tests/renewal-disclosures-browser.mjs": {
-      "sha256": "5c6b16e2cc8e68db4ceded124feb45b7eda4cc68f5ef2498b1ee9e9b8ff9e378",
+      "sha256": "fe01c58e602bca87c6c0832b8709152375792f08f3fdc50a8c6db2dcbdde716e",
       "executable": false
     },
     "tests/renewal-plan-cases.mjs": {
-      "sha256": "63c2d15a7b520ce3cb9c65384f238f6daf6a22bcfeab447db2e73d59a603280b",
+      "sha256": "e7bbc4a41e27e0eee11a85d9875caa79fbb10999d392220fa7ce6fe6b853a4c2",
       "executable": false
     },
     "tests/renewals-browser.mjs": {
-      "sha256": "913e4f1222cf11139dce8deff79ce1ee2d980711fd8241507a1f70ebc4642d83",
+      "sha256": "af4c8e6816b7fb44732072e88c41c3637f42bebd0255f66b7900a787571da386",
       "executable": false
     },
     "tests/report-downloads-browser.mjs": {
@@ -4686,7 +4686,7 @@
       "executable": false
     },
     "tests/termination-reasons-cases.mjs": {
-      "sha256": "6a899814ca832e1635da4b61aa8a5b264fbccadf34cf82de431243b2c4e6fc6f",
+      "sha256": "cb2dd148a938af3e5b4e7461093d2588c6f3263db20fc315bf24ae38f4e09ae9",
       "executable": false
     },
     "tests/tuition-browser.mjs": {

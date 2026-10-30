@@ -4,7 +4,7 @@ import {join,extname} from 'node:path'
 import {chromium} from '@playwright/test'
 
 export async function proofPages(h,run){
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try{for(const width of [1440,390]){
     const contexts=[]

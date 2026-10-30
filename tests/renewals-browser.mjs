@@ -9,7 +9,7 @@ export async function renewalsBrowser(h,{packs}) {
   const proof = process.env.STRAP_PROOF_DIR
   if (proof) await mkdir(proof,{recursive:true})
   const parse = text => text.trimEnd().split('\r\n').map(line => [...line.matchAll(/"((?:[^"]|"")*)"(?:,|$)/g)].map(m => m[1].replaceAll('""','"')))
-  const browser = await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser = await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     for (const [i,width] of [1440,390].entries()) {
       const context = await browser.newContext({viewport:{width,height:1000}})
@@ -89,7 +89,10 @@ export async function renewalsBrowser(h,{packs}) {
         await capture('empty')
         await page.goto(h.origin+'/app/packs#cancellations')
         await page.getByText('Prepare an earlier termination',{exact:true}).click()
-        assert.equal(await page.getByLabel('Termination reason code',{exact:true}).inputValue(),'other')
+        const reason=page.getByLabel('Termination reason code',{exact:true})
+        assert.equal(await reason.locator('option[value=relocation]').count(),0,'a retired code is unavailable for a new preview')
+        await reason.selectOption('price')
+        assert.equal(await reason.inputValue(),'price','owner-configured active codes can be selected')
         await capture('termination-reason-code')
       } finally { await context.close() }
     }
