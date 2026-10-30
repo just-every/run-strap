@@ -17,19 +17,19 @@
 .toggle:hover { background: var(--strap-wash); }
 .toggle .icon { width: 18px; height: 18px; }
 .strip { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 0; padding: 0 16px 12px 124px; list-style: none; }
-.strip li { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--strap-radius-round); background: var(--strap-sea-wash); color: var(--strap-sea-ink); font-size: 12px; font-weight: 600; }
+.strip li { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--strap-radius-round); background: var(--strap-sea-wash); color: var(--strap-sea-ink); font-size: 13px; font-weight: 600; }
 .class-card.open .class-head { background: var(--strap-wash); border-bottom: 1px solid var(--strap-line-soft); }
 
 /* The roster: who is booked, waiting and cancelled, with their pack. */
 .roster { padding: 0 14px 6px; }
 .roster table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.roster th { padding: 14px 8px 8px; color: var(--strap-quiet); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+.roster th { padding: 14px 8px 8px; color: var(--strap-quiet); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
 .roster td { padding: 8px 6px; border-top: 1px solid var(--strap-line-soft); vertical-align: middle; }
 .roster td.n { width: 40px; color: var(--strap-quiet); }
 .roster th:nth-child(2) { width: 24%; } .roster th:nth-child(3) { width: 24%; } .roster th:nth-child(4) { width: 22%; }
 .roster td.act { width: 1%; text-align: right; white-space: nowrap; }
 .who { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.who .avatar { width: 34px; height: 34px; font-size: 12px; }
+.who .avatar { width: 34px; height: 34px; font-size: 13px; }
 .who a, .who > span:last-child { font-weight: 500; text-decoration: none; }
 .roster .who a, .roster .who > span:last-child { white-space: nowrap; }
 .who a:hover { text-decoration: underline; }
@@ -50,7 +50,7 @@
 .class-card.exception { border-color: var(--strap-rose-line); background: linear-gradient(115deg, var(--strap-rose-wash), var(--strap-rose-end)); }
 .class-card.exception .class-head { background: transparent; border-bottom: 0; }
 .class-card.exception .class-time strong { color: var(--strap-plum-button); }
-.flag { display: inline-flex; align-items: center; gap: 6px; width: fit-content; margin-top: 4px; padding: 3px 10px; border-radius: var(--strap-radius-pill); background: var(--strap-rose-tint); color: var(--strap-plum-button); font-size: 12px; font-weight: 600; }
+.flag { display: inline-flex; align-items: center; gap: 6px; width: fit-content; margin-top: 4px; padding: 3px 10px; border-radius: var(--strap-radius-pill); background: var(--strap-rose-tint); color: var(--strap-plum-button); font-size: 13px; font-weight: 600; }
 .flag .icon { width: 14px; height: 14px; }
 .decision { display: flex; align-items: center; gap: 14px; margin: 0 14px 14px 18px; padding: 12px 12px 12px 12px; border: 1px solid var(--strap-rose-line); border-radius: var(--strap-radius-control); background: var(--strap-decision-surface); }
 .decision-mark { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--strap-radius-round); background: var(--strap-rose-tint); color: var(--strap-plum-button); }
@@ -110,12 +110,12 @@
   .class-time { grid-area: time; padding: 12px; border-right: 0; }
   .class-name { grid-area: name; padding: 12px 8px 0 4px; }
   .teacher { grid-area: teacher; padding: 0 8px 0 4px; font-size: 14px; }
-  .teacher .avatar { width: 30px; height: 30px; font-size: 11px; }
+  .teacher .avatar { width: 30px; height: 30px; font-size: 13px; }
   .spots { grid-area: spots; justify-content: flex-start; padding: 4px 12px 0; }
   .toggle { grid-area: toggle; align-self: start; margin-top: 10px; }
   .class-time strong, .class-name strong { font-size: 16px; }
   .strip { padding: 0 12px 14px; }
-  .strip li { width: 32px; height: 32px; font-size: 11px; }
+  .strip li { width: 32px; height: 32px; font-size: 13px; }
   .roster { padding: 0 12px 6px; }
   .roster table, .roster tbody { display: block; width: 100%; }
   .roster thead { display: none; }

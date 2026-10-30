@@ -31,7 +31,7 @@ import { studioPage } from './studio'
 import { successRail } from './success'
 import { dayNav, today } from './today'
 
-const security = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", 'referrer-policy': 'strict-origin', 'x-content-type-options': 'nosniff', 'x-robots-tag': 'noindex, nofollow' }
+const security = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", 'referrer-policy': 'strict-origin', 'x-content-type-options': 'nosniff', 'x-robots-tag': 'noindex, nofollow' }
 
 export async function renderApp(state: any, target: string, notice: { message?: string; error?: string; result?: any } = {}): Promise<Response> {
   const url = new URL(target, 'https://strap.invalid'), current = url.pathname.replace(/\/$/, '') || '/app', query = url.searchParams
@@ -61,6 +61,6 @@ export async function renderApp(state: any, target: string, notice: { message?: 
   const signingHandoff=handoff?.waiverId && handoff?.url?.startsWith('/intake/tablet/start?') ? `<div class="notice"><p>Open on a dedicated signed-out tablet within 15 minutes. Only this document is available.</p><a href="${h(handoff.url)}">Open private signing handoff</a></div>` : '';
   const paymentHandoff=state.actor.role==='member' && handoff?.type==='setup.start' && handoff?.status==='succeeded' && typeof handoff.launchURL==='string' && handoff.launchURL.startsWith('https://checkout.stripe.com/') ? `<div class="notice"><p>Your private test card setup is ready. Continue personally with Stripe; no payment will be collected.</p><a class="btn" rel="noreferrer" href="${h(handoff.launchURL)}">Continue to Stripe test card setup</a></div>` : '';
   const checkoutHandoff=state.actor.role==='owner' && handoff?.launchURL?.startsWith('https://checkout.stripe.com/') && handoff?.type!=='setup.start' ? `<div class="notice"><p>The private hosted test payment is ready. The payer completes it personally with Stripe.</p><a class="btn" rel="noreferrer" href="${h(handoff.launchURL)}">Continue to Stripe test payment</a></div>` : '';
-  const notices = `${billingHandoff}${freezeHandoff}${paymentHandoff}${checkoutHandoff}${signingHandoff}${bulkResult(notice)}${notice.error ? `<div class="notice error" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" role="status">${h(notice.message)}</div>` : ''}`
-  return new Response(shell(state, current, title, topBar(state, day, checkIn), content, notices), { status: allowed ? 200 : 403, headers: current === '/app/security' ? { ...security, 'content-security-policy': security['content-security-policy'] + "; script-src 'self'; connect-src 'self'" } : security })
+  const notices = `${billingHandoff}${freezeHandoff}${paymentHandoff}${checkoutHandoff}${signingHandoff}${bulkResult(notice)}${notice.error ? `<div class="notice error" data-app-notice tabindex="-1" role="alert">${h(notice.error)}</div>` : ''}${notice.message ? `<div class="notice" data-app-notice tabindex="-1" role="status">${h(notice.message)}</div>` : ''}`
+  return new Response(shell(state, current, title, topBar(state, day, checkIn), content, notices), { status: allowed ? 200 : 403, headers: security })
 }

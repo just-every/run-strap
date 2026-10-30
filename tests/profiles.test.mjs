@@ -28,6 +28,11 @@ test('APP-003: members edit their own name, phone and emergency contact; the own
     const expected={personId:ana.id,name:'Ana Lopez',email:ana.email,phone:'6155550101',emergencyContact:{name:'Luis Lopez',phone:'6155550199',relationship:'Brother'},revision:1}
     assert.deepEqual(saved,expected)
     assert.deepEqual(await h.cmd('profile.save',own,ana.cookie),expected,'a replayed request returns the same profile')
+    const receiptPath = '/api/strap/profile-save?command=profile.save&requestId=' + own.requestId
+    assert.deepEqual((await h.send(receiptPath,undefined,ana.cookie)).value,{status:'saved',requestId:own.requestId})
+    assert.equal((await h.send(receiptPath,undefined,ben.cookie)).value.status,'not_saved','another member cannot read a receipt')
+    assert.equal((await h.send(receiptPath,undefined,coach.cookie)).status,403)
+    assert.equal((await h.send(receiptPath)).status,401)
     await refused(h,'profile.save',{...own,phone:'615 555 0102'},ana.cookie,409,'profile_request_changed')
     let owner=await h.state(),mine=await h.state(ana.cookie)
     const ownerRow=owner.people.find(p=>p.id===ana.id),memberRow=mine.people.find(p=>p.id===ana.id)
@@ -59,6 +64,7 @@ test('APP-003: members edit their own name, phone and emergency contact; the own
     assert.deepEqual(staff.emergencyContact,{name:'Luis Lopez',phone:'6155550177',relationship:'Brother'});assert.equal(staff.revision,2)
     owner=await h.state();mine=await h.state(ana.cookie)
     assert.equal(owner.staffActions.length,1)
+    assert.equal((await h.send(receiptPath,undefined,ana.cookie)).value.status,'changed','an old receipt cannot confirm the current profile')
     const event=owner.staffActions[0]
     assert.deepEqual([event.command,event.right,event.channel,event.actorId,event.actorRole,event.personId,event.staffMade,event.changed],['profile.save.staff','member-record','phone',owner.actor.id,'owner',ana.id,true,['emergencyContact']])
     assert.equal(event.before.emergencyContact.phone,'6155550199');assert.equal(event.after.emergencyContact.phone,'6155550177')
@@ -107,7 +113,7 @@ test('APP-003: members edit their own name, phone and emergency contact; the own
     assert.deepEqual([exit.manifest.recordKinds.memberProfile,exit.manifest.recordKinds.profileChange],[3,5])
     assert.ok(profiles.every(r=>ids.has(r.personId)))
     assert.deepEqual(profiles.find(r=>r.kind==='memberProfile'&&r.personId===ana.id).emergencyContact,staff.emergencyContact)
-    if(process.env.STRAP_PROOF_DIR) await (await import('./profiles-browser.mjs')).profilesBrowser(h,{ana,ben,entry})
+    if(process.env.STRAP_PROOF_DIR || process.env.CI) { process.env.STRAP_PROOF_DIR ??= 'logs/proof/profiles'; await (await import('./profiles-browser.mjs')).profilesBrowser(h,{ana,ben,entry}); }
   })
 })
 
@@ -133,6 +139,9 @@ test('MEM-001: scoped member-record staff create phoned-in profiles, invite once
   assert.equal((await h.state()).staffActions.filter(a=>a.requestId===create.requestId).length,1)
   const input={personId:made.id,phone:'5125550102',emergencyName:'Emergency Person',emergencyPhone:'5125550103',channel:'phone',requestId:'synthetic-strap-desk-edit'}
   await h.cmd('profile.save.staff',input,desk.cookie)
+  const receiptPath='/api/strap/profile-save?command=profile.save.staff&personId='+made.id+'&requestId='+input.requestId
+  assert.deepEqual((await h.send(receiptPath,undefined,desk.cookie)).value,{status:'saved',requestId:input.requestId})
+  assert.equal((await h.send(receiptPath.replace(made.id,other.id),undefined,desk.cookie)).status,403,'receipt lookup honors member scope')
   const actions=(await h.state()).staffActions.filter(a=>a.personId===made.id)
   assert.deepEqual(actions.map(a=>a.command).sort(),['member.record.create','profile.save.staff'])
   const edited=actions.find(a=>a.command==='profile.save.staff');assert.equal(edited.actorRole,'front-desk');assert.equal(edited.channel,'phone');assert.equal(edited.before.phone,'5125550101');assert.equal(edited.after.phone,'5125550102')
@@ -151,9 +160,11 @@ test('MEM-001: scoped member-record staff create phoned-in profiles, invite once
   if(process.env.STRAP_PROOF_DIR||process.env.CI)await(await import('./member-records-browser.mjs')).memberRecordsBrowser(h,{desk,member:made})
   await h.cmd('member.record.grant',{personId:desk.id,enabled:false,canCreate:false,memberIds:[]})
   await refused('profile.save.staff',{...input,requestId:'synthetic-strap-after-revoke'},desk.cookie,401)
+  assert.equal((await h.send(receiptPath,undefined,desk.cookie)).status,401,'a revoked session cannot recover a receipt')
   desk.cookie=await h.signIn(desk.email)
   await refused('profile.save.staff',{...input,requestId:'synthetic-strap-after-signin'},desk.cookie)
   await refused('member.record.invite',invite,desk.cookie)
+  assert.equal((await h.send(receiptPath,undefined,desk.cookie)).status,403,'new sign-in cannot revive revoked receipt authority')
   assert.equal((await h.send('/api/strap/member-history?personId='+made.id,undefined,desk.cookie)).status,403)
 }))
 
