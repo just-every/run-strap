@@ -150,7 +150,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
       if(['charge','payment','packCreditEvent'].includes(kind)&&financialReasons.has(data.reason))sanitized.reason=data.reason;
       if(['courseEnrollmentPreview','courseWithdrawalPreview'].includes(kind))Object.assign(sanitized,{key:null,basis:null,payerBasis:null,participantName:null,status:'retired'});
       if(kind==='makeupCredit')Object.assign(sanitized,{voidedAt:data.voidedAt??at,voidedBy:tx.who.id,voidReason:'Member erasure'});
-      if(kind==='payment') {sanitized.referenceHash=await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
+      if(kind==='payment') {sanitized.referenceHash=data.referenceHash ?? await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
       put(kind,{...sanitized,erased:true,privacyReceiptId:receipt.id});
     } else if(auditKinds.has(kind)) {
       put(kind,{...Object.fromEntries(Object.entries(data).filter(([key])=>auditFields.has(key))),id:data.id,erased:true});

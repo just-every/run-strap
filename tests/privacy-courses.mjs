@@ -88,6 +88,9 @@ export async function privacySharedCourses(h) {
   assert.deepEqual(retainedSibling.installments.map(r=>[r.amountCents,r.paidCents,r.creditedCents]),[[1000,0,0],[3000,0,3000]])
   assert.equal(retainedSibling.personId,peer.id);assert.equal(retainedSibling.payerId,payer.id)
   assert.ok(state.people.some(p=>p.id===peer.id&&p.name===peer.name))
+  const frozen=state.version
+  assert.equal((await h.cmd('course.payment.record',{id:unrelated.id,installmentId:'deposit',amountCents:1000,reference},h.owner,409)).error,'payment_reference_used','successive participant and payer erasures preserve the original receipt fence')
+  assert.equal((await h.state()).version,frozen)
   const final=await h.send('/api/strap/exit.json',undefined,h.owner)
   for(const value of [payer.name,payer.email,member.name,member.email])assert.ok(!final.text.includes(value))
   await h.state(payer.cookie,401)

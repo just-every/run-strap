@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "77005d9f626b85e4facc11b9c8c7a0f891080f89856feac4864fdd57daf90616",
+      "sha256": "0002140e7ceb88562cca793dfaa5b376d8b0dd83e445e22a92d9257829fdfe36",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "8e0c608d2adc2da73d690d32965f6618427dc77b3e656b0ae9f9acbbc857d8d9",
+      "sha256": "0bd321d66c10141a01d3643d130801be5ef420f4bee8d8be84b5b153563fe8a9",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "5145025c600c71f71ca320b9eedc578578ce07ffa3f36545e8be83da36bd63ab",
+      "sha256": "8e93939a26f4cbc47bd436010daf836f2dfd845db5b12036c4f564a21507cdcd",
       "executable": false
     },
     "docs/classes.md": {
@@ -3646,7 +3646,7 @@
       "executable": false
     },
     "src/strap/privacy-erasure.ts": {
-      "sha256": "1488c1fcdeadf0fdf6db889b8f16acd494f2401ee48243dd8a66c7cc2176a52b",
+      "sha256": "6c3e6c92f341a386b613e27804570cf09abfeeaeda28714c5b74a7b4e6764ce5",
       "executable": false
     },
     "src/strap/privacy-related.ts": {
@@ -4458,7 +4458,7 @@
       "executable": false
     },
     "tests/privacy-courses.mjs": {
-      "sha256": "b849c439b7e1260228df09e3b9919abf055dc35d828733c8b52ebc404b20cb36",
+      "sha256": "8c05acccb5443e27de5ce81fc9c42a3aedcd2a546bb82003e0c49d088824e285",
       "executable": false
     },
     "tests/privacy-journey.mjs": {
@@ -4475,6 +4475,10 @@
     },
     "tests/privacy-shared.mjs": {
       "sha256": "12d56bfaf5cb582496af9dc2a13efa3b8eb492c3b46c781d999d3dc89e4a8c76",
+      "executable": false
+    },
+    "tests/privacy-signing.mjs": {
+      "sha256": "f3fc7d9014a8395d000fdf13640d6db7da8d8ae65da09e88df8db53f1ce8f209",
       "executable": false
     },
     "tests/privacy-timed-journey.mjs": {
