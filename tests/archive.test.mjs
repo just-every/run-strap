@@ -122,9 +122,16 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.mf.dispatchFetch(h.origin+'/setup',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes',redirect:'manual'})).status,303)
     const p=await h.cmd('person.save',{name:'Temporary joiner',email:'temporary@venue.example',role:'member',active:false})
     // APP-003: a staff-entered emergency contact is the third party's personal data and follows the member.
-    const contact=await h.cmd('profile.save.staff',{personId:p.id,phone:'(212) 555-0144',emergencyName:'Rita Joiner',emergencyPhone:'212-555-0188',emergencyRelationship:'Mother',channel:'phone',revision:0,requestId:'archive-profile'})
+    const contactInput={personId:p.id,phone:'(212) 555-0144',emergencyName:'Rita Joiner',emergencyPhone:'212-555-0188',emergencyRelationship:'Mother',channel:'phone',revision:0,requestId:'archive-profile'}
+    const contact=await h.cmd('profile.save.staff',contactInput)
     assert.deepEqual(contact.emergencyContact,{name:'Rita Joiner',phone:'2125550188',relationship:'Mother'})
+    const contactReceipt='/api/strap/profile-save?command=profile.save.staff&personId='+p.id+'&requestId='+contactInput.requestId
+    assert.equal((await h.send(contactReceipt,undefined,h.owner)).value.status,'saved','staff can verify a committed save for an inactive profile')
     const member = await h.person('Maya'), coach = await h.person('Priya','instructor')
+    const ownProfileInput={phone:'6155550189',requestId:'synthetic-strap-portable-profile'}
+    const ownProfile=await h.cmd('profile.save',ownProfileInput,member.cookie)
+    const ownReceipt='/api/strap/profile-save?command=profile.save&requestId='+ownProfileInput.requestId
+    assert.equal((await h.send(ownReceipt,undefined,member.cookie)).value.status,'saved')
     const draft = await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:'2099-12-01T00:00:00Z'})
     await h.cmd('pack.approve',{id:draft.id})
     await h.cmd('studio.save',{location:'New York studio',timeZone:'America/New_York'})
@@ -262,6 +269,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
     await h.enroll(restoredOwner)
+    assert.equal((await h.send(contactReceipt,undefined,restoredOwner)).value.status,'saved','the restored owner verifies the retained source receipt after fresh authentication')
+    assert.deepEqual(await h.cmd('profile.save.staff',contactInput,restoredOwner),contact,'a restored staff retry keeps the original result')
     assert.equal((await integrationRead(h,integration.token)).status,401,'API-002 a restored studio refuses the old integration secret')
     assert.equal((await integrationRead(h,integration.token,'attendance')).status,401,'API-002 restored attendance scope is refused too')
     assert.deepEqual((await h.state(restoredOwner)).integrations,[],'API-002 integration keys never restore')
@@ -290,6 +299,11 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===p.id).length,1,'APP-003 the restored member keeps one profile change')
     assert.equal((await h.state(restoredOwner)).waiver.id,waiver.id)
     const restoredMember=await h.signIn(member.email),restoredGuardian=await h.signIn(signingGuardian.email);
+    assert.equal((await h.send(ownReceipt,undefined,restoredMember)).value.status,'saved')
+    assert.deepEqual(await h.cmd('profile.save',ownProfileInput,restoredMember),ownProfile,'member retry after restore retains the original request and result')
+    assert.equal((await h.state(restoredOwner)).profileChanges.filter(c=>c.personId===member.id&&c.requestId===ownProfileInput.requestId).length,1,'restoration and retry cannot duplicate the profile change')
+    assert.equal((await h.send(contactReceipt,undefined,restoredMember)).status,403,'a member cannot recover a staff receipt')
+    console.log('PROBE APP-005 portability: public exit and native CLI restore -> current profile receipts recover after fresh sign-in, retries stay once-only, billing and mail require reviewed reconnection')
     const restoredMembership=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,restoredMember),restoredMembershipHtml=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,restoredMember);
     assert.equal(restoredMembership.status,200);assert.deepEqual(restoredMembership.value,membershipBefore.value);assert.equal(restoredMembershipHtml.status,200);assert.equal(restoredMembershipHtml.text,membershipHtmlBefore.text);
     for(const extension of ['json','html'])assert.equal((await h.send('/api/strap/billing/agreement.'+extension+'?id='+membership.id,undefined,introAliasCookie)).status,404,'native restore retains membership evidence privacy');
@@ -382,6 +396,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     finally { await proxy.dispose() }
     h=await harness({root:erased,...identity})
     const privacyOwner=await h.signIn(h.auth.OWNER_EMAIL);await h.enroll(privacyOwner)
+    assert.equal((await h.send(contactReceipt,undefined,privacyOwner)).status,404,'a retained receipt cannot resurrect an erased profile after journal restore')
     const held=(await h.state(privacyOwner)).privacy.retained.find(r=>r.personId===privacyFixture.retained.id)
     assert.equal((await h.cmd('privacy.retained',{id:held.id},privacyOwner)).content.receipt.signature.signerName,privacyFixture.retained.name)
     const sharedHeld=(await h.state(privacyOwner)).privacy.retained.find(r=>r.sourceId===privacyFixture.guardianEvidence.id)

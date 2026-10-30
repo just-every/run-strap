@@ -184,6 +184,9 @@ export async function profilesBrowser(h, { ana, ben, entry }) {
         row = (await h.state()).people.find(p => p.id === ana.id)
         assert.equal(row.emergencyContact.phone, '6155550155')
         if (width === 1440) {
+          const household = await h.cmd('household.save', { name: 'Accessible household' })
+          await h.cmd('household.guardian.link', { id: household.id, guardianId: ana.id, evidenceReference: 'synthetic-strap-accessible-household' })
+          await h.cmd('household.participant.add', { id: household.id, name: 'Synthetic participant' })
           await auditNavigation(staff, h.origin, 'owner', process.env.STRAP_PROOF_DIR)
           await auditNavigation(member, h.origin, 'member', process.env.STRAP_PROOF_DIR)
           await readRecovery(h, staff, row, process.env.STRAP_PROOF_DIR)

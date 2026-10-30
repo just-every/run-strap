@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f82ed1d366d25d3ce72bbf4d253ed252631c9721759c23d5381386cdf0f1a2dd",
+      "sha256": "8c2d6dd3d35b576f31f36dbe5ac799d2e94e8d3dd9b3422c621cb86eb0abfcc2",
       "executable": false
     },
     "DEMO.md": {
@@ -3430,7 +3430,7 @@
       "executable": false
     },
     "src/strap/domain/profiles.ts": {
-      "sha256": "27bba436f2f5567b07c8a86c40d14f93473dbd0449b4b6002dc74ef7c269c8a2",
+      "sha256": "d7c39dd9528a5905440f5ca52498cd6f9b13ae95f6d4970d2fcbd7947b0acb2e",
       "executable": false
     },
     "src/strap/domain/recognition-launch.ts": {
@@ -4097,6 +4097,10 @@
       "sha256": "ec63cfd4d429f74c056f7c938b8f2e80ee09e5acc5c54c6bc518f38757441fe1",
       "executable": false
     },
+    "src/strap/ui/unavailable.ts": {
+      "sha256": "05b268dbbc84480609614a4f9036799486b1a85d21180912a3b258ec0f649296",
+      "executable": false
+    },
     "src/strap/ui/waitlist.ts": {
       "sha256": "89de351ad3ed48d3cafb7422183a39744ae9f7334d4dfa7eb421f08caff92b59",
       "executable": false
@@ -4118,7 +4122,7 @@
       "executable": false
     },
     "tests/accessibility-browser.mjs": {
-      "sha256": "606a301cac61ffa1dbbd5d6c3285b76530c5cb739250b8ecb9402f721ca4b5fd",
+      "sha256": "082ae5f822c343d81073e6d88c57de453a00a1eaf771109b619f476dcf9c6984",
       "executable": false
     },
     "tests/appointment-policy-cases.mjs": {
@@ -4126,7 +4130,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "c0c2d2c9ca205c81a80dda54e5977ed06325e55e16c2b6a681c419c58aed5fe3",
+      "sha256": "52f5d86b10cc12cfa7520269ba09d95c5fdc8d19fdb37c3e39524fa5e724b52a",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4430,7 +4434,7 @@
       "executable": false
     },
     "tests/payments-sandbox.mjs": {
-      "sha256": "1493118c7f02eb25a4a13d80c5427a496851bb2fed57a7b70abfa8a5f39eeee6",
+      "sha256": "8fa79cb99defd0db6a62a54e02f9f809264a66c7f8f9ad89183c1678c5e3db2a",
       "executable": false
     },
     "tests/plan-changes-browser.mjs": {
@@ -4494,7 +4498,7 @@
       "executable": false
     },
     "tests/profiles-browser.mjs": {
-      "sha256": "8848869e54e68cd3e9a0f4e3b4fb78109c124c9531ece0296ef5b0cd1bba4f44",
+      "sha256": "e79b1aabb7b5e9c26fbab52e290a7e4c6e728add60c69cb516c4839738f9f2f2",
       "executable": false
     },
     "tests/profiles.test.mjs": {

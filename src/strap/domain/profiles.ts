@@ -95,7 +95,7 @@ export function profileSaveStatus(state: State, who: Actor, input: Record<string
   const personId = staff ? input.personId : who.personId;
   if (staff) requireMemberRecord(state, who, personId);
   else insist(who.role === 'member' && personId && (input.personId === undefined || input.personId === personId), 'own_profile_required', 403);
-  const member = person(state, personId);
+  const member = person(state, personId, !staff);
   insist(member.role === 'member', 'member_required', 403);
   const requestId = text(input.requestId, 'requestId', 100);
   const receipt = list(state, 'profileChange').find(c => c.actorId === who.id && c.personId === member.id && c.command === input.command && c.requestId === requestId);

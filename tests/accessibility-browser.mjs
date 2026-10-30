@@ -6,6 +6,8 @@ export async function auditPage(page, label) {
   await page.evaluate(axe.source)
   const result = await page.evaluate(async () => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } }))
   assert.deepEqual(result.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.map(n => ({ target: n.target, summary: n.failureSummary })) })), [], label)
+  const missingTooltips = await page.locator('button,a,summary,[role=button]').evaluateAll(controls => controls.filter(control => control.checkVisibility() && !control.innerText.trim() && control.querySelector('svg,img') && !control.querySelector('[role=tooltip]')).map(control => control.tagName))
+  assert.deepEqual(missingTooltips, [], label + ' icon controls have tooltips')
   console.log(`PROBE APP-005 axe: ${label} -> zero WCAG 2.2 AA violations`)
 }
 
@@ -35,10 +37,10 @@ export async function auditNavigation(page, origin, role, proofDirectory) {
     } else assert.equal(response.status(), 200, role + ' can open ' + path)
     await page.locator('main details').evaluateAll(items => items.forEach(item => { item.open = true }))
     await auditPage(page, role + ' navigation ' + path + ' with expanded controls')
-    if (role === 'owner' && ['/app/packs', '/app/security'].includes(path)) {
+    if (role === 'owner' && ['/app/packs', '/app/security'].includes(path) || role === 'instructor' && path === '/app' || role === 'manager' && path === '/app/time-clock') {
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 1000 })
-        await page.screenshot({ path: join(proofDirectory, `APP-005-${path.split('/').at(-1)}-${width}.png`), fullPage: true })
+        await page.screenshot({ path: join(proofDirectory, `APP-005-${role}-${path.split('/').at(-1) || 'today'}-${width}.png`), fullPage: true })
       }
       await page.setViewportSize({ width: 1440, height: 1000 })
     }
@@ -73,7 +75,8 @@ export async function readRecovery(h, page, member, proofDirectory) {
   } finally {
     await h.db.prepare('ALTER TABLE synthetic_strap_unavailable_jobs RENAME TO ik_jobs').run()
   }
-  await page.getByRole('link', { name: 'Load current record' }).click()
+  await page.getByRole('link', { name: 'Load current record' }).focus()
+  await page.keyboard.press('Enter')
   assert.equal(new URL(page.url()).pathname, '/app/people')
   assert.equal(new URL(page.url()).searchParams.get('person'), member.id)
   assert.equal((await h.state()).version, before.version, 'read recovery does not replay the failed action')
