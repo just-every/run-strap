@@ -27,6 +27,7 @@ await run(async h=>{
     await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:who.id,credits:2,amountCents:2000,expiresAt:'2032-12-31T00:00:00Z'})).id})
     await h.cmd('payment.record',{personId:who.id,amountCents:2000,reference:'synthetic-strap-timed-'+who.id})
   }
+  await h.cmd('bookingRule.save',{cancelCutoffHours:12,lateCancelReturnsCredit:true,lateCancelFeeCents:0,noShowFeeCents:750})
   const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:'2031-12-29',classes:[{title:'Synthetic privacy class',start:'2032-01-02T12:00:00Z',end:'2032-01-02T13:00:00Z',capacity:4,instructorId:coach.id}]})).id})).classes[0]
   const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie),other=await h.cmd('booking.book',{classId:entry.id},peer.cookie)
   const create=async label=>{
@@ -54,8 +55,18 @@ await run(async h=>{
   const decision={...privacyDecision,documents:'retain',retainUntil:'2032-01-05T00:00:00Z',holdBasis:'Synthetic pending dispute',holdReviewAt:'2032-01-04T00:00:00Z',holdReleaseCondition:'Owner confirms resolution'}
   assert.equal((await h.cmd('privacy.erase.prepare',{id:request.id,...decision},h.owner,409)).error,'privacy_cancel_future_bookings_first')
   await jump('2032-01-03T12:00:00Z')
+  await h.cmd('attendance.noshow',{id:booking.id})
+  const fee=(await h.state()).charges.find(row=>row.bookingId===booking.id&&row.reason==='no_show_fee')
+  assert.equal(fee.amountCents,750)
+  await h.cmd('fee.waive',{id:fee.id,reason:'Synthetic private medical explanation'})
   const review=await h.cmd('privacy.erase.prepare',{id:request.id,...decision})
   await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true})
+  const report=await h.send('/api/strap/reports/revenue',undefined,h.owner)
+  assert.equal(report.status,200)
+  const retainedFees=report.value.sources.filter(row=>row.record.bookingId===booking.id)
+  assert.deepEqual(retainedFees.map(row=>[row.kind,row.amountCents]).sort((a,b)=>a[1]-b[1]),[['fee',-750],['fee',750]],'erasure preserves assessed fees and their reversals as financial classifications')
+  assert.ok(!JSON.stringify(report.value).includes('Synthetic private medical explanation'),'a retained financial classification does not retain the private waiver note')
+  assert.equal((await h.state()).packCreditEvents.find(row=>row.bookingId===booking.id&&row.type==='consume').reason,'no_show')
   for(const key of [current,legacy]) {
     assert.deepEqual((await read(key,'attendance')).data[0].attendance.map(r=>r.bookingId),[other.id])
     assert.deepEqual((await read(key,'roster')).data[0].roster.map(r=>r.bookingId),[other.id])

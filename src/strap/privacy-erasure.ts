@@ -92,7 +92,8 @@ async function checkpoint(db: D1Database): Promise<D1Sql[]> {
   });
 }
 const auditFields=new Set('id personId action command actorId actorRole staffMade right channel at createdAt changed'.split(' '));
-const privateFields=new Set('name email phone emergencyContact before after result requestBasis reason comment notes body subject recipient text signature url checkoutUrl providerSessionId paymentMethodId customerId'.split(' '));
+const privateFields=new Set('name email phone emergencyContact before after result requestBasis reason comment note notes cancelReason suppressionReason body subject recipient text signature url checkoutUrl providerSessionId paymentMethodId customerId'.split(' '));
+const financialReasons=new Set('initiation_fee late_cancel_fee no_show_fee late_move_fee fee_reversal freeze_fee_reversal guest_drop_in guest_drop_in_reversal appointment_price appointment_price_reversal appointment_price_restoration gift_card_issue gift_card_redemption retail_sale retail_return sales_tax sales_tax_reversal empty_place_incentive referral_reward cooling_off_unpaid_void late_cancel no_show attendance_correction cancellation_restored class_cancelled absence absence_restored unpaid_visit_settled private_appointment_move'.split(' '));
 function redact(value: any, identities: string[], key=''): any {
   if(privateFields.has(key))return null;
   if(Array.isArray(value))return value.map(item=>redact(item,identities));
@@ -136,6 +137,8 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
       const sanitized=redact(data,identities);
       // Purchased plan labels are financial facts; personal values embedded in them still redact.
       if(data.entitlement)sanitized.entitlement.name=redact(data.entitlement.name,identities);
+      // Keep controlled ledger classifications, never free-form personal explanations.
+      if(['charge','payment','packCreditEvent'].includes(kind)&&financialReasons.has(data.reason))sanitized.reason=data.reason;
       if(['courseEnrollmentPreview','courseWithdrawalPreview'].includes(kind))Object.assign(sanitized,{key:null,basis:null,payerBasis:null,participantName:null,status:'retired'});
       if(kind==='makeupCredit')Object.assign(sanitized,{voidedAt:data.voidedAt??at,voidedBy:tx.who.id,voidReason:'Member erasure'});
       if(kind==='payment') {sanitized.referenceHash=await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
