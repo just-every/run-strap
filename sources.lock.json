@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "8b2c1ed29ab4d210bfae69964df19366bb0f352a8cbc4618bfc2f266f195863d",
+      "sha256": "16bdf5aa8de77eaeca3cf8cf0d8f8efa822adfba30c61d7e11e8e8993e2d0dff",
       "executable": false
     },
     "DEMO.md": {
@@ -3330,7 +3330,7 @@
       "executable": false
     },
     "src/strap/domain/freezes.ts": {
-      "sha256": "0ab65eeb113fd25d47dc988a1f2a9b8912a46547d47dc40721cf3d418b679d67",
+      "sha256": "8393ee9bcda3c180e0cb812eec995c5a99f3cbecfa88892645d3af158e5acf7d",
       "executable": false
     },
     "src/strap/domain/gift-cards.ts": {
@@ -4430,7 +4430,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "b68b8725538239750c6a085b5a64a6f98fb53a7efc731b4585eeb14c9c91f847",
+      "sha256": "983daa40c07b460875100b96fff528540bfb18d81bd07034b7286eafacb726a8",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
