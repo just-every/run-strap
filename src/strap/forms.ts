@@ -38,6 +38,13 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('automation.')) {
+    if(name==='automation.prepare') {const [trigger,sequenceId]=String(input.source).split(':');input.trigger=trigger;input.sequenceId=sequenceId;delete input.source;}
+    for(const key of ['intervalMinutes','maxTasks','days','lowCredits'])if(key in input)input[key]=Number(input[key]);
+    for(const key of ['startAt','endAt'])if(input[key])input[key]=String(input[key])+'Z';
+    if(name==='automation.pause')input.enabled=false;
+    return input;
+  }
   if(name.startsWith('privacy.')) {
     for(const key of ['confirm','retireAccess'])if(key in input)input[key]=input[key]==='yes';
     for(const key of ['retainUntil','holdReviewAt'])if(input[key])input[key]=String(input[key])+'T00:00:00Z';

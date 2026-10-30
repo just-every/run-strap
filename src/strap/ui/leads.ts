@@ -1,3 +1,4 @@
+import { automationHistory } from './automation';
 import { body, cell, field, form, h, hidden, panel, person, select as baseSelect, table, textarea } from './shared'
 import { when } from './format'
 import { leadReportPanel } from './lead-report'
@@ -39,7 +40,7 @@ export function leadsPage(s: any,query: URLSearchParams) {
   }
   return `<div class="page"><div class="page-main"><div class="page-title"><h1>Lead follow-up</h1><p>Assigned next actions and a retained history from inquiry to membership.</p></div>`
     +panel('Staff queue',body(`<form method="get" action="${path}" class="form">${select('stage','Filter stage',[['','All stages'],...stages],stage,'')}${select('overdue','Due filter',[['false','All leads'],['true','Overdue only']],String(onlyOverdue))}<button class="btn-quiet">Filter follow-up</button></form><p><a href="${path}?overdue=true">${h(r.overdue.length)} overdue follow-ups</a></p>`)+`<div class="table-wrap">${table(['Person','Stage','Assigned owner','Next action'],list||'<tr><td colspan="4">No leads in this view.</td></tr>')}</div>`)
-    +recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+winbackPanel(s)+referralPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
+    +automationHistory(s,'intro',path)+recoveryPanel(s)+emptyPlacesPanel(s)+nurturePanel(s)+winbackPanel(s)+referralPanel(s)+detail+panel('Stage report',`<div class="table-wrap">${table(['Stage','Leads','Overdue'],report)}</div>`)+leadReportPanel(s.leadReport)
     +'</div><aside class="rail">'+panel('Record an inquiry',body(form('lead.create',path,request()+select('personId','Person',[['','Choose a person'],...s.people.filter((p: any)=>p.role==='member').map((p: any)=>[p.id,p.name])])+taskFields(s)+field('source','Inquiry source (optional)','','text','maxlength="100"')+textarea('note','Inquiry note','','maxlength="2000"'),'Add inquiry')))
     +panel('Recorded conversations',body('<p>Record calls, emails or conversations that actually happened. Saving a note does not send a message. The studio owner manages this queue until staff roles ship.</p>'))+'</aside></div>'
 }

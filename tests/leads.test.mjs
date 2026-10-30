@@ -559,3 +559,7 @@ test('Attendance offers respect member windows and entitlements and recheck conc
   assert.equal(JSON.parse(exportedOffer.data).bookingId,accepted.id);
 
 }));
+
+test('AUTO-001: owner-reviewed intro and renewal rules retain private once-only work through pause restart consent membership and budget changes',{timeout:180000},()=>run(async h=>{
+  await(await import('./automation-cases.mjs')).automationCases(h);
+}));

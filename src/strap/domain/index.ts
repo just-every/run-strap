@@ -1,3 +1,4 @@
+import { prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
 import { deliverClientAppointment, acceptClientAppointment, authorizeClientAppointment, recordAppointmentDeposit, clientAppointmentSnapshot } from './client-appointments';
 import { prepareClientAppointmentChange, confirmClientAppointmentChange } from './client-appointment-changes';
 import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse, confirmEnrollment, recordCoursePayment, prepareWithdrawal, confirmWithdrawal, courseAttendance, coursesSnapshot, coursePublicResult } from './courses';
@@ -87,6 +88,13 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'automation.prepare':defineCommand(prepareAutomation,['owner']),
+  'automation.enable':defineCommand(enableAutomation,['owner']),
+  'automation.pause':defineCommand(setAutomation,['owner']),
+  'automation.resume.preview':defineCommand(previewAutomationResume,['owner']),
+  'automation.resume':defineCommand(resumeAutomation,['owner']),
+  'automation.evaluate':defineCommand(evaluateAutomation,['owner']),
+  'automation.task.complete':defineCommand(completeAutomationTask,['owner']),
   'course.publish':defineCommand(publishCourse,['owner']),
   'course.enrollment.prepare':defineCommand(prepareEnrollment,['owner','front-desk'],{staffRight:'sale'}),
   'course.enrollment.launch':defineCommand(launchCourseAcceptance,['owner','front-desk'],{staffRight:'sale'}),
@@ -253,7 +261,7 @@ export const handlers = {
   'recognition.milestone.save':defineCommand(saveMilestone,['owner']),
   'recognition.preference.save':defineCommand(saveRecognitionPreference,['member'],{member:{staff:'recognition.launch',right:'member-record',ownStep:true}}),
   'recognition.launch':defineCommand(launchRecognition,['owner'],{staffRight:'member-record'}),
-  'recognition.process':defineCommand((tx) => { insist(tx.who.role === 'owner' && tx.who.isOwner,'owner_required',403); return processRecognition(tx); suppressNurture(tx); suppressWinback(tx); },['owner']),
+  'recognition.process':defineCommand((tx) => { insist(tx.who.role === 'owner' && tx.who.isOwner,'owner_required',403); return processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); },['owner']),
   'recognition.complete':defineCommand(completeRecognition,['owner']),
   'pay.rule.save':defineCommand(savePayRule,['owner']),
   'pay.adjust':defineCommand(adjustTeachingPay,['owner']),
@@ -401,14 +409,14 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if ((['attendance.plan.accept','attendance.plan.accept.staff'].includes(name) && !tx.state.records.has('notice:confirmation:'+result.id)) || name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff && !clientReplay) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
-  if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); }
+  if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); }
   await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
 export async function sweep(db: D1Database, context: NoticeContext) {
   const loaded = await loadSystem(db), tx = new Transaction(db,loaded.state,loaded.who);
-  tx.notices = context; applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); suppressNurture(tx); suppressWinback(tx); processClassReminders(tx);
+  tx.notices = context; applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx); promoteAll(tx); processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); processClassReminders(tx); await sweepAutomation(tx);
   if (tx.sql.length) await tx.commit();
 }
 /** The kiosk's whole surface: look up, check in a found seat, or scan a code. */
@@ -418,7 +426,7 @@ export async function kioskRead(db: D1Database, kioskId: string, query: unknown)
 export async function kioskCommand(db: D1Database, kioskId: string, name: 'checkin' | 'scan', input: Record<string,unknown>) {
   const loaded = await loadKiosk(db,kioskId), tx = new Transaction(db,loaded.state,loaded.who);
   const result = name === 'scan' ? scanCheckin(tx,input) : kioskCheckin(tx,input);
-  processRecognition(tx); suppressNurture(tx); suppressWinback(tx);
+  processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx);
   await tx.commit();
   const person = loaded.state.people.find(p => p.id === result.personId)!, entry = loaded.state.records.get(result.classId)!.data;
   return {name:shortName(person.name),classTitle:String(entry.title).split(' · ')[0],start:entry.start};
@@ -464,7 +472,7 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
 export async function snapshot(db: D1Database, who: Actor, origin?: string, operational = true) {
   const loaded = await load(db,who);
   const connection=await db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
-  return {...await snapshotFor(loaded.state,loaded.who,connection,origin,operational),privacy:privacySnapshot(loaded.state,loaded.who),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
+  return {...await snapshotFor(loaded.state,loaded.who,connection,origin,operational),automation:await automationSnapshot(db,loaded.state,loaded.who),privacy:privacySnapshot(loaded.state,loaded.who),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
 }
 async function snapshotFor(state: State, who: Actor, connection?: {connection_id:string;origin:string}|null, origin?: string, operational = true) {
   if (who.role === 'front-desk' || operational && who.staffAccess && ['manager','instructor'].includes(who.role)) {
