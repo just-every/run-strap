@@ -6,7 +6,7 @@ import { chromium } from '@playwright/test'
 const dateAt=(zone,days)=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(Date.now()+days*86_400_000)).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`}
 export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
   typeId=(await h.cmd('freeze.type.save',{name:'Travel',reason:'Planned travel agreed with the studio',feeCents:1000,defaultLengthDays:30,maxLengthDays:90,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:false})).id
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {
     for(const width of [1440,390]) {
@@ -152,4 +152,78 @@ export async function freezesBrowser(h,{member,direct,stranger,typeId}) {
       } finally {for(const context of contexts)await context.close()}
     }
   } finally {await browser.close()}
+}
+
+// The delegated workflow is asserted on the staff phone. The same changed
+// screens are also photographed at desktop width without repeating the writes.
+export async function scopedFreezesBrowser(h,{member,desk,type,grant,rights,day,today,midnight,west}) {
+  const directory=process.env.STRAP_RIGHTS_PROOF_DIR||process.env.STRAP_PROOF_DIR;
+  await mkdir(directory,{recursive:true});
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
+  const contexts=[];
+  try {
+    const pageFor=async cookie=>{
+      const context=await browser.newContext({viewport:{width:390,height:1000}});contexts.push(context);
+      await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()});
+      const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}]);return context.newPage();
+    };
+    const shot=async(page,selector,label)=>{
+      for(const width of [1440,390]) {
+        await page.setViewportSize({width,height:1000});await page.locator(selector).scrollIntoViewIfNeeded();
+        await page.screenshot({path:join(directory,`PLAN-011-${label}-${width}.png`),fullPage:false});
+      }
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'phone stays within the viewport');
+    };
+    const actor=desk,role='front-desk',locationId=west.id;
+    await grant(actor,role,rights,[member.id],[locationId]);
+    const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,locationId,expiresAt:midnight(day(today,90))})).id});
+    const pack=(await h.state()).packs.find(p=>p.id===ack.id),proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:crypto.randomUUID()});
+    await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);
+    const staff=await pageFor(actor.cookie),mine=await pageFor(member.cookie),back='/app/people?person='+member.id+'#freezes';
+    await staff.goto(h.origin+back);
+    assert.equal(await staff.locator('form[action*="name=freeze.type.save"]').count(),0,'types stay owner-managed');
+    assert.equal(await staff.locator('form[action*="name=plan.recurring.prepare"]').count(),0,'the freeze right grants no membership sale');
+    const panel=staff.locator(`[data-freeze-type="${type.id}"]`);await panel.locator('summary').click();
+    const prepare=panel.locator('form[action*="name=freeze.prepare"]');
+    await prepare.locator('[name=packId]').selectOption(pack.id);await prepare.getByLabel('Freeze starts date',{exact:true}).fill(day(today,2));await prepare.getByLabel('Resumption date',{exact:true}).fill(day(today,32));
+    await shot(staff,'#freezes','staff-form');
+    await prepare.getByRole('button',{name:'Preview direct freeze',exact:true}).click();
+    const freeze=(await h.state()).freezes.freezes.find(f=>f.packId===pack.id),preview=staff.locator(`[data-freeze="${freeze.id}"]`);
+    assert.equal(freeze.feeCents,1000);assert.equal(freeze.effects.durationDays,30);assert.equal(freeze.freezeRequestId,null);
+    assert.equal(await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0);
+    await preview.getByRole('button',{name:'Open member freeze acceptance',exact:true}).click();
+    assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).acceptedAt,null);
+    await shot(staff,`[data-freeze="${freeze.id}"]`,'staff-awaiting-member');
+    await mine.goto(h.origin+'/app/packs#freezes');
+    const personal=mine.locator(`[data-freeze="${freeze.id}"]`);await shot(mine,`[data-freeze="${freeze.id}"]`,'member-exact-fee');
+    await personal.getByRole('button',{name:'I accept this exact freeze',exact:true}).click();
+    await staff.reload();
+    // A form already shown on the phone loses authority on its next request.
+    await grant(actor,role,['member-record'],[member.id],[locationId]);
+    const before=await h.state();await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).click();
+    assert.equal((await h.state()).version,before.version);assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).status,'preview');
+    assert.equal(await staff.locator('form[action*="name=freeze.confirm"]').count(),0);
+    await shot(staff,'.page-main','staff-revoked');
+    await grant(actor,role,rights,[member.id],[locationId]);await staff.goto(h.origin+back);
+    await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).click();
+    assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).status,'scheduled');
+    await shot(staff,`[data-freeze="${freeze.id}"]`,'staff-confirmed');
+    await preview.getByText('End this freeze earlier',{exact:true}).click();
+    const ending=preview.locator('form[action*="name=freeze.end.prepare"]');await ending.getByLabel('Earlier resumption date',{exact:true}).fill(day(today,22));await ending.getByLabel('Reason for earlier resumption',{exact:true}).fill('Member returns on day twenty');
+    await ending.getByRole('button',{name:'Preview earlier resumption',exact:true}).click();
+    const end=(await h.state()).freezes.ends.find(e=>e.freezeId===freeze.id),endPanel=staff.locator(`[data-freeze-end="${end.id}"]`);
+    assert.equal(await endPanel.getByRole('button',{name:'Approve this earlier resumption',exact:true}).count(),0);
+    await endPanel.getByRole('button',{name:'Open member resumption acceptance',exact:true}).click();
+    await shot(staff,`[data-freeze-end="${end.id}"]`,'staff-day-twenty');
+    await mine.reload();await shot(mine,`[data-freeze-end="${end.id}"]`,'member-day-twenty');await mine.locator(`[data-freeze-end="${end.id}"]`).getByRole('button',{name:'I accept this exact earlier resumption',exact:true}).click();
+    await staff.reload();await endPanel.getByRole('button',{name:'Approve this earlier resumption',exact:true}).click();
+    const state=await h.state();assert.equal(state.packs.find(p=>p.id===pack.id).expiresAt,end.revisedExpiresAt);assert.equal(state.charges.filter(c=>c.freezeId===freeze.id).length,1);assert.equal(state.staffActions.filter(a=>a.command==='freeze.end.confirm'&&a.after.id===end.id).length,1);
+    await shot(staff,`[data-freeze-end="${end.id}"]`,'staff-end-confirmed');
+    // Shared icon controls already use the common tooltip; no icon-only action
+    // in this surface may lose its accessible tooltip when reached by keyboard.
+    for(const control of await staff.locator('a.has-tooltip,button.has-tooltip').all()) {
+      await control.focus();const tip=control.locator('[role=tooltip]');assert.equal(await tip.count(),1);assert.equal(await tip.isVisible(),true);
+    }
+    console.log('PROBE PLAN-011 staff phone: member profile -> Medical fee and date acceptance, revoked visible confirmation refused, restored rights confirm once, personal day-20 resumption; screens 1440 and 390.');
+  } finally {for(const context of contexts)await context.close();await browser.close();}
 }

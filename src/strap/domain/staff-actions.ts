@@ -56,7 +56,8 @@ export function retainStaffAction(tx: Transaction, name: string, right: string, 
     .find(({data}) => !priorIds.has(data.id) && data.staffMade && !data.parentActionId && data.actorId === tx.who.id);
   const metadata = {command:name,...(input.requestId ? {requestId:text(input.requestId,'requestId',100),requestBasis:requestBasis(input),result:after} : {})};
   if (existing) { tx.put(existing.kind,{...existing.data,...metadata}); return; }
-  const event = {id:result.staffActionId ?? id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason:typeof input.reason === 'string' ? input.reason : typeof result.exceptionReason === 'string' ? result.exceptionReason : null,at:now(),...metadata};
+  const reason = typeof input.reason === 'string' ? input.reason : typeof result.exceptionReason === 'string' ? result.exceptionReason : name.startsWith('freeze.') && typeof result.reason === 'string' ? result.reason : null;
+  const event = {id:result.staffActionId ?? id(),action:name,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right,personId,channel,before,after,reason,at:now(),...metadata};
   tx.put('staffAction',event);
 }
 export function dismissForMember(tx: Transaction, input: Record<string,unknown>) {
