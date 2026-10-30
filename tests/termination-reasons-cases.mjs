@@ -45,6 +45,10 @@ export async function terminationReasonCases(h,{nina,stranger,sell,agree}) {
   assert.equal(state.recurring.invoices.length,before.recurring.invoices.length)
   assert.equal(confirmed.effects.finalChargeCents,0)
   assert.equal(confirmed.effectiveAt,input.effectiveAt)
+  const catalogEvent=state.staffActions.find(a=>a.command==='plan.cancellation.reason.save'&&a.after.revision===5)
+  assert.equal(catalogEvent.before.label,'Moved away');assert.equal(catalogEvent.after.label,'New catalog label')
+  const audit=await h.send('/app/people',undefined,h.owner)
+  assert.equal(audit.status,200,audit.text);assert.match(audit.text,/Moved away/);assert.match(audit.text,/New catalog label/)
   await h.setAuth({})
   assert.equal((await h.state()).cancellations.cancellations.find(c=>c.id===confirmed.id).reasonLabel,'Moved away','runtime restart preserves the reviewed label')
 }

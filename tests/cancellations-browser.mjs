@@ -117,6 +117,10 @@ async function ownerEarlyTermination(c){
   assert.match(await staff.locator(`[data-contract-cancellation="${preview.id}"]`).innerText(),/Moved away/)
   const worklist=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.terminationId===preview.id)
   assert.deepEqual([worklist.reasonCode,worklist.reasonLabel],[c.reasonCode,'Moved away'])
+  await staff.goto(h.origin+'/app/renewals')
+  const renewalRow=staff.locator(`[data-pack-id="${pack.id}"]`)
+  assert.match(await renewalRow.innerText(),/Moved away/)
+  await renewalRow.scrollIntoViewIfNeeded();await shot(staff,'renewal-historical-label')
 }
 
 async function statutoryRefund(c){
@@ -332,7 +336,11 @@ export async function staffTerminationsBrowser(h,s){
         await page.goto(url)
         assert.equal(await commandForm(page,'plan.cancellation.prepare').count(),0)
         await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio'])
-        await page.goto(url);await page.getByText('Prepare an earlier termination',{exact:true}).click()
+        const scoped=await h.state(s.desk.cookie)
+        assert.ok(scoped.staffTerminationContracts.some(t=>t.packId===pack.id),'the selected contract is in the current staff scope')
+        assert.ok(scoped.terminationReasonCodes.some(r=>r.code==='moved-away'),'active reasons are available to permitted staff')
+        await page.goto(url);const response=await page.reload();assert.equal(response.status(),200,await page.locator('body').innerText())
+        await page.getByText('Prepare an earlier termination',{exact:true}).click()
         const form=commandForm(page,'plan.cancellation.prepare')
         await form.locator('[name=packId]').selectOption(pack.id)
         await form.locator('[name=reasonCode]').selectOption('moved-away')
@@ -352,7 +360,7 @@ export async function staffTerminationsBrowser(h,s){
         assert.equal(await commandForm(page,'plan.cancellation.confirm').count(),0)
         await shot('revoked')
         await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio'])
-        await page.goto(url)
+        await page.goto(url);await page.reload()
         await page.locator(`[data-contract-cancellation="${preview.id}"]`).getByRole('button',{name:'Confirm this exact early termination',exact:true}).click()
         const state=await h.state(),confirmed=state.cancellations.cancellations.find(c=>c.id===preview.id)
         assert.deepEqual([confirmed.status,confirmed.reasonCode,confirmed.reasonLabel],['scheduled','moved-away','Moved away'])

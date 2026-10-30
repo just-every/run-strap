@@ -18,6 +18,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   if (name === 'preferences.save.staff') return tx.state.records.get('member-preference:'+String(input.personId))?.data ?? null;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(memberCheckin(tx.state,String(input.personId)));
   if (name === 'waiver.launch') return {waiverId:currentWaiver(tx.state,input.waiverId)?.id ?? null,acknowledged:list(tx.state,'acknowledgement').some(a => a.personId === input.personId && a.waiverId === input.waiverId)};
+  if (name === 'plan.cancellation.reason.save') return structuredClone(tx.state.records.get('termination-reason:'+String(input.code))?.data ?? null);
   if (name === 'plan.disclosure.schedule') return structuredClone(tx.state.records.get(String(input.termsId))?.data ?? null);
   if (name === 'plan.recurring.prepare' || name === 'freeze.prepare') { const pack=tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
   if (name === 'plan.change.prepare') { const pack = tx.state.records.get(String(input.packId))?.data; return pack ? structuredClone(pack) : null; }
