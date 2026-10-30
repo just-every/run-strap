@@ -96,5 +96,6 @@ export async function automationCases(h) {
   assert.ok(!(await h.send('/api/strap/exit.json',undefined,h.owner)).text.includes(target.email));
   console.log('PROBE AUTO-001 erasure and revoked authority: verified owner erasure and revoked agent key -> retained suppressed trigger, replay refused and no private identity in exit');
   console.log('PROBE AUTO-001 intro and schedule: preview retained purchase, enable and tick twice, review privately, buy native membership -> one durable trigger and visible membership stop; future schedule held');
-  if(process.env.CI || process.env.STRAP_PROOF_DIR) await(await import('./preferences-browser.mjs')).automationBrowser(h,{rule,introRule});
+  const deliveryFixture=await(await import('./automation-delivery-cases.mjs')).automationDeliveryCases(h);
+  if(process.env.CI || process.env.STRAP_PROOF_DIR) await(await import('./preferences-browser.mjs')).automationBrowser(h,{rule,introRule,deliveryFixture});
 }
