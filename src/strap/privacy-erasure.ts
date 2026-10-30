@@ -29,11 +29,19 @@ function subjectRecords(state: State, member: Person) {
   }
   return [...selected.values()];
 }
+/** These records carry two subjects; their original amounts and links must survive either erasure. */
+function sharedSubjectRecord(state: State, kind: string, data: RecordData, memberId: string) {
+  if(kind==='acknowledgement')return data.signature?.signerPersonId===memberId || data.signedBy===memberId;
+  const enrollment=['courseEnrollment','courseEnrollmentPreview'].includes(kind)?data
+    :kind==='courseWithdrawalPreview'?state.records.get(data.enrollmentId)?.data
+    :['charge','payment'].includes(kind)&&data.courseEnrollmentId?state.records.get(data.courseEnrollmentId)?.data:null;
+  return !!enrollment && (enrollment.personId===memberId || enrollment.payerId===memberId);
+}
 function supportedRecords(state: State, member: Person) {
   const records=subjectRecords(state,member);
   const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&!privacyBillingKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
   insist(!unsupported.length,'privacy_related_work_requires_review:'+ [...new Set(unsupported.map(r=>r.kind))].sort().join(','),409);
-  const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !(kind==='charge'&&data.forPersonId===member.id));
+  const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !sharedSubjectRecord(state,kind,data,member.id) && !(kind==='charge'&&data.forPersonId===member.id));
   insist(!shared,'privacy_shared_member_work_requires_review',409);
   insist(!records.some(({kind,data})=>kind==='stripeInvoice'&&!['paid','expired'].includes(data.status)||kind==='billingOperation'&&['pending','uncertain'].includes(data.status)),'privacy_resolve_pending_provider_work_first',409);
   insist(!records.some(({kind,data})=>kind==='courseEnrollment'&&data.status==='enrolled'&&
@@ -126,6 +134,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
         content:kind==='billingAgreement'?{agreement:data,mandate:list(tx.state,'paymentMandate').find(m=>m.agreementId===data.id)??null}:{receipt:data,document:tx.state.records.get(data.waiverId)?.data ?? null,personalCopies:copies}};
       put('privacyRetention',retained);
     }
+    if(kind==='acknowledgement')sql('DELETE FROM st_evidence_copies WHERE receipt_id=?',data.id);
     if(privacyBillingKinds.has(kind)) {
       put(kind,retireBilling(kind,data,{...redact(data,identities),privacyReceiptId:receipt.id},at,tx.who.id));
     } else if(relationshipKinds.has(kind)) {

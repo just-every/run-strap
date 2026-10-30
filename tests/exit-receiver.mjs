@@ -17,7 +17,7 @@ function parseCsv(text) {
   return rows
 }
 
-export function reconstructExit(bundle, expectedCsvs, tax) {
+export function reconstructExit(bundle, expectedCsvs, tax, sharedCourse) {
   const receiver = new DatabaseSync(':memory:')
   try {
     for (const table of bundle.manifest.schema) {
@@ -41,11 +41,15 @@ export function reconstructExit(bundle, expectedCsvs, tax) {
       for (const key of ['classId','packId','bookingId','draftId','waiverId','seriesId','seriesChangeId','closureId','introSaleId','introOfferId','offerId','previewId']) if (record[key]) assert.ok(byId.has(record[key]), key + ' resolves')
       for (const key of ['classIds','closureIds']) for (const id of record[key] ?? []) assert.ok(byId.has(id),key + ' resolves')
     }
-    const originalRecords=tax ? records.filter(record=>record.personId!==tax.seed.member.id && record.packId!==tax.seed.serviceCharge.packId) : records;
+    const courseRows=records.filter(record=>record.courseEnrollmentId===sharedCourse.id);
+    assert.deepEqual(courseRows.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='charge').map(record=>record.amountCents).sort((a,b)=>a-b),[-3000,4000],'shared course keeps original tuition and withdrawal credit');
+    assert.deepEqual(courseRows.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='payment').map(record=>record.amountCents),[1000],'shared course keeps the received deposit');
+    assert.deepEqual(byId.get(sharedCourse.id),sharedCourse,'the independent receiver reconstructs exact shared course evidence');
+    const originalRecords=records.filter(record=>record.courseEnrollmentId!==sharedCourse.id && (!tax || record.personId!==tax.seed.member.id && record.packId!==tax.seed.serviceCharge.packId));
     const allMoney=kind=>records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind===kind).reduce((sum,record)=>sum+record.amountCents,0);
     if(tax) {
-      assert.equal(allMoney('charge'),19100,'original balances plus the independent 5200-cent net taxed-sale fixture reconstruct');
-      assert.equal(allMoney('payment'),7200,'original receipts plus the independent 2200-cent net retail and tax tenders reconstruct');
+      assert.equal(allMoney('charge'),20100,'original balances plus the independent 5200-cent net taxed-sale and 1000-cent shared course fixtures reconstruct');
+      assert.equal(allMoney('payment'),8200,'original receipts plus the independent 2200-cent net retail and tax tenders and 1000-cent course deposit reconstruct');
       assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='packCreditEvent').reduce((sum,record)=>sum+record.credits,0),6,'all original credits plus the separately purchased class remain');
       assert.equal(records.filter(record=>bundle.tables.st_records.find(row=>row.id===record.id).kind==='pack').reduce((sum,record)=>sum+record.remaining,0),6,'all reconstructed pack balances equal the complete credit ledger');
     }

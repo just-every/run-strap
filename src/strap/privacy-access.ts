@@ -19,6 +19,7 @@ function familyCopy(data:RecordData,memberId:string) {
 }
 export function accessBundle(state:State,memberId:string) {
   const member=person(state,memberId,false), records:Array<{kind:string;data:RecordData}>=[];
+  const acknowledgements=list(state,'acknowledgement').filter(a=>a.personId===memberId || a.signature?.signerPersonId===memberId || a.signedBy===memberId);
   for(const {kind,data} of state.records.values()) {
     if(internal.has(kind))continue;
     if(['familyTuition','familyInvoice'].includes(kind)) {
@@ -29,11 +30,11 @@ export function accessBundle(state:State,memberId:string) {
       if(data.sourceId===memberId || data.targetId===memberId)records.push({kind,data:{id:data.id,personId:memberId,at:data.at,authorityTransferred:false,role:data.sourceId===memberId?'source':'retained'}});
       continue;
     }
-    if(data.personId!==memberId)continue;
+    if(data.personId!==memberId && !(kind==='acknowledgement'&&acknowledgements.includes(data)))continue;
     const visible=kind==='payment'&&data.collection==='stripe-test-checkout'?{...data,reference:'Recorded payment '+data.id}:data;
     records.push({kind,data:clean(audits.has(kind)?Object.fromEntries(Object.entries(data).filter(([key])=>auditFields.has(key))):visible)});
   }
   return {format:'strap-member-access',version:1,generatedAt:now(),person:{id:member.id,...profileOf(state,member)},records,
-    documents:list(state,'acknowledgement').filter(a=>a.personId===memberId).map(a=>({receipt:clean(a),document:clean(state.records.get(a.waiverId)?.data??null)})),
+    documents:acknowledgements.map(a=>({receipt:clean(a),document:clean(state.records.get(a.waiverId)?.data??null)})),
     boundary:'This copy contains the member records held by this studio. Shared records include only this person’s details and allocations. External providers and copies already delivered remain outside this installation.'};
 }

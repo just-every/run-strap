@@ -3,7 +3,8 @@ import {readFile,writeFile,rename} from 'node:fs/promises'
 import {run} from './harness.mjs'
 import {totp} from './mfa-helpers.mjs'
 import {privacyObligations,privacyMakeup} from './privacy-obligations.mjs'
-import {privacyCourses} from './privacy-courses.mjs'
+import {privacyCourses,privacySharedCourses} from './privacy-courses.mjs'
+import {privacySigning} from './privacy-signing.mjs'
 import {privacyShared} from './privacy-shared.mjs'
 import {privacyDecision} from './privacy-journey.mjs'
 
@@ -99,4 +100,10 @@ await run(async h=>{
   await privacyObligations(h)
   await privacyMakeup(h)
   await privacyCourses(h)
+  await privacySharedCourses(h)
+  await privacySigning(h)
+  await jump('2032-01-08T12:00:00Z')
+  await h.cmd('privacy.dispose',{id:h.sharedSigningRetention.id,confirm:true})
+  const disposed=await h.send('/api/strap/exit.json',undefined,h.owner)
+  for(const value of [h.sharedSigningRetention.guardian.name,h.sharedSigningRetention.guardian.email])assert.ok(!disposed.text.includes(value),'expired shared signing retention is disposed without leaving signer identities')
 })

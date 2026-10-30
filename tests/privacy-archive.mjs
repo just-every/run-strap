@@ -12,13 +12,27 @@ export async function seedPrivacyArchive(h,waiver) {
     await h.cmd('profile.save.staff',{personId:member.id,phone:'2025550166',emergencyName:'Synthetic archive contact',emergencyPhone:'2025550167',emergencyRelationship:'Friend',channel:'phone',requestId:'synthetic-strap-archive-contact-'+member.id})
     await h.cmd('member.note.add',{personId:member.id,text:'Synthetic archive restricted note',alert:true})
   }
-  return {members:[native,imported],jobId:job.job.id,csv}
+  const participant=await h.person('Syntheticarchivecourseparticipant')
+  const home=await h.cmd('household.save',{name:'Synthetic archive course family'})
+  await h.cmd('household.participant.add',{id:home.id,personId:participant.id})
+  await h.cmd('household.payer.propose',{id:home.id,payerId:native.id});await h.cmd('household.payer.accept',{id:home.id},native.cookie)
+  const at=days=>new Date(Date.now()+days*86400000).toISOString()
+  const course=await h.cmd('course.publish',{name:'Synthetic archive course',capacity:2,depositCents:1000,installments:[{dueAt:at(2),amountCents:3000}],sessions:[{start:at(3),end:at(4)}],confirmPolicy:true})
+  for(const document of (await h.state()).waivers.filter(w=>!w.service || w.service===course.name))await h.cmd('waiver.acknowledge',{id:document.id,documentHash:document.documentHash,signerName:participant.name,confirm:true},participant.cookie)
+  const enrollment=await h.cmd('course.enrollment.prepare',{courseId:course.id,personId:participant.id,requestId:'synthetic-strap-archive-shared-course'})
+  await h.cmd('course.accept',{id:enrollment.id,key:enrollment.key,confirm:true},native.cookie)
+  const enrolled=await h.cmd('course.enrollment.confirm',{id:enrollment.id,key:enrollment.key,confirm:true,requestId:'synthetic-strap-archive-shared-enroll'})
+  await h.cmd('course.payment.record',{id:enrolled.id,installmentId:'deposit',amountCents:1000,reference:'synthetic-strap-archive-shared-payment'})
+  const withdrawal=await h.cmd('course.withdraw.prepare',{id:enrolled.id,reason:'Synthetic archive course withdrawal',requestId:'synthetic-strap-archive-shared-withdraw'})
+  const sharedCourse=await h.cmd('course.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,confirm:true,requestId:'synthetic-strap-archive-shared-withdraw-confirm'})
+  return {members:[native,imported],jobId:job.job.id,csv,sharedCourse,participant}
+
 }
 export async function erasePrivacyArchive(h,owner,fixture) {
-  for(const member of [...fixture.members,...(fixture.retained?[fixture.retained]:[])]) {
+  for(const member of [...fixture.members,...(fixture.retained?[fixture.retained]:[]),...(fixture.guardian?[fixture.guardian]:[])]) {
     const request=await h.cmd('privacy.request',{personId:member.id,type:'erasure',channel:'phone',requestId:'synthetic-strap-archive-erase-'+member.id},owner)
     await h.cmd('privacy.verify',{id:request.id,method:'callback-on-file',confirm:true},owner)
-    const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision,...(member.id===fixture.retained?.id?{documents:'retain',holdBasis:'Synthetic archive document hold',holdReviewAt:'2099-06-01T00:00:00Z',holdReleaseCondition:'Owner confirms dispute resolved'}:{})},owner)
+    const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision,...([fixture.retained?.id,fixture.guardian?.id].includes(member.id)?{documents:'retain',holdBasis:'Synthetic archive document hold',holdReviewAt:'2099-06-01T00:00:00Z',holdReleaseCondition:'Owner confirms dispute resolved'}:{})},owner)
     await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true},owner)
   }
   await h.state(fixture.members[0].cookie,401)
@@ -31,6 +45,18 @@ export function assertPrivacyArchive(bytes,fixture) {
   assert.ok(parts.length,'the erasure check reads a populated archive')
 }
 export async function assertPrivacyRestored(db,fixture) {
+  const shared=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='courseEnrollment' AND id=?").bind(fixture.sharedCourse.id).first()).data)
+  for(const key of ['personId','payerId','amountCents','status','installments','acceptedAt','acceptedBy','previewId','withdrawalId'])assert.deepEqual(shared[key],fixture.sharedCourse[key],'restored shared course keeps original '+key)
+  assert.equal(shared.erased,true)
+  assert.equal((await db.prepare('SELECT name FROM st_people WHERE id=?').bind(fixture.participant.id).first()).name,fixture.participant.name)
+  const guardian=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='privacyRetention' AND json_extract(data,'$.sourceId')=?").bind(fixture.guardianEvidence.id).first()).data)
+  assert.deepEqual(guardian.content.receipt,fixture.guardianEvidence)
+  assert.deepEqual(guardian.content.document,fixture.guardianDocument)
+  assert.equal(guardian.hold.basis,'Synthetic archive document hold')
+  assert.equal((await db.prepare("SELECT count(*) AS n FROM st_records WHERE kind='acknowledgement' AND id=?").bind(fixture.guardianEvidence.id).first()).n,0)
+  assert.equal((await db.prepare('SELECT name FROM st_people WHERE id=?').bind(fixture.guardian.id).first()).name,'Erased person')
+  assert.equal((await db.prepare('SELECT erased_at FROM st_people WHERE id=?').bind(fixture.guardianChildId).first()).erased_at,null)
+
   const held=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='privacyRetention' AND json_extract(data,'$.personId')=?").bind(fixture.retained.id).first()).data)
   assert.deepEqual(held.content.receipt.signature,fixture.retainedEvidence.receipt.signature,'native restore keeps exact restricted signing evidence')
   assert.equal(held.hold.basis,'Synthetic archive document hold');assert.equal(held.hold.scope,'member-documents');assert.ok(held.hold.actorId)

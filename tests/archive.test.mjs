@@ -179,6 +179,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const guardianEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:signingGuardian.name,participantId:signingFamily.participantIds[0],confirm:true},signingGuardian.cookie);
     const signedBefore=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,member.cookie);
     const guardianBefore=await h.send('/api/strap/waiver-evidence.json?id='+guardianEvidence.id,undefined,h.owner);
+    Object.assign(privacyFixture,{guardian:signingGuardian,guardianEvidence,guardianDocument:signedPolicy,guardianChildId:signingFamily.participantIds[0]});
     await h.cmd('household.guardian.remove',{id:signingFamily.id,guardianId:signingGuardian.id,reason:'Authority ended before archive'});
     const billingPack=(await h.state()).packs.find(pack=>pack.personId===member.id);
     const billingPreview=await h.cmd('plan.recurring.prepare',{packId:billingPack.id,intervalMonths:1,requestId:'synthetic-strap-archive-billing-terms'});
@@ -208,7 +209,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const portable=download.value
     assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_TAX_TEST_KEY),'portable exit excludes the configured tax provider credential');
     assertPortableTax(portable,taxProof);
-    reconstructExit(portable,[csv,privacyFixture.csv],taxProof)
+    reconstructExit(portable,[csv,privacyFixture.csv],taxProof,privacyFixture.sharedCourse)
     assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
     for(const table of ['st_evidence_copies','st_evidence_copy_mail'])assert.ok(!(table in portable.tables),'portable exit excludes initialized personal-copy credentials and mail review')
     for(const credential of [copyToken,copyRecord.token_hash,copyReview.connection_id])assert.ok(!download.text.includes(credential),'portable exit omits personal-copy authority')
@@ -301,7 +302,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(adultHtmlAfter.status,200);assert.equal(adultHtmlAfter.text,adultHtmlBefore.text,'restored member downloads the identical readable signed evidence');
     assert.equal(guardianHtmlAfter.status,200);assert.equal(guardianHtmlAfter.text,guardianHtmlBefore.text,'owner retains identical historical guardian evidence');
     assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'native restore cannot revive historical guardian HTML-download access');
-    reconstructExit(restoredDownload.value,[csv,privacyFixture.csv],taxProof)
+    reconstructExit(restoredDownload.value,[csv,privacyFixture.csv],taxProof,privacyFixture.sharedCourse)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
     assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')
@@ -383,8 +384,13 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const privacyOwner=await h.signIn(h.auth.OWNER_EMAIL);await h.enroll(privacyOwner)
     const held=(await h.state(privacyOwner)).privacy.retained.find(r=>r.personId===privacyFixture.retained.id)
     assert.equal((await h.cmd('privacy.retained',{id:held.id},privacyOwner)).content.receipt.signature.signerName,privacyFixture.retained.name)
+    const sharedHeld=(await h.state(privacyOwner)).privacy.retained.find(r=>r.sourceId===privacyFixture.guardianEvidence.id)
+    assert.deepEqual((await h.cmd('privacy.retained',{id:sharedHeld.id},privacyOwner)).content.receipt,privacyFixture.guardianEvidence)
+    assert.equal((await h.send('/api/strap/waiver-evidence.json?id='+privacyFixture.guardianEvidence.id,undefined,privacyOwner)).status,404)
     const privacyOther=await h.signIn(member.email)
     await h.cmd('privacy.retained',{id:held.id},privacyOther,403)
+    await h.cmd('privacy.retained',{id:sharedHeld.id},privacyOther,403)
+    await h.cmd('privacy.dispose',{id:sharedHeld.id,confirm:true},privacyOwner,409)
     await h.cmd('privacy.dispose',{id:held.id,confirm:true},privacyOwner,409)
     assert.equal((await h.send(copyPath)).status,410,'restore keeps the original copy capability retired')
     assert.equal((await copyPost(h,'/evidence/copy',{token:copyToken})).status,410)
