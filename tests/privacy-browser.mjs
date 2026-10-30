@@ -48,7 +48,7 @@ export async function privacyBrowser(h,member) {
     const review=form('Review erasure')
     await review.getByLabel('Reason to retain financial evidence').fill('Synthetic evidence retention')
     await review.getByLabel('Retain identifying documents until (UTC)').fill('2099-12-31')
-    await review.getByLabel('Member waiver evidence').selectOption('retain')
+    await review.getByLabel('Signed member evidence').selectOption('retain')
     await review.getByLabel('Document hold basis (optional)').fill('Synthetic pending dispute')
     await review.getByLabel('Hold review date (UTC)').fill('2099-06-01')
     await review.getByLabel('Hold release condition').fill('Owner confirms dispute resolved')

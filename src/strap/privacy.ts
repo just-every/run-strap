@@ -3,8 +3,10 @@ import { humanOwner, id, insist, list, now, person, record, text, type Actor, ty
 import { hasStaffRight } from './domain/staff-rights';
 import { profileOf } from './domain/profiles';
 import { eraseUsedMember, erasureReview } from './privacy-erasure';
+import { accessBundle } from './privacy-access';
 import { sha256 } from '../modules/import-kit/src/d1/index';
 
+export const privacyCommandCatalogue=()=>['request','verify','export','deliver','retained','erase.prepare','erase.confirm','hold.release','dispose'].map(verb=>({name:'privacy.'+verb,roles:['owner'],memberDoor:null,staffRight:'privacy'}));
 const channels = ['desk','phone','inbox'] as const;
 export function privacyAuthority(state: State, who: Actor) {
   humanOwner(who);
@@ -27,18 +29,6 @@ export function verifiedRequest(state: State, key: unknown, kind: string) {
   insist(member.version===request.personVersion,'privacy_identity_changed',409);
   insist(request.identityBasis===sha256(JSON.stringify(profileOf(state,member))),'privacy_identity_changed',409);
   return {request,member};
-}
-/** The downloaded evidence contains this member's records, never a stored export or a reusable credential. */
-export function accessBundle(state: State, memberId: string) {
-  const member=person(state,memberId,false);
-  const selected=[...state.records.values()].filter(r=>r.data.personId===memberId &&
-    !['privacyRetention','privacyReview','privacyRequest','staffAccess','memberRecordGrant','memberInvitation'].includes(r.kind));
-  const clean=(value: any): any => Array.isArray(value)?value.map(clean):value&&typeof value==='object'
-    ? Object.fromEntries(Object.entries(value).filter(([key])=>!/(secret|token|requestBasis|result|^key$|Url$)/i.test(key)).map(([key,item])=>[key,clean(item)])):value;
-  return {format:'strap-member-access',version:1,generatedAt:now(),person:{id:member.id,...profileOf(state,member)},
-    records:selected.map(({kind,data})=>({kind,data:clean(data)})),
-    documents:list(state,'acknowledgement').filter(a=>a.personId===memberId).map(a=>({receipt:clean(a),document:state.records.get(a.waiverId)?.data ?? null})),
-    boundary:'This copy contains the member records held by this studio. External providers and copies already delivered remain outside this installation.'};
 }
 /** Privacy work is deliberately independent of scheduled invoices, notices and other command side effects. */
 export async function privacyCommand(db: D1Database, who: Actor, name: string, input: Record<string,unknown>) {
@@ -84,6 +74,7 @@ export async function privacyCommand(db: D1Database, who: Actor, name: string, i
   }
   if(name==='privacy.retained') {
     const retained=record(tx.state,input.id,'privacyRetention');
+    audit(tx,name,{...retained,channel:'desk'},null,{retentionId:retained.id,downloadedAt:at});await tx.commit();
     return {format:'strap-retained-evidence',...retained};
   }
   if(name==='privacy.erase.prepare') {

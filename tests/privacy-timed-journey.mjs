@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {readFile,writeFile,rename} from 'node:fs/promises'
 import {run} from './harness.mjs'
 import {totp} from './mfa-helpers.mjs'
+import {privacyObligations,privacyMakeup} from './privacy-obligations.mjs'
 import {privacyShared} from './privacy-shared.mjs'
 import {privacyDecision} from './privacy-journey.mjs'
 
@@ -83,4 +84,6 @@ await run(async h=>{
   const revoked=await h.mf.dispatchFetch(h.origin+'/api/strap/integration/attendance',{headers:{authorization:'Bearer '+current.token,'strap-schema-version':'1'}})
   assert.equal(revoked.status,401)
   await privacyShared(h)
+  await privacyObligations(h)
+  await privacyMakeup(h)
 })

@@ -1,3 +1,4 @@
+import {money} from './format'
 import { body, field, form, h, hidden, panel, select, statusPill } from './shared'
 
 const confirm=(label:string)=>'<label class="check"><input name="confirm" type="checkbox" value="yes" required>'+h(label)+'</label>'
@@ -17,13 +18,13 @@ export function privacyPanel(s:any,personId:string,back:string) {
         +select('obligations','Outstanding balance',[['settled','Require a settled balance'],['retain','Retain the existing obligation'],['cancel','Cancel positive outstanding debt']])
         +field('reason','Reason to retain financial evidence','','text','required maxlength="500"')
         +field('retainUntil','Retain identifying documents until (UTC)','','date','required')
-        +select('documents','Member waiver evidence',[['delete','Delete member copies and affirmations'],['retain','Retain restricted evidence until the date']])
+        +select('documents','Signed member evidence',[['delete','Delete local affirmations and agreements'],['retain','Retain restricted evidence until the date']])
         +field('holdBasis','Document hold basis (optional)','','text','maxlength="500"')
         +field('holdReviewAt','Hold review date (UTC)','','date')
         +field('holdReleaseCondition','Hold release condition','','text','maxlength="500"')
         +'<label class="check"><input name="retireAccess" type="checkbox" value="yes" required>I approve ending sign-in and access. This does not settle a refund or erase external copies.</label>','Review erasure')
       const review=s.privacy.reviews.findLast((r:any)=>r.requestId===request.id)
-      if(review)action+='<div data-privacy-review><p>Reviewed balance: '+h(review.balanceCents)+' cents. Decision: '+h(review.obligations)+'. '+h(review.inventory.length)+' related records.</p><p>'+h(review.retention.reason)+' · '+h(review.retention.retainUntil)+'</p>'
+      if(review)action+='<div data-privacy-review><p>Reviewed balance: '+money(review.balanceCents)+'. Decision: '+h(review.obligations)+'. '+h(review.inventory.length)+' related records. Account access and scoped authority for this member end; other people’s balances stay unchanged.</p><p>'+h(review.retention.reason)+' · '+h(review.retention.retainUntil)+'. Document decision: '+h(review.documents)+'.</p>'
         +form('privacy.erase.confirm',back,hidden('id',review.id)+confirm('I approve this exact erasure and retention decision.'),'Confirm member erasure','quiet')+'</div>'
     }
     return '<article>'+title+action+'</article>'

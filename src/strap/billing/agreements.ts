@@ -56,6 +56,7 @@ export function revokeMandate(tx: Transaction,input: Record<string,unknown>) {
 }
 export function agreementEvidence(state: State,who: Actor,id: unknown) {
   const agreement = record(state,id,'billingAgreement');
+  insist(!agreement.erased,'billing_agreement_not_found',404);
   insist(who.role === 'owner' && who.isOwner || who.role === 'member' && who.personId === agreement.personId,'billing_agreement_not_found',404);
   return assembleAgreementEvidence(agreement,mandateFor(state,agreement.id));
 }

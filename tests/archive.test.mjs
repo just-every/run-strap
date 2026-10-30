@@ -200,6 +200,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(copyRecord.delivery_status,'accepted');assert.equal(copyRecord.consumed_at,null);assert.ok(copyReview.connection_id)
     const copyEvidenceBefore=await h.send('/api/strap/waiver-evidence.json?id='+copyRecord.receipt_id,undefined,h.owner),copyHtmlBefore=await h.send('/api/strap/waiver-evidence.html?id='+copyRecord.receipt_id,undefined,h.owner)
     assert.equal(copyEvidenceBefore.status,200);assert.equal(copyHtmlBefore.status,200)
+    Object.assign(privacyFixture,{retained:copyTablet.person,retainedEvidence:copyEvidenceBefore.value,copyToken})
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -360,7 +361,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})
     // Checksum damage is a transfer failure (1); restore policy conflicts remain 4.
     await command(erased,['import','--input',corrupt,'--yes','--no-queue'],1)
-    h=await harness({root:source,...identity});const eraser=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},eraser);await h.cmd('person.erase',{id:p.id,revision:1},eraser);await erasePrivacyArchive(h,eraser,privacyFixture);await h.close();h=null
+    h=await harness({root:source,...identity});const eraser=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},eraser);await h.cmd('person.erase',{id:p.id,revision:1},eraser);await erasePrivacyArchive(h,eraser,privacyFixture);assert.equal((await h.send(copyPath)).status,410);assert.equal((await copyPost(h,'/evidence/copy',{token:copyToken})).status,410);assert.equal(copyEdge.calls.length,2);await h.close();h=null
     await command(source,['export','--output',later,'--no-queue'])
     const erasedBytes=await readFile(later,'utf8')
     assertPrivacyArchive(erasedBytes,privacyFixture)
@@ -378,6 +379,15 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
       assert.deepEqual([entry.erased,entry.changed,entry.channel,entry.staffMade,'before' in entry,'after' in entry,'requestBasis' in entry],[true,['phone','emergencyContact'],'phone',true,false,false,false],'APP-003 the change keeps who acted and when; its values are erased')
     }
     finally { await proxy.dispose() }
+    h=await harness({root:erased,...identity})
+    const privacyOwner=await h.signIn(h.auth.OWNER_EMAIL);await h.enroll(privacyOwner)
+    const held=(await h.state(privacyOwner)).privacy.retained.find(r=>r.personId===privacyFixture.retained.id)
+    assert.equal((await h.cmd('privacy.retained',{id:held.id},privacyOwner)).content.receipt.signature.signerName,privacyFixture.retained.name)
+    const privacyOther=await h.signIn(member.email)
+    await h.cmd('privacy.retained',{id:held.id},privacyOther,403)
+    await h.cmd('privacy.dispose',{id:held.id,confirm:true},privacyOwner,409)
+    assert.equal((await h.send(copyPath)).status,410,'restore keeps the original copy capability retired')
+    assert.equal((await copyPost(h,'/evidence/copy',{token:copyToken})).status,410)
   } finally { if(h)await h.close();await rm(temporary,{recursive:true,force:true}) }
 })
 

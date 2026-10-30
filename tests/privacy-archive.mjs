@@ -15,10 +15,10 @@ export async function seedPrivacyArchive(h,waiver) {
   return {members:[native,imported],jobId:job.job.id,csv}
 }
 export async function erasePrivacyArchive(h,owner,fixture) {
-  for(const member of fixture.members) {
+  for(const member of [...fixture.members,...(fixture.retained?[fixture.retained]:[])]) {
     const request=await h.cmd('privacy.request',{personId:member.id,type:'erasure',channel:'phone',requestId:'synthetic-strap-archive-erase-'+member.id},owner)
     await h.cmd('privacy.verify',{id:request.id,method:'callback-on-file',confirm:true},owner)
-    const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision},owner)
+    const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision,...(member.id===fixture.retained?.id?{documents:'retain',holdBasis:'Synthetic archive document hold',holdReviewAt:'2099-06-01T00:00:00Z',holdReleaseCondition:'Owner confirms dispute resolved'}:{})},owner)
     await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true},owner)
   }
   await h.state(fixture.members[0].cookie,401)
@@ -31,6 +31,12 @@ export function assertPrivacyArchive(bytes,fixture) {
   assert.ok(parts.length,'the erasure check reads a populated archive')
 }
 export async function assertPrivacyRestored(db,fixture) {
+  const held=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='privacyRetention' AND json_extract(data,'$.personId')=?").bind(fixture.retained.id).first()).data)
+  assert.deepEqual(held.content.receipt.signature,fixture.retainedEvidence.receipt.signature,'native restore keeps exact restricted signing evidence')
+  assert.equal(held.hold.basis,'Synthetic archive document hold');assert.equal(held.hold.scope,'member-documents');assert.ok(held.hold.actorId)
+  assert.deepEqual(held.content.personalCopies.map(copy=>copy.delivery_status),['accepted'])
+  assert.ok(!JSON.stringify(held).includes(fixture.copyToken),'retained copy metadata is never reusable copy authority')
+  assert.equal((await db.prepare("SELECT count(*) AS n FROM st_records WHERE kind='acknowledgement' AND json_extract(data,'$.personId')=?").bind(fixture.retained.id).first()).n,0)
   for(const member of fixture.members) {
     assert.equal((await db.prepare('SELECT name FROM st_people WHERE id=?').bind(member.id).first()).name,'Erased person')
     const rows=(await db.prepare("SELECT kind,data FROM st_records WHERE json_extract(data,'$.personId')=?").bind(member.id).all()).results

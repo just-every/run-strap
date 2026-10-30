@@ -6,6 +6,7 @@ import { humanOwner, id, insist, instant, list, now, text, type Person, type Rec
 import type { Transaction } from './domain/store';
 import { hash } from './credentials';
 import { importContext } from './movein';
+import { privacyBillingKinds,retireBilling } from './privacy-billing';
 import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
@@ -30,10 +31,11 @@ function subjectRecords(state: State, member: Person) {
 }
 function supportedRecords(state: State, member: Person) {
   const records=subjectRecords(state,member);
-  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
+  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&!privacyBillingKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
   insist(!unsupported.length,'privacy_related_work_requires_review:'+ [...new Set(unsupported.map(r=>r.kind))].sort().join(','),409);
   const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !(kind==='charge'&&data.forPersonId===member.id));
   insist(!shared,'privacy_shared_member_work_requires_review',409);
+  insist(!records.some(({kind,data})=>kind==='stripeInvoice'&&!['paid','expired'].includes(data.status)||kind==='billingOperation'&&['pending','uncertain'].includes(data.status)),'privacy_resolve_pending_provider_work_first',409);
   // The ordinary cancellation door must resolve capacity, fees and notices first.
   insist(!records.some(({kind,data})=>kind==='booking'&&data.status!=='cancelled'&&
     (state.records.get(data.classId)?.data.end ?? '')>now()),'privacy_cancel_future_bookings_first',409);
@@ -109,13 +111,18 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
     obligations:review.obligations,balanceBeforeCents:review.balanceCents,balanceAfterCents:review.obligations==='cancel'?0:review.balanceCents,
     retention:review.retention,documents:review.documents,externalCopies:'Not erased: provider accounts and copies outside this installation require separate handling.'};
   for(const {kind,data} of records) {
-    if(kind==='acknowledgement' && review.documents==='retain') {
-      const retained={id:id(),personId:member.id,recordClass:'member-documents',sourceId:data.id,reason:review.retention.reason,retainUntil:review.retention.retainUntil,
+    if(['waiverTabletLaunch','intakeTabletLaunch'].includes(kind))sql('DELETE FROM st_intake_tablets WHERE id=?',data.id);
+    if(kind==='waiverLaunch')sql('DELETE FROM st_waiver_launch_dispatches WHERE id=?',data.id);
+    if((kind==='acknowledgement'||kind==='billingAgreement'&&data.signature) && review.documents==='retain') {
+      const copies=kind==='acknowledgement'?(await db.prepare('SELECT created_at,finished_at,delivery_status,provider FROM st_evidence_copies WHERE receipt_id=?').bind(data.id).all()).results:[];
+      const retained={id:id(),personId:member.id,recordClass:kind==='billingAgreement'?'membership-agreement':'member-documents',sourceId:data.id,reason:review.retention.reason,retainUntil:review.retention.retainUntil,
         hold:review.hold?{...review.hold,actorId:tx.who.id,createdAt:at}:null,createdAt:at,createdBy:tx.who.id,
-        content:{receipt:data,document:tx.state.records.get(data.waiverId)?.data ?? null}};
+        content:kind==='billingAgreement'?{agreement:data,mandate:list(tx.state,'paymentMandate').find(m=>m.agreementId===data.id)??null}:{receipt:data,document:tx.state.records.get(data.waiverId)?.data ?? null,personalCopies:copies}};
       put('privacyRetention',retained);
     }
-    if(relationshipKinds.has(kind)) {
+    if(privacyBillingKinds.has(kind)) {
+      put(kind,retireBilling(kind,data,{...redact(data,identities),privacyReceiptId:receipt.id},at,tx.who.id));
+    } else if(relationshipKinds.has(kind)) {
       put(kind,redactRelationship(kind,data,member,identities,tx.state,at,tx.who.id));
     } else if(scopeKinds.has(kind)) {
       const removeScope=(value:any,key=''):any=>Array.isArray(value)?value.filter(item=>!['memberIds','personIds'].includes(key)||item!==member.id).map(item=>removeScope(item)):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([name,item])=>[name,removeScope(item,name)])):value;
