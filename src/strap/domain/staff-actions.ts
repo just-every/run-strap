@@ -5,6 +5,7 @@ import type { Transaction } from './store';
 import { latestWaiver, currentWaiver, currentWaiverReceipt } from './bookings';
 import { memberCheckin } from './checkin';
 import { memberMail } from './notices';
+import { privacyAuditResult } from './privacy';
 
 export const staffChannel = (input: Record<string,unknown>) => { const channel = text(input.channel ?? 'desk','channel',20); insist(['desk','phone','inbox'].includes(channel),'invalid_channel'); return channel; };
 export const staffActions = (state: State) => [...list(state,'staffAction'),...list(state,'bookingAction').filter(a => a.staffMade && (!a.parentActionId || !['staffAction','bookingAction'].includes(state.records.get(a.parentActionId)?.kind ?? ''))),...list(state,'profileChange').filter(a => a.staffMade)].sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
@@ -28,6 +29,7 @@ export function staffBefore(tx: Transaction, name: string, input: Record<string,
   return target ? structuredClone(target) : null;
 }
 export function staffAfter(name: string, result: RecordData) {
+  if (name.startsWith('privacy.')) return privacyAuditResult(result);
   if(name === 'intake.tablet.launch' || name === 'waiver.tablet.launch') return Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'url')) as RecordData;
   if (name === 'checkin.code.staff' || name === 'checkin.rotate') return codeEffect(result);
   if (name === 'notice.dismiss.staff') return noticeEffect(result);

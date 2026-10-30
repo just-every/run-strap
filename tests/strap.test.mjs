@@ -164,6 +164,7 @@ test('unused identity erasure clears PII and blocks recreation or CSV reimport',
   const csv = 'MemberId,FirstName,LastName,Email\nunused,Never,Joined,unused@studio.example\n'
   const preview = await h.cmd('import.preview', { csv })
   await h.cmd('import.apply', { csv, fingerprint: preview.fingerprint }, h.owner, 409)
+  await (await import('./privacy-journey.mjs')).privacyRequests(h)
 }))
 
 test('browser forms take dollars, calendar dates and wall times on the studio clock', () => run(async h => {

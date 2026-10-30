@@ -71,6 +71,7 @@ import { acceptOffer, promoteAll, saveWaitlistPolicy, waitlistPolicy } from './w
 import { checkinAlerts, staffCode, inWindow, kioskCheckin, kioskLookup, memberCheckin, ownCode, rotateCode, scanCheckin, selfCheckin } from './checkin';
 import { adjustPack, approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
+import { recordPrivacyRequest, verifyPrivacyRequest, exportPrivacyAccess, fulfillPrivacyAccess, privacyAuthority } from './privacy';
 import { profileOf as profileOfForDesk, memberProfile, profileSnapshot, saveMemberProfile, saveOwnProfile } from './profiles';
 import { saveStudio, studioSettings } from './studio';
 import { locations, placed, saveLocation } from './locations';
@@ -86,6 +87,10 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'privacy.request.record':defineCommand(recordPrivacyRequest,['owner'],{staffRight:'privacy'}),
+  'privacy.request.verify':defineCommand(verifyPrivacyRequest,['owner'],{staffRight:'privacy'}),
+  'privacy.access.export':defineCommand(exportPrivacyAccess,['owner'],{staffRight:'privacy'}),
+  'privacy.access.fulfill':defineCommand(fulfillPrivacyAccess,['owner'],{staffRight:'privacy'}),
   'course.publish':defineCommand(publishCourse,['owner']),
   'course.enrollment.prepare':defineCommand(prepareEnrollment,['owner','front-desk'],{staffRight:'sale'}),
   'course.enrollment.launch':defineCommand(launchCourseAcceptance,['owner','front-desk'],{staffRight:'sale'}),
@@ -351,6 +356,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
+  if (name.startsWith('privacy.')) privacyAuthority(tx);
   if (who.role === 'agent') insist(['attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   if (name.startsWith('booking.')) {
@@ -386,7 +392,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  const privateAppointmentOffer = name.startsWith('privacy.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // A private offer must not execute unrelated due billing, notices or entitlements.
   if (!privateAppointmentOffer && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);

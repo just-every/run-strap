@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "7869ebe65a24077240103d57c905a9f06cd0c6103782d2a4004f210a9461fa06",
+      "sha256": "649194f5bd9d7995d01654b4bb812001fbebf930a48e0884fa17b5226caa2391",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b9f5f24e5b643a2366c888859d792aa92bcad0e9006bfe26fc370e23d94ec122",
+      "sha256": "7a6782f4a780f811dcf773058c79e8cc30a91fc7db0a4a67476775cdee504731",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "9f283177551745b59026b00f1cd16f5176e7fa0aaf3ca3b7f9849e3cd155ba5d",
+      "sha256": "b443c6e9c6a0a9658da712afaae389aa81cb8d661f9e1b63a68edd00f51dc357",
       "executable": false
     },
     "docs/classes.md": {
@@ -399,6 +399,10 @@
     },
     "docs/people.md": {
       "sha256": "af985a306d6d150ab3add4bcc8819e4c50658b0cf34154913029242483853809",
+      "executable": false
+    },
+    "docs/privacy.md": {
+      "sha256": "cd98e33c15c786b75055c005e5e5a32193c3c13978365cea9e83d4011459a01f",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3354,7 +3358,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "bef270a20f0f52687c0afcc74c99c5abadbf32c79b081d7a58d675d82199b412",
+      "sha256": "d05bc540c2000e65c15ea412c5219f6e6d316350ba73ac66de1fe6067d11b3b7",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3425,6 +3429,10 @@
       "sha256": "c64a37256755532eaf8d409e334c221f9d4302168ecd919bdfe412192386b136",
       "executable": false
     },
+    "src/strap/domain/privacy.ts": {
+      "sha256": "82a01b82d78438489eb0012fddc2b3e43f3e4eb4c7a1a87a0577eaf0e0c0392f",
+      "executable": false
+    },
     "src/strap/domain/profiles.ts": {
       "sha256": "3546ce2bb814da54943d3e019a7a8b1acee3b83e5c8e027e413450b50e51f7ad",
       "executable": false
@@ -3490,7 +3498,7 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "286b024f357e0828e729798e685b711ec2ffb833441e9613d659cf329ef73fa4",
+      "sha256": "e37d6ccb20774aaaaec5917300e5e814b9bbc77790a51a94000a0a0f944e4d79",
       "executable": false
     },
     "src/strap/domain/staff-command-access.ts": {
@@ -3666,7 +3674,7 @@
       "executable": false
     },
     "src/strap/security/gate.ts": {
-      "sha256": "0faf957d5ad3e3ab830a99a6316fbcb7471b35bdaa519aa6cd25ec9162077f70",
+      "sha256": "b640f58652077a5a80c79580fcf17481ad2df00439003de6157bb49bc6eb6ad0",
       "executable": false
     },
     "src/strap/security/manager.ts": {
@@ -4421,6 +4429,10 @@
       "sha256": "07b615c1823a5ed0625a3cf8abfd498ec34955df910d771c5de28e71fe49ec15",
       "executable": false
     },
+    "tests/privacy-journey.mjs": {
+      "sha256": "703e8a4ac3199c99e1c4922732ae4243d6a09f5fbc2afaed8c932120d5320def",
+      "executable": false
+    },
     "tests/profiles-browser.mjs": {
       "sha256": "54c62eafe76213dec38a36772aaae580895d22a4cfc71aa93afb9a08c41c132e",
       "executable": false
@@ -4570,7 +4582,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "8174b476db5abf6b341e16e13bceeea7f5cee4e94809ebe7607540b1348b58a3",
+      "sha256": "8da686a57fe026ae148740fb6658352dc27b6c861cbd57aa3af360007e953c6e",
       "executable": false
     },
     "tests/studio-browser.mjs": {
