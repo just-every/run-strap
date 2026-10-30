@@ -1,4 +1,4 @@
-import { prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
+import { previewAutomationDelivery, confirmAutomationDelivery, prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
 import { deliverClientAppointment, acceptClientAppointment, authorizeClientAppointment, recordAppointmentDeposit, clientAppointmentSnapshot } from './client-appointments';
 import { prepareClientAppointmentChange, confirmClientAppointmentChange } from './client-appointment-changes';
 import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse, confirmEnrollment, recordCoursePayment, prepareWithdrawal, confirmWithdrawal, courseAttendance, coursesSnapshot, coursePublicResult } from './courses';
@@ -88,6 +88,8 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'automation.delivery.preview':defineCommand(previewAutomationDelivery,['owner']),
+  'automation.delivery.confirm':defineCommand(confirmAutomationDelivery,['owner']),
   'automation.prepare':defineCommand(prepareAutomation,['owner']),
   'automation.enable':defineCommand(enableAutomation,['owner']),
   'automation.pause':defineCommand(setAutomation,['owner']),
@@ -145,7 +147,7 @@ export const handlers = {
   'renewal.sequence.approve':defineCommand(approveRenewalSequence,['owner']),
   'renewal.sequence.set':defineCommand(setRenewalSequence,['owner']),
   'renewal.sequence.enroll':defineCommand(enrollRenewalSequence,['owner']),
-  'renewal.queue.review':defineCommand(reviewRenewalQueue,['owner']),
+  'renewal.queue.review':defineCommand(tx=>reviewRenewalQueue(tx),['owner']),
   'preferences.save':defineCommand(saveOwnPreferences,['member'],{member:{staff:'preferences.save.staff',right:'member-record'}}),
   'preferences.save.staff':defineCommand(saveStaffPreferences,['owner','front-desk'],{staffRight:'member-record'}),
   'member.message.send':defineCommand((tx,input) => { insist(tx.who.role === 'member','member_required',403);return sendMemberMessage(tx,input); },['member'],{member:{staff:'member.message.send.staff',right:'member-record'}}),

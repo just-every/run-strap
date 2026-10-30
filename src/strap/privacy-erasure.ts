@@ -11,7 +11,7 @@ import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
 const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview absencePreview'.split(' '));
-const automationKinds=new Set(['automationTask','automationOutcome','automationEvent']);
+const automationKinds=new Set(['automationTask','automationOutcome','automationEvent','automationDeliveryPreview','automationDelivery','nurtureEnrollment','nurtureTask','nurtureOffer']);
 const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit courseEnrollment courseEnrollmentPreview courseWithdrawalPreview'.split(' '));
 const auditKinds=new Set(['profileChange','staffAction','bookingAction','staffAccessEvent']);
 const scopeKinds=new Set('staffAccess memberRecordGrant waiverSigningGrant appointmentBookingGrant attendanceBookingGrant intakeSensitiveGrant retailStaffGrant'.split(' '));
@@ -137,7 +137,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
     }
     if(kind==='acknowledgement')sql('DELETE FROM st_evidence_copies WHERE receipt_id=?',data.id);
     if(automationKinds.has(kind)) {
-      put(kind,{id:data.id,ruleId:data.ruleId,trigger:data.trigger ?? null,sourceId:data.sourceId ?? null,personId:member.id,status:'suppressed',reason:'member_erased',at,erased:true});
+      put(kind,{id:data.id,ruleId:data.ruleId,trigger:data.trigger ?? null,sourceId:data.sourceId ?? null,personId:member.id,status:'suppressed',reason:'member_erased',at,erased:true,...(kind.startsWith('nurture')?{introSaleId:data.introSaleId ?? null,enrollmentId:data.enrollmentId ?? null,sequenceId:data.sequenceId ?? null,packId:data.packId ?? null}: {}),...(kind==='automationDelivery'?{messageCount:data.messageCount}: {})});
     } else if(privacyBillingKinds.has(kind)) {
       put(kind,retireBilling(kind,data,{...redact(data,identities),privacyReceiptId:receipt.id},at,tx.who.id));
     } else if(relationshipKinds.has(kind)) {

@@ -1,7 +1,7 @@
 import { humanOwner, id, insist, integer, list, now, record, text, type State } from './types';
 import type { Transaction } from './store';
 import { channels, permission, preferencesOf, suppressMarketing, type MarketingChannel } from './preferences';
-import { renewalWorklist } from './renewals';
+import { renewalWorklist, renewalCandidates } from './renewals';
 import { studioSettings } from './studio';
 
 /** Queue enforcement only. This module has no external provider transport or credentials.
@@ -39,15 +39,23 @@ export function enrollRenewalSequence(tx:Transaction,input:Record<string,unknown
   insist(sequence.enabled,'sequence_paused',409);
   const key=`marketing-message:${sequence.id}:${pack.id}`,prior=tx.state.records.get(key)?.data;if(prior)return prior;
   const row=worklist(tx).find(r=>r.packId===pack.id);insist(row && input.basis===row.basis,'renewal_worklist_changed',409);
+  return enrollRenewalSource(tx,sequence.id,pack.id);
+}
+/** Shared native enrollment with the same current-source and lifetime sequence budget checks. */
+export function enrollRenewalSource(tx:Transaction,sequenceId:string,packId:string,query=new URLSearchParams()) {
+  humanOwner(tx.who);const sequence=record(tx.state,sequenceId,'renewalSequence'),pack=record(tx.state,packId,'pack');
+  insist(sequence.enabled,'sequence_paused',409);
+  const key=`marketing-message:${sequence.id}:${pack.id}`,prior=tx.state.records.get(key)?.data;if(prior)return prior;
+  insist(renewalCandidates(tx.state,query).rows.some(r=>r.packId===pack.id),'renewal_worklist_changed',409);
   const denied=permission(tx.state,pack.personId,sequence.channel);insist(!denied,denied ?? 'permission_denied',409);
   insist(list(tx.state,'marketingMessage').filter(m=>m.sequenceId===sequence.id).length<sequence.maxMessages,'sequence_budget_exhausted',409);
   const saved={id:key,personId:pack.personId,packId:pack.id,sequenceId:sequence.id,channel:sequence.channel,text:sequence.text,status:'queued',createdAt:now(),createdBy:tx.who.id};
   tx.put('marketingMessage',saved);return saved;
 }
 /** Explicit native owner review. SMS/email remain held: no provider transport is claimed. Quiet hours hold marketing SMS only. */
-export function reviewRenewalQueue(tx:Transaction) {
-  humanOwner(tx.who);const rows=worklist(tx),at=now();
-  for(const message of list(tx.state,'marketingMessage').filter(m=>['queued','held'].includes(m.status))) {
+export function reviewRenewalQueue(tx:Transaction,only?:Set<string>,query=new URLSearchParams()) {
+  humanOwner(tx.who);const rows=renewalCandidates(tx.state,query).rows,at=now();
+  for(const message of list(tx.state,'marketingMessage').filter(m=>['queued','held'].includes(m.status) && (!only || only.has(m.id)))) {
     const denied=permission(tx.state,message.personId,message.channel);
     if(denied){suppressMarketing(tx,message.personId,message.channel,denied);continue;}
     if(!rows.some(r=>r.packId===message.packId)){tx.put('marketingMessage',{...message,status:'suppressed',holdReason:null,suppressionReason:'source_no_longer_eligible',suppressedAt:at});continue;}
