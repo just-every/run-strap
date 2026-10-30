@@ -24,7 +24,8 @@ export function privacySnapshot(state: State, who: Actor) {
 export function verifiedRequest(state: State, key: unknown, kind: string) {
   const request=record(state,key,'privacyRequest');
   insist(request.type===kind,'privacy_request_type',409);
-  insist(request.verifiedAt && request.status!=='erased','privacy_identity_verification_required',409);
+  insist(request.status!=='erased','privacy_request_not_found',404);
+  insist(request.verifiedAt,'privacy_identity_verification_required',409);
   const member=person(state,request.personId,false);
   insist(member.version===request.personVersion,'privacy_identity_changed',409);
   insist(request.identityBasis===sha256(JSON.stringify(profileOf(state,member))),'privacy_identity_changed',409);

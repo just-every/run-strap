@@ -208,7 +208,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const portable=download.value
     assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_TAX_TEST_KEY),'portable exit excludes the configured tax provider credential');
     assertPortableTax(portable,taxProof);
-    reconstructExit(portable,csv,taxProof)
+    reconstructExit(portable,[csv,privacyFixture.csv],taxProof)
     assertWaiverDocuments(portable,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
     for(const table of ['st_evidence_copies','st_evidence_copy_mail'])assert.ok(!(table in portable.tables),'portable exit excludes initialized personal-copy credentials and mail review')
     for(const credential of [copyToken,copyRecord.token_hash,copyReview.connection_id])assert.ok(!download.text.includes(credential),'portable exit omits personal-copy authority')
@@ -301,7 +301,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(adultHtmlAfter.status,200);assert.equal(adultHtmlAfter.text,adultHtmlBefore.text,'restored member downloads the identical readable signed evidence');
     assert.equal(guardianHtmlAfter.status,200);assert.equal(guardianHtmlAfter.text,guardianHtmlBefore.text,'owner retains identical historical guardian evidence');
     assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'native restore cannot revive historical guardian HTML-download access');
-    reconstructExit(restoredDownload.value,csv,taxProof)
+    reconstructExit(restoredDownload.value,[csv,privacyFixture.csv],taxProof)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
     assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')

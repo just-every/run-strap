@@ -1,3 +1,4 @@
+import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { DomainError, insist, type Actor, type Person, type RecordData, type State } from './types';
 import type { NoticeContext } from './notices';
 
@@ -74,6 +75,11 @@ export class Transaction {
     this.sql.push(this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN julianday(?)<=julianday('now') THEN 1 ELSE 0 END",value));
   }
   put(kind: string, data: RecordData) {
+    // Erasure replaces private receipt references with one-way fences at every payment door.
+    if(kind==='payment' && typeof data.reference==='string') {
+      const referenceHash=sha256(data.reference);
+      insist(![...this.state.records.values()].some(row=>row.kind==='payment'&&row.data.id!==data.id&&row.data.referenceHash===referenceHash),'payment_reference_used',409);
+    }
     this.state.records.set(data.id,{kind,data});
     this.sql.push(this.statement('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,version=excluded.version', data.id,kind,JSON.stringify(data),this.state.version+1));
   }

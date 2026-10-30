@@ -1,5 +1,4 @@
 import { halfUp } from './plan-changes';
-import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { parseGuestTerms } from './guest-allowances';
 import { humanOwner, preparer, id, instant, integer, insist, list, now, person, record, text, type State } from './types';
 import type { Transaction } from './store';
@@ -92,8 +91,7 @@ export function adjustPack(tx: Transaction, input: Record<string,unknown>) {
 export function recordPayment(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const member = person(tx.state,input.personId,false), reference = text(input.reference,'reference',160);
-  const referenceHash=sha256(reference);
-  insist(!list(tx.state,'payment').some(p => p.reference === reference || p.referenceHash===referenceHash),'payment_reference_used',409);
+  insist(!list(tx.state,'payment').some(p => p.reference === reference),'payment_reference_used',409);
   const payment = {id:id(),personId:member.id,locationId:placeId(tx.state,input.locationId),amountCents:integer(input.amountCents,'amountCents',1,100_000_000),reference,createdAt:now(),recordedBy:tx.who.id};
   tx.put('payment',payment); return payment;
 }

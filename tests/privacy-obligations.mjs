@@ -8,6 +8,10 @@ export async function privacyObligations(h) {
   const access=await verifiedPrivacyRequest(h,member,'access','-changed')
   await h.cmd('profile.save',{name:'Synthetic corrected identity',requestId:'synthetic-strap-privacy-identity-change'},member.cookie)
   await h.cmd('privacy.export',{id:access.id},h.owner,409)
+  const changedEmail='synthetic-strap-renamed'+String.fromCharCode(64)+'studio.example'
+  await h.cmd('person.save',{id:member.id,name:'Synthetic corrected identity',email:changedEmail,role:'member',active:true})
+  await h.cmd('person.invite',{id:member.id})
+  const changedSession=await h.signIn(changedEmail)
   const request=await verifiedPrivacyRequest(h,member,'erasure','-cancel')
   const decision={id:request.id,...privacyDecision,obligations:'cancel'}
   const stale=await h.cmd('privacy.erase.prepare',decision)
@@ -22,6 +26,15 @@ export async function privacyObligations(h) {
   assert.deepEqual(charges.map(r=>r.amountCents).sort((a,b)=>a-b),[-1100,1100])
   assert.equal(charges.filter(r=>r.privacyReceiptId===receipt.id&&r.kind==='privacy-obligation-cancellation').length,1)
   await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true},h.owner,404)
+  await h.state(member.cookie,401);await h.state(changedSession,401)
+  for(const email of [member.email,changedEmail])await h.cmd('person.save',{name:'Synthetic retired identity',email,role:'member',active:true},h.owner,409)
+  const privateState=await h.state()
+  for(const entry of privateState.privacy.requests.filter(r=>r.personId===member.id))assert.deepEqual([entry.status,entry.requestId,entry.identityBasis],['erased',null,null])
+  const ownerPerson=await h.cmd('person.save',{name:'Synthetic owner membership',email:h.auth.OWNER_EMAIL,role:'member',active:true})
+  const ownerRequest=await verifiedPrivacyRequest(h,ownerPerson,'erasure','-owner')
+  const ownerVersion=(await h.state()).version
+  assert.equal((await h.cmd('privacy.erase.prepare',{id:ownerRequest.id,...privacyDecision},h.owner,409)).error,'privacy_owner_identity_refused')
+  assert.equal((await h.state()).version,ownerVersion,'member privacy cannot retire the studio owner')
   const credit=await h.person('Syntheticrefundowed')
   await h.cmd('payment.record',{personId:credit.id,amountCents:100,reference:'synthetic-strap-privacy-credit'})
   const creditRequest=await verifiedPrivacyRequest(h,credit,'erasure','-credit')

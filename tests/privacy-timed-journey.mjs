@@ -3,6 +3,7 @@ import {readFile,writeFile,rename} from 'node:fs/promises'
 import {run} from './harness.mjs'
 import {totp} from './mfa-helpers.mjs'
 import {privacyObligations,privacyMakeup} from './privacy-obligations.mjs'
+import {privacyCourses} from './privacy-courses.mjs'
 import {privacyShared} from './privacy-shared.mjs'
 import {privacyDecision} from './privacy-journey.mjs'
 
@@ -86,4 +87,5 @@ await run(async h=>{
   await privacyShared(h)
   await privacyObligations(h)
   await privacyMakeup(h)
+  await privacyCourses(h)
 })

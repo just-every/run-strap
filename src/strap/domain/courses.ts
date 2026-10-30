@@ -98,6 +98,7 @@ export function recordCoursePayment(tx: Transaction,input: Record<string,unknown
   humanOwner(tx.who);const e=record(tx.state,input.id,'courseEnrollment'),reference=text(input.reference,'reference',200),amountCents=integer(input.amountCents,'amountCents',1,100_000_000);
   const previous=list(tx.state,'payment').find(p=>p.reference===reference);
   if(previous){insist(previous.courseEnrollmentId===e.id && previous.installmentId===input.installmentId && previous.amountCents===amountCents,'payment_reference_changed',409);return e;}
+  insist(!e.erased,'course_enrollment_erased',409);
   const row=e.installments.find((r: any)=>r.id===input.installmentId);insist(row,'installment_not_found',404);
   insist(amountCents<=row.amountCents-row.paidCents-row.creditedCents,'installment_overpayment',409);
   const updated={...e,installments:e.installments.map((r: any)=>r.id===row.id?{...r,paidCents:r.paidCents+amountCents}:r)};
@@ -115,6 +116,7 @@ export function confirmWithdrawal(tx: Transaction,input: Record<string,unknown>)
   authorizeCourse(tx,'course.withdraw.confirm',input);
   const p=record(tx.state,input.id,'courseWithdrawalPreview'),e=record(tx.state,p.enrollmentId,'courseEnrollment'),c=record(tx.state,e.courseId,'course');
   insist(input.key===p.key && input.confirm===true,'course_exact_confirmation_required',409);
+  insist(!e.erased,'course_enrollment_erased',409);
   if(p.status==='applied')return e;
   insist(p.basis===JSON.stringify(e),'course_withdrawal_changed',409);
   // A preview crossing a due time or session start must be reviewed again.

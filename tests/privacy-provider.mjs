@@ -65,6 +65,10 @@ export async function privacyProvider() {
     const late=edge.event(checkout.providerSessionId,'invoice.paid','privacy-late')
     assert.equal((await signedEvent(h,late)).value.status,'exception')
     const after=await h.state();assert.deepEqual(after.payments.map(p=>[p.id,p.amountCents]),amounts);assert.ok(!after.people.some(p=>p.id===seed.member.id))
+    for(const path of ['/app/packs','/app/renewals','/app/studio']) {
+      const page=await h.send(path,undefined,h.owner);assert.equal(page.status,200,'ordinary billing pages remain usable after erasure')
+      assert.ok(!page.text.includes(seed.member.email))
+    }
     const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(exit.status,200)
     for(const value of [method.paymentMethodId,method.setupIntentId,'synthetic-strap-provider-subject','synthetic-strap-provider-session'])assert.ok(!exit.text.includes(value),'full exit omits retired provider credentials')

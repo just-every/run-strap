@@ -17,7 +17,7 @@ function parseCsv(text) {
   return rows
 }
 
-export function reconstructExit(bundle, expectedCsv, tax) {
+export function reconstructExit(bundle, expectedCsvs, tax) {
   const receiver = new DatabaseSync(':memory:')
   try {
     for (const table of bundle.manifest.schema) {
@@ -58,14 +58,18 @@ export function reconstructExit(bundle, expectedCsv, tax) {
     assert.equal(originalRecords.filter(r => bundle.tables.st_records.find(row => row.id === r.id).kind === 'pack').reduce((sum,r) => sum+r.remaining,0),creditHistory)
     assert.ok(records.some(r => r.text === 'Studio waiver, "current"\nKeep your own limits.'))
     assert.ok(records.some(r => r.waiverId && byId.get(r.waiverId).text.includes('Keep your own limits.')))
-    const original = bundle.tables.ik_originals.find(o => o.name.endsWith('.csv'))
-    assert.ok(original, 'source original has retained file metadata')
-    const version = bundle.tables.ik_original_sets.find(s => s.job_id === original.job_id).version
-    const chunks = bundle.tables.ik_d1_original_chunks.filter(c => c.job_id === original.job_id && c.kind === original.kind && c.original_key === original.original_key).sort((a,b) => a.ordinal - b.ordinal)
-    const bytes = chunks.length ? (version === 3 ? Buffer.from(chunks.map(c => Buffer.from(c.bytes.hex, 'hex').toString()).join(''), 'base64') : Buffer.concat(chunks.map(c => Buffer.from(c.bytes.hex, 'hex')))) : Buffer.from(original.bytes.hex, 'hex')
-    assert.equal(bytes.toString(), expectedCsv)
-    assert.equal(bytes.length, original.size)
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), original.sha256)
+    // Multiple source imports have independent originals; verify each expected file without relying on random job ordering.
+    for(const expectedCsv of expectedCsvs) {
+      const expectedHash=createHash('sha256').update(expectedCsv).digest('hex')
+      const original = bundle.tables.ik_originals.find(o => o.name.endsWith('.csv') && o.sha256===expectedHash)
+      assert.ok(original, 'source original has retained file metadata')
+      const version = bundle.tables.ik_original_sets.find(s => s.job_id === original.job_id).version
+      const chunks = bundle.tables.ik_d1_original_chunks.filter(c => c.job_id === original.job_id && c.kind === original.kind && c.original_key === original.original_key).sort((a,b) => a.ordinal - b.ordinal)
+      const bytes = chunks.length ? (version === 3 ? Buffer.from(chunks.map(c => Buffer.from(c.bytes.hex, 'hex').toString()).join(''), 'base64') : Buffer.concat(chunks.map(c => Buffer.from(c.bytes.hex, 'hex')))) : Buffer.from(original.bytes.hex, 'hex')
+      assert.equal(bytes.toString(), expectedCsv)
+      assert.equal(bytes.length, original.size)
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), original.sha256)
+    }
     assert.ok(bundle.tables.ik_provenance.every(p => people.has(p.target_id)))
     assert.equal(bundle.manifest.documents.signedWaivers.status, 'not_implemented')
     assert.deepEqual(bundle.manifest.documents.media.files, [])

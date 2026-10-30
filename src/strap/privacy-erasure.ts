@@ -11,7 +11,7 @@ import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
 const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview absencePreview'.split(' '));
-const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit'.split(' '));
+const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit courseEnrollment courseEnrollmentPreview courseWithdrawalPreview'.split(' '));
 const auditKinds=new Set(['profileChange','staffAction','bookingAction','staffAccessEvent']);
 const scopeKinds=new Set('staffAccess memberRecordGrant waiverSigningGrant appointmentBookingGrant attendanceBookingGrant intakeSensitiveGrant retailStaffGrant'.split(' '));
 const contains=(value: unknown, values: Set<string>): boolean => typeof value==='string'?values.has(value)
@@ -36,6 +36,8 @@ function supportedRecords(state: State, member: Person) {
   const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !(kind==='charge'&&data.forPersonId===member.id));
   insist(!shared,'privacy_shared_member_work_requires_review',409);
   insist(!records.some(({kind,data})=>kind==='stripeInvoice'&&!['paid','expired'].includes(data.status)||kind==='billingOperation'&&['pending','uncertain'].includes(data.status)),'privacy_resolve_pending_provider_work_first',409);
+  insist(!records.some(({kind,data})=>kind==='courseEnrollment'&&data.status==='enrolled'&&
+    (state.records.get(data.courseId)?.data.sessions??[]).some((session:RecordData)=>session.end>now())),'privacy_withdraw_future_course_first',409);
   // The ordinary cancellation door must resolve capacity, fees and notices first.
   insist(!records.some(({kind,data})=>kind==='booking'&&data.status!=='cancelled'&&
     (state.records.get(data.classId)?.data.end ?? '')>now()),'privacy_cancel_future_bookings_first',409);
@@ -43,6 +45,7 @@ function supportedRecords(state: State, member: Person) {
 }
 
 export function erasureReview(state: State, member: Person, input: Record<string,unknown>) {
+  insist(member.email?.toLowerCase()!==state.operator.email.toLowerCase(),'privacy_owner_identity_refused',409);
   const obligations=text(input.obligations,'obligations',20);
   insist(['settled','retain','cancel'].includes(obligations),'invalid_obligation_decision');
   const balanceCents=list(state,'charge').filter(r=>r.personId===member.id).reduce((n,r)=>n+r.amountCents,0)
@@ -100,11 +103,13 @@ function redact(value: any, identities: string[], key=''): any {
 export async function eraseUsedMember(db: D1Database, tx: Transaction, request: RecordData, review: RecordData, member: Person): Promise<RecordData> {
   humanOwner(tx.who);
   const records=supportedRecords(tx.state,member),at=now(),erasedAt=Date.now();
-  const operators=(await db.prepare('SELECT id,role FROM oa_operators WHERE lower(email)=lower(?)').bind(member.email).all<{id:string;role:string}>()).results;
+  const identities=[member.email!,member.name,...list(tx.state,'profileChange').filter(p=>p.personId===member.id).flatMap(p=>[p.before?.email,p.after?.email,p.before?.name,p.after?.name])].filter((value):value is string=>typeof value==='string'&&value.length>0);
+  const emails=new Set(identities.filter(value=>value.includes(String.fromCharCode(64))).map(value=>value.toLowerCase()));
+  insist(!tx.state.people.some(other=>other.id!==member.id && !other.erasedAt && other.email && emails.has(other.email.toLowerCase())),'privacy_historical_identity_reassigned',409);
+  const operators=(await db.prepare('SELECT id,role,email FROM oa_operators').all<{id:string;role:string;email:string}>()).results.filter(operator=>emails.has(operator.email.toLowerCase()));
   insist(operators.every(o=>o.role!=='owner'),'privacy_owner_identity_refused',409);
   const native:D1Sql[]=[],sql=(sql:string,...params:unknown[])=>native.push({sql,params});
   const put=(kind:string,data:RecordData)=>sql('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,version=excluded.version',data.id,kind,JSON.stringify(data),tx.state.version+1);
-  const identities=[member.email!,member.name,...list(tx.state,'profileChange').filter(p=>p.personId===member.id).flatMap(p=>[p.before?.email,p.after?.email,p.before?.name,p.after?.name])].filter((value):value is string=>typeof value==='string'&&value.length>0);
   sql('INSERT INTO st_assert(value) SELECT CASE WHEN version=? THEN 1 ELSE 0 END FROM st_meta WHERE id=1',tx.state.version);
   sql("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",tx.who.id,tx.who.email,tx.state.operator.version);
   const receipt={id:id(),personId:member.id,requestId:request.id,erasedAt:at,actorId:tx.who.id,actorRole:tx.who.role,right:'privacy',channel:request.channel,
@@ -129,6 +134,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
       put(kind,{...removeScope(data),...(data.personId===member.id?{enabled:false,rights:{}}:{}),version:(data.version??0)+1,updatedAt:at,updatedBy:tx.who.id});
     } else if(financial.has(kind) || kind==='draft'&&data.type==='pack') {
       const sanitized=redact(data,identities);
+      if(['courseEnrollmentPreview','courseWithdrawalPreview'].includes(kind))Object.assign(sanitized,{key:null,basis:null,payerBasis:null,participantName:null,status:'retired'});
       if(kind==='makeupCredit')Object.assign(sanitized,{voidedAt:data.voidedAt??at,voidedBy:tx.who.id,voidReason:'Member erasure'});
       if(kind==='payment') {sanitized.referenceHash=await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
       put(kind,{...sanitized,erased:true,privacyReceiptId:receipt.id});
@@ -155,7 +161,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
     sql("UPDATE oa_operators SET email=?,display_name='Erased person',status='inactive',version=version+1 WHERE id=?", 'erased-'+operator.id+String.fromCharCode(64)+'invalid.local',operator.id);
   }
   sql("UPDATE st_people SET name='Erased person',email=?,active=0,version=version+1,erased_at=? WHERE id=?", 'erased-'+member.id+String.fromCharCode(64)+'invalid.local',erasedAt,member.id);
-  put('privacyRequest',{...request,status:'erased',erasedAt:at,receiptId:receipt.id});
+  for(const entry of list(tx.state,'privacyRequest').filter(row=>row.personId===member.id))put('privacyRequest',{...entry,requestId:null,identityBasis:null,status:'erased',erasedAt:at,receiptId:receipt.id});
   put('privacyReceipt',receipt);
   put('staffAction',{id:id(),action:'privacy.erase.confirm',command:'privacy.erase.confirm',personId:member.id,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'privacy',channel:request.channel,at,
     before:{privacy:true,status:'verified',balanceCents:review.balanceCents},after:{privacy:true,status:'erased',receiptId:receipt.id,balanceCents:receipt.balanceAfterCents}});
