@@ -1,6 +1,6 @@
-import { humanOwner, id, insist, list, now, person, record, text, type RecordData, type State } from './types';
+import { id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { freezeBasis, freezeEndBasis } from './freezes';
+import { freezeBasis, freezeEndBasis, requireFreezeStaff, authorizeFreezeCommand } from './freezes';
 import { calendarDays, shiftCalendarDays } from './freeze-calendar';
 import { appendPackEvent, bookingCredit, studioZone } from './pack-credits';
 import { bookingHistory } from './booking-history';
@@ -24,16 +24,22 @@ function acceptance(tx: Transaction, input: Record<string,unknown>, ending: bool
 export const acceptFreeze=(tx:Transaction,input:Record<string,unknown>)=>acceptance(tx,input,false);
 export const acceptFreezeEnd=(tx:Transaction,input:Record<string,unknown>)=>acceptance(tx,input,true);
 function launch(tx:Transaction,input:Record<string,unknown>,ending:boolean) {
-  humanOwner(tx.who);text(input.requestId,'requestId',100);
+  authorizeFreezeCommand(tx,ending?'freeze.end.accept.launch':'freeze.accept.launch',input);text(input.requestId,'requestId',100);
+  checkFreezeLaunch(tx,input,ending);
   const preview=record(tx.state,input.id,ending ? 'freezeEnd' : 'freeze');person(tx.state,preview.personId);
-  insist(preview.status==='preview','freeze_preview_expired',409);
   return {id:id(),personId:preview.personId,previewId:preview.id,status:'member_action_required',url:'/signin?returnTo=%2Fapp%2Fpacks%23freezes'};
+}
+export function checkFreezeLaunch(tx:Transaction,input:Record<string,unknown>,ending:boolean) {
+  const preview=record(tx.state,input.id,ending?'freezeEnd':'freeze'),freeze=ending?record(tx.state,preview.freezeId,'freeze'):preview;
+  insist(preview.status==='preview' && (ending?preview.endAt:preview.startAt)>now(),'freeze_preview_expired',409);
+  const basis=ending?freezeEndBasis(tx.state,freeze):freezeBasis(tx.state,record(tx.state,preview.packId,'pack'),freeze);
+  insist(preview.basis===basis,'freeze_source_changed',409);
 }
 export const launchFreezeAcceptance=(tx:Transaction,input:Record<string,unknown>)=>launch(tx,input,false);
 export const launchFreezeEndAcceptance=(tx:Transaction,input:Record<string,unknown>)=>launch(tx,input,true);
 function closeRequest(tx:Transaction,input:Record<string,unknown>,decline:boolean) {
-  const request=record(tx.state,input.id,'freezeRequest');if(decline)humanOwner(tx.who);else own(tx,request.personId);
-  const requestId=text(input.requestId,'requestId',100), reason=decline || tx.who.role==='owner' ? text(input.reason,'reason',500) : input.reason ? text(input.reason,'reason',500) : null;
+  const request=record(tx.state,input.id,'freezeRequest');if(!['owner','front-desk','manager'].includes(tx.who.role)&&!decline)own(tx,request.personId);else requireFreezeStaff(tx.state,tx.who,request.packId);
+  const requestId=text(input.requestId,'requestId',100), reason=decline || tx.who.role!=='member' ? text(input.reason,'reason',500) : input.reason ? text(input.reason,'reason',500) : null;
   const status=decline ? 'declined' : 'withdrawn';
   if(request.status===status){insist(request.closedBy===tx.who.id&&request.closeRequestId===requestId&&request.closeReason===reason,'freeze_request_changed',409);return request;}
   insist(request.status==='requested','freeze_request_closed',409);
@@ -54,8 +60,8 @@ export function freezeWithdrawal(state:State,freeze:RecordData) {
   return {...result,key:JSON.stringify(result)};
 }
 export function withdrawFreeze(tx:Transaction,input:Record<string,unknown>) {
-  const freeze=record(tx.state,input.id,'freeze');own(tx,freeze.personId);
-  const requestId=text(input.requestId,'requestId',100),reason=tx.who.role==='owner'?text(input.reason,'reason',500):input.reason?text(input.reason,'reason',500):null;
+  const freeze=record(tx.state,input.id,'freeze');if(!['owner','front-desk','manager'].includes(tx.who.role))own(tx,freeze.personId);else requireFreezeStaff(tx.state,tx.who,freeze.packId);
+  const requestId=text(input.requestId,'requestId',100),reason=tx.who.role!=='member'?text(input.reason,'reason',500):input.reason?text(input.reason,'reason',500):null;
   if(freeze.status==='withdrawn'){insist(freeze.withdrawnBy===tx.who.id&&freeze.withdrawRequestId===requestId&&freeze.withdrawalReason===reason&&freeze.withdrawKey===input.withdrawKey,'freeze_request_changed',409);return freeze;}
   const preview=freezeWithdrawal(tx.state,freeze);insist(preview&&input.withdrawKey===preview.key,'freeze_withdrawal_changed',409);tx.future(freeze.startAt);
   const actionId=id();

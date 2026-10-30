@@ -155,7 +155,10 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
         await refused(h,'freeze.confirm',{id:freezePreview.id,key:freezePreview.key,requestId:randomUUID()},h.owner,409);
         const accepted=await h.cmd('freeze.accept',{id:freezePreview.id,key:freezePreview.key},freezeMember.cookie);
         assert.ok(accepted.acceptedAt);
-        freezeScheduled=await h.cmd('freeze.confirm',{id:freezePreview.id,key:freezePreview.key,requestId:randomUUID(),channel:'phone'});
+        const confirm={id:freezePreview.id,key:freezePreview.key,requestId:randomUUID(),channel:'phone'};
+        freezeScheduled=await h.cmd('freeze.confirm',confirm);await h.cmd('freeze.confirm',confirm);
+        const events=(await h.state()).staffActions.filter(a=>a.command==='freeze.confirm'&&a.requestId===confirm.requestId);
+        assert.equal(events.length,1);assert.equal(events[0].personId,freezeMember.id);assert.equal(events[0].after.typeName,freezeType.name);assert.equal(events[0].reason,freezePreview.reason);
       },
       'freeze.end.accept':async door=>{
         freezeEnd=await h.cmd('freeze.end.prepare',{id:freezeScheduled.id,endAt:'2098-01-20',reason:'Member requested an earlier return',requestId:randomUUID(),channel:'phone'});

@@ -4,6 +4,28 @@ import type { Transaction } from './store';
 import { appendPackEvent, bookingCredit, studioZone } from './pack-credits';
 import { bookingHistory } from './booking-history';
 import { contractNotice, moveRecurringRenewal, recurringBasis } from './contract-billing';
+import { hasStaffRight, requireStaffRight } from './staff-rights';
+
+export function freezeStaffVisible(state: State, who: Actor, packId: string) {
+  const pack = state.records.get(packId)?.data;
+  return !!pack && state.people.some(p=>p.id===pack.personId && p.active && !p.erasedAt)
+    && hasStaffRight(state,who,'contract-change',pack.personId,pack.locationId ?? 'studio')
+    && hasStaffRight(state,who,'member-record',pack.personId,pack.locationId ?? 'studio');
+}
+export function requireFreezeStaff(state: State, who: Actor, packId: unknown) {
+  const pack = record(state,packId,'pack'); person(state,pack.personId);
+  requireStaffRight(state,who,'contract-change',pack.personId,pack.locationId ?? 'studio');
+  requireStaffRight(state,who,'member-record',pack.personId,pack.locationId ?? 'studio');
+}
+/** Saved targets define authority even when a replay supplies a different pack. */
+export function authorizeFreezeCommand(tx: Transaction, name: string, input: Record<string,unknown>) {
+  const target = name === 'freeze.prepare'
+    ? input.freezeRequestId ? record(tx.state,input.freezeRequestId,'freezeRequest') : null
+    : record(tx.state,input.id,name.startsWith('freeze.end.') && name !== 'freeze.end.prepare' ? 'freezeEnd'
+      : ['freeze.decline','freeze.request.withdraw'].includes(name) ? 'freezeRequest' : 'freeze');
+  requireFreezeStaff(tx.state,tx.who,target?.packId ?? input.packId);
+  if (input.packId) requireFreezeStaff(tx.state,tx.who,input.packId);
+}
 
 const live = (f: RecordData) => ['scheduled','active'].includes(f.status);
 const inside = (f: RecordData, at: string) => at >= f.startAt && (!f.endAt || at < f.endAt);
@@ -103,7 +125,7 @@ export function requestFreeze(tx: Transaction, input: Record<string,unknown>) {
   tx.put('freezeRequest',request); return request;
 }
 export function prepareFreeze(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
+  authorizeFreezeCommand(tx,'freeze.prepare',input);
   const prior = replay(tx,'freeze',input); if (prior.prior) return prior.prior;
   const request = input.freezeRequestId ? record(tx.state,input.freezeRequestId,'freezeRequest') : null;
   const pack = record(tx.state,input.packId ?? request?.packId,'pack'); person(tx.state,pack.personId);
@@ -123,7 +145,7 @@ export function prepareFreeze(tx: Transaction, input: Record<string,unknown>) {
   tx.put('freeze',saved); return saved;
 }
 export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who); text(input.requestId,'requestId',100);
+  authorizeFreezeCommand(tx,'freeze.confirm',input); text(input.requestId,'requestId',100);
   const freeze = record(tx.state,input.id,'freeze'); insist(input.key === freeze.key,'preview_changed',409);
   if (freeze.confirmedAt) { insist(freeze.confirmedBy === tx.who.id && freeze.confirmationRequestId === input.requestId && freeze.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return freeze; }
   insist(freeze.status === 'preview' && freeze.startAt > now(),'freeze_preview_expired',409);
@@ -163,7 +185,7 @@ export function freezeEndBasis(state: State, freeze: RecordData) {
   return JSON.stringify({freeze,pack:record(state,freeze.packId,'pack'),recurring:recurringBasis(state,freeze.packId),member:person(state,freeze.personId,false)});
 }
 export function prepareEndFreeze(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who);
+  authorizeFreezeCommand(tx,'freeze.end.prepare',input);
   const prior = replay(tx,'freezeEnd',input); if (prior.prior) return prior.prior;
   const freeze = record(tx.state,input.id,'freeze'); insist(live(freeze),'freeze_not_live',409);
   const endAt = studioDayInstant(input.endAt,studioZone(tx.state));
@@ -179,7 +201,7 @@ export function prepareEndFreeze(tx: Transaction, input: Record<string,unknown>)
   const saved = {...preview,key:JSON.stringify(preview)}; tx.put('freezeEnd',saved); return saved;
 }
 export function confirmEndFreeze(tx: Transaction, input: Record<string,unknown>) {
-  humanOwner(tx.who); text(input.requestId,'requestId',100);
+  authorizeFreezeCommand(tx,'freeze.end.confirm',input); text(input.requestId,'requestId',100);
   const end = record(tx.state,input.id,'freezeEnd'); insist(input.key === end.key,'preview_changed',409);
   if (end.status === 'confirmed') { insist(end.confirmedBy === tx.who.id && end.confirmationRequestId === input.requestId && end.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return end; }
   const freeze = record(tx.state,end.freezeId,'freeze');
@@ -208,8 +230,9 @@ export function applyDueFreezes(tx: Transaction) {
   }
 }
 export function freezesSnapshot(state: State, who: Actor) {
-  const visible = (r: RecordData) => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId);
-  const allowed = who.role === 'owner' || who.role === 'member';
+  const staff = ['front-desk','manager'].includes(who.role);
+  const visible = (r: RecordData) => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId) || staff && freezeStaffVisible(state,who,r.packId);
+  const allowed = who.role === 'owner' || who.role === 'member' || staff && list(state,'pack').some(p=>freezeStaffVisible(state,who,p.id));
   return {types:allowed ? list(state,'freezeType') : [],requests:list(state,'freezeRequest').filter(visible),freezes:list(state,'freeze').filter(visible).map(f => ({...f,
     stale:f.status === 'preview' && (f.startAt <= now() || !state.records.has(f.packId) || f.basis !== freezeBasis(state,record(state,f.packId,'pack'),f))})),
     ends:list(state,'freezeEnd').filter(visible).map(e => ({...e,stale:e.status === 'preview' && (e.endAt <= now() || e.basis !== freezeEndBasis(state,record(state,e.freezeId,'freeze')))}))};

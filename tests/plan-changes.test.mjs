@@ -240,6 +240,7 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   await h.cmd('freeze.accept',{id:seriesFreeze.id,key:seriesFreeze.key},sofia.cookie);
   await h.cmd('freeze.confirm',{id:seriesFreeze.id,key:seriesFreeze.key,requestId:'synthetic-strap-series-confirm'});
   await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
+  await scopedFreezes(h,{member:stranger,type,day,today,midnight});
   if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
 },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})
 
@@ -589,4 +590,107 @@ async function combinedProration(){
     if(process.env.STRAP_PROOF_DIR)await(await import('./campaign-browser.mjs')).combinedProrationBrowser(h,{member,pack,upgrade,freeze});
     console.log('BILL-006 exact dates: join Jan 16 16000 cents; upgrade Jan 18 7001 cents; freeze Jan 22–25 1000 cents; total 24001 cents; stale approval no writes; replay once.');
   })}finally{await writeFile(path+'.new',original);await rename(path+'.new',path);}
+}
+
+// Delegated freezes use the real command and profile doors, including current
+// member and location authority before preview, confirmation and committed replay.
+async function scopedFreezes(h,{member,type,day,today,midnight}) {
+  const {randomUUID}=await import('node:crypto');
+  const west=await h.cmd('location.save',{name:'Freeze West',timeZone:'America/Los_Angeles'});
+  const desk=await h.person('FreezeDesk'),manager=await h.person('FreezeManager'),other=await h.person('FreezeOther');
+  const grant=(actor,role,rights,members=[member.id],places=['studio'])=>h.cmd('staff.access.grant',{personId:actor.id,role,enabled:true,rights:Object.fromEntries(rights.map(right=>[right,{enabled:true,scopes:[{memberIds:members,locationIds:places,doors:['all']}]}]))});
+  const rights=['member-record','contract-change'];
+  const refused=async(name,input,cookie,status=403,error)=>{
+    const retained=async()=>{const rows=await h.db.batch([h.db.prepare('SELECT version FROM st_meta WHERE id=1'),h.db.prepare('SELECT id,kind,data,version FROM st_records ORDER BY id'),h.db.prepare('SELECT source_id,status FROM st_notice_deliveries ORDER BY source_id')]);return rows.map(row=>row.results);};
+    const before=await retained(),r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,r.text);if(error)assert.equal(r.value.error,error);
+    assert.deepEqual(await retained(),before,'refusal changes no records or notice deliveries');return r;
+  };
+  const captures=[];
+  for(const [actor,role] of [[desk,'front-desk'],[manager,'manager']]) {
+    await grant(actor,role,rights);
+    const preMfa={packId:(await h.state()).packs.find(p=>p.personId===member.id).id,freezeTypeId:type.id,startAt:day(today,2),endAt:day(today,32),requestId:randomUUID()};
+    await refused('freeze.prepare',preMfa,actor.cookie,403,'mfa_enrollment_required');
+    await h.enroll(actor.cookie);
+    const actorId=(await h.state(actor.cookie)).actor.id;
+    const fresh=await h.signIn(actor.email);await refused('freeze.prepare',preMfa,fresh,403,'mfa_required');
+    for(const locationId of ['studio',west.id]) {
+      const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:6,amountCents:12000,locationId,expiresAt:midnight(day(today,90))})).id});
+      const pack=(await h.state()).packs.find(p=>p.id===approved.id);
+      const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
+      const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);
+      const input={packId:pack.id,freezeTypeId:type.id,startAt:day(today,2),endAt:day(today,32),reason:'Medical leave agreed with the member',channel:'phone',requestId:randomUUID()};
+      for(const [names,members,places] of [[['member-record'],[member.id],[locationId]],[['contract-change'],[member.id],[locationId]],[rights,[other.id],[locationId]],[rights,[member.id],[locationId==='studio'?west.id:'studio']]]) {
+        await grant(actor,role,names,members,places);await refused('freeze.prepare',input,actor.cookie);
+        const scoped=await h.state(actor.cookie);assert.equal(scoped.freezes.freezes.some(f=>f.packId===pack.id),false);
+        assert.equal(scoped.freezePacks.some(p=>p.id===pack.id),false);
+        assert.equal((await h.send('/app/people?person='+member.id,undefined,actor.cookie)).text.includes('<option value="'+pack.id+'">'),false);
+      }
+      await grant(actor,role,rights,[member.id],[locationId]);
+      await refused('freeze.type.save',{...type,revision:type.revision,name:'Unapproved type change'},actor.cookie);
+      const stale=await h.cmd('freeze.prepare',{...input,requestId:randomUUID()},actor.cookie);
+      const staleLaunch={id:stale.id,requestId:randomUUID(),channel:'phone'};await h.cmd('freeze.accept.launch',staleLaunch,actor.cookie);
+      await h.cmd('person.save',{id:member.id,name:member.name+' '+randomUUID(),email:member.email,role:'member',active:true});
+      await refused('freeze.accept.launch',staleLaunch,actor.cookie,409,'freeze_source_changed');
+      await refused('freeze.confirm',{id:stale.id,key:stale.key,requestId:randomUUID()},actor.cookie,409,'freeze_source_changed');
+      const preview=await h.cmd('freeze.prepare',input,actor.cookie);
+      assert.equal(preview.freezeRequestId,null);assert.equal(preview.typeName,'Medical');assert.equal(preview.feeCents,1000);assert.equal(preview.effects.durationDays,30);
+      assert.equal(preview.effects.revisedExpiresAt,midnight(day(today,120)));assert.equal(preview.effects.revisedRenewalAt,midnight(day(today,120)));
+      const launch={id:preview.id,requestId:randomUUID(),channel:'phone'};
+      assert.equal((await h.cmd('freeze.accept.launch',launch,actor.cookie)).status,'member_action_required');
+      await h.cmd('freeze.accept.launch',launch,actor.cookie);
+      await refused('freeze.accept',{id:preview.id,key:preview.key},actor.cookie);
+      await refused('freeze.accept',{id:preview.id,key:preview.key},other.cookie,404);
+      const confirm={id:preview.id,key:preview.key,requestId:randomUUID(),channel:'phone'};
+      await refused('freeze.confirm',confirm,actor.cookie,409,'freeze_member_acceptance_required');
+      await h.cmd('freeze.accept',{id:preview.id,key:preview.key},member.cookie);
+      for(const [members,places] of [[[other.id],[locationId]],[[member.id],[locationId==='studio'?west.id:'studio']]]) {
+        await grant(actor,role,rights,members,places);await refused('freeze.confirm',confirm,actor.cookie);await refused('freeze.accept.launch',launch,actor.cookie);
+      }
+      await grant(actor,role,['member-record'],[member.id],[locationId]);await refused('freeze.confirm',confirm,actor.cookie);
+      await grant(actor,role,rights,[member.id],[locationId]);
+      const committed=await h.cmd('freeze.confirm',confirm,actor.cookie);assert.equal(committed.status,'scheduled');assert.deepEqual(await h.cmd('freeze.confirm',confirm,actor.cookie),committed);
+      await grant(actor,role,['contract-change'],[member.id],[locationId]);await refused('freeze.confirm',confirm,actor.cookie);
+      await grant(actor,role,rights,[member.id],[locationId]);
+      const end=await h.cmd('freeze.end.prepare',{id:preview.id,endAt:day(today,22),reason:'Member returns on day twenty',requestId:randomUUID(),channel:'phone'},actor.cookie);
+      assert.equal(end.revisedRenewalAt,midnight(day(today,110)));assert.equal(end.feeCents,0);assert.deepEqual(end.bookingsRestored,[]);
+      const endLaunch={id:end.id,requestId:randomUUID(),channel:'phone'};
+      await h.cmd('freeze.end.accept.launch',endLaunch,actor.cookie);await h.cmd('freeze.end.accept.launch',endLaunch,actor.cookie);
+      await refused('freeze.end.accept',{id:end.id,key:end.key},actor.cookie);
+      const endConfirm={id:end.id,key:end.key,requestId:randomUUID(),channel:'phone'};
+      await refused('freeze.end.confirm',endConfirm,actor.cookie,409,'freeze_member_acceptance_required');
+      await h.cmd('freeze.end.accept',{id:end.id,key:end.key},member.cookie);
+      await grant(actor,role,['member-record'],[member.id],[locationId]);await refused('freeze.end.confirm',endConfirm,actor.cookie);await refused('freeze.end.accept.launch',endLaunch,actor.cookie);
+      await grant(actor,role,rights,[member.id],[locationId]);
+      await h.cmd('freeze.end.confirm',endConfirm,actor.cookie);await h.cmd('freeze.end.confirm',endConfirm,actor.cookie);
+      let state=await h.state();
+      assert.equal(state.packs.find(p=>p.id===pack.id).expiresAt,end.revisedExpiresAt);assert.equal(state.recurring.terms.find(t=>t.id===terms.id).nextRenewalAt,end.revisedRenewalAt);
+      assert.equal(state.charges.filter(c=>c.freezeId===preview.id).length,1);assert.equal(state.charges.find(c=>c.freezeId===preview.id).amountCents,1000);
+      for(const [name,requestId] of [['freeze.prepare',input.requestId],['freeze.accept.launch',launch.requestId],['freeze.confirm',confirm.requestId],['freeze.end.accept.launch',endLaunch.requestId],['freeze.end.confirm',endConfirm.requestId]]) {
+        const events=state.staffActions.filter(a=>a.command===name&&a.requestId===requestId);assert.equal(events.length,1,name);
+        assert.deepEqual([events[0].actorId,events[0].actorRole,events[0].personId,events[0].right,events[0].channel],[actorId,role,member.id,'contract-change','phone']);assert.ok(events[0].before&&events[0].after);
+      }
+      await grant(actor,role,['member-record'],[member.id],[locationId]);await refused('freeze.end.confirm',endConfirm,actor.cookie);
+      await grant(actor,role,rights,[member.id],[locationId]);
+      captures.push({actor,role,locationId,pack,terms,freeze:preview,end});
+    }
+  }
+  await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false});
+  const retired=captures.at(-1);await refused('freeze.end.confirm',{id:retired.end.id,key:retired.end.key,requestId:crypto.randomUUID()},manager.cookie,404,'person_not_found');
+  assert.equal((await h.state(manager.cookie)).freezes.freezes.length,0,'retired member records are absent from delegated freeze reads');
+  await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:true});
+  // Existing due-date fixture technique retains public approvals, then crosses
+  // the real scheduler boundary; both sweeps must preserve one invoice and fee.
+  const due=new Date(Date.now()-1000).toISOString();
+  for(const entry of captures) {
+    const state=await h.state(),freeze=state.freezes.freezes.find(f=>f.id===entry.freeze.id),terms=state.recurring.terms.find(t=>t.id===entry.terms.id),pack=state.packs.find(p=>p.id===entry.pack.id);
+    for(const record of [{...freeze,startAt:new Date(Date.now()-21*86400000).toISOString(),endAt:due},{...terms,nextRenewalAt:due},{...pack,expiresAt:due}])await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(record),record.id).run();
+  }
+  for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+  const state=await h.state();
+  for(const entry of captures) {
+    const invoices=state.recurring.invoices.filter(i=>i.recurringTermsId===entry.terms.id);assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000);
+    assert.equal(state.charges.filter(c=>c.invoiceId===invoices[0].id).length,1);assert.equal(state.charges.filter(c=>c.freezeId===entry.freeze.id).length,1);assert.equal(state.freezes.freezes.find(f=>f.id===entry.freeze.id).resumptionCount,1);
+  }
+  console.log('PROBE PLAN-011 scoped authority: manager and front desk at two locations -> 30-day Medical freeze, one 1000-cent fee, exact personal acceptance, day-20 end, one native renewal invoice; wrong member, location, missing MFA and revoked previews or replays -> refused with no writes or notices.');
+  if(process.env.STRAP_RIGHTS_PROOF_DIR||process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).scopedFreezesBrowser(h,{member,desk,manager,type,grant,rights,day,today,midnight,west});
 }
