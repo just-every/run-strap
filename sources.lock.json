@@ -3342,11 +3342,11 @@
       "executable": false
     },
     "src/strap/domain/freeze-lifecycle.ts": {
-      "sha256": "cf9d32603c14db25225adc277fe27b4b95f7ebad548cec6c935598c1eda4c091",
+      "sha256": "4a918e5a36b7a35d45c643ecfe98e6be300b927d8d6716647c61572342c58552",
       "executable": false
     },
     "src/strap/domain/freezes.ts": {
-      "sha256": "8393ee9bcda3c180e0cb812eec995c5a99f3cbecfa88892645d3af158e5acf7d",
+      "sha256": "fea68101a420189536c22a60ecf5312561df4cfa8e4f927bccc4efa1734359b7",
       "executable": false
     },
     "src/strap/domain/gift-cards.ts": {
@@ -3370,7 +3370,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "ec887360df4d603b6354150ec5a11ebdc8992e3224b8f8e6f59d765c97d17a0d",
+      "sha256": "2c2616938b90b06e350727f4847fd2d5d480cd4749dfa55b0466c704aa24e756",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3590,7 +3590,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "0beedcd9db0a36c01f42d83ad07790791f22f958ed29e827d1fb241e5f377763",
+      "sha256": "2989079423006e1a92aaea512847a6af92498e32f9e6c84c4d91c335da91d3d2",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3906,7 +3906,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "f9a29fb067f60fc4cd145f62af3675e6db3a5c394222091c60cb4ea87935f089",
+      "sha256": "535d47b2d61bbd5fd403efd4661fc33dc306fab7b9b5d25b8f3f6e2e37f07c40",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -4358,7 +4358,7 @@
       "executable": false
     },
     "tests/freezes-browser.mjs": {
-      "sha256": "260cfe490eec44430861753995885b07e890ebe2dde2c4eac7ad94a7227d5193",
+      "sha256": "84f612f2552fd1de1ad2e31bcff35e12441b2fd666b56c5ff03906ae4ecf235b",
       "executable": false
     },
     "tests/guests-browser.mjs": {
@@ -4458,7 +4458,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "983daa40c07b460875100b96fff528540bfb18d81bd07034b7286eafacb726a8",
+      "sha256": "08a836913e9435f69e766460fe25a5639d22857f948fa5eb26dbfeff8e1c664c",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {

@@ -174,6 +174,18 @@ export async function scopedFreezesBrowser(h,{member,desk,type,grant,rights,day,
       }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'phone stays within the viewport');
     };
+    const followMemberLink=async(mine,link)=>{
+      const target=await link.getAttribute('href');
+      assert.equal(target,'/signin?returnTo=%2Fapp%2Fpacks%23freezes');
+      await mine.goto(h.origin+target);
+      await mine.getByLabel('Email',{exact:true}).fill(member.email);
+      await mine.getByRole('button',{name:'Email a sign-in link',exact:true}).click();
+      const outbox=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results;
+      const message=outbox.map(r=>JSON.parse(r.message)).find(m=>m.to.includes(member.email));
+      await mine.goto(message.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]);
+      await mine.getByRole('button',{name:'Confirm',exact:true}).click();
+      assert.equal(new URL(mine.url()).pathname,'/app/packs');
+    };
     const actor=desk,role='front-desk',locationId=west.id;
     await grant(actor,role,rights,[member.id],[locationId]);
     const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,locationId,expiresAt:midnight(day(today,90))})).id});
@@ -193,8 +205,9 @@ export async function scopedFreezesBrowser(h,{member,desk,type,grant,rights,day,
     assert.equal(await preview.getByRole('button',{name:'Approve this exact freeze',exact:true}).count(),0);
     await preview.getByRole('button',{name:'Open member freeze acceptance',exact:true}).click();
     assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).acceptedAt,null);
-    await shot(staff,`[data-freeze="${freeze.id}"]`,'staff-awaiting-member');
-    await mine.goto(h.origin+'/app/packs#freezes');
+    await shot(staff,'.panel[role=status]','staff-awaiting-member');
+    const freezeLink=staff.getByRole('link',{name:'Open member freeze acceptance',exact:true});
+    await freezeLink.waitFor();await followMemberLink(mine,freezeLink);
     const personal=mine.locator(`[data-freeze="${freeze.id}"]`);await shot(mine,`[data-freeze="${freeze.id}"]`,'member-exact-fee');
     await personal.getByRole('button',{name:'I accept this exact freeze',exact:true}).click();
     await staff.reload();
@@ -214,8 +227,9 @@ export async function scopedFreezesBrowser(h,{member,desk,type,grant,rights,day,
     const end=(await h.state()).freezes.ends.find(e=>e.freezeId===freeze.id),endPanel=staff.locator(`[data-freeze-end="${end.id}"]`);
     assert.equal(await endPanel.getByRole('button',{name:'Approve this earlier resumption',exact:true}).count(),0);
     await endPanel.getByRole('button',{name:'Open member resumption acceptance',exact:true}).click();
-    await shot(staff,`[data-freeze-end="${end.id}"]`,'staff-day-twenty');
-    await mine.reload();await shot(mine,`[data-freeze-end="${end.id}"]`,'member-day-twenty');await mine.locator(`[data-freeze-end="${end.id}"]`).getByRole('button',{name:'I accept this exact earlier resumption',exact:true}).click();
+    await shot(staff,'.panel[role=status]','staff-day-twenty');
+    const endLink=staff.getByRole('link',{name:'Open member resumption acceptance',exact:true});
+    await endLink.waitFor();await followMemberLink(mine,endLink);await shot(mine,`[data-freeze-end="${end.id}"]`,'member-day-twenty');await mine.locator(`[data-freeze-end="${end.id}"]`).getByRole('button',{name:'I accept this exact earlier resumption',exact:true}).click();
     await staff.reload();await endPanel.getByRole('button',{name:'Approve this earlier resumption',exact:true}).click();
     const state=await h.state();assert.equal(state.packs.find(p=>p.id===pack.id).expiresAt,end.revisedExpiresAt);assert.equal(state.charges.filter(c=>c.freezeId===freeze.id).length,1);assert.equal(state.staffActions.filter(a=>a.command==='freeze.end.confirm'&&a.after.id===end.id).length,1);
     await shot(staff,`[data-freeze-end="${end.id}"]`,'staff-end-confirmed');
@@ -224,6 +238,6 @@ export async function scopedFreezesBrowser(h,{member,desk,type,grant,rights,day,
     for(const control of await staff.locator('a.has-tooltip,button.has-tooltip').all()) {
       await control.focus();const tip=control.locator('[role=tooltip]');assert.equal(await tip.count(),1);assert.equal(await tip.isVisible(),true);
     }
-    console.log('PROBE PLAN-011 staff phone: member profile -> Medical fee and date acceptance, revoked visible confirmation refused, restored rights confirm once, personal day-20 resumption; screens 1440 and 390.');
+    console.log('PROBE PLAN-011 A: profile launch renders a member link; native sign-in and personal acceptance complete for freeze and early resumption. Staff phone: member profile -> Medical fee and date acceptance, revoked visible confirmation refused, restored rights confirm once, personal day-20 resumption; screens 1440 and 390.');
   } finally {for(const context of contexts)await context.close();await browser.close();}
 }

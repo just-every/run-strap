@@ -35,7 +35,7 @@ import { requestCancellation, prepareCancellation, confirmCancellation, prepareW
 import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
 import { recordContractPrepayment, reconcileCancellationRefund, settleCancellationRefund } from './cancellation-value';
 import { acceptFreeze, acceptFreezeEnd, launchFreezeAcceptance, launchFreezeEndAcceptance, declineFreezeRequest, withdrawFreezeRequest, withdrawFreeze, freezeWithdrawal, checkFreezeLaunch } from './freeze-lifecycle';
-import { requestFreeze, prepareFreeze, confirmFreeze, prepareEndFreeze, confirmEndFreeze, saveFreezeType, applyDueFreezes, freezesSnapshot, authorizeFreezeCommand } from './freezes';
+import { requestFreeze, prepareFreeze, confirmFreeze, prepareEndFreeze, confirmEndFreeze, saveFreezeType, applyDueFreezes, freezesSnapshot, authorizeFreezeCommand, freezePublicResult } from './freezes';
 import { prepareRecurringTerms, acceptRecurringTerms, stopRecurringTerms, reconnectRecurringBilling, applyDueRecurringInvoices, recurringSnapshot, recurringForPack } from './contract-billing';
 import { saveMakeupGuardian, acceptMakeupGuardian, revokeMakeupGuardian, launchMakeupGuardian } from './makeup-authority';
 import { saveAbsencePolicy, previewAbsence, reportAbsence, bookMakeup, makeupSnapshot } from './makeups';
@@ -397,7 +397,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
     checkFreezeLaunch(tx,input,name.startsWith('freeze.end.'));
   }
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
-  if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : replay;
+  if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
   const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // A private offer must not execute unrelated due billing, notices or entitlements.
@@ -414,7 +414,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff && !clientReplay) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
   if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); }
-  await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : result;
+  await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : name.startsWith('freeze.') ? freezePublicResult(tx.who,result) : result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and
  * moves each freed seat on. Returns the emails it reserved, to send after commit. */
@@ -479,7 +479,8 @@ export async function snapshot(db: D1Database, who: Actor, origin?: string, oper
   return {...await snapshotFor(loaded.state,loaded.who,connection,origin,operational),automation:await automationSnapshot(db,loaded.state,loaded.who),privacy:privacySnapshot(loaded.state,loaded.who),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
 }
 async function snapshotFor(state: State, who: Actor, connection?: {connection_id:string;origin:string}|null, origin?: string, operational = true) {
-  const frozen=freezesSnapshot(state,who);frozen.freezes=frozen.freezes.map(f=>({...f,withdrawal:freezeWithdrawal(state,record(state,f.id,'freeze'))}));
+  const source=freezesSnapshot(state,who);
+  const frozen=freezePublicResult(who,{...source,freezes:source.freezes.map(f=>({...f,withdrawal:freezeWithdrawal(state,record(state,f.id,'freeze'))}))});
   if (who.role === 'front-desk' || operational && who.staffAccess && ['manager','instructor'].includes(who.role)) {
     const grant = memberRecordGrant(state,who);
     const members = grant?.enabled ? state.people.filter(p => !p.erasedAt && grant.memberIds.includes(p.id)) : [];

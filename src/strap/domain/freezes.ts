@@ -1,3 +1,4 @@
+import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { studioDayInstant, calendarDays, shiftCalendarDays } from './freeze-calendar';
 import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
@@ -5,6 +6,23 @@ import { appendPackEvent, bookingCredit, studioZone } from './pack-credits';
 import { bookingHistory } from './booking-history';
 import { contractNotice, moveRecurringRenewal, recurringBasis } from './contract-billing';
 import { hasStaffRight, requireStaffRight } from './staff-rights';
+
+const freezeToken = (value: string) => /^[a-f0-9]{64}$/.test(value) ? value : sha256(value);
+const delegatedFreezeView = (who: Actor) => ['front-desk','manager','instructor'].includes(who.role);
+/** Source records remain server-side; delegates receive exact opaque tokens. */
+export function freezePublicResult<T>(who: Actor, value: T): T {
+  if (!delegatedFreezeView(who)) return value;
+  const project = (item: any): any => {
+    if (Array.isArray(item)) return item.map(project);
+    if (!item || typeof item !== 'object') return item;
+    return Object.fromEntries(Object.entries(item)
+      .filter(([key]) => !['basis','acceptanceBasis','requestBasis','confirmationBasis','booking'].includes(key))
+      .map(([key,entry]) => [key,['key','acceptanceKey','withdrawKey'].includes(key) && typeof entry === 'string' ? freezeToken(entry) : project(entry)]));
+  };
+  return project(value);
+}
+export const freezeKeyMatches = (supplied: unknown, stored: string) => supplied === stored
+  || supplied === freezeToken(stored);
 
 export function freezeStaffVisible(state: State, who: Actor, packId: string) {
   const pack = state.records.get(packId)?.data;
@@ -149,12 +167,12 @@ export function prepareFreeze(tx: Transaction, input: Record<string,unknown>) {
   const freeze = {requiresAcceptance:dates.feeCents>0 || !!changedRequest || dates.exceptions.length>0,acceptedAt:null,originalAllowanceExpiresAt:pack.allowanceExpiresAt ?? null,id:id(),personId:pack.personId,packId:pack.id,...dates,requestId:prior.requestId,requestBasis:prior.requestBasis,freezeRequestId:request?.id ?? null,
     exceptionReason,approvedExceptionBy:exceptionReason ? tx.who.id : null,changedRequest:!!changedRequest,status:'preview',createdAt:now(),createdBy:tx.who.id};
   const preview = {...freeze,effects:freezeEffects(tx.state,pack,freeze),basis:freezeBasis(tx.state,pack,freeze)};
-  const saved = {...preview,key:JSON.stringify(preview)};
+  const saved = {...preview,key:sha256(JSON.stringify(preview))};
   tx.put('freeze',saved); return saved;
 }
 export function confirmFreeze(tx: Transaction, input: Record<string,unknown>) {
   authorizeFreezeCommand(tx,'freeze.confirm',input); text(input.requestId,'requestId',100);
-  const freeze = record(tx.state,input.id,'freeze'); insist(input.key === freeze.key,'preview_changed',409);
+  const freeze = record(tx.state,input.id,'freeze'); insist(freezeKeyMatches(input.key,freeze.key),'preview_changed',409);
   if (freeze.confirmedAt) { insist(freeze.confirmedBy === tx.who.id && freeze.confirmationRequestId === input.requestId && freeze.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return freeze; }
   insist(freeze.status === 'preview' && freeze.startAt > now(),'freeze_preview_expired',409);
   const pack = record(tx.state,freeze.packId,'pack');
@@ -206,11 +224,11 @@ export function prepareEndFreeze(tx: Transaction, input: Record<string,unknown>)
   const preview = {id:id(),freezeId:freeze.id,personId:freeze.personId,packId:freeze.packId,endAt,reason,revisedExpiresAt,
     revisedRenewalAt:recurringBasis(tx.state,freeze.packId) ? revisedExpiresAt : null,renewalAmountCents:freeze.effects.renewalAmountCents,feeCents:0,bookingsRestored:[],
     requiresAcceptance:true,acceptedAt:null,status:'preview',requestId:prior.requestId,requestBasis:prior.requestBasis,createdBy:tx.who.id,createdAt:now(),basis:freezeEndBasis(tx.state,freeze)};
-  const saved = {...preview,key:JSON.stringify(preview)}; tx.put('freezeEnd',saved); return saved;
+  const saved = {...preview,key:sha256(JSON.stringify(preview))}; tx.put('freezeEnd',saved); return saved;
 }
 export function confirmEndFreeze(tx: Transaction, input: Record<string,unknown>) {
   authorizeFreezeCommand(tx,'freeze.end.confirm',input); text(input.requestId,'requestId',100);
-  const end = record(tx.state,input.id,'freezeEnd'); insist(input.key === end.key,'preview_changed',409);
+  const end = record(tx.state,input.id,'freezeEnd'); insist(freezeKeyMatches(input.key,end.key),'preview_changed',409);
   if (end.status === 'confirmed') { insist(end.confirmedBy === tx.who.id && end.confirmationRequestId === input.requestId && end.confirmationBasis === fingerprint(input),'freeze_confirmation_closed',409); return end; }
   const freeze = record(tx.state,end.freezeId,'freeze');
   insist(end.acceptedAt && end.acceptanceBasis === end.basis,'freeze_member_acceptance_required',409);

@@ -736,6 +736,44 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
   await grant(manager,'manager',[...rights,'price'],[member.id],[west.id]);await h.cmd('freeze.confirm',adjustedConfirm,manager.cookie);
   assert.equal((await h.state()).charges.filter(c=>c.freezeId===adjusted.id).length,0,'the exact personally accepted fee adjustment is honored');
   await grant(manager,'manager',rights,[member.id],[west.id]);await refused('freeze.confirm',adjustedConfirm,manager.cookie,403,'staff_right_required');
+  // A host-only delegate can review effects without reading another guest's
+  // identity or payer ledger hidden inside source fingerprints and form keys.
+  const guest=await h.person('FreezeGuest'),payer=await h.person('FreezePayer'),coach=await h.person('FreezeCoach','instructor');
+  await grant(desk,'front-desk',rights,[member.id],['studio']);
+  const guestPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:midnight(day(today,90)),guestTerms:{passes:1,period:'month',rollover:0,services:[],perGuest:10,windowDays:365,excess:'charge',priceCents:43217}})).id});
+  await h.cmd('guest.consent.save',{sponsorEmail:member.email,consent:true},guest.cookie);
+  await h.cmd('guest.consent.save',{sponsorEmail:member.email,kind:'payer',consent:true,maxChargeCents:43217},payer.cookie);
+  const bookGuest=async(days,hour=0)=>{
+    const start=new Date(Date.parse(midnight(day(today,days)))+hour*3600000).toISOString(),published=await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:weekOf(start),classes:[{title:'Guest freeze class '+days+' '+hour,room:'Guest freeze room',start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity:5,instructorId:coach.id}]})).id});
+    const quote=await h.cmd('guest.preview',{sponsorId:member.id,guestId:guest.id,packId:guestPack.id,classId:published.classes[0].id,payerId:payer.id},member.cookie);
+    return h.cmd('guest.book',{id:quote.id,confirm:true},member.cookie);
+  };
+  await bookGuest(4);const paid=await bookGuest(4,1);assert.equal(paid.guestPriceCents,43217);assert.equal(paid.payerId,payer.id);
+  const privateInput={packId:guestPack.id,freezeTypeId:type.id,startAt:day(today,2),endAt:day(today,32),reason:'Medical leave with guest effects',requestId:randomUUID()};
+  const privatePreview=await h.cmd('freeze.prepare',privateInput,desk.cookie);
+  const privateData=value=>{const bytes=JSON.stringify(value);for(const secret of [guest.id,payer.id,guest.email,payer.email,'guestPriceCents'])assert.equal(bytes.includes(secret),false,'delegated freeze response protects unrelated guest finances: '+secret);};
+  privateData(privatePreview);privateData(await h.cmd('freeze.prepare',privateInput,desk.cookie));
+  privateData((await h.state(desk.cookie)).freezes);
+  privateData((await h.send('/app/people?person='+member.id,undefined,desk.cookie)).text);
+  const memberPreview=(await h.state(member.cookie)).freezes.freezes.find(f=>f.id===privatePreview.id);
+  const privateConfirm={id:privatePreview.id,key:privatePreview.key,requestId:randomUUID()};
+  await refused('freeze.confirm',{...privateConfirm,key:'synthetic-strap-invalid-key'},desk.cookie,409,'preview_changed');
+  await h.cmd('freeze.accept',{id:memberPreview.id,key:memberPreview.key},member.cookie);
+  privateData(await h.cmd('freeze.confirm',privateConfirm,desk.cookie));privateData(await h.cmd('freeze.confirm',privateConfirm,desk.cookie));
+  const privateEnd=await h.cmd('freeze.end.prepare',{id:privatePreview.id,endAt:day(today,22),reason:'Member returns earlier',requestId:randomUUID()},desk.cookie);privateData(privateEnd);
+  const memberEnd=(await h.state(member.cookie)).freezes.ends.find(e=>e.id===privateEnd.id);
+  await h.cmd('freeze.end.accept',{id:memberEnd.id,key:memberEnd.key},member.cookie);
+  privateData(await h.cmd('freeze.end.confirm',{id:privateEnd.id,key:privateEnd.key,requestId:randomUUID()},desk.cookie));
+  await bookGuest(95);const laterPaid=await bookGuest(95,1);assert.equal(laterPaid.guestPriceCents,43217);
+  const privateState=await h.state(desk.cookie);privateData(privateState.freezes);
+  const withdrawal=privateState.freezes.freezes.find(f=>f.id===privatePreview.id).withdrawal;
+  assert.equal(withdrawal.bookings.length,2);
+  const withdraw={id:privatePreview.id,withdrawKey:withdrawal.key,reason:'Member withdrew scheduled leave',requestId:randomUUID()};
+  await refused('freeze.withdraw',{...withdraw,withdrawKey:'synthetic-strap-invalid-key'},desk.cookie,409,'freeze_withdrawal_changed');
+  privateData(await h.cmd('freeze.withdraw',withdraw,desk.cookie));privateData(await h.cmd('freeze.withdraw',withdraw,desk.cookie));
+  const privateAfter=await h.state();
+  for(const booking of [paid,laterPaid])assert.equal(privateAfter.charges.filter(c=>c.bookingId===booking.id&&c.reason==='guest_drop_in_reversal'&&c.personId===payer.id&&c.amountCents===-43217).length,1);
+  console.log('PROBE STAFF-001 B: host-only freeze commands, replay, state and profile with paid guest seats -> no unrelated identity, payer or price; exact confirmation and withdrawal return original funding once; forged tokens refused without writes.');
   console.log('PROBE PLAN-011 scoped authority: manager and front desk at two locations -> 30-day Medical freeze, one 1000-cent fee, exact personal acceptance, day-20 end, one native renewal invoice; wrong member, location, missing MFA and revoked previews or replays -> refused with no writes or notices.');
   if(process.env.STRAP_RIGHTS_PROOF_DIR||process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).scopedFreezesBrowser(h,{member,desk,manager,type,grant,rights,day,today,midnight,west});
 }

@@ -1,6 +1,7 @@
+import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { id, insist, list, now, person, record, text, type RecordData, type State } from './types';
 import type { Transaction } from './store';
-import { freezeBasis, freezeEndBasis, requireFreezeStaff, authorizeFreezeCommand } from './freezes';
+import { freezeBasis, freezeEndBasis, requireFreezeStaff, authorizeFreezeCommand, freezeKeyMatches } from './freezes';
 import { calendarDays, shiftCalendarDays } from './freeze-calendar';
 import { appendPackEvent, bookingCredit, studioZone } from './pack-credits';
 import { bookingHistory } from './booking-history';
@@ -12,7 +13,7 @@ function own(tx: Transaction, personId: string) {
 function acceptance(tx: Transaction, input: Record<string,unknown>, ending: boolean) {
   insist(tx.who.role === 'member','member_acceptance_required',403);
   const preview=record(tx.state,input.id,ending ? 'freezeEnd' : 'freeze'), freeze=ending ? record(tx.state,preview.freezeId,'freeze') : preview;
-  own(tx,preview.personId); insist(input.key===preview.key,'preview_changed',409);
+  own(tx,preview.personId); insist(freezeKeyMatches(input.key,preview.key),'preview_changed',409);
   insist(preview.status==='preview' && (ending ? preview.endAt : freeze.startAt)>now(),'freeze_preview_expired',409);
   const basis=ending ? freezeEndBasis(tx.state,freeze) : freezeBasis(tx.state,record(tx.state,freeze.packId,'pack'),freeze);
   insist(preview.basis===basis,'freeze_source_changed',409);
@@ -57,13 +58,13 @@ export function freezeWithdrawal(state:State,freeze:RecordData) {
   const charge=freeze.chargeId?state.records.get(freeze.chargeId)?.data:null;
   const feeReversedCents=charge&&!list(state,'charge').some(c=>c.reversesChargeId===charge.id)?charge.amountCents:0;
   const result={freezeId:freeze.id,revisedExpiresAt,feeReversedCents,bookings,basis:JSON.stringify({freeze,pack,bookings,charge,terms:list(state,'recurringTerms').filter(t=>t.currentPackId===pack.id)})};
-  return {...result,key:JSON.stringify(result)};
+  return {...result,key:sha256(JSON.stringify(result))};
 }
 export function withdrawFreeze(tx:Transaction,input:Record<string,unknown>) {
   const freeze=record(tx.state,input.id,'freeze');if(!['owner','front-desk','manager'].includes(tx.who.role))own(tx,freeze.personId);else requireFreezeStaff(tx.state,tx.who,freeze.packId);
   const requestId=text(input.requestId,'requestId',100),reason=tx.who.role!=='member'?text(input.reason,'reason',500):input.reason?text(input.reason,'reason',500):null;
-  if(freeze.status==='withdrawn'){insist(freeze.withdrawnBy===tx.who.id&&freeze.withdrawRequestId===requestId&&freeze.withdrawalReason===reason&&freeze.withdrawKey===input.withdrawKey,'freeze_request_changed',409);return freeze;}
-  const preview=freezeWithdrawal(tx.state,freeze);insist(preview&&input.withdrawKey===preview.key,'freeze_withdrawal_changed',409);tx.future(freeze.startAt);
+  if(freeze.status==='withdrawn'){insist(freeze.withdrawnBy===tx.who.id&&freeze.withdrawRequestId===requestId&&freeze.withdrawalReason===reason&&freezeKeyMatches(input.withdrawKey,freeze.withdrawKey),'freeze_request_changed',409);return freeze;}
+  const preview=freezeWithdrawal(tx.state,freeze);insist(preview&&freezeKeyMatches(input.withdrawKey,preview.key),'freeze_withdrawal_changed',409);tx.future(freeze.startAt);
   const actionId=id();
   for(const item of preview.bookings){const b=record(tx.state,item.id,'booking'),returned=b.status==='booked';if(returned)bookingCredit(tx,b,{type:'restore',credits:1,bookingId:b.id,classId:b.classId,reason:'Freeze withdrawn; original term restored'});
     const after={...b,status:'cancelled',cancellation:'freeze-withdrawal',refunded:returned,feeCents:0,cancelledAt:now(),cancelledBy:tx.who.id,cancelledByRole:tx.who.role};tx.put('booking',after);
