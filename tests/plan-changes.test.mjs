@@ -240,7 +240,7 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   await h.cmd('freeze.accept',{id:seriesFreeze.id,key:seriesFreeze.key},sofia.cookie);
   await h.cmd('freeze.confirm',{id:seriesFreeze.id,key:seriesFreeze.key,requestId:'synthetic-strap-series-confirm'});
   await refused('series.change.prepare',{classId:series.classes[0].id,scope:'this',reason:'Move into frozen day',change:{startDate:'2098-01-07'}},h.owner,409,/series_booking_membership_frozen/);
-  await scopedFreezes(h,{member:stranger,type,day,today,midnight});
+  await scopedFreezeJourney({day,today,midnight});
   if(process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).freezesBrowser(h,{member,direct,stranger,typeId:type.id})
 },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})
 
@@ -592,6 +592,16 @@ async function combinedProration(){
   })}finally{await writeFile(path+'.new',original);await rename(path+'.new',path);}
 }
 
+async function scopedFreezeJourney(dates) {
+  await run(async h=>{
+    await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Scoped freeze studio',timeZone:'America/New_York'});
+    await h.person('FreezeFirst');await h.person('FreezeSecond');const member=await h.person('FreezeThird');
+    await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:6,amountCents:12000,expiresAt:dates.midnight(dates.day(dates.today,90))})).id});
+    const type=await h.cmd('freeze.type.save',{name:'Medical',reason:'Agreed time away',feeCents:1000,defaultLengthDays:30,maxLengthDays:366,allowedStartDays:[1,2,3,4,5,6,7],allowOpenEnded:true});
+    await scopedFreezes(h,{member,type,...dates});
+  });
+}
+
 // Delegated freezes use the real command and profile doors, including current
 // member and location authority before preview, confirmation and committed replay.
 async function scopedFreezes(h,{member,type,day,today,midnight}) {
@@ -601,7 +611,7 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
   const grant=(actor,role,rights,members=[member.id],places=['studio'])=>h.cmd('staff.access.grant',{personId:actor.id,role,enabled:true,rights:Object.fromEntries(rights.map(right=>[right,{enabled:true,scopes:[{memberIds:members,locationIds:places,doors:['all']}]}]))});
   const rights=['member-record','contract-change'];
   const refused=async(name,input,cookie,status=403,error)=>{
-    const retained=async()=>{const rows=await h.db.batch([h.db.prepare('SELECT version FROM st_meta WHERE id=1'),h.db.prepare('SELECT id,kind,data,version FROM st_records ORDER BY id'),h.db.prepare('SELECT source_id,status FROM st_notice_deliveries ORDER BY source_id')]);return rows.map(row=>row.results);};
+    const retained=async()=>{const rows=await h.db.batch([h.db.prepare('SELECT version FROM st_meta WHERE id=1'),h.db.prepare('SELECT id,kind,version FROM st_records ORDER BY id'),h.db.prepare('SELECT source_id,status FROM st_notice_deliveries ORDER BY source_id')]);return rows.map(row=>row.results);};
     const before=await retained(),r=await h.send('/api/strap/command',{name,input},cookie);assert.equal(r.status,status,r.text);if(error)assert.equal(r.value.error,error);
     assert.deepEqual(await retained(),before,'refusal changes no records or notice deliveries');return r;
   };
@@ -629,7 +639,7 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
       await refused('freeze.type.save',{...type,revision:type.revision,name:'Unapproved type change'},actor.cookie);
       const stale=await h.cmd('freeze.prepare',{...input,requestId:randomUUID()},actor.cookie);
       const staleLaunch={id:stale.id,requestId:randomUUID(),channel:'phone'};await h.cmd('freeze.accept.launch',staleLaunch,actor.cookie);
-      await h.cmd('person.save',{id:member.id,name:member.name+' '+randomUUID(),email:member.email,role:'member',active:true});
+      await h.cmd('person.save',{id:member.id,name:member.name+' '+captures.length,email:member.email,role:'member',active:true});
       await refused('freeze.accept.launch',staleLaunch,actor.cookie,409,'freeze_source_changed');
       await refused('freeze.confirm',{id:stale.id,key:stale.key,requestId:randomUUID()},actor.cookie,409,'freeze_source_changed');
       const preview=await h.cmd('freeze.prepare',input,actor.cookie);
@@ -690,6 +700,30 @@ async function scopedFreezes(h,{member,type,day,today,midnight}) {
   for(const entry of captures) {
     const invoices=state.recurring.invoices.filter(i=>i.recurringTermsId===entry.terms.id);assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000);
     assert.equal(state.charges.filter(c=>c.invoiceId===invoices[0].id).length,1);assert.equal(state.charges.filter(c=>c.freezeId===entry.freeze.id).length,1);assert.equal(state.freezes.freezes.find(f=>f.id===entry.freeze.id).resumptionCount,1);
+  }
+  // Closing a request and reversing a scheduled freeze use the same delegated
+  // scope and canonical identity as preparation, including committed replay.
+  for(const [actor,role] of [[desk,'front-desk'],[manager,'manager']]) {
+    await grant(actor,role,rights,[member.id],[west.id]);
+    const ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:12000,locationId:west.id,expiresAt:midnight(day(today,90))})).id});
+    const pack=(await h.state()).packs.find(p=>p.id===ack.id),input={packId:pack.id,freezeTypeId:type.id,startAt:day(today,2),endAt:day(today,32),reason:'Medical leave request',requestId:crypto.randomUUID()};
+    for(const name of ['freeze.decline','freeze.request.withdraw']) {
+      const request=await h.cmd('freeze.request',{...input,requestId:crypto.randomUUID()},member.cookie),close={id:request.id,reason:'Member and studio agreed to close these dates',channel:'inbox',requestId:crypto.randomUUID()};
+      await grant(actor,role,['member-record'],[member.id],[west.id]);await refused(name,close,actor.cookie);
+      await grant(actor,role,rights,[member.id],[west.id]);
+      const result=await h.cmd(name,close,actor.cookie);assert.equal(result.status,name==='freeze.decline'?'declined':'withdrawn');assert.deepEqual(await h.cmd(name,close,actor.cookie),result);
+      const events=(await h.state()).staffActions.filter(a=>a.command===name&&a.requestId===close.requestId);assert.equal(events.length,1);assert.equal(events[0].right,'contract-change');assert.equal(events[0].channel,'inbox');assert.equal(events[0].personId,member.id);
+      await grant(actor,role,['member-record'],[member.id],[west.id]);await refused(name,close,actor.cookie);await grant(actor,role,rights,[member.id],[west.id]);
+    }
+    const freeze=await h.cmd('freeze.prepare',{...input,channel:'phone',requestId:crypto.randomUUID()},actor.cookie);await h.cmd('freeze.accept',{id:freeze.id,key:freeze.key},member.cookie);
+    await h.cmd('freeze.confirm',{id:freeze.id,key:freeze.key,channel:'phone',requestId:crypto.randomUUID()},actor.cookie);
+    const current=(await h.state()).freezes.freezes.find(f=>f.id===freeze.id),withdraw={id:freeze.id,withdrawKey:current.withdrawal.key,reason:'Member withdrew the scheduled leave',channel:'phone',requestId:crypto.randomUUID()};
+    await grant(actor,role,['member-record'],[member.id],[west.id]);await refused('freeze.withdraw',withdraw,actor.cookie);
+    await grant(actor,role,rights,[member.id],[west.id]);await h.cmd('freeze.withdraw',withdraw,actor.cookie);await h.cmd('freeze.withdraw',withdraw,actor.cookie);
+    const after=await h.state(),fee=after.charges.find(c=>c.freezeId===freeze.id&&c.amountCents===1000);
+    assert.equal(after.packs.find(p=>p.id===pack.id).expiresAt,pack.expiresAt);assert.equal(after.charges.filter(c=>c.reversesChargeId===fee.id).length,1);assert.equal(after.charges.filter(c=>c.freezeId===freeze.id).reduce((n,c)=>n+c.amountCents,0),0);
+    const events=after.staffActions.filter(a=>a.command==='freeze.withdraw'&&a.requestId===withdraw.requestId);assert.equal(events.length,1);assert.equal(events[0].right,'contract-change');assert.equal(events[0].personId,member.id);
+    await grant(actor,role,['member-record'],[member.id],[west.id]);await refused('freeze.withdraw',withdraw,actor.cookie);await grant(actor,role,rights,[member.id],[west.id]);
   }
   console.log('PROBE PLAN-011 scoped authority: manager and front desk at two locations -> 30-day Medical freeze, one 1000-cent fee, exact personal acceptance, day-20 end, one native renewal invoice; wrong member, location, missing MFA and revoked previews or replays -> refused with no writes or notices.');
   if(process.env.STRAP_RIGHTS_PROOF_DIR||process.env.STRAP_PROOF_DIR)await(await import('./freezes-browser.mjs')).scopedFreezesBrowser(h,{member,desk,manager,type,grant,rights,day,today,midnight,west});
