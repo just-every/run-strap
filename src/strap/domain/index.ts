@@ -390,9 +390,9 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
-  // A private offer must not execute unrelated due billing, notices or entitlements.
-  if (!privateAppointmentOffer && !name.startsWith('appointment.')) {
+  const privatePreparation = name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  // Private preparations and reviews must not execute unrelated due billing, notices or entitlements.
+  if (!privatePreparation && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
   }
   const clientTarget = name.startsWith('appointment.client.') ? tx.state.records.get(String(input.id ?? input.reservationId))?.data : null;
@@ -404,7 +404,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if ((['attendance.plan.accept','attendance.plan.accept.staff'].includes(name) && !tx.state.records.has('notice:confirmation:'+result.id)) || name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff && !clientReplay) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
-  if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); }
+  if (!privatePreparation && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); }
   await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and

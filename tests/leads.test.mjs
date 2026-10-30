@@ -229,7 +229,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   assert.deepEqual(await h.cmd('lead.recovery.complete',completion),await h.cmd('lead.recovery.complete',completion))
   await h.cmd('lead.recovery.complete',{...completion,note:'Changed replay'},owner,409)
   await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
-  const success=await successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits:visits.get(ana.id),yoga,packs})
+  const success=await successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits:visits.get(ana.id),yoga,packs,jump})
   // Corrected attendance ends the lapse; it never revives a completed task.
   await h.cmd('attendance.correct',{id:missedSeat.id,outcome:'attended',reason:'Instructor confirmed the missing paper check-in'})
   await h.cmd('lead.recovery.process',{})
@@ -238,7 +238,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   await success.erase()
 })))
 
-async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits,yoga,packs}) {
+async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits,yoga,packs,jump}) {
   for(const booking of eveningVisits)await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
   await h.cmd('attendance.noshow',{id:privateVisits[2].id},coach.cookie)
   const key=await h.cmd('agent.create',{label:'Synthetic attendance success preparer'}),headers={authorization:'Bearer '+key.token}
@@ -319,6 +319,25 @@ async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task
   assert.equal((await h.send('/api/strap/agent/command',{name:'lead.success.prepare',input:{personId:ana.id,channel:'inApp'}},'',headers)).status,401)
   assert.equal((await h.state()).version,revokedVersion)
   return {stale,erase:async()=>{
+    // A ripe invoice is a positive control: private success work must not run
+    // unrelated financial or notice processing; the ordinary owner refresh does.
+    const billed=await h.cmd('person.save',{name:'Synthetic billing control',email:'synthetic-strap-billing'+String.fromCharCode(64)+'studio.example',role:'member',active:true})
+    await h.cmd('person.invite',{id:billed.id});billed.cookie=await h.signIn(billed.email)
+    const duePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:billed.id,credits:2,amountCents:1300,expiresAt:new Date(Date.now()+86400000).toISOString()})).id})
+    const terms=await h.cmd('plan.recurring.prepare',{packId:duePack.id,intervalMonths:1,requestId:'synthetic-strap-isolated-billing'})
+    await h.cmd('plan.recurring.accept',{id:terms.id,key:terms.key},billed.cookie)
+    await jump(new Date(Date.parse(terms.firstDueAt)+60000).toISOString())
+    const before=await h.state(),mail=await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n')
+    const currentKey=await h.cmd('agent.create',{label:'Synthetic isolated success preparation'})
+    const isolated=await h.send('/api/strap/agent/command',{name:'lead.success.prepare',input:{personId:frozen.id,channel:'inApp'}},'',{authorization:'Bearer '+currentKey.token})
+    assert.equal(isolated.status,200,isolated.text)
+    const currentRule=(await h.state()).pipeline.successRule
+    await h.cmd('lead.success.rule.save',{enabled:true,version:currentRule.version,maxPer30Days:1})
+    const after=await h.state()
+    assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.packs,before.packs);assert.deepEqual(after.recurring.invoices,before.recurring.invoices)
+    assert.equal(await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n'),mail)
+    await h.cmd('lead.recovery.process',{})
+    assert.equal((await h.state()).recurring.invoices.filter(i=>i.recurringTermsId===terms.id).length,1,'ordinary processing proves the invoice was due')
     const {privacyDecision,verifiedPrivacyRequest}=await import('./privacy-journey.mjs')
     const request=await verifiedPrivacyRequest(h,ana,'erasure','-success-review')
     const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision,obligations:'retain'})

@@ -455,7 +455,7 @@ Incumbent day-one references from buyer review round 5: [Mindbody No-Shows repor
 
 ## Status
 
-Judged from the code and tests at commit `ea298d25a1e5460f4c9d3ef4212c162f83ddece6` (30 October 2026). SUCCESS-001 uses the source-bound HTTP and browser journey below. This status candidate changes only contract metadata and its generated source lock; the guarded lander owns generated views, exact candidate Verify, publication scanning and main site results.
+Judged from the code and tests at commit `ea298d25a1e5460f4c9d3ef4212c162f83ddece6` (30 October 2026). SUCCESS-001 uses the source-bound HTTP and browser journey below. The candidate also isolates private success commands from unrelated due billing, notices and entitlement processing. Exact candidate public-door proof governs this status; the guarded lander owns generated views, exact candidate Verify, publication scanning and main site results.
 
 Historical judgment retained (28 October 2026):
 
