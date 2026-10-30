@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "cfeaf48fe5fbdc3a21571f56cc66ea618ea93eb6b84f498456f0977d6afbcbc0",
+      "sha256": "5dcb9db87b4d5792eaa1a9b0b8710e0673393a9c69ab1f846bac795470a00e15",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5107bf7ca3c6d6e4431cabb07d631815fc420ad0720677db2d87ed37dd502e61",
+      "sha256": "938c34c69396e84de30de6b2aca6386ad1a5acf1a24c7a1540b42ed7e31d8ea3",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "6cd448b987d50a3b7b37a0e21ec97a9fc5d051fd42ff307da4246ebe13b42230",
+      "sha256": "6660189bb230ae0e300abb8103c6b1776f9fb05b47161d0a1691ed8a66f7cd2e",
       "executable": false
     },
     "docs/classes.md": {
@@ -402,7 +402,7 @@
       "executable": false
     },
     "docs/privacy.md": {
-      "sha256": "bae027205f1a1d689c4d8459d4287473ee232d998aa51a9480a04a48d9783414",
+      "sha256": "b091e86b08be2c6ebc815c0ec0b3fe4430525975f7973cd5239498e532335b65",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3434,11 +3434,11 @@
       "executable": false
     },
     "src/strap/domain/privacy-erasure.ts": {
-      "sha256": "0264a6fd7e50c1cd0397008cf041be49b5319125d449f7a364b17f2edee1046d",
+      "sha256": "3a6c8235c91197711e0257e12d7752f43550e8ee717e0caf1b2d08a5d8cda18a",
       "executable": false
     },
     "src/strap/domain/privacy.ts": {
-      "sha256": "5f2d364461e401623b5ada0e15edee16ad263ec14ee9b6c43abddcd2ac31638f",
+      "sha256": "b11240be3f7c4643309eb22633515a6b3315f3bd3821eaf90750df8e9359ab12",
       "executable": false
     },
     "src/strap/domain/profiles.ts": {
@@ -4438,7 +4438,7 @@
       "executable": false
     },
     "tests/privacy-journey.mjs": {
-      "sha256": "5d40d8b36f2cfb100c5c63986236e8f89d826c86bf6e65224f3d869b86e4837f",
+      "sha256": "9e840d02df27dcd63e0f288a805ed150ebdb5915096aab7e0154de6588a982d1",
       "executable": false
     },
     "tests/profiles-browser.mjs": {

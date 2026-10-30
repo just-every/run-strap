@@ -34,7 +34,7 @@ const emails=(value: unknown): string[]=>!value||typeof value!=='object'?[]:Obje
 async function erasureScope(tx: Transaction,personId: string) {
   const member=person(tx.state,personId,false);
   const originals=(await tx.db.prepare("SELECT record_json FROM ik_provenance WHERE destination='strap:members' AND target_kind='member' AND target_id=? UNION SELECT record_json FROM ik_d1_history WHERE destination='strap:members' AND target_kind='member' AND target_id=?").bind(member.id,member.id).all()).results;
-  const historicalAliases=[...new Set([member.email!.toLowerCase(),
+  const historicalAliases=[...new Set([...(member.email?[member.email.toLowerCase()]:[]),
     ...list(tx.state,'profileChange').filter(row=>row.personId===member.id).flatMap(emails),
     ...originals.flatMap(row=>emails(JSON.parse(String(row.record_json))))])].sort();
   const operators=(await tx.db.prepare(`SELECT id,role,version FROM oa_operators WHERE lower(email) IN (${historicalAliases.map(()=>'?').join(',')}) ORDER BY id`).bind(...historicalAliases).all()).results;

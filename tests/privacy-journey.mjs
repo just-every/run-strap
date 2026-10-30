@@ -52,6 +52,7 @@ export async function privacyRequests(h) {
   assert.equal((await h.cmd('privacy.access.fulfill',{id:request.id,exportId:'synthetic-strap-wrong',confirm:true,deliveryReference:'synthetic-strap-delivery',requestId:'synthetic-strap-wrong-delivery'},h.owner,409)).error,'privacy_export_review_required');
   const fulfilled=await h.cmd('privacy.access.fulfill',{id:request.id,exportId:exported.export.id,confirm:true,deliveryReference:'synthetic-strap-delivery',channel:'phone',requestId:'synthetic-strap-delivery'});
   assert.equal(fulfilled.status,'fulfilled');assert.equal(fulfilled.delivery.digest,exported.export.digest);
+  assert.deepEqual(fulfilled.delivery.coverage,{nativeComplete:true,omitted:{}});
   const response=await h.send('/api/strap/staff-history?person='+member.id,undefined,h.owner);
   assert.equal(response.status,200);
   const history=response.value.rows.filter(r=>r.right==='privacy');
@@ -164,6 +165,12 @@ export async function importedPrivacyErasure(h) {
   assert.ok(member);
   const changedEmail=['changed-imported-privacy','studio.example'].join('@');
   await h.cmd('person.save',{id:member.id,name:member.name,email:changedEmail,active:false});
+  const access=await h.cmd('privacy.request.record',{personId:member.id,type:'access',channel:'phone',sourceReference:'synthetic-strap-imported-access',requestId:'synthetic-strap-imported-request'});
+  await h.cmd('privacy.request.verify',{id:access.id,confirm:true,verificationReference:'synthetic-strap-imported-review',requestId:'synthetic-strap-imported-verification'});
+  const copy=await h.cmd('privacy.access.export',{id:access.id,requestId:'synthetic-strap-imported-copy'});
+  assert.equal(copy.bundle.profile.email,changedEmail);assert.ok(copy.bundle.coverage.omitted.importCustody>0);
+  const delivery=await h.cmd('privacy.access.fulfill',{id:access.id,exportId:copy.export.id,confirm:true,deliveryReference:'synthetic-strap-imported-delivery',requestId:'synthetic-strap-imported-delivered'});
+  assert.equal(delivery.status,'partially-fulfilled','a native imported profile cannot imply delivery of the unreviewed original artifact');
   const request=await erasureRequest(h,member.id,'imported');
   const review=await h.cmd('privacy.erasure.prepare',erasureReview(request.id,'imported'));
   assert.deepEqual(review.unsupported,[]);
@@ -174,6 +181,33 @@ export async function importedPrivacyErasure(h) {
   for(const address of [email,changedEmail])assert.equal((await h.cmd('person.save',{name:'Synthetic recreated import',email:address,active:true},h.owner,409)).error,'erased_identity','both original import and current identity addresses stay fenced');
   const journal=await h.cmd('import.journal',{jobId:job.id});
   assert.ok(!JSON.stringify(journal).includes(email),'the original source and undo journal cannot disclose erased data');
+  await sharedPrivacyRefusal(h);
+  const beforeRevocation=await h.db.prepare('SELECT version FROM st_meta WHERE id=1').first();
+  await h.db.prepare('UPDATE oa_operators SET version=version+1 WHERE email=?').bind(h.auth.OWNER_EMAIL).run();
+  assert.equal((await h.send('/api/strap/privacy/access.json',{id:request.id,requestId:'synthetic-strap-revoked-download'},h.owner)).status,401);
+  assert.equal((await h.send('/api/strap/command',{name:'privacy.erasure.confirm',input:{id:review.id,basis:review.basis,confirm:true,requestId:'synthetic-strap-confirm-imported'}},h.owner)).status,401,'a revoked owner credential cannot replay a privacy capture');
+  assert.deepEqual(await h.db.prepare('SELECT version FROM st_meta WHERE id=1').first(),beforeRevocation);
+}
+
+async function sharedPrivacyRefusal(h) {
+  const member=await h.person('SharedPrivacy'),peer=await h.person('SharedPeer');
+  const home=await h.cmd('household.save',{name:'Synthetic private household',channel:'phone',requestId:'synthetic-strap-shared-home'});
+  await h.cmd('household.guardian.link',{id:home.id,guardianId:member.id,evidenceReference:'synthetic-strap-guardian',channel:'phone',requestId:'synthetic-strap-shared-guardian'});
+  await h.cmd('household.participant.add',{id:home.id,personId:peer.id,channel:'phone',requestId:'synthetic-strap-shared-peer'});
+  const access=await h.cmd('privacy.request.record',{personId:member.id,type:'access',channel:'phone',sourceReference:'synthetic-strap-shared-access',requestId:'synthetic-strap-shared-request'});
+  await h.cmd('privacy.request.verify',{id:access.id,confirm:true,verificationReference:'synthetic-strap-shared-verification',requestId:'synthetic-strap-shared-verify'});
+  const exported=await h.cmd('privacy.access.export',{id:access.id,requestId:'synthetic-strap-shared-export'});
+  assert.equal(exported.bundle.coverage.nativeComplete,false);assert.equal(exported.bundle.coverage.omitted.household,1);
+  for(const value of [peer.name,peer.email,'Synthetic private household'])assert.ok(!JSON.stringify(exported.bundle).includes(value),'a limited access copy cannot disclose another household member');
+  const delivered=await h.cmd('privacy.access.fulfill',{id:access.id,exportId:exported.export.id,confirm:true,deliveryReference:'synthetic-strap-shared-delivery',requestId:'synthetic-strap-shared-delivered'});
+  assert.equal(delivered.status,'partially-fulfilled');assert.equal(delivered.delivery.coverage.omitted.household,1,'a limited copy is never a completed access request');
+  const request=await erasureRequest(h,member.id,'shared');
+  const review=await h.cmd('privacy.erasure.prepare',erasureReview(request.id,'shared'));
+  assert.ok(review.unsupported.includes('household'));
+  const before=(await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results;
+  await h.cmd('privacy.erasure.confirm',{id:review.id,basis:review.basis,confirm:true,requestId:'synthetic-strap-shared-confirm'},h.owner,409);
+  assert.deepEqual((await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,before,'unsupported shared erasure refuses whole without changing either member');
+  assert.equal((await h.send('/api/strap/state',undefined,peer.cookie)).status,200);
 }
 
 export async function seedArchivePrivacy(h) {

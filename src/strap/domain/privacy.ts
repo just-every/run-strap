@@ -52,17 +52,31 @@ export function verifiedPrivacyRequest(tx: Transaction,input: Record<string,unkn
  * no credentials or original import artifacts that might hold other members. */
 export async function exportPrivacyAccess(tx: Transaction,input: Record<string,unknown>) {
   const {request,member}=verifiedPrivacyRequest(tx,input,'access');
-  const kinds=['memberProfile','profileChange','memberPreference','memberPreferenceEvent','messagePreference',
+  const kinds=new Set(['memberProfile','profileChange','memberPreference','memberPreferenceEvent','messagePreference',
     'messagePreferenceEvent','memberNote','memberMessage','pack','packCreditEvent','booking','charge','payment','acknowledgement',
-    'intakeResponse','privacyRequest'];
+    'intakeResponse','privacyRequest','staffAction','bookingAction','draft','approval','memberCheckin',
+    'privacyErasurePreview','intakeTabletLaunch','waiverTabletLaunch','waiverLaunch','memberInvitation']);
   const owned=new Set(list(tx.state,'pack').filter(r=>r.personId===member.id).map(r=>r.id));
-  const records=[...tx.state.records.values()].filter(r=>kinds.includes(r.kind)&&(r.data.personId===member.id||r.kind==='packCreditEvent'&&owned.has(r.data.packId)))
-    .map(({kind,data})=>({kind,data:kind==='profileChange'?Object.fromEntries(Object.entries(data).filter(([key])=>!['result','requestBasis'].includes(key))):structuredClone(data)}));
-  const documents=list(tx.state,'acknowledgement').filter(row=>row.personId===member.id).map(row=>assembleWaiverEvidence(row,record(tx.state,row.waiverId,'waiver')));
+  const drafts=new Set(list(tx.state,'draft').filter(r=>r.personId===member.id).map(r=>r.id));
+  const values=(value: unknown): unknown[]=>value&&typeof value==='object'?Object.values(value).flatMap(values):[value];
+  const others=new Set(tx.state.people.filter(row=>row.id!==member.id).map(row=>row.id));
+  const related=[...tx.state.records.values()].filter(({kind,data})=>values(data).includes(member.id)||kind==='packCreditEvent'&&owned.has(data.packId)||kind==='approval'&&drafts.has(data.draftId));
+  const supported=(row: {kind:string;data:RecordData})=>kinds.has(row.kind)&&!values(row.data).some(value=>others.has(String(value)))
+    &&(row.kind!=='draft'||['pack','reminder'].includes(row.data.type));
+  const omitted: Record<string,number>={};
+  for(const row of related.filter(row=>!supported(row)))omitted[row.kind]=(omitted[row.kind]??0)+1;
+  const records=related.filter(supported).map(({kind,data}): {kind:string;data:RecordData}=>({kind,data:{id:data.id,...(
+    kind==='memberCheckin'?{id:data.id,personId:member.id,phone:data.phone}:
+    kind==='staffAction'?Object.fromEntries(['id','personId','command','actorId','actorRole','right','channel','at'].filter(key=>data[key]!==undefined).map(key=>[key,data[key]])):
+    Object.fromEntries(Object.entries(structuredClone(data)).filter(([key])=>!['result','requestBasis'].includes(key))))}}));
+  const documents=records.filter(row=>row.kind==='acknowledgement').map(row=>assembleWaiverEvidence(row.data,record(tx.state,row.data.waiverId,'waiver')));
   const forms=[...new Set(records.filter(row=>row.kind==='intakeResponse').map(row=>row.data.formId))].map(formId=>structuredClone(record(tx.state,formId,'intakeForm')));
-  const bundle={format:'strap-native-member-access-v1',personId:member.id,profile:profileOf(tx.state,member),records,documents,forms,
-    boundary:'Native member records for private owner review. Shared household records, original import artifacts, provider copies and membership agreement packages and shared signing evidence require separate review; no external delivery is performed.'};
-  const exported={id:id(),digest:await privacyHash(JSON.stringify(bundle)),generatedAt:now(),personVersion:member.version};
+  const custody=await tx.db.prepare("SELECT COUNT(*) AS count FROM (SELECT id FROM ik_provenance WHERE destination='strap:members' AND target_kind='member' AND target_id=? UNION SELECT id FROM ik_d1_history WHERE destination='strap:members' AND target_kind='member' AND target_id=?)").bind(member.id,member.id).first<{count:number}>();
+  if(custody?.count)omitted.importCustody=custody.count;
+  const coverage={nativeComplete:Object.keys(omitted).length===0,omitted};
+  const bundle={format:'strap-native-member-access-v1',personId:member.id,profile:profileOf(tx.state,member),records,documents,forms,coverage,
+    boundary:'Native member records for private owner review. Shared household records, original import artifacts, provider copies, membership agreement packages and shared signing evidence require separate review; no external delivery is performed.'};
+  const exported={id:id(),digest:await privacyHash(JSON.stringify(bundle)),generatedAt:now(),personVersion:member.version,coverage};
   tx.put('privacyRequest',{...request,status:'exported',export:exported});
   return {id:request.id,personId:member.id,status:'exported',export:exported,bundle};
 }
@@ -71,11 +85,12 @@ export function fulfillPrivacyAccess(tx: Transaction,input: Record<string,unknow
   const {request,member}=verifiedPrivacyRequest(tx,input,'access');
   insist(request.status==='exported'&&request.export?.id===input.exportId,'privacy_export_review_required',409);
   insist(input.confirm===true,'privacy_delivery_confirmation_required');
-  const fulfilled={...request,status:'fulfilled',fulfilledAt:now(),fulfilledBy:tx.who.id,
+  const status=request.export.coverage?.nativeComplete===true?'fulfilled':'partially-fulfilled';
+  const fulfilled={...request,status,fulfilledAt:now(),fulfilledBy:tx.who.id,
     delivery:{exportId:request.export.id,digest:request.export.digest,channel:staffChannel(input),
-      reference:text(input.deliveryReference,'deliveryReference',200),kind:'owner-recorded-delivery'}};
+      reference:text(input.deliveryReference,'deliveryReference',200),kind:'owner-recorded-delivery',scope:'native-member-copy',coverage:request.export.coverage}};
   tx.put('privacyRequest',fulfilled);
-  return {id:request.id,personId:member.id,status:'fulfilled',delivery:fulfilled.delivery,fulfilledAt:fulfilled.fulfilledAt};
+  return {id:request.id,personId:member.id,status,delivery:fulfilled.delivery,fulfilledAt:fulfilled.fulfilledAt};
 }
 
 /** Shared audit and replay keep the receipt, never a second copy of an export. */
