@@ -148,7 +148,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   const rule=await h.cmd('lead.recovery.rule.save',{enabled:true,version:0,minVisits:2,missedWeeks:1,lookbackWeeks:12})
   assert.equal(rule.version,1)
   assert.deepEqual((await h.cmd('lead.recovery.process',{})).tasks,[],'no invented routine')
-  const coach=await h.person('RecoveryCoach','instructor'),ana=await h.person('RecoveryAna'),frozen=await h.person('RecoveryFrozen'),unavailable=await h.person('RecoveryUnavailable'),cancelled=await h.person('RecoveryCancelled')
+  const coach=await h.person('RecoveryCoach','instructor'),ana=await h.person('RecoveryAna'),frozen=await h.person('RecoveryFrozen'),unavailable=await h.person('RecoveryUnavailable'),cancelled=await h.person('RecoveryCancelled'),privateMember=await h.person('RecoveryPrivate')
   for(const p of [ana,coach]) {
     const version=(await h.state()).version
     await h.cmd('lead.recovery.process',{},p.cookie,403)
@@ -168,7 +168,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
     await new Promise(resolve=>setTimeout(resolve,50))
     owner=await h.signIn(h.auth.OWNER_EMAIL);h.owner=owner
     await h.cmd('mfa.verify',{code:totp(h.mfaOwner.secret)})
-    for(const p of [coach,ana,frozen,unavailable,cancelled]) p.cookie=await h.signIn(p.email)
+    for(const p of [coach,ana,frozen,unavailable,cancelled,privateMember]) p.cookie=await h.signIn(p.email)
   }
   const day=86400000,date=new Date(Date.now()+day).toISOString().slice(0,10)
   const until=new Date(Date.parse(date+'T12:00:00Z')+5*7*day).toISOString().slice(0,10)
@@ -181,6 +181,12 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
     const result=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:12,amountCents:10000,eligibleServices:p===ana?['Recovery Yoga','Recovery Yoga Evening']:[p===unavailable?'Recovery Pilates':'Recovery Yoga'],expiresAt:'2099-12-31T00:00:00Z'})).id})
     packs.set(p.id,result.id)
   }
+  await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:privateMember.id,credits:5,amountCents:0,eligibleServices:['Private recovery'],expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const privateOffer=await h.cmd('appointment.series.offer.save',{requestId:'synthetic-strap-private-recovery',service:'Private recovery',instructorId:coach.id,room:'Private recovery',startDate:date,endDate:new Date(Date.parse(date+'T12:00:00Z')+14*day).toISOString().slice(0,10),time:'16:00',minutes:45})
+  const privatePreview=await h.cmd('appointment.reservation.prepare',{offerId:privateOffer.id,personId:privateMember.id,channel:'phone',requestId:'synthetic-strap-private-review'})
+  const privateRoutine=await h.cmd('appointment.reservation.confirm',{id:privatePreview.id,key:privatePreview.key,personId:privateMember.id,channel:'phone',requestId:'synthetic-strap-private-confirm'})
+  const privateBookings=(await h.state()).bookings.filter(b=>privateRoutine.occurrences.some(c=>c.id===b.classId)).sort((a,b)=>a.classId.localeCompare(b.classId))
+  const privateVisits=privateRoutine.occurrences.map(c=>privateBookings.find(b=>b.classId===c.id))
   const visits=new Map([ana,frozen,unavailable,cancelled].map(p=>[p.id,[]]))
   for(let i=0;i<2;i++)for(const p of [ana,frozen,unavailable,cancelled])visits.get(p.id).push(await h.cmd('booking.book',{classId:(p===unavailable?pilates:yoga)[i].id},p.cookie))
   const eveningVisits=[]
@@ -197,6 +203,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   for(let i=0;i<2;i++) {
     await jump(new Date(Date.parse(pilates[i].end)+60000).toISOString())
     for(const p of [ana,frozen,unavailable,cancelled])await h.cmd('attendance.checkin',{id:visits.get(p.id)[i].id},coach.cookie)
+    await h.cmd('attendance.checkin',{id:privateVisits[i].id},coach.cookie)
     assert.deepEqual((await h.cmd('lead.recovery.process',{})).tasks,[])
   }
   await jump(new Date(Date.parse(yoga[3].end)+60000).toISOString())
@@ -222,7 +229,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   assert.deepEqual(await h.cmd('lead.recovery.complete',completion),await h.cmd('lead.recovery.complete',completion))
   await h.cmd('lead.recovery.complete',{...completion,note:'Changed replay'},owner,409)
   await h.cmd('lead.recovery.process',{});assert.equal((await h.state()).pipeline.recoveryTasks.length,1)
-  const success=await successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,visits:visits.get(ana.id),yoga,packs})
+  const success=await successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits:visits.get(ana.id),yoga,packs})
   // Corrected attendance ends the lapse; it never revives a completed task.
   await h.cmd('attendance.correct',{id:missedSeat.id,outcome:'attended',reason:'Instructor confirmed the missing paper check-in'})
   await h.cmd('lead.recovery.process',{})
@@ -231,8 +238,9 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   await success.erase()
 })))
 
-async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,visits,yoga,packs}) {
+async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits,yoga,packs}) {
   for(const booking of eveningVisits)await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
+  await h.cmd('attendance.noshow',{id:privateVisits[2].id},coach.cookie)
   const key=await h.cmd('agent.create',{label:'Synthetic attendance success preparer'}),headers={authorization:'Bearer '+key.token}
   const agent=async(personId=ana.id,channel='inApp')=>{
     const response=await h.send('/api/strap/agent/command',{name:'lead.success.prepare',input:{personId,channel}},'',headers)
@@ -247,7 +255,7 @@ async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task
   await h.cmd('lead.success.prepare',{personId:ana.id,channel:'inApp'},h.owner,409)
   let rule=await h.cmd('lead.success.rule.save',{enabled:true,version:0,maxPer30Days:1})
   const moneyBefore=await h.state(),mailBefore=await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first('n')
-  for(const member of [frozen,unavailable,cancelled])assert.deepEqual((await agent(member.id)).proposals,[],'excluded member has no invented alert')
+  for(const member of [frozen,unavailable,cancelled,privateMember])assert.deepEqual((await agent(member.id)).proposals,[],'excluded member has no invented alert')
   const unpermitted=(await agent(ana.id,'email')).proposals[0]
   assert.equal(unpermitted.permission.state,'denied');assert.equal(unpermitted.permission.reason,'permission_denied')
   await refused(confirm(unpermitted),'success_permission_required')
@@ -263,6 +271,9 @@ async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task
   await h.cmd('pack.adjust',{id:pack.id,revision:pack.summary.revision,creditsDelta:1,reason:'Member requested another available visit',requestId:'synthetic-strap-credit-source'})
   await refused(confirm(changed),'success_sources_changed')
   const oldLimit=(await agent()).proposals[0]
+  rule=await h.cmd('lead.success.rule.save',{enabled:false,version:rule.version,maxPer30Days:1})
+  await refused(confirm(oldLimit),'success_review_paused')
+  await h.cmd('lead.success.prepare',{personId:ana.id,channel:'inApp'},h.owner,409)
   rule=await h.cmd('lead.success.rule.save',{enabled:true,version:rule.version,maxPer30Days:1})
   await refused(confirm(oldLimit),'success_sources_changed')
   const prepared=await agent();assert.equal(prepared.proposals.length,2)

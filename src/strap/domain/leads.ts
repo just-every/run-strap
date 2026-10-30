@@ -212,10 +212,10 @@ function historicalEligibility(state: State, personId: string, c: RecordData) {
   });
 }
 /** A read-only explanation, shared by the refresh and task completion fences. */
-export function recoveryEvidence(state: State) {
+export function recoveryEvidence(state: State, publicClassesOnly = false) {
   const rule = state.records.get('recovery-rule')?.data, at = now();
   if(!rule?.enabled) return [];
-  const classes = list(state,'class'), bookings = list(state,'booking'), results: RecordData[] = [];
+  const classes = list(state,'class').filter(c=>!publicClassesOnly || !c.privatePersonId), bookings = list(state,'booking'), results: RecordData[] = [];
   const since = new Date(Date.parse(at)-rule.lookbackWeeks*7*86400000).toISOString();
   for(const member of state.people.filter(p=>p.role === 'member' && p.active && !p.erasedAt)) {
     if(frozenAt(state,member.id,at)) continue;
@@ -326,7 +326,7 @@ export function prepareSuccess(tx: Transaction, input: Record<string,unknown>) {
   insist(member.role==='member','member_required');insist(channels.includes(channel),'invalid_channel');
   const rule=tx.state.records.get('success-rule')?.data;
   insist(rule?.enabled,'success_review_paused',409);
-  const evidence=recoveryEvidence(tx.state).filter(e=>e.personId===member.id);
+  const evidence=recoveryEvidence(tx.state,true).filter(e=>e.personId===member.id);
   const proposals=evidence.map(e=>{
     const explained=successEvidence(tx.state,e,channel),basis=successBasis(tx.state,e,channel);
     const proposal={...explained,id:crypto.randomUUID(),basis,key:crypto.randomUUID(),status:'proposed',
@@ -347,7 +347,7 @@ export function confirmSuccess(tx: Transaction, input: Record<string,unknown>) {
   }
   const rule=tx.state.records.get('success-rule')?.data;
   insist(rule?.enabled,'success_review_paused',409);
-  const evidence=recoveryEvidence(tx.state).find(e=>e.personId===proposal.personId&&e.patternKey===proposal.patternKey&&e.lastBookingId===proposal.lastBookingId);
+  const evidence=recoveryEvidence(tx.state,true).find(e=>e.personId===proposal.personId&&e.patternKey===proposal.patternKey&&e.lastBookingId===proposal.lastBookingId);
   insist(evidence,'success_no_longer_justified',409);
   const channel=proposal.permission.channel as MarketingChannel;
   insist(!marketingPermission(tx.state,proposal.personId,channel),'success_permission_required',409);
