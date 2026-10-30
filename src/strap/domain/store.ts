@@ -1,7 +1,10 @@
 import { DomainError, insist, type Actor, type Person, type RecordData, type State } from './types';
 import type { NoticeContext } from './notices';
+import { retireD1ImportCustody, type D1Sql } from '../../modules/import-kit/src/d1/index.ts';
+import { importContext } from '../movein';
 
 type Native = State['operator'];
+const capturedSource=Symbol('privacy SQL source');
 type PersonRow = Omit<Person, 'active' | 'erasedAt'> & { active: number; erased_at: number | null };
 const asPerson = (p: PersonRow): Person => ({ id:p.id,name:p.name,email:p.email,role:p.role,active:!!p.active,version:p.version,erasedAt:p.erased_at });
 function resolve(native: Native | undefined, people: Person[], requestedAgent = false, finance: string[] = [], managers: Map<string,string[]> = new Map(), staff: RecordData[] = []): Actor {
@@ -64,8 +67,29 @@ export async function loadSystem(db: D1Database): Promise<{ state: State; who: A
 export class Transaction {
   sql: D1PreparedStatement[] = [];
   notices: NoticeContext = {};
+  private sources = new WeakMap<D1PreparedStatement,D1Sql>();
+  importErasure?: {personId:string; values:string[]; checkpoint:D1PreparedStatement[]};
   constructor(public db: D1Database, public state: State, public who: Actor) {}
-  statement(sql: string, ...args: unknown[]) { return this.db.prepare(sql).bind(...args); }
+  statement(sql: string, ...args: unknown[]) {
+    const prepared=this.db.prepare(sql).bind(...args);
+    this.sources.set(prepared,{sql,params:args});
+    return prepared;
+  }
+  /** Capture Base's prepared portability fence without inspecting its internals. */
+  capturedDatabase(): D1Database {
+    const tx=this;
+    return new Proxy(this.db,{get(target,key) {
+      if(key==='prepare')return (sql: string)=>{
+        const capture=(args: unknown[]): D1PreparedStatement=>new Proxy(tx.statement(sql,...args),{get(prepared,field) {
+          if(field===capturedSource)return {sql,params:args};
+          if(field==='bind')return (...next: unknown[])=>capture(next);
+          const value=Reflect.get(prepared,field);return typeof value==='function'?value.bind(prepared):value;
+        }});
+        return capture([]);
+      };
+      const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+    }});
+  }
   future(value: string) {
     // SQLite's clock is evaluated by the committing Worker, after any queue wait.
     this.sql.push(this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN julianday(?)>julianday('now') THEN 1 ELSE 0 END",value));
@@ -87,11 +111,23 @@ export class Transaction {
       ? this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",who.id,who.email,state.operator.version)
       : this.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators o JOIN st_people p ON lower(p.email)=lower(o.email) WHERE o.id=? AND o.status='active' AND o.version=? AND p.id=? AND p.active=1 AND p.erased_at IS NULL AND p.role=? AND p.version=?) THEN 1 ELSE 0 END",who.id,state.operator.version,who.personId,p?.role,p?.version);
     try {
-      await this.db.batch([
+      const statements=[
         this.statement('INSERT INTO st_assert(value) SELECT CASE WHEN version=? THEN 1 ELSE 0 END FROM st_meta WHERE id=1',state.version),
         authorization,...this.sql,
         this.statement('UPDATE st_meta SET version=version+1 WHERE id=1'),this.statement('DELETE FROM st_assert'),
-      ]);
+      ];
+      if(this.importErasure) {
+        const source=(statement: D1PreparedStatement): D1Sql=>{const value=this.sources.get(statement)??(statement as any)[capturedSource];insist(value,'privacy_uncaptured_statement',500);return value;};
+        const context=importContext(this.db,this.who),targets=context.storage.targets;
+        // Strap keeps an inert identity tombstone for its historical ledgers.
+        // For import custody it is absent, and cannot be an undo target again.
+        context.storage.targets={...targets,matches(row,destination,kind,targetId) {
+          return row?targets.matches(row,destination,kind,targetId):{
+            sql:'NOT EXISTS(SELECT 1 FROM st_people WHERE id=? AND erased_at IS NULL) AND NOT EXISTS(SELECT 1 FROM st_import_people_revisions WHERE person_id=?)',params:[targetId,targetId]};
+        }};
+        await retireD1ImportCustody({target:{kind:'member',id:this.importErasure.personId},values:this.importErasure.values},
+          statements.map(source),context,this.importErasure.checkpoint.map(source));
+      } else await this.db.batch(statements);
     } catch (error) {
       const message = String(error);
       if (/st_assert|CHECK constraint|UNIQUE constraint|strap_commit_conflict/.test(message)) throw new DomainError('conflict_refresh_and_retry',409);

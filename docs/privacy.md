@@ -1,6 +1,6 @@
 # Native privacy requests
 
-The native owner records a member's access or erasure request through the authenticated command door, `POST /api/strap/command`, with a command `name` and an `input` object. Every privacy command requires the owner privacy right and a checked second factor. Managers, members, preparation keys and integrations cannot use it. No command sends an export externally or automatically deletes a used record.
+The native owner records a member's access or erasure request through the authenticated command door, `POST /api/strap/command`, with a command `name` and an `input` object. Every privacy command requires the owner privacy right and a checked second factor. Managers, members, preparation keys and integrations cannot use it. No command sends an export externally. Used-record erasure requires a separate exact review and confirmation.
 
 1. `privacy.request.record`: provide `personId`, `type` (`access` or `erasure`), `channel` (`desk`, `phone` or `inbox`), a `sourceReference` and a unique `requestId`. Store a reference to the request, never a copied identity document.
 2. `privacy.request.verify`: provide the returned request `id`, a `verificationReference`, `confirm: true`, `channel` and a new `requestId`. The owner verifies identity outside this command. Strap records that review; it does not perform identity verification itself. A changed member identity requires another verification.
@@ -9,4 +9,20 @@ The native owner records a member's access or erasure request through the authen
 
 The ordered staff history records the owner, privacy right, member, channel and before and after state. Repeating a request returns its receipt without another effect. An export replay returns only its receipt; request a new export with a new request identity if another private copy is needed. Export contents never enter the audit or replay cache.
 
-The existing unused-identity erasure fence remains separate. Full used and imported member erasure, retention periods, document holds and disposal, provider deletion and complete access fulfillment remain unfinished. The owner-only conservative default awaits contract approval and is not legal certification.
+## Review used-member erasure
+
+After recording and verifying an `erasure` request, call `privacy.erasure.prepare` with the request `id`, `financialDecision` (`resolved` or `retain`), `retentionReason`, `retainUntil` as an ISO instant, `channel` and a unique `requestId`. A resolved balance must be exactly zero. Retain keeps the original amount due or credit; erasure never waives debt, refunds money or settles a provider invoice.
+
+The preview names the observed counts, outstanding balance, retention decision and unsupported relationships. Ordinary credit packs and their original charge and external receipt chronology, historical or canceled class bookings, notes, profiles, intake responses and acknowledgement records are supported. Original external receipt references are retained as justified financial evidence. Shared obligations, nonstandard plans, connected-provider records and other unsupported relationships refuse confirmation whole. Cancel future bookings through the existing booking door first.
+
+Confirm with `privacy.erasure.confirm`, the preview `id`, its exact `basis`, `confirm: true`, `channel` and a new `requestId`. Changed source facts require a fresh preview. Confirmation revokes sign-in, removes unnecessary native notes and documents, redacts profile history, removes personal-copy capabilities and fences original and historical identity addresses. Minimal financial and action chronology stays under the retention receipt. Import custody is redacted atomically; unrelated imported members keep their records. An older backup requires the later journal and is refused if it could resurrect erased data. External recipients and offline copies are unchanged.
+
+## Retain and dispose of a signing record
+
+Before erasure, `privacy.retention.record` copies an acknowledgement into restricted owner privacy storage. Provide the document `id`, `personId`, `reason`, `retainUntil`, `hold` as a boolean, `confirm: true`, `channel` and a unique `requestId`. A hold also requires `holdBasis` and `releaseConditions`. The receipt names the document, actor, reason and date. This is a studio-selected review record, not legal certification.
+
+Use `privacy.retention.read` with its receipt `id`, `channel` and a new `requestId` to inspect the private retained copy; that access is audited without storing another copy. Ordinary member and staff state excludes this storage. Native owner backups and the owner exit retain it with its hold and date, so protect those files.
+
+`privacy.retention.release` requires the receipt `id`, `confirm: true`, a `reason`, `channel` and a new `requestId`. It records the owner's review of the release conditions; it does not dispose of the record. `privacy.retention.dispose` also requires explicit confirmation and a reason, and refuses an unreleased hold or an unelapsed retention date. It removes the retained copy's content and keeps its disposal receipt. Disposal is manual and never erases an external recipient's copy.
+
+The existing unused-identity erasure door remains separate. Shared household and tuition records, nonstandard plans, complete signed-document access packages, wider financial disposal classes, provider deletion and member-facing request screens remain unfinished. The owner-only conservative policy default awaits contract approval; SEC-003 remains partial.

@@ -8,6 +8,7 @@ const tables = [
   ['st_people', 'id name email role active version erased_at', 'id'],
   ['st_records', 'id kind data version', 'id'],
   ['st_erasure_journal', 'identity_hash erased_at', 'identity_hash'],
+  ['st_privacy_retained', 'id person_id kind data reason retain_until hold_basis release_conditions recorded_by recorded_at released_by released_at release_reason disposed_by disposed_at', 'id'],
   ['st_notice_deliveries', 'id source_kind source_id person_id booking_ids recipient subject body status provider provider_message_id code created_at attempted_at finished_at', 'id'],
   ['st_import_people_revisions', 'person_id revision', 'person_id'],
   ['ik_jobs', 'id destination namespace mapping_version principal_id fingerprint operation_key plan_json state checkpoint total fence error reversal_policy reversal_policy_hash reversal_cursor reversal_hash', 'id'],

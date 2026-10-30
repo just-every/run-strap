@@ -72,6 +72,7 @@ import { checkinAlerts, staffCode, inWindow, kioskCheckin, kioskLookup, memberCh
 import { adjustPack, approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
 import { recordPrivacyRequest, verifyPrivacyRequest, exportPrivacyAccess, fulfillPrivacyAccess, privacyAuthority } from './privacy';
+import { preparePrivacyErasure, confirmPrivacyErasure, retainPrivacyDocument, readPrivacyDocument, releasePrivacyHold, disposePrivacyDocument } from './privacy-erasure';
 import { profileOf as profileOfForDesk, memberProfile, profileSnapshot, saveMemberProfile, saveOwnProfile } from './profiles';
 import { saveStudio, studioSettings } from './studio';
 import { locations, placed, saveLocation } from './locations';
@@ -91,6 +92,12 @@ export const handlers = {
   'privacy.request.verify':defineCommand(verifyPrivacyRequest,['owner'],{staffRight:'privacy'}),
   'privacy.access.export':defineCommand(exportPrivacyAccess,['owner'],{staffRight:'privacy'}),
   'privacy.access.fulfill':defineCommand(fulfillPrivacyAccess,['owner'],{staffRight:'privacy'}),
+  'privacy.erasure.prepare':defineCommand(preparePrivacyErasure,['owner'],{staffRight:'privacy'}),
+  'privacy.erasure.confirm':defineCommand(confirmPrivacyErasure,['owner'],{staffRight:'privacy'}),
+  'privacy.retention.record':defineCommand(retainPrivacyDocument,['owner'],{staffRight:'privacy'}),
+  'privacy.retention.read':defineCommand(readPrivacyDocument,['owner'],{staffRight:'privacy'}),
+  'privacy.retention.release':defineCommand(releasePrivacyHold,['owner'],{staffRight:'privacy'}),
+  'privacy.retention.dispose':defineCommand(disposePrivacyDocument,['owner'],{staffRight:'privacy'}),
   'course.publish':defineCommand(publishCourse,['owner']),
   'course.enrollment.prepare':defineCommand(prepareEnrollment,['owner','front-desk'],{staffRight:'sale'}),
   'course.enrollment.launch':defineCommand(launchCourseAcceptance,['owner','front-desk'],{staffRight:'sale'}),

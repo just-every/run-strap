@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "649194f5bd9d7995d01654b4bb812001fbebf930a48e0884fa17b5226caa2391",
+      "sha256": "f130694ab75bb74d77a987aa9b3e25861d6326f740f072e5d0d3bc288bacda08",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "7a6782f4a780f811dcf773058c79e8cc30a91fc7db0a4a67476775cdee504731",
+      "sha256": "8146a2e0853102611905ed7e54ff76d233e9da43f36b70d41c6a8803c1b94ddb",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "b443c6e9c6a0a9658da712afaae389aa81cb8d661f9e1b63a68edd00f51dc357",
+      "sha256": "8afc87a249eb1705ceb99ab912bd81237890e3e8b405d7dcf401f9f1d6df44cb",
       "executable": false
     },
     "docs/classes.md": {
@@ -402,7 +402,7 @@
       "executable": false
     },
     "docs/privacy.md": {
-      "sha256": "cd98e33c15c786b75055c005e5e5a32193c3c13978365cea9e83d4011459a01f",
+      "sha256": "f4dee400292d16ca8ea498fcfba473d5ae7137525f5dbc0aaeeaea08685ef690",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -611,6 +611,10 @@
     },
     "migrations/core/0041-payment-control.sql": {
       "sha256": "70ae4bcade4fc4f700334048e96adb6bb1e8cc863626d2d193e4e2615df67f2d",
+      "executable": false
+    },
+    "migrations/core/0041-privacy-retention.sql": {
+      "sha256": "d0ce04efff820677f8fd36b1702040625ffae760b577f9a47b90c00a19f56e2e",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3358,7 +3362,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "d05bc540c2000e65c15ea412c5219f6e6d316350ba73ac66de1fe6067d11b3b7",
+      "sha256": "603d712beea440692ea0b2b8ecbb5def42783a9d2a78b1698efc707142f7fd8e",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3427,6 +3431,10 @@
     },
     "src/strap/domain/preferences.ts": {
       "sha256": "c64a37256755532eaf8d409e334c221f9d4302168ecd919bdfe412192386b136",
+      "executable": false
+    },
+    "src/strap/domain/privacy-erasure.ts": {
+      "sha256": "f864c24b00c43119aa1e08d2a4222b21435d941fd107c77898a4364ed5caa212",
       "executable": false
     },
     "src/strap/domain/privacy.ts": {
@@ -3514,7 +3522,7 @@
       "executable": false
     },
     "src/strap/domain/store.ts": {
-      "sha256": "19a67fd5a73dd1a0f5e00f970bb5b0c0437198187afc4100133e24061189e1f4",
+      "sha256": "e40b376c9d6c4dd61c9f6af98e48cdca888669d62007a548f7d59ef134feffff",
       "executable": false
     },
     "src/strap/domain/studio-profile.ts": {
@@ -3554,7 +3562,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "10a9e605bd788a719e883592ec13d08b1b4a104e51250292010bf724e85c9d24",
+      "sha256": "dfabe6542555ed18e7cc5245563445d1100859265f956618e544c70ceea63b56",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -4102,7 +4110,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "8dbc7b34daccd6ec3222cd419555ab821ee4f7d9d92e91606a2354f9a001a76b",
+      "sha256": "55d829b6d07fae4a7fa5755275acaac8dda188d3cf5c4f10ab6d8ed0022db1cd",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4430,7 +4438,7 @@
       "executable": false
     },
     "tests/privacy-journey.mjs": {
-      "sha256": "703e8a4ac3199c99e1c4922732ae4243d6a09f5fbc2afaed8c932120d5320def",
+      "sha256": "bb431875146a1a88d82143e92d00da04c7840020161f861dc5481c5288d33466",
       "executable": false
     },
     "tests/profiles-browser.mjs": {
@@ -4582,7 +4590,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "8da686a57fe026ae148740fb6658352dc27b6c861cbd57aa3af360007e953c6e",
+      "sha256": "515b57d34db0ec90da8df09e100e830c674a45442594b35570585647db13c95a",
       "executable": false
     },
     "tests/studio-browser.mjs": {

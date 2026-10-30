@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getPlatformProxy } from 'wrangler'
 import { harness } from './harness.mjs'
+import { seedArchivePrivacy, eraseArchivePrivacy, assertArchivedPrivacy } from './privacy-journey.mjs'
 import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
@@ -109,6 +110,39 @@ async function archiveCopyTablet(h,owner,waiver,suffix) {
 }
 const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
+
+// One additional native custody scenario in the existing archive sanity journey.
+// Its private fixture cannot change the original receiver's financial assertions.
+async function privacyArchiveRoundtrip() {
+  const temporary=await mkdtemp(join(tmpdir(),'strap-privacy-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored');
+  let h;
+  try {
+    for(const root of [source,restored])await checkout(root);
+    await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6});
+    h=await harness({root:source});await h.confirmSetup(h.owner);
+    const fixture=await seedArchivePrivacy(h),identity={auth:h.auth,owner:h.owner,factor:h.mfaOwner};
+    await h.close();h=null;
+    const old=join(temporary,'before.rer'),later=join(temporary,'later.rer');
+    await command(source,['export','--output',old,'--no-queue']);
+    assert.ok((await readFile(old,'utf8')).includes(fixture.member.email));
+    h=await harness({root:source,...identity});
+    const owner=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},owner);
+    await eraseArchivePrivacy(h,owner,fixture);await h.close();h=null;
+    await command(source,['export','--output',later,'--no-queue']);
+    const bytes=await readFile(later,'utf8');
+    for(const value of [fixture.member.email,'Synthetic archive contact','Synthetic archive private note','2125550165','2125550166'])assert.ok(!bytes.includes(value),'later native archive removes unnecessary personal values');
+    await command(restored,['import','--input',old,'--journal',later,'--yes','--no-queue'],4);
+    await command(restored,['import','--input',later,'--yes','--no-queue']);
+    h=await harness({root:restored,auth:identity.auth,owner:identity.owner});
+    const recovered=await h.signIn(h.auth.OWNER_EMAIL);await h.enroll(recovered);
+    await assertArchivedPrivacy(h.db,fixture);
+    const held=await h.cmd('privacy.retention.read',{id:fixture.holdId,requestId:'synthetic-strap-restored-private-read'},recovered);
+    assert.equal(held.holdBasis,'Synthetic archive pending dispute');assert.ok(held.bundle.waiverId);
+    assert.equal((await h.send('/api/strap/state',undefined,fixture.member.cookie)).status,401,'restore cannot revive the erased native session');
+    await h.cmd('person.save',{name:'Recreated private member',email:fixture.member.email,active:true},recovered,409);
+  } finally {if(h)await h.close();await rm(temporary,{recursive:true,force:true});}
+}
+
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
   let h
@@ -375,6 +409,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     }
     finally { await proxy.dispose() }
   } finally { if(h)await h.close();await rm(temporary,{recursive:true,force:true}) }
+  await privacyArchiveRoundtrip()
 })
 
 
