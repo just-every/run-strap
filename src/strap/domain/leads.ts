@@ -1,4 +1,4 @@
-import { humanOwner, instant, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
+import { humanOwner, instant, insist, integer, list, now, person, preparer, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { addDays, localDate } from '../zone';
 import { wallStart } from './series-model';
@@ -7,7 +7,8 @@ import { bookingPack, acknowledged, book } from './bookings';
 import { windowOpen } from './booking-policy';
 import { seatCapacity } from './spots';
 import { studioSettings } from './studio';
-import { permission as marketingPermission, preferencesOf } from './preferences';
+import { channels, permission as marketingPermission, preferencesOf, type MarketingChannel } from './preferences';
+import { sha256 } from '../../modules/import-kit/src/d1/index';
 import { promote } from './waitlist';
 import { confirmBooking } from './notices';
 import { contractNotice } from './contract-billing';
@@ -172,7 +173,7 @@ export function leadSnapshot(state: State, who: Actor) {
   const queue = leads.filter(lead => open(lead.stage)).sort((a,b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id));
   const events = list(state,'leadEvent').sort((a,b) => a.at.localeCompare(b.at) || a.after.version-b.after.version || a.id.localeCompare(b.id));
   const stages = leadStages.map(stage => ({stage,count:leads.filter(lead => lead.stage === stage).length,overdue:leads.filter(lead => lead.stage === stage && lead.overdue).length}));
-  return {asOf,leads,events,guestSources:list(state,'guestLeadSource'),queue,overdue:queue.filter(lead => lead.overdue),stages,recoveryRule:state.records.get('recovery-rule')?.data ?? null,recoveryTasks:list(state,'recoveryTask')};
+  return {asOf,leads,events,guestSources:list(state,'guestLeadSource'),queue,overdue:queue.filter(lead => lead.overdue),stages,recoveryRule:state.records.get('recovery-rule')?.data ?? null,recoveryTasks:list(state,'recoveryTask'),successRule:state.records.get('success-rule')?.data ?? null,successProposals:list(state,'successProposal'),successTasks:list(state,'successTask')};
 }
 
 // Recovery uses studio-local weekly slots, not a duration since an arbitrary
@@ -211,10 +212,10 @@ function historicalEligibility(state: State, personId: string, c: RecordData) {
   });
 }
 /** A read-only explanation, shared by the refresh and task completion fences. */
-export function recoveryEvidence(state: State) {
+export function recoveryEvidence(state: State, publicClassesOnly = false) {
   const rule = state.records.get('recovery-rule')?.data, at = now();
   if(!rule?.enabled) return [];
-  const classes = list(state,'class'), bookings = list(state,'booking'), results: RecordData[] = [];
+  const classes = list(state,'class').filter(c=>!publicClassesOnly || !c.privatePersonId), bookings = list(state,'booking'), results: RecordData[] = [];
   const since = new Date(Date.parse(at)-rule.lookbackWeeks*7*86400000).toISOString();
   for(const member of state.people.filter(p=>p.role === 'member' && p.active && !p.erasedAt)) {
     if(frozenAt(state,member.id,at)) continue;
@@ -280,6 +281,84 @@ export function completeRecovery(tx: Transaction, input: Record<string,unknown>)
   insist(task.status === 'open' && recoveryEvidence(tx.state).some(e=>e.personId === task.personId && e.patternKey === task.patternKey && e.lastBookingId === task.lastBookingId),'recovery_no_longer_justified',409);
   const saved = {...task,status:'completed',completedAt:now(),completedBy:tx.who.id,completionRequestId:requestId,note};
   tx.put('recoveryTask',saved);return saved;
+}
+
+/** SUCCESS-001 prepares source-bound explanations; only a native owner queues
+ * private review work. Neither door has a message or financial effect. */
+export function saveSuccessRule(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const previous=tx.state.records.get('success-rule')?.data;
+  insist(integer(input.version ?? 0,'version',0)===(previous?.version ?? 0),'success_rule_changed',409);
+  insist(typeof input.enabled==='boolean','invalid_enabled');
+  const saved={id:'success-rule',enabled:input.enabled,maxPer30Days:integer(input.maxPer30Days,'maxPer30Days',1,30),
+    version:(previous?.version ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id};
+  tx.put('successRule',saved);tx.put('successRuleRevision',{...saved,id:`success-rule:${saved.version}`});return saved;
+}
+const successUncertainty='Observed opportunities differ from this member’s completed routine. The records do not establish why visits stopped or diagnose health. Unsettled bookings are not counted as absences.';
+function successEvidence(state: State, evidence: RecordData, channel: MarketingChannel): RecordData {
+  const preference=preferencesOf(state,evidence.personId);
+  const visits=evidence.sourceBookingIds.map((bookingId: string)=>{
+    const booking=record(state,bookingId,'booking'),entry=record(state,booking.classId,'class');
+    return {bookingId,classId:entry.id,start:entry.start,end:entry.end,attendance:booking.attendance,recordedAt:booking.checkedInAt};
+  });
+  const memberships=list(state,'pack').filter(p=>p.personId===evidence.personId).map(p=>({packId:p.id,
+    startsAt:p.termStartAt ?? p.createdAt,expiresAt:p.expiresAt,remaining:p.remaining,
+    freezeIds:list(state,'freeze').filter(f=>f.packId===p.id).map(f=>f.id),
+    cancellationIds:list(state,'contractCancellation').filter(c=>c.packId===p.id).map(c=>c.id)}));
+  return {...evidence,visits,memberships,uncertainty:successUncertainty,
+    permission:{channel,revision:preference.revision,state:preference.marketing[channel],
+      reason:marketingPermission(state,evidence.personId,channel),recordedAt:preference.updatedAt,source:preference.source}};
+}
+function successBasis(state: State, evidence: RecordData, channel: MarketingChannel) {
+  // Bind the review to actual sources and permission revisions, without binding
+  // it to unrelated writes or the instant at which the owner opens the page.
+  const {asOf:_,...stable}=successEvidence(state,evidence,channel);
+  const member=person(state,evidence.personId);
+  const kinds=['pack','freeze','contractCancellation','booking'];
+  const records=[...state.records.values()].filter(r=>kinds.includes(r.kind)&&r.data.personId===member.id
+    ||r.kind==='class'&&(weeklySlot(state,r.data).key===evidence.patternKey||evidence.alternatives.some((c: RecordData)=>c.classId===r.data.id)))
+    .map(r=>[r.kind,r.data]).sort((a,b)=>String((a[1] as RecordData).id).localeCompare(String((b[1] as RecordData).id)));
+  return sha256(JSON.stringify([stable,member.version,records,state.records.get('success-rule')?.data]));
+}
+export function prepareSuccess(tx: Transaction, input: Record<string,unknown>) {
+  preparer(tx.who);
+  const member=person(tx.state,input.personId),channel=text(input.channel,'channel',10) as MarketingChannel;
+  insist(member.role==='member','member_required');insist(channels.includes(channel),'invalid_channel');
+  const rule=tx.state.records.get('success-rule')?.data;
+  insist(rule?.enabled,'success_review_paused',409);
+  const evidence=recoveryEvidence(tx.state,true).filter(e=>e.personId===member.id);
+  const proposals=evidence.map(e=>{
+    const explained=successEvidence(tx.state,e,channel),basis=successBasis(tx.state,e,channel);
+    const proposal={...explained,id:crypto.randomUUID(),basis,key:crypto.randomUUID(),status:'proposed',
+      cap:{maxPer30Days:rule.maxPer30Days,version:rule.version},createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+    tx.put('successProposal',proposal);return proposal;
+  });
+  return {proposals,reason:proposals.length ? null : 'no_justified_routine_deviation'};
+}
+export function confirmSuccess(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const proposal=record(tx.state,input.id,'successProposal');
+  person(tx.state,proposal.personId);
+  insist(input.key===proposal.key,'success_preview_changed',409);
+  const requestId=text(input.requestId,'requestId',100),note=text(input.note,'note',2000);
+  if(proposal.status==='queued') {
+    insist(proposal.requestId===requestId&&proposal.note===note,'success_request_changed',409);
+    return record(tx.state,proposal.taskId,'successTask');
+  }
+  const rule=tx.state.records.get('success-rule')?.data;
+  insist(rule?.enabled,'success_review_paused',409);
+  const evidence=recoveryEvidence(tx.state,true).find(e=>e.personId===proposal.personId&&e.patternKey===proposal.patternKey&&e.lastBookingId===proposal.lastBookingId);
+  insist(evidence,'success_no_longer_justified',409);
+  const channel=proposal.permission.channel as MarketingChannel;
+  insist(!marketingPermission(tx.state,proposal.personId,channel),'success_permission_required',409);
+  insist(successBasis(tx.state,evidence,channel)===proposal.basis,'success_sources_changed',409);
+  const at=now(),since=new Date(Date.parse(at)-30*86400000).toISOString(),tasks=list(tx.state,'successTask');
+  insist(tasks.filter(t=>t.personId===proposal.personId&&t.createdAt>since).length<rule.maxPer30Days,'success_frequency_cap',409);
+  insist(!tasks.some(t=>t.personId===proposal.personId&&t.patternKey===proposal.patternKey&&t.lastBookingId===proposal.lastBookingId),'success_routine_already_reviewed',409);
+  const task={...successEvidence(tx.state,evidence,channel),id:crypto.randomUUID(),proposalId:proposal.id,
+    status:'open',nextAction:'Privately review the cited routine and current channel permission before any separately authorized outreach.',
+    ownerId:tx.who.id,createdAt:at,createdBy:tx.who.id,cap:{maxPer30Days:rule.maxPer30Days,version:rule.version},requestId,note};
+  tx.put('successTask',task);tx.put('successProposal',{...proposal,status:'queued',taskId:task.id,confirmedAt:at,confirmedBy:tx.who.id,requestId,note});return task;
 }
 
 /** An offer is an invitation, never a reservation ahead of the waitlist. */
