@@ -28,6 +28,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "privacy.md", "reason": "Native owner privacy commands, private access receipts and restricted record retention procedures" },
     { "file": "CLAIMS.md", "reason": "Generated contract status and evidence for maintainers" },
     { "file": "BILLING-AGREEMENTS.md", "reason": "Personal additional membership agreements, test hosted card setup and disconnected restored payment authority" },
     { "file": "TAX.md", "reason": "Stripe Tax test operations, immutable original prices, provider evidence and guarded reconnection for maintainers" },
