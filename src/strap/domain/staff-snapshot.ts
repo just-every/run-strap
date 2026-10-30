@@ -1,3 +1,5 @@
+import { terminationReasons } from './termination-reasons';
+import { cancellationPreviewStale } from './contract-cancellations';
 import { locations } from './locations';
 import { memberRecordVisible } from './member-records';
 import { classRightVisible } from './staff-command-access';
@@ -8,7 +10,7 @@ import { seatCapacity } from './spots';
 import { packSummary } from './pack-credits';
 
 /** Operational staff receive no ledger, payer, private conflict reason or pay data. */
-export function staffDeskSnapshot(state: State, who: Actor) {
+export async function staffDeskSnapshot(state: State, who: Actor) {
   const access = staffAccess(state,who);
   const members = state.people.filter(p => p.role === 'member' && !p.erasedAt && memberRecordVisible(state,who,p.id));
   const classes = list(state,'class').filter(c => !c.privatePersonId && members.some(p =>
@@ -20,7 +22,7 @@ export function staffDeskSnapshot(state: State, who: Actor) {
       ...(state.records.get(b.classId)!.data.start > new Date().toISOString() && b.status !== 'cancelled' ? {cancelEffect:cancellationEffect(b,state.records.get(b.classId)!.data)} : {})}));
   const packs = list(state,'pack').filter(p => members.some(m => m.id === p.personId) && memberRecordVisible(state,who,p.personId,p.locationId ?? 'studio')).map(p => ({id:p.id,personId:p.personId,credits:p.credits,remaining:p.remaining,expiresAt:p.expiresAt,eligibleServices:p.eligibleServices,entitlement:p.entitlement,summary:packSummary(state,p)}));
   const rightForPack=(right: 'membership-sale'|'contract-change',packId: string) => {const p=state.records.get(packId)?.data;return p && hasStaffRight(state,who,right,p.personId,p.locationId ?? 'studio');};
-  return {collectionLocations:locations(state).filter(l=>hasStaffRight(state,who,'collection',undefined,l.id)).map(l=>({id:l.id,name:l.name})),staffRecurring:list(state,'recurringTerms').filter(t => rightForPack('membership-sale',t.packId) || rightForPack('contract-change',t.packId)),staffContracts:list(state,'contractCancellation').filter(c => rightForPack('contract-change',c.packId)),classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c)})),bookings,packs,
+  return {collectionLocations:locations(state).filter(l=>hasStaffRight(state,who,'collection',undefined,l.id)).map(l=>({id:l.id,name:l.name})),staffRecurring:list(state,'recurringTerms').filter(t => rightForPack('membership-sale',t.packId) || rightForPack('contract-change',t.packId)),staffTerminationContracts:list(state,'recurringTerms').filter(t=>t.acceptedAt&&t.currentPackId&&rightForPack('contract-change',t.currentPackId)).map(t=>({id:t.id,packId:t.currentPackId,personId:t.personId})),terminationReasonCodes:hasStaffRight(state,who,'contract-change')?terminationReasons(state).filter(r=>r.active):[],staffContracts:await Promise.all(list(state,'contractCancellation').filter(c => rightForPack('contract-change',c.packId)).map(async c=>({...c,stale:await cancellationPreviewStale(state,c)}))),classes:classes.map(c => ({...c,occupancy:seatCapacity(state,c)})),bookings,packs,
     cancellationReasons:state.records.get('cancellation-reasons')?.data.reasons ?? ['Sick','Schedule conflict','Other'],
     staffPermissions:access?.enabled ? Object.keys(access.rights).filter(right => access.rights[right as keyof typeof access.rights]?.enabled) : []};
 }

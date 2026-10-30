@@ -18,7 +18,7 @@ export function retentionChurn(state: State, query: URLSearchParams, asOf: strin
     return {id:t.id,personId:t.personId as string,acceptedAt:t.acceptedAt as string,endedAt:endedAt as string|null,
       opening:t.acceptedAt <= start && (!endedAt || endedAt > start),
       endedInPeriod:!!endedAt && endedAt > start && endedAt <= end,
-      monthlyCents,cancellationId:cancellation?.id ?? null,
+      monthlyCents,cancellationId:cancellation?.id ?? null,reasonCode:cancellation?.reasonCode ?? null,reasonLabel:cancellation?.reasonLabel ?? cancellation?.reasonCode ?? null,
       evidenceUrl:'/app/packs?person='+encodeURIComponent(t.personId)+'#recurring-'+encodeURIComponent(t.id)}
   })
   const member = (personId: string) => {
@@ -31,6 +31,7 @@ export function retentionChurn(state: State, query: URLSearchParams, asOf: strin
     return {openingMember:opening.length > 0,lostMember:lost,openingAgreementIds:opening.map(t => t.id),
       endedAgreementIds:opening.filter(t => t.endedInPeriod).map(t => t.id),
       cancellationIds:opening.filter(t => t.endedInPeriod && t.cancellationId).map(t => t.cancellationId!),
+      terminationReasons:opening.filter(t=>t.endedInPeriod&&t.cancellationId).map(t=>({cancellationId:t.cancellationId,code:t.reasonCode,label:t.reasonLabel})),
       openingMonthlyCents:known ? opening.reduce((n,t) => n+t.monthlyCents!,0) : null,
       lostMonthlyCents:known ? opening.filter(t => t.endedInPeriod).reduce((n,t) => n+t.monthlyCents!,0) : null,
       agreementUrls:opening.map(t => t.evidenceUrl)}

@@ -31,6 +31,7 @@ import { sendMemberMessage, addMemberNote, createDeskMember, grantMemberRecord, 
 import { verifyIntroIdentity, saveIntroOffer, closeIntroOffer, previewIntro, purchaseIntro, introSnapshot } from './intro-offers';
 import { recordCoolingServiceValue } from './cooling-refunds';
 import { recordContractDelivery, saveContractRegion } from './contract-copies';
+import { saveTerminationReason } from './termination-reasons';
 import { requestCancellation, prepareCancellation, confirmCancellation, prepareWithdrawCancellation, confirmWithdrawCancellation, applyDueCancellations, cancellationsSnapshot, stopCancellation, statutoryCancellation, saveCancellationPolicy, cancellationBlocks, launchCancellationWithdrawal } from './contract-cancellations';
 import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
 import { recordContractPrepayment, reconcileCancellationRefund, settleCancellationRefund } from './cancellation-value';
@@ -163,6 +164,7 @@ export const handlers = {
   'intro.purchase':defineCommand(purchaseIntro,['owner','member'],{member:{staff:'intro.purchase',right:'sale'},staffRight:'sale'}),
   'contract.copy.delivery.record':defineCommand(recordContractDelivery,['owner'],{staffRight:'contract-change'}),
   'contract.jurisdiction.save':defineCommand(saveContractRegion,['owner'],{staffRight:'member-record'}),
+  'plan.cancellation.reason.save':defineCommand(saveTerminationReason,['owner'],{staffRight:'contract-change'}),
   'plan.cancellation.policy.save':defineCommand(saveCancellationPolicy,['owner'],{staffRight:'contract-change'}),
   'contract.authority.save':defineCommand(saveContractAuthority,['owner'],{staffRight:'member-record'}),
   'contract.authority.launch':defineCommand(launchContractAuthority,['owner'],{staffRight:'member-record'}),
@@ -482,7 +484,7 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
     const savedSigningGrant=state.records.get('signing-checkin-grant:'+who.personId)?.data;
     const signingGrant=grant?.enabled && savedSigningGrant?.enabled && savedSigningGrant.recordGrantVersion===grant.version && savedSigningGrant.memberIds.some((id: string)=>grant.memberIds.includes(id)) && savedSigningGrant.locationIds.length ? savedSigningGrant : null;
     return {courseTuition:coursesSnapshot(state,who),attendancePlans:attendancePlanSnapshot(state,who),...deskRetailSnapshot(state,who),...appointmentSnapshot(state,who),...clientAppointmentSnapshot(state,who),appointmentGrant,appointmentInstructors:appointmentGrant?.enabled ? state.people.filter(p=>p.role === 'instructor' && p.active).map(p=>({id:p.id,name:p.name})) : [],signingGrant,locations:locations(state).filter(l=>appointmentGrant?.enabled && appointmentGrant.locationIds.includes(l.id) || signingGrant?.enabled && signingGrant.locationIds.includes(l.id)),winback:winbackSnapshot(state,who),intake:intakeSnapshot(state,who),actor:who,version:state.version,studio:studioSettings(state),people:members.map(p => ({...p,...profileOfForDesk(state,p)})),
-      memberRecords:members.map(p => memberHistory(state,who,p.id)),recordGrant:grant,bookingActions:[],staffActions:[],waiver:signingGrant?latestWaiver(state):null,waivers:signingGrant?currentWaivers(state):[],drafts:[],profileChanges:[],charges:[],payments:[],waiverLaunches:[],...reservationSnapshot(state,who),...staffDeskSnapshot(state,who)};
+      memberRecords:members.map(p => memberHistory(state,who,p.id)),recordGrant:grant,bookingActions:[],staffActions:[],waiver:signingGrant?latestWaiver(state):null,waivers:signingGrant?currentWaivers(state):[],drafts:[],profileChanges:[],charges:[],payments:[],waiverLaunches:[],...reservationSnapshot(state,who),...await staffDeskSnapshot(state,who)};
   }
   const owner = who.role === 'owner' || who.role === 'agent';
   const allClasses = list(state,'class');

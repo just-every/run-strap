@@ -93,9 +93,11 @@ async function ownerEarlyTermination(c){
   await prepare.locator('select[name=packId]').selectOption(pack.id)
   const effective={...wall(zone,Date.now()+14*day),time:'10:30:00'}
   await dateTime(prepare,'effective',effective)
+  await prepare.locator('select[name=reasonCode]').selectOption(c.reasonCode)
   await prepare.locator('textarea[name=reason]').fill('The studio agreed to an earlier end after the member moved')
   await prepare.getByRole('button',{name:'Preview early termination',exact:true}).click()
   const preview=(await h.state()).cancellations.cancellations.find(r=>r.termsId===terms.id&&r.status==='preview')
+  assert.deepEqual([preview.reasonCode,preview.reasonLabel],[c.reasonCode,'Moved away'])
   assert.ok(preview);assert.equal(preview.disposition,'refund_due');assert.equal(preview.effects.unusedPrepaid.paidCents,pack.amountCents)
   assert.deepEqual(wall(zone,Date.parse(preview.effectiveAt)),effective,'the chosen termination time uses the studio clock')
   assert.ok(preview.effects.unusedPrepaid.amountCents>0);assert.equal(preview.effects.finalChargeCents,0)
@@ -106,6 +108,15 @@ async function ownerEarlyTermination(c){
   assert.equal(confirmed.status,'scheduled');assert.equal(confirmed.effectiveAt,preview.effectiveAt)
   assert.equal(confirmed.terminatedBy,(await h.state()).actor.id)
   await staff.locator(`[data-contract-cancellation="${preview.id}"]`).scrollIntoViewIfNeeded();await shot(staff,'owner-early-termination-confirmed')
+  await staff.goto(h.origin+'/app/studio#termination-reasons')
+  const reason=staff.locator(`[data-termination-reason="${c.reasonCode}"]`)
+  await reason.locator('[name=label]').fill('Relocated elsewhere');await reason.locator('[name=active]').selectOption('false')
+  await reason.getByRole('button',{name:'Save reason code',exact:true}).click()
+  await staff.locator('#termination-reasons').scrollIntoViewIfNeeded();await shot(staff,'owner-reason-retired')
+  await go(staff,nina)
+  assert.match(await staff.locator(`[data-contract-cancellation="${preview.id}"]`).innerText(),/Moved away/)
+  const worklist=(await h.send('/api/strap/reports/renewals',undefined,h.owner)).value.rows.find(r=>r.terminationId===preview.id)
+  assert.deepEqual([worklist.reasonCode,worklist.reasonLabel],[c.reasonCode,'Moved away'])
 }
 
 async function statutoryRefund(c){
@@ -243,8 +254,9 @@ async function ownerPayerRevocation(c,width){
 }
 
 export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger}){
-  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const proof=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR
+  await mkdir(proof,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   let sequence=800
   try{
     for(const width of [1440,390]){
@@ -261,7 +273,7 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         }
         const staff=await pageFor(h.owner),mine=await pageFor(nina.cookie),payerPage=await pageFor(payer.cookie),guardianPage=await pageFor(guardian.cookie),outsider=await pageFor(stranger.cookie)
         const go=async(page,who)=>{await page.goto(h.origin+(who?`/app/packs?person=${who.id}#cancellations`:path));await page.reload()}
-        const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'the page fits the viewport');await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`PLAN007-${label}-${width}.png`),fullPage:false})}
+        const shot=async(page,label)=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'the page fits the viewport');await page.screenshot({path:join(proof,`PLAN007-${label}-${width}.png`),fullPage:false})}
         const key=()=>`synthetic-strap-${sequence++}`,zone=(await h.state()).studio.timeZone
         // End seed grants through the actual owner form, so each width starts fresh.
         for(const grant of (await h.state()).cancellations.authorities.filter(g=>!g.revokedAt&&((g.personId===nina.id&&g.delegateId===payer.id)||(g.personId===child.id&&g.delegateId===guardian.id)))){
@@ -275,6 +287,14 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
           await revoke.getByRole('button',{name:'Revoke cancellation authority',exact:true}).click()
         }
         const adultPage=await pageFor(child.cookie);const context={h,nina,payer,guardian,child,staff,mine,payerPage,guardianPage,go,shot,key,zone,adultPage,childPage:async()=>adultPage}
+        context.reasonCode='moved-away-'+width
+        await staff.goto(h.origin+'/app/studio#termination-reasons')
+        await staff.getByText('Add termination reason',{exact:true}).click()
+        const add=staff.locator('#termination-reasons form').filter({has:staff.locator('input[name=code]')}).last()
+        await add.locator('[name=code]').fill(context.reasonCode);await add.locator('[name=label]').fill('Moved away')
+        await add.getByRole('button',{name:'Add reason code',exact:true}).click()
+        assert.equal((await h.state()).cancellations.reasonCodes.find(r=>r.code===context.reasonCode).label,'Moved away')
+        await staff.locator('#termination-reasons').scrollIntoViewIfNeeded();await shot(staff,'owner-reason-catalog')
         await ownStopAndWithdrawal(context)
         await ownerEarlyTermination(context)
         await statutoryRefund(context)
@@ -286,6 +306,60 @@ export async function cancellationsBrowser(h,{nina,payer,guardian,child,stranger
         for(const field of ['authorities','contracts','requests','cancellations','withdrawals','statements','refunds','settlements'])assert.equal(privateView[field].filter(r=>[nina.id,child.id].includes(r.personId)).length,0)
         await outsider.locator('#cancellations').scrollIntoViewIfNeeded();await shot(outsider,'unrelated-account-private')
       }finally{for(const context of contexts)await context.close()}
+    }
+  }finally{await browser.close()}
+}
+
+export async function staffTerminationsBrowser(h,s){
+  const proof=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR
+  await mkdir(proof,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try{
+    for(const width of [1440,390]){
+      const context=await browser.newContext({viewport:{width,height:1000}})
+      try{
+        await context.route(h.origin+'/**',async route=>{
+          const asset=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}
+          if(!asset.includes('..')&&types[extname(asset)])return route.fulfill({body:await readFile(join(process.cwd(),'public',asset)),contentType:types[extname(asset)]})
+          return route.continue()
+        })
+        const i=s.desk.cookie.indexOf('=');await context.addCookies([{name:s.desk.cookie.slice(0,i),value:s.desk.cookie.slice(i+1),url:h.origin}])
+        const page=await context.newPage();page.setDefaultTimeout(15000)
+        const {pack}=await saleAndAgreement(h,s.ben,'synthetic-strap-staff-browser-'+width)
+        const url=h.origin+'/app/people?person='+s.ben.id+'#staff-terminations'
+        const shot=async label=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(proof,`PLAN012-staff-${label}-${width}.png`)})}
+        await s.grant(s.desk,'front-desk',['member-record'],[s.ben.id],['studio'])
+        await page.goto(url)
+        assert.equal(await commandForm(page,'plan.cancellation.prepare').count(),0)
+        await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio'])
+        await page.goto(url);await page.getByText('Prepare an earlier termination',{exact:true}).click()
+        const form=commandForm(page,'plan.cancellation.prepare')
+        await form.locator('[name=packId]').selectOption(pack.id)
+        await form.locator('[name=reasonCode]').selectOption('moved-away')
+        await form.locator('[name=reason]').fill('Member is moving away')
+        await dateTime(form,'effective',wall((await h.state()).studio.timeZone,Date.now()+30*day))
+        await form.getByRole('button',{name:'Preview early termination',exact:true}).click()
+        const preview=(await h.state()).cancellations.cancellations.find(c=>c.packId===pack.id&&c.status==='preview')
+        assert.ok(preview)
+        const card=page.locator(`[data-contract-cancellation="${preview.id}"]`)
+        assert.match(await card.innerText(),/Moved away \(moved-away\)/)
+        await card.scrollIntoViewIfNeeded();await shot('preview')
+        await s.grant(s.desk,'front-desk',['member-record'],[s.ben.id],['studio'])
+        const version=(await h.state()).version
+        await card.getByRole('button',{name:'Confirm this exact early termination',exact:true}).click()
+        assert.equal((await h.state()).version,version)
+        assert.equal((await h.state()).cancellations.cancellations.find(c=>c.id===preview.id).status,'preview')
+        assert.equal(await commandForm(page,'plan.cancellation.confirm').count(),0)
+        await shot('revoked')
+        await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio'])
+        await page.goto(url)
+        await page.locator(`[data-contract-cancellation="${preview.id}"]`).getByRole('button',{name:'Confirm this exact early termination',exact:true}).click()
+        const state=await h.state(),confirmed=state.cancellations.cancellations.find(c=>c.id===preview.id)
+        assert.deepEqual([confirmed.status,confirmed.reasonCode,confirmed.reasonLabel],['scheduled','moved-away','Moved away'])
+        const audit=state.staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===preview.id)
+        assert.equal(audit.length,1);assert.equal(audit[0].actorRole,'front-desk');assert.equal(audit[0].after.reasonLabel,'Moved away')
+        await page.locator(`[data-contract-cancellation="${preview.id}"]`).scrollIntoViewIfNeeded();await shot('confirmed')
+      }finally{await context.close()}
     }
   }finally{await browser.close()}
 }

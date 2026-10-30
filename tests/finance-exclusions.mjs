@@ -34,7 +34,7 @@ export async function financeExclusions(h,{cmd,state,read,jump,buy,key,members,c
   // Let the paid freeze finish before ordinary termination, preserving its separate fee.
   await jump('2032-05-13T07:00:00Z');await(await h.mf.getWorker()).scheduled()
   for(const scenario of cases.slice(0,3)){
-    const cancellation=await cmd('plan.cancellation.prepare',{packId:scenario.sale.pack.id,effectiveAt:'2032-05-20T07:00:00Z',reason:'End membership early',exceptionReason:'Record unused prepaid refund externally',requestId:key(),channel:'desk'})
+    const cancellation=await cmd('plan.cancellation.prepare',{reasonCode:'other',packId:scenario.sale.pack.id,effectiveAt:'2032-05-20T07:00:00Z',reason:'End membership early',exceptionReason:'Record unused prepaid refund externally',requestId:key(),channel:'desk'})
     scenario.cancellation=await cmd('plan.cancellation.confirm',{id:cancellation.id,key:cancellation.key,requestId:key(),channel:'desk'})
   }
   await jump('2032-05-21T07:00:00Z');await(await h.mf.getWorker()).scheduled()

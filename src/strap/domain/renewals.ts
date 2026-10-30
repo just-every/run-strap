@@ -45,6 +45,7 @@ export function renewalCandidates(state: State, query: URLSearchParams) {
       expiresAt:reasons.includes('expiring') || reasons.includes('low-credits') ? endAt : freeze.endAt,
       termExpiresAt:pack.expiresAt,freezeEndsAt:freeze?.endAt ?? null,terminationId:cancellation?.id ?? null,
       reasonCode:cancellation?.mode === 'early' ? cancellation.reasonCode ?? 'other' : null,
+      reasonLabel:cancellation?.mode === 'early' ? cancellation.reasonLabel ?? cancellation.reasonCode ?? 'other' : null,
       remainingCredits:countsCredits(pack) ? pack.remaining : null,remainingValueCents:value.amountCents,
       valueBasis:{paidCents:value.paidCents,needsAllocation:value.needsAllocation,method:'unused receipt-allocated elapsed access; half-up cents'},lastVisit:visits.at(-1) ?? null,
       sequenceEnrollments:list(state,'marketingMessage').filter(m=>m.packId===pack.id).map(m=>({id:m.id,sequenceId:m.sequenceId,status:m.status,channel:m.channel})),
@@ -55,7 +56,7 @@ export function renewalCandidates(state: State, query: URLSearchParams) {
   return {asOf,through,days,lowCredits,rows,coverage:'Native finite packs, fixed-term visit/unlimited plans, intro offers, stopped invoice renewals, scheduled terminations and freeze endings. Value is unused receipt-allocated prepaid access at the report time, rounded half-up; an unallocated eligible receipt makes it unavailable. This is not a refund quote or collection. Channel-specific permission and approved native renewal sequence enrollment are recorded. Native in-app review is explicit; SMS/email delivery and provider-autopay endings remain unavailable.'};
 }
 
-export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','kind','termExpiresAt','freezeEndsAt','terminationId','reasonCode','valueBasis','sequenceEnrollments','lastVisit','renewalStatus','contactPermission','reasons','followup'];
+export const renewalColumns = ['packId','personId','member','plan','expiresAt','remainingCredits','remainingValueCents','kind','termExpiresAt','freezeEndsAt','terminationId','reasonCode','reasonLabel','valueBasis','sequenceEnrollments','lastVisit','renewalStatus','contactPermission','reasons','followup'];
 
 export function renewalCsv(report: ReturnType<typeof renewalWorklist>) {
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"';

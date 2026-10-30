@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2007e19e4fe885634eeaf2b1ff4314ff62014742de31b9d7c69ecfe918270464",
+      "sha256": "c6153426ba39fb68f9f339d8bca801ae2ac117333cac6d52d7a5fff73bb8fd5b",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "fa394b4a99ad8b6026875abbb1eb4514f7d2efe25045ad16eeb053902d536d1d",
+      "sha256": "e5fbb002e6250ad2a78977c690dbdd3b898e45be867bfe0cfb1979cadecab5d1",
       "executable": false
     },
     "DEMO.md": {
@@ -366,7 +366,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "c6db41b02b53fbda72a30b5d2fb8fbe837eb5f37ade10d342d2636a657358e36",
+      "sha256": "db017fe7ac50426e223d639fcb1880f65b8f093ae0cc658349709b2f5156b2c0",
       "executable": false
     },
     "docs/classes.md": {
@@ -3278,7 +3278,7 @@
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
-      "sha256": "b64b133235abd83d492f9bf22ed3e023106beb538accdc889e1479093d56d53d",
+      "sha256": "bd313c80ced59e3951729276aacb5315cd2e40da822e03574d51e8139e24c189",
       "executable": false
     },
     "src/strap/domain/contract-copies.ts": {
@@ -3370,7 +3370,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "29128bbb6ae26a9a2dfa2ad4f8cc554d0d3d0accdaf7ace5f05ac1cf323027d1",
+      "sha256": "42f5fb7e33cce7a59564a5b820745480aa17303c9e00adad18f3b49ae0b28e28",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3462,7 +3462,7 @@
       "executable": false
     },
     "src/strap/domain/renewals.ts": {
-      "sha256": "0ac8f58eaf014a06d40a37e8f71be03f38e72666ffdf861a12dc9ac84cc9ae52",
+      "sha256": "bf0c5c1be92efae79087c1879087e6181e1a486bdaa7f05e72f271b03d14b05c",
       "executable": false
     },
     "src/strap/domain/reservations.ts": {
@@ -3518,7 +3518,7 @@
       "executable": false
     },
     "src/strap/domain/staff-snapshot.ts": {
-      "sha256": "8fae38b648e5612089b525446115a88d660492fe075736ca09bb4f03aed457e4",
+      "sha256": "723e8ba49fa4a9a2ddbf7f9c0f4a40a60355e8a273712b76cb557cca602bb709",
       "executable": false
     },
     "src/strap/domain/store.ts": {
@@ -3545,6 +3545,10 @@
       "sha256": "80a676cfeb8bee91ac04335ba83efb3b79fab8c48989711b9abfa94e4efced14",
       "executable": false
     },
+    "src/strap/domain/termination-reasons.ts": {
+      "sha256": "9f86655028436b805015dc4aa4c5a2ad58f44ba1470b76f504ddb4ed87455d3a",
+      "executable": false
+    },
     "src/strap/domain/time-clock.ts": {
       "sha256": "1ed3a8023c6cda96c2c300feed6b5fcd8215e15c8310c7f25cadcc3869dee60a",
       "executable": false
@@ -3562,7 +3566,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "10a9e605bd788a719e883592ec13d08b1b4a104e51250292010bf724e85c9d24",
+      "sha256": "1e9802071cbcf76dc6c17fd37676a83b4ad1e03aa7b341a25b1a7be1c66b3058",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3586,7 +3590,7 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "e8c6e67ff6c1f7555b7f3912c056d1d5ce65675787771c5dee81e098808c095f",
+      "sha256": "7786b01742f8d4a1ad97e2997165b020415fa33827c7d85c9038f4802550aa4f",
       "executable": false
     },
     "src/strap/http.ts": {
@@ -3678,11 +3682,11 @@
       "executable": false
     },
     "src/strap/retention-churn.ts": {
-      "sha256": "f77649e870725262418f8fdf7ccc4d9f6d83498a421ca5718c0e3d004518ef8b",
+      "sha256": "e321a7e9c6da0310fe28c5aefcc42597db49e1389b7ee9234d86a77566e01a0a",
       "executable": false
     },
     "src/strap/retention-report.ts": {
-      "sha256": "def8551628fd578e646b5ff17c3f1ae656a3b0579c97c45daf93faff1a125dd8",
+      "sha256": "c50ecb5eb44f9a0f23d91559a8bedd6905bc093d769cf36caff592e9cf2270d0",
       "executable": false
     },
     "src/strap/revenue-report.ts": {
@@ -3842,7 +3846,7 @@
       "executable": false
     },
     "src/strap/ui/contract-cancellations.ts": {
-      "sha256": "a44627619a236862197b7f413c97a001f33682900bc1f15cca3d2317013c10ab",
+      "sha256": "f532364ca353281c4388a74b9d740952627afa1d44152bf97beb96d4774fde79",
       "executable": false
     },
     "src/strap/ui/contract-invoices.ts": {
@@ -4002,7 +4006,7 @@
       "executable": false
     },
     "src/strap/ui/renewals.ts": {
-      "sha256": "629a7592c805480b7847f4d0715dd8a22288425b57255f79b14a5868471323ac",
+      "sha256": "c676a75983071ca974ea0963cfc631509de4e55e65fe3ae30be11c94c2267d43",
       "executable": false
     },
     "src/strap/ui/reports.ts": {
@@ -4066,7 +4070,7 @@
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
-      "sha256": "b10ced51f863382b3e6ec13c4e993bf60bdc9089dd8239122ff0cfc88884826f",
+      "sha256": "496aae5a029aa078f051828872ade3d1e9449018a07f4f6d0b29f1c7a68e0421",
       "executable": false
     },
     "src/strap/ui/staff-rights.ts": {
@@ -4078,7 +4082,7 @@
       "executable": false
     },
     "src/strap/ui/studio.ts": {
-      "sha256": "aecdd78ee5e6d5dcbac7304baf510c4e924483486ed06171975e23f09bfc9af7",
+      "sha256": "08223652ab87f4810187f3cd76916b61eb347da3c1335ae2fb887cfca2f98e7c",
       "executable": false
     },
     "src/strap/ui/substitutions.ts": {
@@ -4103,6 +4107,10 @@
     },
     "src/strap/ui/teaching-pay.ts": {
       "sha256": "38d3351f2befb709021ef0a31b238a4717cd73807055aa59a1b45e1f556e8b52",
+      "executable": false
+    },
+    "src/strap/ui/termination-reasons.ts": {
+      "sha256": "6cf84dcdd5235f47b7fc709b00674c2cd161a5c8ce132f3a3af8e992e77fd302",
       "executable": false
     },
     "src/strap/ui/time-clock.ts": {
@@ -4138,7 +4146,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "95d05d5da35e32ef9b24b132fac46bd2f58394a4bfe5947062aba7009b7f342c",
+      "sha256": "82f3b29a1634738931818fc6ba47778574709b5d44d6f7551eb856dcd66fd017",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4190,7 +4198,7 @@
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
-      "sha256": "f5cf394c5b2f3481290a579587046b9941de943f2647657436919e3478be9f49",
+      "sha256": "b50a5de06cb632a05992d1ccc4b84b056ce8a3d18567db884c993cc2c8a699ea",
       "executable": false
     },
     "tests/capacity-browser.mjs": {
@@ -4342,7 +4350,7 @@
       "executable": false
     },
     "tests/finance-exclusions.mjs": {
-      "sha256": "0291a44de91317f6497f1cce32dec3a964f3dd0a6a7b940006f2794d8a87a614",
+      "sha256": "fdac26030d369906f68915a1937c5ee6d064dd4e93ddd3e059f7ef589bccbdfc",
       "executable": false
     },
     "tests/finance-restatement.mjs": {
@@ -4350,7 +4358,7 @@
       "executable": false
     },
     "tests/finance-timing.mjs": {
-      "sha256": "f159f2b3f9c1a6c27e7a3db592c1387cc1c145eebf202ec959d3d95dd49bfdc8",
+      "sha256": "fd3ac6e7c34b8e5c8a1f3de4022a2d3450e5af379b61a156783127220710de74",
       "executable": false
     },
     "tests/fixtures/members.csv": {
@@ -4458,7 +4466,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "9b7dec8dfa90e83d7999c98726c6787cb516bb0d10865cefa4ce1c63a56d796f",
+      "sha256": "0913c26e5f215a51774ba59ba6e44e338eb123e3a333ed86d23ce6609fc761f4",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
@@ -4542,7 +4550,7 @@
       "executable": false
     },
     "tests/renewal-plan-cases.mjs": {
-      "sha256": "f5bf89b73d008c6033c3019cbae065f2017717f971898b979bf5bb5727178624",
+      "sha256": "63c2d15a7b520ce3cb9c65384f238f6daf6a22bcfeab447db2e73d59a603280b",
       "executable": false
     },
     "tests/renewals-browser.mjs": {
@@ -4562,7 +4570,7 @@
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "388a3ca349db5fcadc671f28acf5c050426f7d5c2d5cbc13f7edc77a668e8f68",
+      "sha256": "02b252e5d9357715b9e1cded391821780f02f65ac9f8f6499400dd24caf076b5",
       "executable": false
     },
     "tests/reservations-browser.mjs": {
@@ -4642,7 +4650,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "97d194ea228428a1a2f5e0c5e5f9ec2359414c6d1f569dbc1e47d063f139d30e",
+      "sha256": "c1ab1e9e6b142dfaf3ab87a6239ea7395f8ea3fb3820458feaba4109b8480f55",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
@@ -4650,7 +4658,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "f62dd6366ef966751a006c255e1fb7fc23979c5da996541b53ca5c915c0aca44",
+      "sha256": "dc8f5f9619f0a4962228e91e645fe0598efffcd702d685d5eeb477f80c698e0e",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
@@ -4703,6 +4711,10 @@
     },
     "tests/teaching-pay.test.mjs": {
       "sha256": "6a87898da358d9ca6ab477d7430702fdd5a57f877a901c19defb9802b6161edd",
+      "executable": false
+    },
+    "tests/termination-reasons-cases.mjs": {
+      "sha256": "6a899814ca832e1635da4b61aa8a5b264fbccadf34cf82de431243b2c4e6fc6f",
       "executable": false
     },
     "tests/tuition-browser.mjs": {
