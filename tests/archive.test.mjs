@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getPlatformProxy } from 'wrangler'
 import { harness } from './harness.mjs'
+import {seedPrivacyArchive,erasePrivacyArchive,assertPrivacyArchive,assertPrivacyRestored} from './privacy-archive.mjs'
 import { softwarePasskey, totp } from './mfa-helpers.mjs'
 import { reconstructExit } from './exit-receiver.mjs'
 import { acceptance, billingEdge, billingSucceeded } from './billing-sandbox.mjs'
@@ -173,6 +174,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     signingFamily=await h.cmd('household.guardian.link',{id:signingFamily.id,guardianId:signingGuardian.id,evidenceReference:'synthetic-strap-archive-authority'});
     signingFamily=await h.cmd('household.participant.add',{id:signingFamily.id,name:'Archived signing child'});
     const signedPolicy=await h.cmd('waiver.publish',{text:'Archived exact service policy and personal affirmation.\n<studio-policy source="synthetic-strap-1">Care & consent.</studio-policy><script>throw new Error("synthetic document")</script>',requiresSignature:true,service:'Evidence retention',validDays:365});
+    const privacyFixture=await seedPrivacyArchive(h,signedPolicy);
     const adultEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:member.name,confirm:true},member.cookie);
     const guardianEvidence=await h.cmd('waiver.acknowledge',{id:signedPolicy.id,documentHash:signedPolicy.documentHash,signerName:signingGuardian.name,participantId:signingFamily.participantIds[0],confirm:true},signingGuardian.cookie);
     const signedBefore=await h.send('/api/strap/waiver-evidence.json?id='+adultEvidence.id,undefined,member.cookie);
@@ -358,15 +360,17 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const corrupt=join(temporary,'corrupt.rer');await writeFile(corrupt,bytes.replace('Temporary joiner','Changed joiner'),{mode:0o600})
     // Checksum damage is a transfer failure (1); restore policy conflicts remain 4.
     await command(erased,['import','--input',corrupt,'--yes','--no-queue'],1)
-    h=await harness({root:source,...identity});const eraser=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},eraser);await h.cmd('person.erase',{id:p.id,revision:1},eraser);await h.close();h=null
+    h=await harness({root:source,...identity});const eraser=await h.signIn(h.auth.OWNER_EMAIL);await h.cmd('mfa.verify',{code:totp(identity.factor.secret,1)},eraser);await h.cmd('person.erase',{id:p.id,revision:1},eraser);await erasePrivacyArchive(h,eraser,privacyFixture);await h.close();h=null
     await command(source,['export','--output',later,'--no-queue'])
     const erasedBytes=await readFile(later,'utf8')
+    assertPrivacyArchive(erasedBytes,privacyFixture)
     for(const value of ['Rita Joiner','2125550188','2125550144','temporary@venue.example']) assert.ok(!erasedBytes.includes(value),`APP-003 erasure removes ${value} from the later archive`)
     // APP-003: the pre-erasure archive still holds the contact, so the later journal fences it.
     await command(erased,['import','--input',old,'--journal',later,'--yes','--no-queue'],4)
     await command(erased,['import','--input',later,'--yes','--no-queue'])
     const proxy=await getPlatformProxy({configPath:join(erased,'wrangler.jsonc'),persist:{path:join(erased,'.wrangler/state/v3')},remoteBindings:false})
     try {
+      await assertPrivacyRestored(proxy.env.DB,privacyFixture)
       assert.equal((await proxy.env.DB.prepare('SELECT name FROM st_people WHERE id=?').bind(p.id).first()).name,'Erased person')
       const kept=(await proxy.env.DB.prepare("SELECT kind,data FROM st_records WHERE kind IN ('memberProfile','profileChange','memberCheckin') AND json_extract(data,'$.personId')=?").bind(p.id).all()).results
       assert.deepEqual(kept.map(r=>r.kind),['profileChange'],'APP-003 erasure deletes the current contact and the check-in phone')

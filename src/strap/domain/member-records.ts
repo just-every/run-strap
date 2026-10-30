@@ -89,7 +89,7 @@ export function memberHistory(state: State,who: Actor,personId: string) {
       // identity/provenance instead of nesting earlier merge previews inside later ones.
       record:kind === 'staffAction' ? {id:r.id,personId:r.personId,command:r.command,actorId:r.actorId,actorRole:r.actorRole,staffMade:r.staffMade,channel:r.channel,right:r.right,at:r.at} : r})))
     .filter(e => who.role === 'owner' || (['profileChange','memberMessage','memberInvitation'].includes(e.kind) || (e.kind === 'staffAction' && ['member.record.create','profile.save.staff','member.record.invite','member.message.send.staff'].includes(e.record.command)))).sort((a,b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
-  return {personId:member.id,profile:profileOf(state,member),sourceIdentities:ids.map(key => person(state,key,false)),timeline,
+  return {personId:member.id,profile:profileOf(state,member),sourceIdentities:ids.map(key => state.people.find(p=>p.id===key&&p.erasedAt)??person(state,key,false)),timeline,
     notes:who.role === 'owner' ? own('memberNote') : [],preferences:own('memberPreference').map(p => visiblePreferences(p,who)),
     packs:who.role === 'owner' ? own('pack') : own('pack').map(deskPack),bookings:who.role === 'owner' ? own('booking') : own('booking').map(deskBooking),waivers:own('acknowledgement').map(r=>who.role==='owner'?r:{id:r.id,personId:r.personId,waiverId:r.waiverId,createdAt:r.createdAt}),
     ledger:who.role === 'owner' ? [...own('charge').map(r => ({...r,kind:'charge'})),...own('payment').map(r => ({...r,kind:'payment'}))] : [],

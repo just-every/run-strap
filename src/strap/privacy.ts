@@ -3,6 +3,7 @@ import { humanOwner, id, insist, list, now, person, record, text, type Actor, ty
 import { hasStaffRight } from './domain/staff-rights';
 import { profileOf } from './domain/profiles';
 import { eraseUsedMember, erasureReview } from './privacy-erasure';
+import { sha256 } from '../modules/import-kit/src/d1/index';
 
 const channels = ['desk','phone','inbox'] as const;
 export function privacyAuthority(state: State, who: Actor) {
@@ -11,11 +12,12 @@ export function privacyAuthority(state: State, who: Actor) {
 }
 function audit(tx: Transaction, command: string, request: RecordData, before: unknown, after: unknown) {
   tx.put('staffAction',{id:id(),action:command,command,personId:request.personId,actorId:tx.who.id,actorRole:tx.who.role,
-    staffMade:true,right:'privacy',channel:request.channel,before,after,reason:null,at:now()});
+    staffMade:true,right:'privacy',channel:request.channel,before:before?{privacy:true,...before as object}:null,after:{privacy:true,...after as object},reason:null,at:now()});
 }
 export function privacySnapshot(state: State, who: Actor) {
   if (who.role !== 'owner' || !who.isOwner) return null;
-  return {requests:list(state,'privacyRequest'),retained:list(state,'privacyRetention').map(({content:_,...row})=>row)};
+  return {requests:list(state,'privacyRequest'),reviews:list(state,'privacyReview'),receipts:list(state,'privacyReceipt'),
+    retained:list(state,'privacyRetention').map(({content:_,...row})=>row)};
 }
 export function verifiedRequest(state: State, key: unknown, kind: string) {
   const request=record(state,key,'privacyRequest');
@@ -23,6 +25,7 @@ export function verifiedRequest(state: State, key: unknown, kind: string) {
   insist(request.verifiedAt && request.status!=='erased','privacy_identity_verification_required',409);
   const member=person(state,request.personId,false);
   insist(member.version===request.personVersion,'privacy_identity_changed',409);
+  insist(request.identityBasis===sha256(JSON.stringify(profileOf(state,member))),'privacy_identity_changed',409);
   return {request,member};
 }
 /** The downloaded evidence contains this member's records, never a stored export or a reusable credential. */
@@ -57,18 +60,31 @@ export async function privacyCommand(db: D1Database, who: Actor, name: string, i
     insist(input.confirm===true,'privacy_identity_confirmation_required');
     const method=text(input.method,'method',40);
     insist(['in-person-document','callback-on-file','signed-in-member'].includes(method),'invalid_verification_method');
-    const saved={...request,personVersion:member.version,status:'verified',verifiedAt:at,verifiedBy:who.id,verificationMethod:method};
+    const saved={...request,personVersion:member.version,identityBasis:sha256(JSON.stringify(profileOf(tx.state,member))),status:'verified',verifiedAt:at,verifiedBy:who.id,verificationMethod:method};
     tx.put('privacyRequest',saved);audit(tx,name,saved,{status:request.status},{status:saved.status,method});await tx.commit();return saved;
   }
   if(name==='privacy.export') {
     const {request,member}=verifiedRequest(tx.state,input.id,'access');
-    insist(request.status==='verified' || request.status==='delivered','privacy_request_not_verified',409);
+    insist(['verified','exported','delivered'].includes(request.status),'privacy_request_not_verified',409);
     const bundle=accessBundle(tx.state,member.id);
-    if(request.status!=='delivered') {
-      tx.put('privacyRequest',{...request,status:'delivered',deliveredAt:at,deliveredBy:who.id,delivery:'owner-download'});
-      audit(tx,name,request,{status:request.status},{status:'delivered',delivery:'owner-download'});await tx.commit();
+    if(request.status==='verified') {
+      tx.put('privacyRequest',{...request,status:'exported',exportedAt:at,exportedBy:who.id});
+      audit(tx,name,request,{status:request.status},{status:'exported',delivery:'owner-download'});await tx.commit();
     }
     return bundle;
+  }
+  if(name==='privacy.deliver') {
+    const {request}=verifiedRequest(tx.state,input.id,'access');
+    insist(request.status==='exported','privacy_download_required',409);
+    insist(input.confirm===true,'privacy_delivery_confirmation_required');
+    const delivery=text(input.delivery,'delivery',30);
+    insist(['in-person','secure-transfer'].includes(delivery),'invalid_privacy_delivery');
+    const saved={...request,status:'delivered',deliveredAt:at,deliveredBy:who.id,delivery};
+    tx.put('privacyRequest',saved);audit(tx,name,request,{status:'exported'},{status:'delivered',delivery});await tx.commit();return saved;
+  }
+  if(name==='privacy.retained') {
+    const retained=record(tx.state,input.id,'privacyRetention');
+    return {format:'strap-retained-evidence',...retained};
   }
   if(name==='privacy.erase.prepare') {
     const {request,member}=verifiedRequest(tx.state,input.id,'erasure');
@@ -95,6 +111,7 @@ export async function privacyCommand(db: D1Database, who: Actor, name: string, i
     } else {
       insist(!retained.hold || retained.hold.releasedAt,'privacy_hold_active',409);
       insist(Date.parse(retained.retainUntil)<=Date.now(),'privacy_retention_not_due',409);
+      tx.reached(retained.retainUntil);
       // A fresh checkpoint is required whenever retained identifying evidence is disposed.
       const { disposeRetention }=await import('./privacy-erasure');
       await disposeRetention(tx,retained);

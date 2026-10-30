@@ -1,4 +1,5 @@
 import { paymentConnectionPanel } from './payment-connection';
+import { privacyRetentionPanel } from './privacy';
 import { appointmentPricesPanel } from './appointment-prices';
 import { taxSettingsPanel } from './tax-settings'
 import { smsTestPanel } from './sms-test'
@@ -33,6 +34,7 @@ export function studioPage(s: any, notice: any = {}) {
     + smsTestPanel(s)
     + taxSettingsPanel(s)
     + paymentConnectionPanel(s)
+    + privacyRetentionPanel(s)
     + rulesPanel(s)
     + waitlistPanel(s)
     + spotsPanel(s)

@@ -41,9 +41,17 @@ Their access ends on their next request, and their bookings and payment history 
 
 ## Erase personal data
 
-**Erase personal data** removes a person who never used Strap: no bookings, no packs or payments, never invited and not
-imported. Everyone else is deactivated instead, so the studio's history stays whole. An erased identity can't be added
-or imported again.
+**Erase personal data** is the shortcut for an unused identity. For a used or imported member, open **Privacy requests** on their card. Only the owner, with a verified second factor and privacy authority, can complete these requests. A manager's member-record permission does not grant privacy authority.
+
+Record whether the request arrived in person, by phone or by email, then record the identity check. For an access request, download the member copy and separately confirm delivery to the verified person. Strap records the request, verification, download and delivery; downloading alone does not claim that the member received it. A changed identity requires a new verified request.
+
+For erasure, settle the balance first, explicitly retain the obligation, or explicitly cancel positive outstanding debt. A credit owed to the member must be settled through the ordinary payment process. Review the retention reason and date, choose whether to delete waiver evidence or keep it restricted, and explicitly approve ending account access. Future bookings must first be resolved through their ordinary cancellation doors. A changed review must be prepared again.
+
+The confirmed operation removes contact details, emergency contacts, restricted notes, personal sign-in links and imported source values. Original financial amounts and chronology remain under a redacted identity; an explicit debt cancellation adds a balancing entry. Shared household history keeps other people's obligations and accepted allocations. The erased member leaves active household and staff scopes, future family tuition ends for that person, and makeup authority is revoked without issuing another credit. Merged history retains the original source identifiers with personal values removed.
+
+Retained affirmations are available only under **Studio → Privacy retention**. Each retained document has a stated reason and date. An optional hold records its basis, scope, actor, review date and release condition. Release a hold explicitly after its condition is satisfied; dispose of the document only after the retention date. Expiry never deletes evidence automatically. Retention settings record the studio's decision; they do not certify a legal retention period.
+
+Unsupported related work is refused before anything is erased. Active provider billing and other unfinished record classes still require additional handling. Erasure does not delete data held by external providers, previously delivered copies or offline backups. Use a later erasure journal when restoring an older backup: the restore refuses resurrection. Erased identities cannot be recreated or imported again.
 
 ## Act for a member
 

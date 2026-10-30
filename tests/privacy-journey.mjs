@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {privacyBrowser} from './privacy-browser.mjs'
 
 const address = name => name + String.fromCharCode(64) + 'studio.example'
 export const privacyDecision = {obligations:'settled',reason:'Studio financial record retention',retainUntil:'2099-12-31T00:00:00Z',documents:'delete',retireAccess:true}
@@ -31,6 +32,7 @@ export async function privacyJourney(h) {
   assert.equal(bundle.documents[0].document.text,'Synthetic studio service waiver')
   assert.ok(!JSON.stringify(bundle).includes(other.email),'the subject access copy excludes another member')
   await h.cmd('privacy.export',{id:request.id})
+  await h.cmd('privacy.deliver',{id:request.id,delivery:'in-person',confirm:true})
   let actions=(await h.send('/api/strap/staff-history?member='+member.id,undefined,h.owner)).text
   assert.ok(actions.includes('privacy.export')&&actions.includes('privacy.verify')&&actions.includes('privacy.request'))
   assert.equal((await h.state()).staffActions.filter(a=>a.command==='privacy.export'&&a.personId===member.id).length,1)
@@ -74,4 +76,9 @@ export async function privacyJourney(h) {
   assert.ok(!(await h.state()).people.some(p=>p.id===importedMember.id),'import undo cannot restore the erased member')
   const reimport=await h.cmd('import.preview',{csv})
   await h.cmd('import.apply',{csv,fingerprint:reimport.fingerprint},h.owner,409)
+  // The existing owner forms keep receipt delivery, holds and disposal distinct.
+  const signed=await h.cmd('waiver.publish',{text:'Synthetic retained affirmation',requiresSignature:true})
+  await h.cmd('waiver.acknowledge',{id:signed.id,documentHash:signed.documentHash,signerName:other.name,confirm:true},other.cookie)
+  await h.confirmSetup(h.owner)
+  await privacyBrowser(h,other)
 }

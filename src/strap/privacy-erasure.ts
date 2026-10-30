@@ -6,11 +6,13 @@ import { humanOwner, id, insist, instant, list, now, text, type Person, type Rec
 import type { Transaction } from './domain/store';
 import { hash } from './credentials';
 import { importContext } from './movein';
+import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
-const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview'.split(' '));
-const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent'.split(' '));
-const auditKinds=new Set(['profileChange','staffAction','bookingAction']);
+const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview absencePreview'.split(' '));
+const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit'.split(' '));
+const auditKinds=new Set(['profileChange','staffAction','bookingAction','staffAccessEvent']);
+const scopeKinds=new Set('staffAccess memberRecordGrant waiverSigningGrant appointmentBookingGrant attendanceBookingGrant intakeSensitiveGrant retailStaffGrant'.split(' '));
 const contains=(value: unknown, values: Set<string>): boolean => typeof value==='string'?values.has(value)
   :Array.isArray(value)?value.some(item=>contains(item,values)):!!value&&typeof value==='object'&&Object.values(value).some(item=>contains(item,values));
 /** Follow references toward dependent records, never toward global documents or another member's ledger. */
@@ -21,16 +23,16 @@ function subjectRecords(state: State, member: Person) {
     changed=false;
     for(const [key,row] of state.records) {
       if(selected.has(key) || row.kind==='privacyRetention' || row.kind==='privacyRequest')continue;
-      if(contains(row.data,keys)) { selected.set(key,row); keys.add(key); changed=true; }
+      if(contains(row.data,keys)) { selected.set(key,row); if(!scopeKinds.has(row.kind)&&!auditKinds.has(row.kind)&&!relationshipKinds.has(row.kind))keys.add(key); changed=true; }
     }
   }
   return [...selected.values()];
 }
 function supportedRecords(state: State, member: Person) {
   const records=subjectRecords(state,member);
-  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
+  const unsupported=records.filter(({kind,data})=>!disposable.has(kind)&&!financial.has(kind)&&!auditKinds.has(kind)&&!scopeKinds.has(kind)&&!relationshipKinds.has(kind)&&kind!=='acknowledgement'&&!(kind==='draft'&&['pack','reminder'].includes(data.type)));
   insist(!unsupported.length,'privacy_related_work_requires_review:'+ [...new Set(unsupported.map(r=>r.kind))].sort().join(','),409);
-  const shared=records.some(({data,kind})=>!auditKinds.has(kind) && data.personId && data.personId!==member.id);
+  const shared=records.some(({data,kind})=>!auditKinds.has(kind) && !scopeKinds.has(kind) && !relationshipKinds.has(kind) && data.personId && data.personId!==member.id && !(kind==='charge'&&data.forPersonId===member.id));
   insist(!shared,'privacy_shared_member_work_requires_review',409);
   // The ordinary cancellation door must resolve capacity, fees and notices first.
   insist(!records.some(({kind,data})=>kind==='booking'&&data.status!=='cancelled'&&
@@ -100,8 +102,9 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
   insist(operators.every(o=>o.role!=='owner'),'privacy_owner_identity_refused',409);
   const native:D1Sql[]=[],sql=(sql:string,...params:unknown[])=>native.push({sql,params});
   const put=(kind:string,data:RecordData)=>sql('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,version=excluded.version',data.id,kind,JSON.stringify(data),tx.state.version+1);
-  const identities=[member.email!,member.name,...list(tx.state,'profileChange').filter(p=>p.personId===member.id).flatMap(p=>[p.before?.email,p.after?.email,p.before?.name,p.after?.name]).filter(Boolean)];
+  const identities=[member.email!,member.name,...list(tx.state,'profileChange').filter(p=>p.personId===member.id).flatMap(p=>[p.before?.email,p.after?.email,p.before?.name,p.after?.name])].filter((value):value is string=>typeof value==='string'&&value.length>0);
   sql('INSERT INTO st_assert(value) SELECT CASE WHEN version=? THEN 1 ELSE 0 END FROM st_meta WHERE id=1',tx.state.version);
+  sql("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND email=? AND status='active' AND role='owner' AND version=?) THEN 1 ELSE 0 END",tx.who.id,tx.who.email,tx.state.operator.version);
   const receipt={id:id(),personId:member.id,requestId:request.id,erasedAt:at,actorId:tx.who.id,actorRole:tx.who.role,right:'privacy',channel:request.channel,
     obligations:review.obligations,balanceBeforeCents:review.balanceCents,balanceAfterCents:review.obligations==='cancel'?0:review.balanceCents,
     retention:review.retention,documents:review.documents,externalCopies:'Not erased: provider accounts and copies outside this installation require separate handling.'};
@@ -112,8 +115,14 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
         content:{receipt:data,document:tx.state.records.get(data.waiverId)?.data ?? null}};
       put('privacyRetention',retained);
     }
-    if(financial.has(kind) || kind==='draft'&&data.type==='pack') {
+    if(relationshipKinds.has(kind)) {
+      put(kind,redactRelationship(kind,data,member,identities,tx.state,at,tx.who.id));
+    } else if(scopeKinds.has(kind)) {
+      const removeScope=(value:any,key=''):any=>Array.isArray(value)?value.filter(item=>!['memberIds','personIds'].includes(key)||item!==member.id).map(item=>removeScope(item)):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([name,item])=>[name,removeScope(item,name)])):value;
+      put(kind,{...removeScope(data),...(data.personId===member.id?{enabled:false,rights:{}}:{}),version:(data.version??0)+1,updatedAt:at,updatedBy:tx.who.id});
+    } else if(financial.has(kind) || kind==='draft'&&data.type==='pack') {
       const sanitized=redact(data,identities);
+      if(kind==='makeupCredit')Object.assign(sanitized,{voidedAt:data.voidedAt??at,voidedBy:tx.who.id,voidReason:'Member erasure'});
       if(kind==='payment') {sanitized.referenceHash=await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
       put(kind,{...sanitized,erased:true,privacyReceiptId:receipt.id});
     } else if(auditKinds.has(kind)) {
@@ -132,6 +141,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
   }
   for(const operator of operators) {
     for(const table of ['oa_external_identities','oa_credentials','oa_step_up_challenges','st_mfa_factors','st_mfa_recovery','st_mfa_sessions','st_mfa_challenges'])sql('DELETE FROM '+table+' WHERE operator_id=?',operator.id);
+    for(const table of ['oa_provider_sessions','oa_provider_session_pins'])sql('DELETE FROM '+table+' WHERE session_id IN (SELECT id FROM oa_sessions WHERE operator_id=?)',operator.id);
     sql('UPDATE oa_sessions SET revoked_at=? WHERE operator_id=?',erasedAt,operator.id);
     sql('UPDATE oa_tokens SET revoked_at=? WHERE operator_id=? OR issuer_id=?',erasedAt,operator.id,operator.id);
     sql("UPDATE st_security_audit SET actor_email=CASE WHEN actor_id=? THEN '' ELSE actor_email END,subject_email=CASE WHEN subject_id=? THEN NULL ELSE subject_email END,detail='{}' WHERE actor_id=? OR subject_id=?",operator.id,operator.id,operator.id,operator.id);
@@ -141,7 +151,7 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
   put('privacyRequest',{...request,status:'erased',erasedAt:at,receiptId:receipt.id});
   put('privacyReceipt',receipt);
   put('staffAction',{id:id(),action:'privacy.erase.confirm',command:'privacy.erase.confirm',personId:member.id,actorId:tx.who.id,actorRole:tx.who.role,staffMade:true,right:'privacy',channel:request.channel,at,
-    before:{status:'verified',balanceCents:review.balanceCents},after:{status:'erased',receiptId:receipt.id,balanceCents:receipt.balanceAfterCents}});
+    before:{privacy:true,status:'verified',balanceCents:review.balanceCents},after:{privacy:true,status:'erased',receiptId:receipt.id,balanceCents:receipt.balanceAfterCents}});
   sql('UPDATE st_meta SET version=version+1 WHERE id=1');sql('DELETE FROM st_assert');
   const context=importContext(db,tx.who), targets=context.storage.targets;
   // Import custody regards a redacted, fenced identity as absent. The stable native ID remains for the ledger.

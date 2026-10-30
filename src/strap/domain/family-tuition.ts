@@ -13,7 +13,7 @@ const currentMonth = (state: State) => localDate(now(),studioSettings(state)?.ti
 const home = (state: State,key: unknown) => record(state,key,'household');
 function facts(state: State, plan: RecordData) {
   const household = home(state,plan.householdId);
-  return JSON.stringify({plan,household,people:[plan.payerId,...plan.rows.map((r: RecordData) => r.personId)].map(key => person(state,key,false))});
+  return JSON.stringify({plan,household,people:[plan.payerId,...plan.rows.map((r: RecordData) => r.personId)].map(key => state.people.some(p=>p.id===key&&p.erasedAt)?{id:key,erased:true}:person(state,key,false))});
 }
 /** No automatic collection, no retroactive repricing, and a payer personally accepts each exact monthly bill. */
 export function saveFamilyTuition(tx: Transaction,input: Record<string,unknown>) {

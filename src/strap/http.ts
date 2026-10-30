@@ -314,6 +314,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
+        if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
         // private result document (source review, journal, one-time key or pairing link).

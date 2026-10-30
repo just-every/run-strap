@@ -22,7 +22,7 @@ export const managerRoute = (path: string) => ['/app', '/app/revenue', '/app/rep
 export const reportStaff = (who: Actor) => who.role === 'finance' || who.role === 'manager'
 
 /** Keys no door may return until a covered person is cleared: pay, provider connections and staff access. */
-export const privilegedState = ['teachingPay', 'payRules', 'integrations', 'agentKeys', 'kiosks', 'memberMail', 'smsTest']
+export const privilegedState = ['privacy', 'teachingPay', 'payRules', 'integrations', 'agentKeys', 'kiosks', 'memberMail', 'smsTest']
 
 export interface Hold { code: 'mfa_required' | 'mfa_enrollment_required'; reason: string | null }
 const person = (who: Actor) => ['owner', 'finance', 'manager', 'front-desk', 'member', 'instructor'].includes(who.role) && !(who.role === 'owner' && !who.isOwner)

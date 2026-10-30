@@ -3,6 +3,7 @@ import { prepareClientAppointmentChange, confirmClientAppointmentChange } from '
 import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse, confirmEnrollment, recordCoursePayment, prepareWithdrawal, confirmWithdrawal, courseAttendance, coursesSnapshot, coursePublicResult } from './courses';
 import { saveAppointmentPrice } from './appointment-funding';
 import { staffDeskSnapshot } from './staff-snapshot';
+import { privacySnapshot } from '../privacy';
 import { grantStaffAccess, staffAccess, legacyStaffGrants, legacyStaffGrant, hasStaffRight } from './staff-rights';
 import { delegatedCommandRight, authorizeStaffCommand } from './staff-command-access';
 import { currentWaivers, assertSigningEnrollments } from './bookings';
@@ -463,7 +464,7 @@ export async function managerSnapshot(db: D1Database, who: Actor) {
 export async function snapshot(db: D1Database, who: Actor, origin?: string, operational = true) {
   const loaded = await load(db,who);
   const connection=await db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
-  return {...await snapshotFor(loaded.state,loaded.who,connection,origin,operational),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
+  return {...await snapshotFor(loaded.state,loaded.who,connection,origin,operational),privacy:privacySnapshot(loaded.state,loaded.who),renewalDisclosures:await renewalDisclosuresSnapshot(db,loaded.state,loaded.who)};
 }
 async function snapshotFor(state: State, who: Actor, connection?: {connection_id:string;origin:string}|null, origin?: string, operational = true) {
   if (who.role === 'front-desk' || operational && who.staffAccess && ['manager','instructor'].includes(who.role)) {

@@ -1,4 +1,5 @@
 import { clientAppointmentsPanel } from './client-appointments'
+import { privacyPanel } from './privacy'
 import { attendanceBookingAccess } from './attendance-access'
 import { attendancePlanControls } from './attendance-plan'
 import { appointmentBookingAccess } from './appointment-access'
@@ -40,10 +41,11 @@ function card(s: any, p: any, back: string) {
     + (p.role === 'member' ? attendancePlanControls(s,p.id,back+'#attendance-plan') : '')
     + staffProfileEditor(s, p, back)
     + staffProfileActions(s, p, back)
+    + (p.role==='member'?privacyPanel(s,p.id,back+'#privacy'):'')
     + (p.role === 'member'
       ? `<details class="more"><summary>Sign-in and access</summary><div class="panel-body"><p class="meta">The sign-in email is an identity change only you make; Strap records it in the member’s profile changes.</p>${form('person.save', back, hidden('id', p.id) + hidden('version', p.version) + hidden('name', p.name) + `<div class="row2">${field('email', 'Sign-in email', p.email, 'email', 'required autocomplete="email"')}${select('role', 'Role', [['member', 'Member'], ['instructor', 'Instructor']], p.role)}</div>` + select('active', 'Status', [['true', 'Active'], ['false', 'Inactive']], String(p.active)), 'Save sign-in and access')}</div></details>`
       : `<details class="more"><summary>Edit ${h(p.name.split(' ')[0])}</summary><div class="panel-body">${form('person.save', back, hidden('id', p.id) + personFields(p), 'Save changes')}</div></details>`)
-    + `<details class="more"><summary>Erase personal data</summary><div class="panel-body"><p class="meta">Only people with no bookings, packs, payments, sign-in or import history can be erased. Make anyone else inactive to end their access.</p>${form('person.erase', '/app/people', hidden('id', p.id) + '<label class="check"><input type="checkbox" required>I understand this erases this person’s personal data.</label>', 'Erase this person', 'quiet')}</div></details></section>`
+    + `<details class="more"><summary>Erase personal data</summary><div class="panel-body"><p class="meta">This shortcut erases an unused identity. For a used or imported member, record and verify an erasure request under Privacy requests.</p>${form('person.erase', '/app/people', hidden('id', p.id) + '<label class="check"><input type="checkbox" required>I understand this erases this person’s personal data.</label>', 'Erase this person', 'quiet')}</div></details></section>`
 }
 
 export function peoplePage(s: any, query: URLSearchParams) {
