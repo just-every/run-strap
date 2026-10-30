@@ -113,7 +113,7 @@ test('APP-003: members edit their own name, phone and emergency contact; the own
     assert.deepEqual([exit.manifest.recordKinds.memberProfile,exit.manifest.recordKinds.profileChange],[3,5])
     assert.ok(profiles.every(r=>ids.has(r.personId)))
     assert.deepEqual(profiles.find(r=>r.kind==='memberProfile'&&r.personId===ana.id).emergencyContact,staff.emergencyContact)
-    if(process.env.STRAP_PROOF_DIR || process.env.CI) { process.env.STRAP_PROOF_DIR ??= 'logs/proof/profiles'; await (await import('./profiles-browser.mjs')).profilesBrowser(h,{ana,ben,entry}); }
+    if(process.env.STRAP_PROOF_DIR || process.env.CI) { process.env.STRAP_PROOF_DIR ??= 'logs/proof/profiles'; await (await import('./profiles-browser.mjs')).profilesBrowser(h,{ana,ben,entry,inactive:cy}); }
   })
 })
 

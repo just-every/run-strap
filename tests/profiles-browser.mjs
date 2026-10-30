@@ -7,7 +7,7 @@ import { auditPage, keyboardFields } from './accessibility-browser.mjs'
 // APP-003 screens at 1440 and 390: the member edits their profile, books and
 // cancels; the owner reads the same profile and booking on the person card and
 // edits the emergency contact for them; another member sees only their own page.
-export async function profilesBrowser(h, { ana, ben, entry }) {
+export async function profilesBrowser(h, { ana, ben, entry, inactive }) {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.STRAP_CHROMIUM_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
   await mkdir(process.env.STRAP_PROOF_DIR, { recursive: true })
   try {
@@ -166,6 +166,39 @@ export async function profilesBrowser(h, { ana, ben, entry }) {
         assert.deepEqual([action.command, action.channel, action.after.emergencyContact.phone], ['profile.save.staff', 'phone', '6155550155'])
         await staff.locator('#person summary').filter({ hasText: /^Profile changes$/ }).click()
         await shot(staff, 'staff-profile')
+        // Inactive records remain editable by the owner without restoring sign-in.
+        await staff.goto(h.origin + `/app/people?person=${inactive.id}#person`)
+        await staff.locator('#person summary').filter({ hasText: /^Edit profile$/ }).click()
+        const inactiveEditor = staff.locator('form[data-profile-save]')
+        if (width === 1440) {
+          const inactivePhone = '6155550181'
+          const inactiveBefore = (await h.state()).profileChanges.filter(c => c.personId === inactive.id).length
+          const inactiveRequest = await inactiveEditor.locator('[name=requestId]').inputValue()
+          await inactiveEditor.getByLabel('Mobile phone').fill(inactivePhone)
+          const saveUrl = '**/app/action?name=profile.save.staff&*'
+          await staff.route(saveUrl, async route => { await route.fetch(); await route.abort('failed') })
+          await staff.route('**/api/strap/profile-save?*', route => route.abort('failed'))
+          await inactiveEditor.getByRole('button', { name: 'Save profile for member', exact: true }).click()
+          await inactiveEditor.getByRole('alert').filter({ hasText: 'Save not confirmed' }).waitFor()
+          assert.equal(await inactiveEditor.getByLabel('Mobile phone').inputValue(), inactivePhone)
+          assert.equal((await h.state()).profileChanges.filter(c => c.personId === inactive.id).length, inactiveBefore + 1)
+          await staff.unroute('**/api/strap/profile-save?*')
+          await inactiveEditor.getByRole('button', { name: 'Retry same save', exact: true }).click()
+          await staff.getByRole('status').filter({ hasText: 'Verified against the current studio record' }).waitFor({ timeout: 10000 })
+          await staff.unroute(saveUrl)
+          const inactiveState = await h.state(), inactiveRow = inactiveState.people.find(p => p.id === inactive.id)
+          assert.equal(inactiveRow.phone, inactivePhone)
+          assert.equal(inactiveRow.active, false, 'editing an inactive profile never restores sign-in')
+          assert.equal(inactiveState.profileChanges.filter(c => c.personId === inactive.id).length, inactiveBefore + 1, 'retrying the inactive save keeps one change')
+          const receipt = await staff.request.get(h.origin + '/api/strap/profile-save?' + new URLSearchParams({ command: 'profile.save.staff', personId: inactive.id, requestId: inactiveRequest }))
+          assert.equal(receipt.status(), 200)
+          assert.equal((await receipt.json()).status, 'saved')
+          await staff.locator('#person summary').filter({ hasText: /^Edit profile$/ }).click()
+          assert.equal(await inactiveEditor.getByLabel('Mobile phone').isEnabled(), true, 'a verified inactive save restores the editor')
+          assert.equal((await staff.request.get(staff.url())).status(), 200, 'the final People confirmation page is readable')
+        }
+        await shot(staff, 'inactive-profile')
+        if (width === 1440) console.log('PROBE APP-005 A: owner saves an inactive People profile, loses the committed response and receipt, retries -> verified current profile, enabled editor, inactive access and exactly one change')
         // The member cancels and reads the staff change; the owner sees the cancellation.
         await member.goto(h.origin + '/app')
         if (width === 390) await shot(member, 'member-classes')

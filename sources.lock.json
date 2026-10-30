@@ -689,10 +689,6 @@
       "sha256": "203fb688db7853887877f2964e83e4fd53d8fe81142d5b63136de57e33ccad9b",
       "executable": false
     },
-    "public/brand/profile-save.js": {
-      "sha256": "99efaad9802f3213685983334b80ba43f321140de4b698973b31eee6de7e3483",
-      "executable": false
-    },
     "public/brand/strap.css": {
       "sha256": "522c0587ccc0783141929ad37d980d432843352bf3577fc2d96dd6e61a57b8b1",
       "executable": false
@@ -875,6 +871,10 @@
     },
     "public/site/theme.css": {
       "sha256": "bf31371e932e209f07f5276b06dca1d866bdadb025a628077c2070dd0f5f343e",
+      "executable": false
+    },
+    "public/studio/profile-save.js": {
+      "sha256": "99efaad9802f3213685983334b80ba43f321140de4b698973b31eee6de7e3483",
       "executable": false
     },
     "README.md": {
@@ -3430,7 +3430,7 @@
       "executable": false
     },
     "src/strap/domain/profiles.ts": {
-      "sha256": "27bba436f2f5567b07c8a86c40d14f93473dbd0449b4b6002dc74ef7c269c8a2",
+      "sha256": "d7c39dd9528a5905440f5ca52498cd6f9b13ae95f6d4970d2fcbd7947b0acb2e",
       "executable": false
     },
     "src/strap/domain/recognition-launch.ts": {
@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "e9dc9f9c4e6f52dc77b77e9c412889132057492b3cd59ad681add44089148af8",
+      "sha256": "cf1657be2e9ea1679370774e1a286e738f2a2c4e6b9fc68dbdc29c99c15edcab",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -4494,11 +4494,11 @@
       "executable": false
     },
     "tests/profiles-browser.mjs": {
-      "sha256": "e2cd82f77d09bc121adc4303c40f1bb8ae3f9faff0889c1bf268e712e2a651af",
+      "sha256": "4b07884d52d851264fb6c019c535092aa1631a9607ab1b4a029c9a52fed7037e",
       "executable": false
     },
     "tests/profiles.test.mjs": {
-      "sha256": "2ce674300c99c36497dd27e97ae59fd5927684f5c59b7e45773928dd0823772b",
+      "sha256": "988e792c8611d38539e293fb610c3ee09d166c5f66443dea4f8dd9dfccaa8cbd",
       "executable": false
     },
     "tests/recognition-browser.mjs": {
