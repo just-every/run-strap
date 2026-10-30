@@ -37,6 +37,7 @@ import { agentKeys, credentialCommand, fail, principal } from './credentials'
 import { inAppOnly, integrationCommand, integrationKeys } from './integrations'
 import { integrationResponse } from './integration-api'
 import { renderApp } from './ui'
+import { unavailablePage } from './ui/unavailable'
 import { formInput } from './forms'
 import { exitExport } from './exit-export'
 import { privacyCommand,privacyCommandCatalogue } from './privacy'
@@ -356,8 +357,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
+      if (status >= 500) return unavailablePage(back, 'uncertain')
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
-      const page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') })
+      let page: Response
+      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      catch { return unavailablePage(back, 'uncertain') }
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }
     if (pages.has(path) && held && who) {
@@ -366,6 +370,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
     }
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
+    if (pages.has(path) && status === 403) return unavailablePage('/app', 'denied')
+    if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
     return json({ error: message }, status)
   }
 }

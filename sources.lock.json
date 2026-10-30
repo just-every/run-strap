@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "58fe9043f9cf14ff7ce2a8df6bf1a0753276b185e9a438a38b2beb398fc3d945",
+      "sha256": "f82ed1d366d25d3ce72bbf4d253ed252631c9721759c23d5381386cdf0f1a2dd",
       "executable": false
     },
     "DEMO.md": {
@@ -689,12 +689,8 @@
       "sha256": "203fb688db7853887877f2964e83e4fd53d8fe81142d5b63136de57e33ccad9b",
       "executable": false
     },
-    "public/brand/profile-save.js": {
-      "sha256": "99efaad9802f3213685983334b80ba43f321140de4b698973b31eee6de7e3483",
-      "executable": false
-    },
     "public/brand/strap.css": {
-      "sha256": "522c0587ccc0783141929ad37d980d432843352bf3577fc2d96dd6e61a57b8b1",
+      "sha256": "9dd4ee8d64d9ccb4cc9706b998ac55388bcf02086d9d71393cdcf0d7f262bbfc",
       "executable": false
     },
     "public/favicon.ico": {
@@ -739,6 +735,10 @@
     },
     "public/fonts/README.md": {
       "sha256": "2665d61930bb8c48a2dee203cd97b3b982a0b500959fdba33d119bec10798dd0",
+      "executable": false
+    },
+    "public/instance/profile-save.js": {
+      "sha256": "99efaad9802f3213685983334b80ba43f321140de4b698973b31eee6de7e3483",
       "executable": false
     },
     "public/rer-theme.css": {
@@ -3578,7 +3578,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "8a816c830f68fc317833f974ad9a6ac9cb8708e631ae2ff4aace86278945aba2",
+      "sha256": "f7faac0650d9c3f838e5b562880a1189616995ccec518846ab7134c8c8fb0709",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "e9dc9f9c4e6f52dc77b77e9c412889132057492b3cd59ad681add44089148af8",
+      "sha256": "60b12c2824b313260263149c02f079c39ba65a76d7fecefec7c72e78f56d7dda",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -4118,7 +4118,7 @@
       "executable": false
     },
     "tests/accessibility-browser.mjs": {
-      "sha256": "10f95fbc9991921b9709114ae24bf00042a344c4996daddb710320894afa8603",
+      "sha256": "606a301cac61ffa1dbbd5d6c3285b76530c5cb739250b8ecb9402f721ca4b5fd",
       "executable": false
     },
     "tests/appointment-policy-cases.mjs": {
@@ -4494,7 +4494,7 @@
       "executable": false
     },
     "tests/profiles-browser.mjs": {
-      "sha256": "e2cd82f77d09bc121adc4303c40f1bb8ae3f9faff0889c1bf268e712e2a651af",
+      "sha256": "8848869e54e68cd3e9a0f4e3b4fb78109c124c9531ece0296ef5b0cd1bba4f44",
       "executable": false
     },
     "tests/profiles.test.mjs": {
@@ -4590,7 +4590,7 @@
       "executable": false
     },
     "tests/site/browser-journey.mjs": {
-      "sha256": "5a83eebf137631d5d15550c4ded6ea37cf50e792972e44d8249eb87fe5bc6754",
+      "sha256": "1fc7f9609f3990b33c799ce8cbd0dc0736b38653210ed02a7b7a5f6ce18eaa3d",
       "executable": false
     },
     "tests/site/site.test.mjs": {
@@ -4626,7 +4626,7 @@
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
-      "sha256": "fab1a7eef389ebeea029743bab09c6292b8733b76f09f203c52e4a16aef4e620",
+      "sha256": "f666a78172fb950f301a34d237e783e37c303f15cf40b679aeaa5e3f2a2cb5cf",
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {

@@ -43,7 +43,7 @@
   color: var(--strap-sea-ink);
 }
 .spots > .pill:first-child { background: var(--strap-spots); }
-.spots > .pill.full, .pill.full { background: var(--strap-sea-strong); color: var(--rer-accent-text); }
+.spots > .pill.full, .pill.full { background: var(--strap-sea-ink); color: var(--rer-accent-text); }
 .pill.quiet, .pill.wait { font-size: 13px; }
 .pill.quiet { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; }
 .pill.wait { background: var(--strap-wash); color: var(--strap-quiet); font-weight: 500; padding-right: 6px; }
@@ -134,7 +134,7 @@
   border-color: var(--rer-focus);
 }
 .check { display: flex; align-items: flex-start; gap: 10px; font: 400 15px/1.45 var(--rer-font-body); }
-.check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--strap-plum-button); }
+.check input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--strap-plum-button); }
 /* Base #247's dropdown: two gradient strokes 14px in from the border, 40px end padding. */
 select:not([multiple],[size]:not([size="1"])) {
   --rer-select-ink: var(--strap-chevron);
@@ -195,7 +195,7 @@ html.rer-themed main input:not([type=checkbox]):not([type=hidden]) { box-sizing:
 /* Above Base's frame rule (.rer-themed input:not(…):not(…)), the same plum focus as the app's fields. */
 html.rer-themed main input:not([type=checkbox]):not([type=hidden]):focus-visible { outline: 3px solid color-mix(in srgb, var(--rer-focus) 30%, transparent); outline-offset: 0; border-color: var(--rer-focus); }
 html.rer-themed main button:focus-visible, html.rer-themed main a:focus-visible { outline: 3px solid var(--rer-focus); outline-offset: 3px; }
-html.rer-themed main input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--strap-plum-button); }
+html.rer-themed main input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--strap-plum-button); }
 html.rer-themed main label:has(input[type=checkbox]) { font-weight: 400; font-size: 15px; }
 html.rer-themed main button, html.rer-themed main .action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 22px; border: 1px solid var(--strap-plum-button); border-radius: var(--strap-radius-control); background: var(--strap-plum-button); color: var(--rer-accent-text); font: 600 16px/1.2 var(--rer-font-body); text-decoration: none; box-shadow: var(--strap-button-shadow); cursor: pointer; }
 html.rer-themed main button:hover, html.rer-themed main .action:hover { background: var(--strap-plum); border-color: var(--strap-plum); }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir,readFile } from 'node:fs/promises';
 import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
-import { auditPage, keyboardFields } from './accessibility-browser.mjs';
+import { auditPage, keyboardFields, auditNavigation } from './accessibility-browser.mjs';
 
 export async function staffRightsBrowser(h,s) {
   const proof=process.env.STRAP_RIGHTS_PROOF_DIR ?? process.env.STRAP_PROOF_DIR;await mkdir(proof,{recursive:true});
@@ -67,6 +67,11 @@ export async function staffRightsBrowser(h,s) {
         if(width===1440)await h.enroll(s.coach.cookie);
         await login(s.coach.cookie);await page.goto(h.origin+'/app/people?person='+s.ana.id);await capture('instructor-members');
         await login(s.finance.cookie);await page.goto(h.origin+'/app/revenue');await capture('finance-report');
+        if(width===1440) {
+          for(const [role,cookie] of [['front desk',s.desk.cookie],['manager',s.manager.cookie],['instructor',s.coach.cookie],['finance',s.finance.cookie]]) {
+            await login(cookie);await auditNavigation(page,h.origin,role,proof);
+          }
+        }
       } finally {await context.close();}
     }
   } finally {await browser.close();}

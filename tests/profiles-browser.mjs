@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join, extname } from 'node:path'
 import { chromium } from '@playwright/test'
-import { auditPage, keyboardFields } from './accessibility-browser.mjs'
+import { auditPage, keyboardFields, auditNavigation, readRecovery } from './accessibility-browser.mjs'
 
 // APP-003 screens at 1440 and 390: the member edits their profile, books and
 // cancels; the owner reads the same profile and booking on the person card and
@@ -183,6 +183,11 @@ export async function profilesBrowser(h, { ana, ben, entry }) {
         await shot(other, 'other-member')
         row = (await h.state()).people.find(p => p.id === ana.id)
         assert.equal(row.emergencyContact.phone, '6155550155')
+        if (width === 1440) {
+          await auditNavigation(staff, h.origin, 'owner', process.env.STRAP_PROOF_DIR)
+          await auditNavigation(member, h.origin, 'member', process.env.STRAP_PROOF_DIR)
+          await readRecovery(h, staff, row, process.env.STRAP_PROOF_DIR)
+        }
       } finally { for (const context of contexts) await context.close() }
     }
   } finally { await browser.close() }
