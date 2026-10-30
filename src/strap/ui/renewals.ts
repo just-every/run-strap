@@ -12,7 +12,7 @@ export function renewalsPage(s: any, query: URLSearchParams) {
   const back = path+'?'+filters
   const selected = report.rows.find(row => row.packId === query.get('pack'))
   const rows = report.rows.map(row => `<tr data-pack-id="${h(row.packId)}">`
-    + cell('Member / plan',`<a href="/app/people?person=${encodeURIComponent(row.personId)}#person">${h(row.member)}</a><small>${h(row.plan)} · ${h(row.kind)}</small>${row.reasonCode ? `<small>Termination code: ${h(row.reasonCode)}</small>` : ''}`)
+    + cell('Member / plan',`<a href="/app/people?person=${encodeURIComponent(row.personId)}#person">${h(row.member)}</a><small>${h(row.plan)} · ${h(row.kind)}</small>${row.reasonCode ? `<small>Termination code: ${h(row.reasonLabel ?? row.reasonCode)} (${h(row.reasonCode)})</small>` : ''}`)
     + cell('Expires',`${when(s,row.expiresAt)}<small>${row.reasons.map(reason => reason === 'expiring' ? 'Expiring' : reason === 'freeze-ending' ? 'Freeze ending' : 'Low credits').join(' · ')}</small>`)
     + cell('Remaining',`${row.remainingCredits === null ? 'No credit limit' : h(row.remainingCredits)+' credits'}<small>${row.remainingValueCents === null ? 'Prepaid value needs receipt allocation' : money(row.remainingValueCents)+' unused prepaid access'}</small>`)
     + cell('Last visit',row.lastVisit ? when(s,row.lastVisit) : 'No recorded visit')

@@ -104,6 +104,7 @@ const relationships = [
   { from: 'st_records.data.otherPersonId', to: 'st_people.id', when: 'kind=introIdentityLink' },
   { from: 'st_records.data.recurringTermsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'recurringInvoice', when: 'kind=pack or kind=charge' },
+  { from: 'st_records.data.reasonCatalogId', to: 'st_records.id', kind: 'terminationReason', when: 'kind=contractCancellation' },
   { from: 'st_records.data.cancellationId', to: 'st_records.id', kind: 'contractCancellation' },
   { from: 'st_records.data.termsId', to: 'st_records.id', kind: 'recurringTerms' },
   { from: 'st_records.data.delegateId', to: 'st_people.id' },

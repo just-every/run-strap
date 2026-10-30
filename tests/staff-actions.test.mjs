@@ -118,6 +118,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       'plan.cancellation.statutory':async door=>{const {member,pack}=await nativeContract('Imani');const r=await checkAudit(door,{packId:pack.id,reasonCode:'cooling-off',documentedAt:new Date().toISOString(),evidenceReference:'synthetic-strap-702',requestId:randomUUID(),channel:'phone'});assert.equal(r.result.status,'applied');assert.equal(r.after.cancellations.statements.filter(s=>s.cancellationId===r.result.id).length,1)},
       'plan.cancellation.request':async door=>{
         const {member,pack}=await nativeContract('Selena');const input={packId:pack.id,effectiveAt:at(72),reason:'Member phoned for an early end',requestId:randomUUID(),channel:'phone'};
+        await h.cmd('plan.cancellation.reason.save',{code:'other',label:'Other',active:true,revision:0});input.reasonCode='other';
         contractRequest=await h.cmd('plan.cancellation.request',{...input,requestId:randomUUID()},member.cookie);
         const r=await checkAudit(door,{...input,cancellationRequestId:contractRequest.id});assert.equal(r.result.status,'preview');
         contractCancel=await h.cmd('plan.cancellation.confirm',{id:r.result.id,key:r.result.key,requestId:randomUUID(),channel:'phone'});

@@ -56,6 +56,7 @@ export async function financeTiming() {
     const bookings=[]
     for(const entry of [attended,missed,forfeited])bookings.push(await cmd('booking.book',{classId:entry.id},member.cookie))
     assert.ok(bookings.every(b=>b.packId===ten.pack.id),'finite ten-pack funds the visits')
+    await cmd('plan.cancellation.reason.save',{code:'other',label:'Other',active:true,revision:0})
     const read=async month=>{const r=await h.send('/api/strap/reports/finance?financeMonth='+month,undefined,owner);assert.equal(r.status,200,r.text);return r.value}
     const finite=report=>report.rows.find(r=>r.id===ten.charge.id)
     assert.equal(finite(await read('2032-01')).earnedCents,0,'reservations earn nothing')
@@ -128,7 +129,7 @@ async function adjustments(h,{cmd,state,read,jump,buy,key,member,coach,refundedM
   await cmd('contract.prepayment.record',{packId:refundSale.pack.id,paymentId:receipt.id,chargeId:refundSale.charge.id,amountCents:31000,reference:key()})
   const proposal=await cmd('plan.recurring.prepare',{packId:refundSale.pack.id,intervalMonths:1,requestId:key()})
   await cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},refundedMember.cookie)
-  const cancellation=await cmd('plan.cancellation.prepare',{packId:refundSale.pack.id,effectiveAt:'2032-03-20T07:00:00Z',reason:'Leave the studio early',exceptionReason:'Unused period will be refunded',requestId:key(),channel:'desk'})
+  const cancellation=await cmd('plan.cancellation.prepare',{reasonCode:'other',packId:refundSale.pack.id,effectiveAt:'2032-03-20T07:00:00Z',reason:'Leave the studio early',exceptionReason:'Unused period will be refunded',requestId:key(),channel:'desk'})
   await cmd('plan.cancellation.confirm',{id:cancellation.id,key:cancellation.key,requestId:key(),channel:'desk'})
   await jump('2032-03-21T07:00:00Z')
   await(await h.mf.getWorker()).scheduled()
@@ -187,7 +188,7 @@ async function timeRefund(h,{cmd,state,read,jump,buy,key,timeRefundedMember:memb
   await cmd('contract.prepayment.record',{packId:sale.pack.id,paymentId:receipt.id,chargeId:sale.charge.id,amountCents:15500,reference:key()})
   const proposal=await cmd('plan.recurring.prepare',{packId:sale.pack.id,intervalMonths:1,requestId:key()})
   await cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
-  const cancellation=await cmd('plan.cancellation.prepare',{packId:sale.pack.id,effectiveAt:'2032-04-10T07:00:00Z',reason:'Leave the studio early',exceptionReason:'Return unused allocated prepaid value',requestId:key(),channel:'desk'})
+  const cancellation=await cmd('plan.cancellation.prepare',{reasonCode:'other',packId:sale.pack.id,effectiveAt:'2032-04-10T07:00:00Z',reason:'Leave the studio early',exceptionReason:'Return unused allocated prepaid value',requestId:key(),channel:'desk'})
   await cmd('plan.cancellation.confirm',{id:cancellation.id,key:cancellation.key,requestId:key(),channel:'desk'})
   await jump('2032-04-11T07:00:00Z');await(await h.mf.getWorker()).scheduled()
   const due=(await state()).cancellations.refunds.find(r=>r.packId===sale.pack.id)

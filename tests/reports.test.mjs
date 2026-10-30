@@ -448,6 +448,7 @@ test('RPT-003: tenure and attendance frequency count only corrected attended vis
 
 test('RPT-003: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',()=>run(async h=>{
   await h.confirmSetup(h.owner)
+  for(const [code,label] of [['moved-away','Moved away'],['price','Price']])await h.cmd('plan.cancellation.reason.save',{code,label,active:true,revision:0})
   const members=[await h.person('MovedMember'),await h.person('PriceMember'),await h.person('RenewedMember')]
   const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
   const buy=async(member,expiry=at(90))=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:expiry,planName:'Lifecycle offer'})).id})
@@ -463,12 +464,13 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
   const confirmed=await h.cmd('freeze.confirm',{id:f.id,key:f.key,requestId:'synthetic-strap-freeze-confirm'})
   await edit('freeze',{...confirmed,startAt:at(-4),endAt:at(-2)})
   const cancelled=[]
-  for(const [index,reasonCode] of ['Moved away','Price'].entries()){
+  for(const [index,reasonCode] of ['moved-away','price'].entries()){
     const p=await h.cmd('plan.cancellation.prepare',{packId:packs[index].id,effectiveAt:at(5),reasonCode,reason:'Member requested stop',requestId:'synthetic-strap-end-'+index})
     const c=await h.cmd('plan.cancellation.confirm',{id:p.id,key:p.key,requestId:'synthetic-strap-confirm-'+index})
     cancelled.push(c)
     await edit('contractCancellation',{...c,effectiveAt:at(-1)})
   }
+  await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Relocated elsewhere',active:false,revision:1})
   const terms=(await h.state()).recurring.terms.find(t=>t.personId===members[2].id)
   const pack=(await h.state()).packs.find(p=>p.id===packs[2].id)
   await edit('recurringTerms',{...terms,nextRenewalAt:at(-1)})
@@ -482,6 +484,8 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
   const version=(await h.state()).version,path='/api/strap/reports/retention'
   const report=(await h.send(path,undefined,h.owner)).value,cohort=report.cohorts.find(c=>c.initialOffer==='Lifecycle offer')
   assert.deepEqual(cohort.churnByReason,[{label:'Moved away',count:1},{label:'Price',count:1}])
+  assert.deepEqual(report.rows.find(r=>r.packId===packs[0].id).terminationReasonCodes,['moved-away'])
+  assert.deepEqual(state.cancellations.cancellations.find(c=>c.id===cancelled[0].id).reasonLabel,'Moved away')
   assert.equal(cohort.terminatedAgreements,2);assert.equal(cohort.scheduledTerminations,0)
   assert.deepEqual(cohort.freezeByType,[{label:'Travel leave',count:1}]);assert.equal(cohort.reactivations,1)
   const row=report.rows.find(r=>r.packId===pack.id)
@@ -499,6 +503,7 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
 
 test('RPT-003: period churn reconciles unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
   await h.confirmSetup(h.owner)
+  for(const [code,label] of [['moved-away','Moved away'],['price','Price']])await h.cmd('plan.cancellation.reason.save',{code,label,active:true,revision:0})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const members = [await h.person('ChurnLost'),await h.person('ChurnRetained'),await h.person('ChurnReplacement'),await h.person('ChurnScheduled')]
   const day = 86400000, base = Date.now(), at = d => new Date(base+d*day).toISOString()
@@ -516,7 +521,7 @@ test('RPT-003: period churn reconciles unique lost members and opening recurring
   // A real, separately sold plan preserves member access when a recurring agreement ends.
   const other=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:members[1].id,kind:'visits',visits:2,period:'month',amountCents:5000,expiresAt:at(90),planName:'Other access'})).id})
   for(const [i,item] of [lost1,lost2,kept,replaced,scheduled].entries()) {
-    const p=await h.cmd('plan.cancellation.prepare',{packId:item.pack.id,effectiveAt:at(5),reasonCode:i<2?'Moved away':'Price',reason:'Requested stop',requestId:'synthetic-strap-churn-'+i})
+    const p=await h.cmd('plan.cancellation.prepare',{packId:item.pack.id,effectiveAt:at(5),reasonCode:i<2?'moved-away':'price',reason:'Requested stop',requestId:'synthetic-strap-churn-'+i})
     const c=await h.cmd('plan.cancellation.confirm',{id:p.id,key:p.key,requestId:'synthetic-strap-churn-confirm-'+i})
     if(item!==scheduled)await editClock('contractCancellation',{...c,effectiveAt:at(-1)})
   }
@@ -546,6 +551,7 @@ test('RPT-003: period churn reconciles unique lost members and opening recurring
 
 test('RPT-003: reviewed eighteen-month historical terms join native cutover renewals and terminations with labeled source and payment evidence', () => run(async h => {
   await h.confirmSetup(h.owner)
+  for(const [code,label] of [['moved-away','Moved away'],['price','Price']])await h.cmd('plan.cancellation.reason.save',{code,label,active:true,revision:0})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
   const member=await h.person('HistoryMember'),other=await h.person('HistoryOther'),coach=await h.person('HistoryCoach','instructor')
   const day=86400000,base=Date.now(),at=d=>new Date(base+d*day).toISOString()
@@ -588,7 +594,7 @@ test('RPT-003: reviewed eighteen-month historical terms join native cutover rene
   assert.ok(invoice)
   const payment=await h.cmd('payment.record',{personId:member.id,amountCents:12000,reference:'synthetic-strap-history-native-payment'})
   await h.cmd('contract.prepayment.record',{packId:invoice.packId,paymentId:payment.id,chargeId:invoice.chargeId,amountCents:12000,reference:'synthetic-strap-history-allocation'})
-  const end=await h.cmd('plan.cancellation.prepare',{packId:invoice.packId,effectiveAt:at(5),reasonCode:'Moved away',reason:'Requested stop',requestId:'synthetic-strap-history-stop'})
+  const end=await h.cmd('plan.cancellation.prepare',{packId:invoice.packId,effectiveAt:at(5),reasonCode:'moved-away',reason:'Requested stop',requestId:'synthetic-strap-history-stop'})
   const cancellation=await h.cmd('plan.cancellation.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-history-stop-confirm'})
   await editClock('contractCancellation',{...cancellation,effectiveAt:at(-0.5)})
   await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()

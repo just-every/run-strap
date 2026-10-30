@@ -1,3 +1,4 @@
+import { staffTerminationsPanel } from './contract-cancellations';
 import { reservationsPanel } from './reservations';
 import { when } from './format';
 import { body, field, form, h, hidden, panel, rows, select } from './shared';
@@ -16,5 +17,5 @@ export function staffDeskPanel(s: any, personId: string, back: string) {
     const checkin = rights.has('check-in') && b.status === 'booked' && !b.checkedInAt ? form('attendance.checkin',back,identity()+hidden('id',b.id),'Check in member','quiet') : '';
     return '<article data-staff-booking="'+h(b.id)+'"><details class="more"><summary>'+label+'</summary><div class="panel-body">'+cancel+restore+checkin+'</div></details></article>';
   }).join('');
-  return (book || bookings ? panel('Bookings at the desk',body(book+bookings),{id:'staff-bookings',icon:'calendar'}) : '')+(rights.has('booking') ? reservationsPanel(s,personId,back) : '');
+  return staffTerminationsPanel(s,personId,back)+(book || bookings ? panel('Bookings at the desk',body(book+bookings),{id:'staff-bookings',icon:'calendar'}) : '')+(rights.has('booking') ? reservationsPanel(s,personId,back) : '');
 }

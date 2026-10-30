@@ -1,3 +1,4 @@
+import { activeTerminationReason, terminationReasonChanged, terminationReasons } from './termination-reasons';
 import { requireStaffRight } from './staff-rights';
 import { coolingRefund } from './cooling-refunds';
 import { coolingAgreementPackIds } from './cooling-void';
@@ -113,15 +114,16 @@ export async function prepareCancellation(tx:Transaction,input:Record<string,unk
   const sourcePack=record(tx.state,input.packId ?? tx.state.records.get(String(input.cancellationRequestId))?.data.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',sourcePack.personId,sourcePack.locationId ?? 'studio');const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
   insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
   insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
+  const selected=activeTerminationReason(tx.state,input.reasonCode);
   const reason=text(merged.reason,'reason',500),c=await prepare(tx,{...input,packId:pack.id},'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
-  const coded={...c,reasonCode:input.reasonCode ? text(input.reasonCode,'reasonCode',50) : 'other'};tx.put('contractCancellation',coded);
+  const coded={...c,reasonCode:selected.code,reasonLabel:selected.label,reasonCatalogId:selected.id,reasonCatalogRevision:selected.revision};tx.put('contractCancellation',coded);
   if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
   requireStaffRight(tx.state,tx.who,'contract-change');
   const c=record(tx.state,input.id,'contractCancellation'),sourcePack=record(tx.state,c.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',c.personId,sourcePack.locationId ?? 'studio');insist(input.key===c.key,'preview_changed',409);
   if(c.confirmedAt){insist(c.terminatedBy===tx.who.id&&c.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return c;}
-  insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
+  insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(!terminationReasonChanged(tx.state,c)&&c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
   const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}return scheduled;
 }
 function mayWithdraw(state:State,who:Actor,c:RecordData){
@@ -164,10 +166,11 @@ export function applyDueCancellations(tx:Transaction){
     tx.put('contractCancellation',{...c,status:'applied',appliedAt:c.effectiveAt,processedAt:now(),statementId,refundId:refund?.id??null});notify(tx,c,`cancellation-effective:${c.id}`,'Membership ended',`${notice(c)} Final covered-agreement balance ${contractBalance(tx.state,c.termsId)} cents. Refund record ${refund?.id??'none'}.`);
   }
 }
+export async function cancellationPreviewStale(state:State,c:RecordData){return c.status==='preview'&&(c.effectiveAt<=now()||terminationReasonChanged(state,c)||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt));}
 export async function cancellationsSnapshot(state:State,who:Actor){
   const termsOf=(r:RecordData)=>r.termsId??(r.cancellationId?state.records.get(r.cancellationId)?.data.termsId:r.refundId?state.records.get(state.records.get(r.refundId)?.data.cancellationId)?.data.termsId:undefined);
   const visible=(r:RecordData)=>canCancelContract(state,who,r.personId,termsOf(r));
-  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:mayWithdraw(state,who,c)&&live(c)&&c.effectiveAt>now(),stale:c.status==='preview'&&(c.effectiveAt<=now()||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt))})));
-  return {policy:policy(state),statutoryPreviews:list(state,'statutoryRefundPreview').filter(p=>!p.submittedAt&&cancellationForTerms(state,p.termsId)?.status!=='applied'&&p.createdBy===who.id&&visible(p)),authorities:contractAuthoritySnapshot(state,who),contracts:await Promise.all(list(state,'recurringTerms').filter(t=>canCancelContract(state,who,t.personId,t.id)).filter(t=>t.currentPackId&&contract(state,t.currentPackId).terms.id===t.id).map(async t=>{const pack=record(state,t.currentPackId,'pack');return {id:t.id,personId:t.personId,participantName:person(state,t.personId,false).name,packId:t.currentPackId,status:t.status,acceptedAt:t.acceptedAt,nextRenewalAt:t.nextRenewalAt,pack,memberRegion:contractRegion(state,t.personId),copy:await contractCopy(state,t),deliveredAt:contractDeliveredAt(state,t.id),coolingOff:currentCooling(state,pack,t)};})),requests:list(state,'cancellationRequest').filter(visible),cancellations,
+  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:mayWithdraw(state,who,c)&&live(c)&&c.effectiveAt>now(),stale:await cancellationPreviewStale(state,c)})));
+  return {reasonCodes:who.role==='owner'?terminationReasons(state):[],policy:policy(state),statutoryPreviews:list(state,'statutoryRefundPreview').filter(p=>!p.submittedAt&&cancellationForTerms(state,p.termsId)?.status!=='applied'&&p.createdBy===who.id&&visible(p)),authorities:contractAuthoritySnapshot(state,who),contracts:await Promise.all(list(state,'recurringTerms').filter(t=>canCancelContract(state,who,t.personId,t.id)).filter(t=>t.currentPackId&&contract(state,t.currentPackId).terms.id===t.id).map(async t=>{const pack=record(state,t.currentPackId,'pack');return {id:t.id,personId:t.personId,participantName:person(state,t.personId,false).name,packId:t.currentPackId,status:t.status,acceptedAt:t.acceptedAt,nextRenewalAt:t.nextRenewalAt,pack,memberRegion:contractRegion(state,t.personId),copy:await contractCopy(state,t),deliveredAt:contractDeliveredAt(state,t.id),coolingOff:currentCooling(state,pack,t)};})),requests:list(state,'cancellationRequest').filter(visible),cancellations,
     withdrawals:await Promise.all(list(state,'cancellationWithdrawal').filter(visible).map(async w=>({...w,canConfirm:who.id===w.createdBy,stale:w.status==='preview'&&(!live(record(state,w.cancellationId,'contractCancellation'))||w.basis!==await withdrawalBasis(state,record(state,w.cancellationId,'contractCancellation')))}))),statements:list(state,'cancellationStatement').filter(visible),refunds:list(state,'cancellationRefund').filter(visible),settlements:list(state,'cancellationRefundSettlement').filter(visible)};
 }

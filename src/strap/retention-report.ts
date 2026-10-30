@@ -66,7 +66,7 @@ export function retentionReport(state: State, who: Actor, query: URLSearchParams
         tenureDays,attendedVisits,visitsPer30Days,churnEvidence:churn.member(member.id),packId:pack.id,termStartAt:pack.termStartAt ?? pack.createdAt,expiresAt:pack.expiresAt,completed,
         renewalStatus:applied || invoice ? 'applied' : scheduled ? 'scheduled' : completed ? 'expired-without-linked-renewal' : 'not-recorded',
         renewalAttemptIds:renewals.map(change => change.id),renewalChangeId:applied?.id ?? scheduled?.id ?? null,successorPackId,renewalInvoiceId:invoice?.id ?? null,
-        cancellationIds:[...cancellations.map(c => c.id),...historicalTermination.map(() => pack.id+':termination')],terminationReasons:[...cancellations.map(c => c.reasonCode ?? 'unrecorded'),...historicalTermination],scheduledCancellationIds:scheduledCancellations.map(c => c.id),
+        cancellationIds:[...cancellations.map(c => c.id),...historicalTermination.map(() => pack.id+':termination')],terminationReasons:[...cancellations.map(c => c.reasonLabel ?? c.reasonCode ?? 'unrecorded'),...historicalTermination],terminationReasonCodes:cancellations.map(c => c.reasonCode ?? 'unrecorded'),scheduledCancellationIds:scheduledCancellations.map(c => c.id),
         freezeIds:freezes.map(f => f.id),freezeTypes:freezes.map(f => f.typeName),resumedFreezeIds:resumed.map(f => f.id),
         lifecycleUrl:historyUrl ?? '/app/packs?person='+encodeURIComponent(member.id)+'#cancellations',freezeUrl:'/app/packs?person='+encodeURIComponent(member.id)+'#freezes',
         chargeIds:pack.sourceTerm ? [pack.id+':contract'] : evidence.map(charge => charge.id),assessedCents:pack.sourceTerm ? pack.sourceTerm.amountCents : evidence.reduce((total,charge) => total+charge.amountCents,0),
@@ -104,7 +104,7 @@ export function retentionReport(state: State, who: Actor, query: URLSearchParams
     unavailable:{importedHistoricalChurn:null}}
 }
 
-export const retentionColumns = ['personId','member','acquisitionMonth','initialOffer','firstPackId','acquiredAt','tenureDays','attendedVisits','visitsPer30Days','packId','termStartAt','expiresAt','completed','renewalStatus','renewalAttemptIds','renewalChangeId','successorPackId','chargeIds','assessedCents','collectedRenewalCents','paymentIds','packUrl','renewalUrl','chargeUrls','renewalInvoiceId','cancellationIds','terminationReasons','scheduledCancellationIds','freezeIds','freezeTypes','resumedFreezeIds','lifecycleUrl','freezeUrl','allocationIds','paymentUrls','churnEvidence','source','sourceName','historyId','sourceRecord','definitionDifferences'] as const
+export const retentionColumns = ['personId','member','acquisitionMonth','initialOffer','firstPackId','acquiredAt','tenureDays','attendedVisits','visitsPer30Days','packId','termStartAt','expiresAt','completed','renewalStatus','renewalAttemptIds','renewalChangeId','successorPackId','chargeIds','assessedCents','collectedRenewalCents','paymentIds','packUrl','renewalUrl','chargeUrls','renewalInvoiceId','cancellationIds','terminationReasons','terminationReasonCodes','scheduledCancellationIds','freezeIds','freezeTypes','resumedFreezeIds','lifecycleUrl','freezeUrl','allocationIds','paymentUrls','churnEvidence','source','sourceName','historyId','sourceRecord','definitionDifferences'] as const
 
 export function retentionCsv(report: ReturnType<typeof retentionReport>) {
   const quote = (value: string) => '"'+value.replace(/"/g,'""')+'"'
