@@ -252,6 +252,18 @@
       "name": "0041-payment-control.sql",
       "sha256": "70ae4bcade4fc4f700334048e96adb6bb1e8cc863626d2d193e4e2615df67f2d",
       "sql": "-- Fresh connection reviews are invalidated by a later disconnect or review.\n-- This installation authority is excluded from native and portable archives.\nCREATE TABLE st_payment_control (\n  id TEXT PRIMARY KEY,\n  operation_id TEXT NOT NULL,\n  origin TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0042-automation-connections.sql",
+      "sha256": "0b413c4038a5bd2aa0836e3a65dffa7bad368d15d7a68e4cfb2fe9f7356538c8",
+      "sql": "-- Installation-local reviewed authority. Portable history cannot enable execution.\nCREATE TABLE st_automation_connections (\n  rule_id TEXT PRIMARY KEY,\n  epoch TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0043-automation-reviews.sql",
+      "sha256": "608867a78ce1e192b859fa27ec3ff10f6de094254d4ee7f0ac929b4628e5021e",
+      "sql": "-- Preview confirmation is installation-local as well as owner-bound.\nCREATE TABLE st_automation_reviews (\n  id TEXT PRIMARY KEY,\n  rule_id TEXT NOT NULL,\n  review_key TEXT NOT NULL\n);\n"
     }
   ],
   "compatibilityDate": "2026-09-08",
