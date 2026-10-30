@@ -25,7 +25,16 @@ export async function privacyRequests(h) {
   assert.equal((await h.cmd('privacy.access.export',{id:request.id,requestId:'synthetic-strap-stale'},h.owner,409)).error,'privacy_identity_changed_reverify');
   await h.cmd('privacy.request.verify',{id:request.id,verificationReference:'synthetic-strap-identity-review-2',confirm:true,channel:'phone',requestId:'synthetic-strap-privacy-reverify'});
   const exportInput={id:request.id,channel:'phone',requestId:'synthetic-strap-privacy-export'};
-  const exported=await h.cmd('privacy.access.export',exportInput);
+  for(const cookie of [member.cookie,manager.cookie])assert.equal((await h.send('/api/strap/privacy/access.json',exportInput,cookie)).status,403);
+  const download=await h.send('/api/strap/privacy/access.json',exportInput,h.owner);
+  assert.equal(download.status,200);assert.match(download.headers.get('content-disposition'),/^attachment;/);
+  assert.equal(download.headers.get('cache-control'),'no-store');
+  const exported={export:download.value.receipt,bundle:download.value.bundle};
+  const {createHash}=await import('node:crypto');
+  assert.equal(createHash('sha256').update(JSON.stringify(exported.bundle)).digest('hex'),exported.export.digest,'the private file matches its delivery receipt');
+  const downloadVersion=(await h.state()).version;
+  assert.equal((await h.send('/api/strap/privacy/access.json',exportInput,h.owner)).status,409,'a download replay exposes only its receipt');
+  assert.equal((await h.state()).version,downloadVersion);
   assert.equal(exported.bundle.profile.name,'Updated privacy member');
   assert.equal(exported.bundle.profile.emergencyContact.name,'Synthetic contact');
   assert.ok(exported.bundle.records.some(r=>r.kind==='memberNote'&&r.data.text==='Synthetic private note'));

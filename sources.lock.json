@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "f130694ab75bb74d77a987aa9b3e25861d6326f740f072e5d0d3bc288bacda08",
+      "sha256": "c72924e0801697b3c1a1325da44649d49fedb3541bd321c808f1809adba94272",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "8146a2e0853102611905ed7e54ff76d233e9da43f36b70d41c6a8803c1b94ddb",
+      "sha256": "b4a24412d17791a8bdad25acbdd3b96e74191ec68d91f73cb857d1b83243a78e",
       "executable": false
     },
     "DEMO.md": {
@@ -362,7 +362,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "8afc87a249eb1705ceb99ab912bd81237890e3e8b405d7dcf401f9f1d6df44cb",
+      "sha256": "4453c92243ba86a437331eeeb2c342468e564099ca2ccbf935be5c953f75ac26",
       "executable": false
     },
     "docs/classes.md": {
@@ -402,7 +402,7 @@
       "executable": false
     },
     "docs/privacy.md": {
-      "sha256": "f4dee400292d16ca8ea498fcfba473d5ae7137525f5dbc0aaeeaea08685ef690",
+      "sha256": "242c30c2f85d7c0a32f86ce72a82d6114de4013fdca9aab423e73d4de17a5dc2",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3590,7 +3590,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "ecf0b9448f4d74a520144ef11d8d606db894f5c69cf5895d89e4b3f1598d8fa5",
+      "sha256": "f113ec8ae30bd7ceb62ff8faddb40ed7b2cb675cb375c6d7ac9d4078ac7bc7b8",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3682,7 +3682,7 @@
       "executable": false
     },
     "src/strap/security/gate.ts": {
-      "sha256": "b640f58652077a5a80c79580fcf17481ad2df00439003de6157bb49bc6eb6ad0",
+      "sha256": "d15b16fe55d7795c6f05b9cef1c1b1d71cbca57a33d223b12daab29d6db34408",
       "executable": false
     },
     "src/strap/security/manager.ts": {
@@ -4438,7 +4438,7 @@
       "executable": false
     },
     "tests/privacy-journey.mjs": {
-      "sha256": "bb431875146a1a88d82143e92d00da04c7840020161f861dc5481c5288d33466",
+      "sha256": "ca111d6b4c07a9152f2f8f9c4e10158f565de2abc2d86130b606573d44594700",
       "executable": false
     },
     "tests/profiles-browser.mjs": {

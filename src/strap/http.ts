@@ -299,6 +299,13 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="strap-reminder-${reminderFile[1]}.txt"` } })
       }
     } else {
+      if (path === '/api/strap/privacy/access.json') {
+        const input=await inputBody(request)
+        await guard(env,who,path,'privacy.access.export',input)
+        const result=await command(env.DB,who,'privacy.access.export',input)
+        if (!result.bundle) fail('privacy_export_replay_contains_receipt_only',409)
+        return Response.json({receipt:result.export,bundle:result.bundle},{headers:{...headers,'content-disposition':'attachment; filename=strap-member-access.json'}})
+      }
       if (path === '/app/action') {
         const name = url.searchParams.get('name') ?? ''
         await guard(env, who, path, name)
