@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict'
+
+const address = name => name + String.fromCharCode(64) + 'studio.example'
+export const privacyDecision = {obligations:'settled',reason:'Studio financial record retention',retainUntil:'2099-12-31T00:00:00Z',documents:'delete',retireAccess:true}
+export async function verifiedPrivacyRequest(h, member, type, suffix = '') {
+  const request=await h.cmd('privacy.request',{personId:member.id,type,channel:'phone',requestId:'synthetic-strap-'+type+suffix})
+  await h.cmd('privacy.verify',{id:request.id,method:'callback-on-file',confirm:true})
+  return request
+}
+export async function privacyJourney(h) {
+  const member=await h.person('Syntheticprivacy'), other=await h.person('Syntheticother')
+  const paid=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:3700,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await h.cmd('profile.save.staff',{personId:member.id,phone:'2025550162',emergencyName:'Synthetic emergency contact',emergencyPhone:'2025550163',emergencyRelationship:'Friend',channel:'phone',requestId:'synthetic-strap-contact'})
+  await h.cmd('member.note.add',{personId:member.id,text:'Synthetic restricted health note',alert:true})
+  const waiver=await h.cmd('waiver.publish',{text:'Synthetic studio service waiver'})
+  await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
+  const input={personId:member.id,type:'access',channel:'phone',requestId:'synthetic-strap-access'}
+  const before=await h.state()
+  await h.cmd('privacy.request',input,other.cookie,403)
+  assert.equal((await h.state()).version,before.version,'a member cannot create another member privacy request')
+  const request=await h.cmd('privacy.request',input)
+  assert.equal((await h.cmd('privacy.request',input)).id,request.id,'captured request replay records one request')
+  await h.cmd('privacy.export',{id:request.id},h.owner,409)
+  await h.cmd('privacy.verify',{id:request.id,method:'callback-on-file',confirm:false},h.owner,400)
+  await h.cmd('privacy.verify',{id:request.id,method:'callback-on-file',confirm:true})
+  const bundle=await h.cmd('privacy.export',{id:request.id})
+  assert.equal(bundle.person.email,member.email)
+  assert.equal(bundle.person.emergencyContact.name,'Synthetic emergency contact')
+  assert.ok(bundle.records.some(r=>r.kind==='charge'&&r.data.amountCents===3700))
+  assert.ok(bundle.records.some(r=>r.kind==='memberNote'&&r.data.text==='Synthetic restricted health note'))
+  assert.equal(bundle.documents[0].document.text,'Synthetic studio service waiver')
+  assert.ok(!JSON.stringify(bundle).includes(other.email),'the subject access copy excludes another member')
+  await h.cmd('privacy.export',{id:request.id})
+  let actions=(await h.send('/api/strap/staff-history?member='+member.id,undefined,h.owner)).text
+  assert.ok(actions.includes('privacy.export')&&actions.includes('privacy.verify')&&actions.includes('privacy.request'))
+  assert.equal((await h.state()).staffActions.filter(a=>a.command==='privacy.export'&&a.personId===member.id).length,1)
+  const erasure=await verifiedPrivacyRequest(h,member,'erasure')
+  const pending=(await h.state()).version
+  await h.cmd('privacy.erase.prepare',{id:erasure.id,...privacyDecision},h.owner,409)
+  assert.equal((await h.state()).version,pending,'unresolved debt is not silently removed')
+  await h.cmd('payment.record',{personId:member.id,amountCents:3700,reference:'synthetic-strap-privacy-payment'})
+  const review=await h.cmd('privacy.erase.prepare',{id:erasure.id,...privacyDecision})
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:false},h.owner,400)
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true},other.cookie,403)
+  const receipt=await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true})
+  assert.equal(receipt.balanceAfterCents,0)
+  const after=await h.state()
+  assert.ok(!after.people.some(p=>p.id===member.id))
+  assert.equal(after.charges.find(c=>c.packId===paid.id).amountCents,3700)
+  assert.equal(after.payments.find(p=>p.personId===member.id).amountCents,3700)
+  await h.cmd('payment.record',{personId:other.id,amountCents:3700,reference:'synthetic-strap-privacy-payment'},h.owner,409)
+  assert.equal(after.profileChanges.find(p=>p.personId===member.id).erased,true)
+  for(const field of ['before','after','requestBasis','result'])assert.ok(!(field in after.profileChanges.find(p=>p.personId===member.id)))
+  const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
+  assert.equal(exit.status,200)
+  for(const secret of [member.email,'Synthetic emergency contact','2025550162','2025550163','Synthetic restricted health note'])assert.ok(!exit.text.includes(secret),'erasure removes private data from the owner exit')
+  assert.ok(!exit.value.tables.st_records.some(r=>r.kind==='acknowledgement'&&JSON.parse(r.data).personId===member.id))
+  await h.state(member.cookie,401)
+  await h.cmd('privacy.export',{id:request.id},h.owner,404)
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true},h.owner,404)
+  await h.cmd('person.save',{name:member.name,email:member.email,role:'member',active:true},h.owner,409)
+  // Imported originals and reversals are custody too; another row must remain usable.
+  const email=address('synthetic-strap-imported'), peer=address('synthetic-strap-peer')
+  const csv='MemberId,FirstName,LastName,Email\nsynthetic-strap-1,Synthetic,Imported,'+email+'\nsynthetic-strap-2,Synthetic,Peer,'+peer+'\n'
+  const preview=await h.cmd('import.preview',{csv})
+  const imported=await h.cmd('import.apply',{csv,fingerprint:preview.fingerprint})
+  const importedMember=(await h.state()).people.find(p=>p.email===email)
+  const importedRequest=await verifiedPrivacyRequest(h,importedMember,'erasure','-imported')
+  const importedReview=await h.cmd('privacy.erase.prepare',{id:importedRequest.id,...privacyDecision})
+  await h.cmd('privacy.erase.confirm',{id:importedReview.id,confirm:true})
+  const journal=await h.cmd('import.journal',{jobId:imported.job.id})
+  assert.ok(!JSON.stringify(journal).includes(email),'retained import sources no longer carry the erased address')
+  await h.cmd('import.undo',{jobId:imported.job.id})
+  assert.ok(!(await h.state()).people.some(p=>p.id===importedMember.id),'import undo cannot restore the erased member')
+  const reimport=await h.cmd('import.preview',{csv})
+  await h.cmd('import.apply',{csv,fingerprint:reimport.fingerprint},h.owner,409)
+}

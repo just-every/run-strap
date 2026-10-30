@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { run } from './harness.mjs'
+import { privacyJourney } from './privacy-journey.mjs'
 
 // Future ISO week keeps the actual time-bound booking rules meaningful.
 export function week() {
@@ -164,6 +165,7 @@ test('unused identity erasure clears PII and blocks recreation or CSV reimport',
   const csv = 'MemberId,FirstName,LastName,Email\nunused,Never,Joined,unused@studio.example\n'
   const preview = await h.cmd('import.preview', { csv })
   await h.cmd('import.apply', { csv, fingerprint: preview.fingerprint }, h.owner, 409)
+  await privacyJourney(h)
 }))
 
 test('browser forms take dollars, calendar dates and wall times on the studio clock', () => run(async h => {

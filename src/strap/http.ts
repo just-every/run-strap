@@ -38,6 +38,7 @@ import { integrationResponse } from './integration-api'
 import { renderApp } from './ui'
 import { formInput } from './forms'
 import { exitExport } from './exit-export'
+import { privacyCommand } from './privacy'
 import { kioskResponse } from './kiosk/http'
 import { kioskDeviceCommand, kioskDevices } from './kiosk/devices'
 import { memberMailConfigured, noticeDeliveries, sendNotices } from './notice-mail'
@@ -115,6 +116,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   if (name.startsWith('agent.') || name === 'person.invite' || name === 'member.record.invite') return credentialCommand(request, env, who, name, input)
   if (name.startsWith('integration.')) return integrationCommand(env, who, name, input)
   if (name.startsWith('import.')) return importCommand(env.DB, who, name, input)
+  if (name.startsWith('privacy.')) return privacyCommand(env.DB, who, name, input)
   if (name.startsWith('kiosk.')) return kioskDeviceCommand(env, who, name, input)
   if (name === 'booking.bulk.cancel') {
     if (who.role !== 'owner') fail('owner_required',403)
