@@ -158,6 +158,13 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const renewalInput={packId:renewalRow.packId,basis:renewalRow.basis,lowCredits:10000,ownerId:(await h.state()).actor.id,nextAction:'Review next pack',dueAt:'2099-11-01T00:00:00Z'}
     const renewalTask=await h.cmd('renewal.followup.create',renewalInput)
     const automationProof=await seedAutomationArchive(h,member)
+    const terminationReason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0})
+    const terminationPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:8000,expiresAt:'2099-12-01T00:00:00Z'})).id})
+    const terminationTerms=await h.cmd('plan.recurring.prepare',{packId:terminationPack.id,intervalMonths:1,requestId:'synthetic-strap-archive-terms'})
+    await h.cmd('plan.recurring.accept',{id:terminationTerms.id,key:terminationTerms.key},member.cookie)
+    const terminationPreview=await h.cmd('plan.cancellation.prepare',{packId:terminationPack.id,reasonCode:terminationReason.code,reason:'Member is moving away',effectiveAt:'2099-11-01T00:00:00Z',requestId:'synthetic-strap-archive-termination'})
+    const termination=await h.cmd('plan.cancellation.confirm',{id:terminationPreview.id,key:terminationPreview.key,requestId:'synthetic-strap-archive-confirm'})
+    const retiredReason=await h.cmd('plan.cancellation.reason.save',{code:terminationReason.code,label:'Moved elsewhere',active:false,revision:terminationReason.revision})
     assert.equal((await h.send('/api/strap/exit.json')).status,401)
     for(const cookie of [member.cookie,coach.cookie]) assert.equal((await h.send('/api/strap/exit.json',undefined,cookie)).status,403)
     assert.equal((await h.send('/api/strap/exit.json',undefined,'',{authorization:`Bearer ${key.token}`})).status,401)
@@ -305,6 +312,13 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(guardianHtmlAfter.status,200);assert.equal(guardianHtmlAfter.text,guardianHtmlBefore.text,'owner retains identical historical guardian evidence');
     assert.equal((await h.send('/api/strap/waiver-evidence.html?id='+guardianEvidence.id,undefined,restoredGuardian)).status,404,'native restore cannot revive historical guardian HTML-download access');
     reconstructExit(restoredDownload.value,[csv,privacyFixture.csv],taxProof,privacyFixture.sharedCourse)
+    const recoveredCancellation=(await h.state(restoredOwner)).cancellations
+    assert.deepEqual(recoveredCancellation.reasonCodes.find(r=>r.code==='moved-away'),retiredReason)
+    const restoredTermination=recoveredCancellation.cancellations.find(c=>c.id===termination.id)
+    assert.deepEqual([restoredTermination.reasonCode,restoredTermination.reasonLabel,restoredTermination.status],['moved-away','Moved away','scheduled'])
+    const restoredAction=(await h.state(restoredOwner)).staffActions.find(a=>a.command==='plan.cancellation.confirm'&&a.after.id===termination.id)
+    assert.equal(restoredAction.after.reasonLabel,'Moved away')
+    await h.cmd('plan.cancellation.prepare',{packId:terminationPack.id,reasonCode:'moved-away',reason:'Retired selection',effectiveAt:'2099-11-02T00:00:00Z',requestId:'synthetic-strap-archive-retired'},restoredOwner,409)
     const recoveredRenewals=(await h.send('/api/strap/reports/renewals?lowCredits=10000',undefined,restoredOwner)).value
     assert.equal(recoveredRenewals.rows.find(r=>r.packId===renewalRow.packId).followup.leadId,renewalTask.leadId,'RPT-007 native restore retains the pack/task relationship')
     assert.deepEqual(await h.cmd('renewal.followup.create',renewalInput,restoredOwner),renewalTask,'RPT-007 native restore reuses the once-only task')

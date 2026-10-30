@@ -1,4 +1,5 @@
 import { automationSettings } from './automation';
+import { terminationReasonsPanel } from './termination-reasons';
 import { paymentConnectionPanel } from './payment-connection';
 import { privacyRetentionPanel } from './privacy';
 import { appointmentPricesPanel } from './appointment-prices';
@@ -27,6 +28,7 @@ export function studioPage(s: any, notice: any = {}) {
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
     + automationSettings(s)
+    + terminationReasonsPanel(s)
     + locationsPanel(s)
     + appointmentPricesPanel(s)
     + classRemindersPanel(s)

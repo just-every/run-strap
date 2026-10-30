@@ -112,7 +112,9 @@ export async function staffContractRights(h) {
   assert.equal(preview.personId,ana.id);assert.equal(preview.createdBy,(await h.state(desk.cookie)).actor.id);assert.equal(preview.status,'preview');
   await refuse('plan.recurring.accept',{id:preview.id,key:preview.key},desk.cookie);
   const terms=await h.cmd('plan.recurring.accept',{id:preview.id,key:preview.key},ana.cookie);assert.equal(terms.status,'active');
-  const cancel={packId:terms.currentPackId,effectiveAt:iso(1000),reason:'Moving out of town',channel:'phone',requestId:randomUUID()};
+  const reason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0});
+  for(const who of [desk,s.manager,s.finance,s.coach,ana])await refuse('plan.cancellation.reason.save',{code:'price',label:'Price',active:true,revision:0},who.cookie);
+  const cancel={reasonCode:reason.code,packId:terms.currentPackId,effectiveAt:iso(1000),reason:'Moving out of town',channel:'phone',requestId:randomUUID()};
   await refuse('plan.cancellation.prepare',cancel,desk.cookie);
   await grant(desk,'front-desk',['member-record','contract-change']);
   const proposed=await h.cmd('plan.cancellation.prepare',cancel,desk.cookie);assert.equal(proposed.status,'preview');
@@ -122,6 +124,8 @@ export async function staffContractRights(h) {
   const saved=await h.cmd('plan.cancellation.confirm',confirm,desk.cookie);assert.equal(saved.status,'scheduled');assert.equal(saved.terminatedRole,'front-desk');assert.equal(saved.channel,'phone');
   assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),saved);
   const history=(await h.state()).staffActions;assert.equal(history.filter(a=>a.command==='plan.cancellation.confirm'&&a.personId===ana.id).length,1);
+  const event=history.find(a=>a.command==='plan.cancellation.confirm'&&a.personId===ana.id);assert.deepEqual([event.after.reasonCode,event.after.reasonLabel],['moved-away','Moved away']);
+  if(process.env.STRAP_PROOF_DIR||process.env.STRAP_RIGHTS_PROOF_DIR)await(await import('./cancellations-browser.mjs')).staffTerminationsBrowser(h,s);
   // Contract-change eligibility is independent of role titles and location scope.
   for(const actor of [s.finance,s.coach]) {
     const role=actor===s.coach?'instructor':'finance',version=(await h.state()).version;
@@ -134,7 +138,7 @@ export async function staffContractRights(h) {
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:s.ben.id,credits:4,amountCents:8000,locationId,eligibleLocations:'all',expiresAt:iso(2000)})).id});
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
     const accepted=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},s.ben.cookie);
-    const input={packId:accepted.currentPackId,effectiveAt:iso(1000),reason:'Moving out of town',channel:'phone',requestId:randomUUID()};
+    const input={reasonCode:reason.code,packId:accepted.currentPackId,effectiveAt:iso(1000),reason:'Moving out of town',channel:'phone',requestId:randomUUID()};
     await grant(actor,role,['member-record'],[s.ben.id],[locationId]);
     await refuse('plan.cancellation.prepare',input,actor.cookie);
     await grant(actor,role,['member-record','contract-change'],[ana.id],[locationId]);
