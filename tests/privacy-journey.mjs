@@ -10,7 +10,8 @@ export async function verifiedPrivacyRequest(h, member, type, suffix = '') {
 }
 export async function privacyJourney(h) {
   const member=await h.person('Syntheticprivacy'), other=await h.person('Syntheticother')
-  const paid=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:3700,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  const paid=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,planName:'Synthetic retained class plan',credits:3,amountCents:3700,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,planName:member.name+' private plan',credits:1,amountCents:0,expiresAt:'2099-12-31T00:00:00Z'})).id})
   await h.cmd('profile.save.staff',{personId:member.id,phone:'2025550162',emergencyName:'Synthetic emergency contact',emergencyPhone:'2025550163',emergencyRelationship:'Friend',channel:'phone',requestId:'synthetic-strap-contact'})
   await h.cmd('member.note.add',{personId:member.id,text:'Synthetic restricted health note',alert:true})
   const waiver=await h.cmd('waiver.publish',{text:'Synthetic studio service waiver'})
@@ -48,6 +49,7 @@ export async function privacyJourney(h) {
   assert.equal(receipt.balanceAfterCents,0)
   const after=await h.state()
   assert.ok(!after.people.some(p=>p.id===member.id))
+  assert.equal(after.packs.find(p=>p.id===paid.id).entitlement.name,'Synthetic retained class plan','the retained financial record still identifies the service purchased')
   assert.equal(after.charges.find(c=>c.packId===paid.id).amountCents,3700)
   assert.equal(after.payments.find(p=>p.personId===member.id).amountCents,3700)
   await h.cmd('payment.record',{personId:other.id,amountCents:3700,reference:'synthetic-strap-privacy-payment'},h.owner,409)
@@ -55,7 +57,7 @@ export async function privacyJourney(h) {
   for(const field of ['before','after','requestBasis','result'])assert.ok(!(field in after.profileChanges.find(p=>p.personId===member.id)))
   const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
   assert.equal(exit.status,200)
-  for(const secret of [member.email,'Synthetic emergency contact','2025550162','2025550163','Synthetic restricted health note'])assert.ok(!exit.text.includes(secret),'erasure removes private data from the owner exit')
+  for(const secret of [member.name,member.email,'Synthetic emergency contact','2025550162','2025550163','Synthetic restricted health note'])assert.ok(!exit.text.includes(secret),'erasure removes private data from the owner exit')
   assert.ok(!exit.value.tables.st_records.some(r=>r.kind==='acknowledgement'&&JSON.parse(r.data).personId===member.id))
   await h.state(member.cookie,401)
   await h.cmd('privacy.export',{id:request.id},h.owner,404)

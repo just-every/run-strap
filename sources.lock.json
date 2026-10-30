@@ -3646,7 +3646,7 @@
       "executable": false
     },
     "src/strap/privacy-erasure.ts": {
-      "sha256": "33687999959f9c709492467e387f1caf0df829b86c9355b26faaf6e0665d6f99",
+      "sha256": "cca8ff770ad39a18653f50ea5913a58101292ab3599da9494e44b935d00ddccc",
       "executable": false
     },
     "src/strap/privacy-related.ts": {
@@ -4462,7 +4462,7 @@
       "executable": false
     },
     "tests/privacy-journey.mjs": {
-      "sha256": "65a59d28e808e7ff16e503a867ff7f153479d36b5d8a1e211638a0211c0a495b",
+      "sha256": "742333d76a43a4082c71225044c0e24ca924b197b9609b908d70ec919bcd005f",
       "executable": false
     },
     "tests/privacy-obligations.mjs": {

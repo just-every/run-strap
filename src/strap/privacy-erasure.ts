@@ -134,6 +134,8 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
       put(kind,{...removeScope(data),...(data.personId===member.id?{enabled:false,rights:{}}:{}),version:(data.version??0)+1,updatedAt:at,updatedBy:tx.who.id});
     } else if(financial.has(kind) || kind==='draft'&&data.type==='pack') {
       const sanitized=redact(data,identities);
+      // Purchased plan labels are financial facts; personal values embedded in them still redact.
+      if(data.entitlement)sanitized.entitlement.name=redact(data.entitlement.name,identities);
       if(['courseEnrollmentPreview','courseWithdrawalPreview'].includes(kind))Object.assign(sanitized,{key:null,basis:null,payerBasis:null,participantName:null,status:'retired'});
       if(kind==='makeupCredit')Object.assign(sanitized,{voidedAt:data.voidedAt??at,voidedBy:tx.who.id,voidReason:'Member erasure'});
       if(kind==='payment') {sanitized.referenceHash=await hash(String(data.reference));sanitized.reference='Retained receipt '+data.id;}
