@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0521c08f85bb90e03979312e197bc2e1d6001ecdd466f4131161c5c9af096ee7",
+      "sha256": "8b2c1ed29ab4d210bfae69964df19366bb0f352a8cbc4618bfc2f266f195863d",
       "executable": false
     },
     "DEMO.md": {
@@ -3502,7 +3502,7 @@
       "executable": false
     },
     "src/strap/domain/staff-snapshot.ts": {
-      "sha256": "eae2c003c04340b6ba421a0ced312718afb73ac46220aa5374e35630d50ada93",
+      "sha256": "ae845cc3d4645f01e3b1e6de25412b4d8f1aca86aa5544e03a862e7c9823581b",
       "executable": false
     },
     "src/strap/domain/store.ts": {
@@ -4430,7 +4430,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "4afa5d5cab5043cea0a3ed6768ac475d7bf2e643feadfe630c41f10514396380",
+      "sha256": "b68b8725538239750c6a085b5a64a6f98fb53a7efc731b4585eeb14c9c91f847",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
