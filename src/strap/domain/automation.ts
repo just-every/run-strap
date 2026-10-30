@@ -220,7 +220,7 @@ export async function automationSnapshot(db: D1Database,state: State,who: Actor)
   const connections = (await db.prepare('SELECT rule_id,epoch FROM st_automation_connections').all<{rule_id:string;epoch:string}>()).results;
   return {rules:list(state,'automationRule').map(r => ({...r,maxMessages:messageLimit(r),usedMessages:usedMessages(state,r),connected:connections.some(c => c.rule_id === r.id && c.epoch === r.epoch)})),
     deliveryPreviews:list(state,'automationDeliveryPreview'),deliveries:list(state,'automationDelivery'),
-    previews:list(state,'automationPreview').map(p => ({...p,audience:sources(state,p),stale:p.basis !== audienceBasis(state,p)})),
+    previews:list(state,'automationPreview').map(p => ({...p,maxMessages:messageLimit(p),audience:sources(state,p),stale:p.basis !== audienceBasis(state,p)})),
     resumes:list(state,'automationResume').map(p => ({...p,audience:sources(state,state.records.get(p.ruleId)!.data)})),
     tasks:list(state,'automationTask').map(t => {const rule = state.records.get(t.ruleId)?.data;return open(t) && !connections.some(c => c.rule_id === rule?.id && c.epoch === rule?.epoch) ? {...t,status:'held',reason:rule?.enabled ? 'execution_disconnected' : 'rule_paused'} : t;}),runs:list(state,'automationRun'),outcomes:list(state,'automationOutcome'),events:list(state,'automationEvent')};
 }
