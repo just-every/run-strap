@@ -16,6 +16,9 @@ export async function privacyProvider() {
     const finish={id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-private-method-complete'}
     const method=(await billingSucceeded(h,'billing.setup.complete',finish,seed.member.cookie)).result
     assert.equal((await billingView(h)).methods.find(r=>r.id===method.id).available,true)
+    const removalRequest=await h.cmd('billing.method.removal.request',{methodId:method.id,confirm:true,requestId:'synthetic-strap-privacy-removal-request'},seed.member.cookie)
+    await h.cmd('billing.method.remove',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-privacy-removal'},seed.member.cookie)
+    assert.equal((await billingView(h)).methods.find(r=>r.id===method.id).status,'removed')
     const checkout=await h.cmd('billing.checkout.start',{packId:seed.pack.id,requestId:'synthetic-strap-private-checkout',confirm:true})
     const request=await verifiedPrivacyRequest(h,seed.member,'erasure','-provider')
     const before=(await h.state()).version
@@ -59,6 +62,10 @@ export async function privacyProvider() {
     for(const table of ['oa_external_identities','oa_provider_sessions','oa_provider_session_pins'])assert.equal((await h.db.prepare('SELECT count(*) AS n FROM '+table).first()).n,0)
     for(const value of [method.paymentMethodId,method.setupIntentId,seed.member.email])assert.ok(!JSON.stringify(snapshot).includes(value),'normal billing reads omit erased provider tokens and identity')
     await h.cmd('billing.setup.complete',finish,seed.member.cookie,401)
+    await h.cmd('billing.method.remove',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-privacy-erased-replay'},seed.member.cookie,401)
+    await h.cmd('billing.method.remove.staff',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-privacy-erased-staff',channel:'desk'},h.owner,409)
+    assert.equal(snapshot.removalRequests.find(r=>r.id===removalRequest.id).status,'retired')
+    console.log('PROBE BILL-004 erasure: verified owner erasure after native removal -> old member and staff captures refused, provider identifiers retired, no resurrected method')
     await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-private-late-reconcile'},h.owner,404)
     const amounts=state.payments.map(p=>[p.id,p.amountCents])
     assert.equal((await signedEvent(h,paid)).value.status,'processed')

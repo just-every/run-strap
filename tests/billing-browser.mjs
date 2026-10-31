@@ -147,20 +147,30 @@ export async function billingBrowser(h,edge) {
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('member-removed-history')
       if(width===1440){const removed=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;assert.equal(removed.methods.filter(m=>m.agreementId===agreement.id).every(m=>m.status==='removed'&&!m.available),true);assert.equal(edge.calls.length,removalCalls)}
+      // Preserve the existing revocation proof on a currently usable method.
+      edge.setCard('4444')
+      await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
+      await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor()
+      await page.goto(h.origin+'/app/packs#billing')
+      await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
+      await section.getByText(/visa ending 4444/).waitFor()
+      const freshMethod=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.find(m=>m.agreementId===agreement.id&&m.available)
+      assert.ok(freshMethod,'revocation starts with an available newly authorized card')
       await staffLaunch('billing.mandate.revoke','Open payment revocation','revocation')
       await section.getByRole('button',{name:'Revoke future payment permission',exact:true}).click()
       await section.getByText(/Future payment permission revoked/).waitFor();await capture('revoked')
       const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
       assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).status,'revoked')
       assert.equal(state.methods.find(m=>m.agreementId===agreement.id).available,false)
+      assert.equal(state.methods.find(m=>m.id===freshMethod.id).available,false,'revocation disconnects the freshly authorized method')
       assert.equal(await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).count(),0)
       assert.equal(await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).count(),0)
       await sign(h.owner);await page.goto(h.origin+'/app/people?person='+seed.member.id+'#staff-actions')
       const audit=page.locator('#staff-actions')
-      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1)
+      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1,command)
       for(const details of await audit.locator('details').all())await details.locator('summary').click()
       await capture('staff-history')
-      edge.setComplete(false)
+      edge.setComplete(false);edge.setCard('4242')
     } finally {await context.close()}
   }} finally {await browser.close()}
 }

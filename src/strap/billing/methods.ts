@@ -25,7 +25,9 @@ export function requestMethodRemoval(tx: Transaction,input: Record<string,unknow
 }
 
 export function removeMethod(tx: Transaction,input: Record<string,unknown>,staff=false) {
-  const request=record(tx.state,input.id,'billingMethodRemovalRequest'),method=storedMethod(tx,request.methodId);
+  const request=record(tx.state,input.id,'billingMethodRemovalRequest');
+  insist(!request.erased && request.status!=='retired','billing_removal_request_retired',409);
+  const method=storedMethod(tx,request.methodId);
   const agreement=record(tx.state,method.agreementId,'billingAgreement');
   person(tx.state,method.personId);
   if(staff) {
