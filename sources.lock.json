@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "abede5c5dc7a03baf09e6c17716ad6ab919e88e3bed7dbb8c4f77da5770bc9a3",
+      "sha256": "55406b4ebdcec5722771b910792064dc5ce973bba20b7c1a595db9831283115a",
       "executable": false
     },
     "DEMO.md": {
@@ -4286,19 +4286,19 @@
       "executable": false
     },
     "tests/cooling-off-browser.mjs": {
-      "sha256": "5b4bbbe65552f49d835280d4bb0d27d48dcc60cd157fd5a2192b1eadc523acdc",
+      "sha256": "7270a962f9d63eb2eb78c5c09ad39e4d7eb4e55981dc0f2287e6c71c9c21661b",
       "executable": false
     },
     "tests/cooling-off-cases.mjs": {
-      "sha256": "3a9c60e2a535288454159e17674caf87bacfa10797fcc42cb2dadf46e4169c0f",
+      "sha256": "a9dbbec9ffacc1ff1f6911cecfc36a9d835a7c2fef72f763ac739830d0a97603",
       "executable": false
     },
     "tests/cooling-refund-cases.mjs": {
-      "sha256": "5c8cc6e6d05d3ce3555bf75e666697409bac1854ec8d8963cfb4d041683fa2f4",
+      "sha256": "8265df0391b84cad0e4aac976424d220f632cc9fd83a0904f63d4af25f4cf40f",
       "executable": false
     },
     "tests/cooling-refunds-browser.mjs": {
-      "sha256": "fcc65d18970b6a57603fad980b2d162a9fcbfef53125a5a9f3c2e943d9a900e6",
+      "sha256": "9419e17a0da1af5471933b5f947720385a29f417bac5f16136156822b2dfaafe",
       "executable": false
     },
     "tests/course-pair.mjs": {
@@ -4490,7 +4490,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "084fc3c02c971ba0d59a28a6032bcd6154318e925624c247f68c3289bcb81b31",
+      "sha256": "5d6d1a940ffff2b216627e03c5acb3163b94d1eacf47a86d6e677cd658120ae1",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {

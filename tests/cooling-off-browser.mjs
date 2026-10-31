@@ -4,7 +4,7 @@ import {join,extname} from 'node:path'
 import {chromium} from '@playwright/test'
 
 export async function coolingOffBrowser(h,cases){
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try{for(const width of [1440,390]){
     const contexts=[]
@@ -54,5 +54,33 @@ export async function coolingOffBrowser(h,cases){
       assert.match(await confirmation.innerText(),/GA: 7 business days/);assert.match(await confirmation.innerText(),/Refund settle-by/)
       await shot(mine,'confirmed-and-refund-deadline')
     }finally{for(const context of contexts)await context.close()}
+  }}finally{await browser.close()}
+}
+
+
+export async function studioCoolingBrowser(h,cases,{width=1440,proofDir=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR}={}){
+  if(proofDir)await mkdir(proofDir,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try{for(const [label,a] of Object.entries(cases)){
+    await h.cmd('studio.save',{location:a.studio.location,timeZone:'America/Phoenix',address:a.studio.address,businessHours:a.hours})
+    for(const [role,cookie] of [['member',a.member.cookie],['owner',h.owner]]){
+      const context=await browser.newContext({viewport:{width,height:1000}})
+      try{
+        await context.route(h.origin+'/**',async route=>{
+          const asset=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}
+          if(!asset.includes('..')&&types[extname(asset)])return route.fulfill({body:await readFile(join(process.cwd(),'public',asset)),contentType:types[extname(asset)]})
+          return route.continue()
+        })
+        const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}])
+        const page=await context.newPage();page.setDefaultTimeout(15000)
+        await page.goto(h.origin+'/app/packs#cancellations')
+        const copy=page.locator(`[data-contract-copy="${a.terms.id}"]`)
+        assert.equal(await copy.locator('[data-cooling-window] time').getAttribute('datetime'),a.window.deadline)
+        assert.ok((await copy.innerText()).includes(a.window.governingRule.label))
+        await copy.scrollIntoViewIfNeeded()
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+        if(proofDir)await page.screenshot({path:join(proofDir,`PLAN-007-state-${label}-${role}-${width}.png`)})
+      }finally{await context.close()}
+    }
   }}finally{await browser.close()}
 }
