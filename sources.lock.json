@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "a8bfbd10ca10910b7ba71ab1e4bfad5afcbe6050492ef2bd665c371156404cb5",
+      "sha256": "62530eec7a4cfccc9bd387d94f4f730cca5cd761de13f4e4ec41ba12874bc60f",
       "executable": false
     },
     "AGENTS.md": {
@@ -366,7 +366,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "c42bed5decb29d072fb940a6c5838386eb4387f8085e8d6d25ca58f11af3a91c",
+      "sha256": "f86d804c1b5f85f4183b8ae2d420991ff9d05ef9955a68d0c487ad55ca1af409",
       "executable": false
     },
     "docs/classes.md": {
