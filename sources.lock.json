@@ -4750,7 +4750,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "e79f936dbe53df20ae6d266875601dceb3b25b521dba7534d7ea0570d22dcc29",
+      "sha256": "9eeb8d9483c4d3cad9c5545e0fb985b9bf083c3d9edd48986fc04b4eb750ab59",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
