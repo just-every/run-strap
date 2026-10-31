@@ -85,7 +85,7 @@ export async function payoutReconciliationCases() {
     await payoutsBrowser(h,report,{statement:true});
     edge.setReconciliationChange(({u,body})=>{mixed({u,body});if(u.pathname==='/v1/payouts')body.data[0].amount=8849;});
     await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-statement-difference'});
-    const mismatch=(await readPayouts(h)).payouts[0];assert.equal(mismatch.statementDifferenceCents,-1);assert.equal(mismatch.depositStatus,'unmatched');assert.equal(mismatch.bankDepositConfirmed,false);
+    report=await readPayouts(h);const mismatch=report.payouts[0];assert.equal(mismatch.statementDifferenceCents,-1);assert.equal(mismatch.depositStatus,'unmatched');assert.equal(mismatch.bankDepositConfirmed,false);await payoutsBrowser(h,report,{statement:true,difference:-1});
     edge.setReconciliationChange(({u,body})=>{if(u.pathname==='/v1/balance_transactions')body.data[0].source='synthetic-strap-unrelated-source';});
     await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-membership-source'});
     const wrongSource=(await readPayouts(h)).payouts[0];assert.equal(wrongSource.statementDifferenceCents,0);assert.equal(wrongSource.nativeCoverageStatus,'unresolved');assert.equal(wrongSource.unmappedTransactionCount,1);assert.equal(wrongSource.providerDifferenceCents,null);
@@ -144,6 +144,7 @@ export async function payoutReconciliationCases() {
         assert.equal(p.depositStatus,'unmatched');assert.equal(p.bankDepositConfirmed,false);assert.equal(report.totals.netCents,9625);
       } else {assert.equal(report.totals.feeCents,null);assert.equal(report.totals.netCents,null);assert.equal(report.cards.filter(c=>c.status==='unresolved').length,2);}
       assert.doesNotMatch(JSON.stringify(report),/synthetic-strap-private/);
+      if(name==='membership-currency')await payoutsBrowser(h,report,{unavailable:true});
     }
     edge.setReconciliationChange(null);
     let release,entered;const gate=new Promise(r=>release=r),arrived=new Promise(r=>entered=r);let wait=true;
