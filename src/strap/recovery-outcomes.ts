@@ -1,6 +1,6 @@
 import { permission } from './domain/preferences'
 import { humanOwner, insist, list, now, type Actor, type RecordData, type State } from './domain/types'
-import { studioSettings } from './domain/studio'
+import { classZone } from './domain/locations'
 import { localDate } from './zone'
 
 const day = 86400000
@@ -27,7 +27,7 @@ export function recoveryOutcomes(state: State, who: Actor, query: URLSearchParam
   insist(/^\d+$/.test(days) && Number(days) >= 1 && Number(days) <= 90,'invalid_observation_window')
   insist(campaignId === null || campaignId.length <= 100,'invalid_campaign')
   insist(selectedOffer === null || selectedOffer.length <= 100,'invalid_offer')
-  const windowDays = Number(days), asOf = now(), zone = studioSettings(state)?.timeZone ?? 'UTC'
+  const windowDays = Number(days), asOf = now()
   const allCampaigns: (RecordData & {kind:string;zero:boolean})[] = [...list(state,'emptyPlaceCampaign').map(c => ({...c,kind:'empty-place',zero:c.incentiveCents === 0 && c.budgetCents === 0})),
     ...list(state,'winbackCampaign').map(c => ({...c,kind:'win-back',zero:c.rewardCents === 0 && c.budgetCents === 0}))]
   const campaigns = allCampaigns.filter(c => c.status === 'approved' && c.approvedBy && c.zero && (!campaignId || c.id === campaignId))
@@ -52,7 +52,7 @@ export function recoveryOutcomes(state: State, who: Actor, query: URLSearchParam
         const attendancePlan = plans.find(p => p.status === 'accepted' && p.bookingId === b.id)
         return [{bookingId:b.id,classId:c.id,title:c.title,start:c.start,end:c.end,status:b.status,attendance:b.attendance ?? 'unsettled',
           counted:b.status === 'booked' && b.attendance === 'attended',corrections:b.corrections ?? [],attendancePlanId:attendancePlan?.id ?? null,
-          url:'/app?day='+localDate(c.start,zone)+'&class='+encodeURIComponent(c.id)+'#roster'}]
+          url:'/app?day='+localDate(c.start,classZone(state,c))+'&class='+encodeURIComponent(c.id)+'#roster'}]
       })
       return {campaignId:campaign.id,kind:campaign.kind,personId:audience.personId,member:member?.name ?? 'Unavailable member',
         offerId:offer?.id ?? null,status,exclusionReason:reason ?? null,measured:accepted && !excluded,

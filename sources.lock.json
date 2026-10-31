@@ -3682,7 +3682,7 @@
       "executable": false
     },
     "src/strap/recovery-outcomes.ts": {
-      "sha256": "0a98f8091de786356f110a6ae64960b66704793804b72c4c44985859845b6c54",
+      "sha256": "d229a741c9f492675281052a7eee8607bea644b13e1d7bbbbaf85df4507ed087",
       "executable": false
     },
     "src/strap/report-exports.ts": {
@@ -4218,7 +4218,7 @@
       "executable": false
     },
     "tests/campaign-browser.mjs": {
-      "sha256": "f3a73b13c1fd4561e3c6181b0ec9f3104f539ec07810442893bff6f8e2233ec6",
+      "sha256": "d6380b2ae1f76c72e1bdf063c153239875f118f52aa3d024bfcb543ffef1cf7b",
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
@@ -4570,7 +4570,7 @@
       "executable": false
     },
     "tests/recovery-outcomes-cases.mjs": {
-      "sha256": "2a0267456e04535f916d0c9bcb22ab63a200fb278cf8b7fe18ebf7be091804c6",
+      "sha256": "c8e2d3222725844cba05c8dc1f89e5c61f71bda8a5b59fa0910c7dc41f52051f",
       "executable": false
     },
     "tests/renewal-disclosure-timing.mjs": {

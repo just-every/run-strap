@@ -120,7 +120,7 @@ export async function prorationStageBrowser(h,{cookie,selector,name,amount}) {
 
 // The ordinary studio journey asserts at desktop; candidate proof also records
 // the same populated report and source detail at the phone width.
-export async function recoveryOutcomesBrowser(h,{campaignId,offerId,bookingId,visits}) {
+export async function recoveryOutcomesBrowser(h,{campaignId,offerId,bookingId,classId,memberName,visits}) {
   const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os')
   const temporary=!process.env.STRAP_PROOF_DIR,dir=process.env.STRAP_PROOF_DIR ?? await mkdtemp(join(tmpdir(),'strap-outcomes-browser-'))
   const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
@@ -157,6 +157,11 @@ export async function recoveryOutcomesBrowser(h,{campaignId,offerId,bookingId,vi
       if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-sources-'+width+'.png'),fullPage:true})
       await page.locator('[data-outcome-booking="'+bookingId+'"]').getByRole('link').click()
       assert.equal(new URL(page.url()).pathname,'/app')
+      const roster=page.locator('[id="class-'+classId+'"] #roster')
+      await roster.waitFor()
+      assert.ok((await roster.innerText()).includes(memberName),'source link shows the observed member roster')
+      assert.ok((await roster.innerText()).includes('Paper roster confirmed completed attendance'),'source link shows retained correction')
+      if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-roster-'+width+'.png'),fullPage:true})
       await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId)
       if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-report-'+width+'.png'),fullPage:true})
     } finally {await context.close()}

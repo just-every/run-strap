@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
  * corrected attendance, without adding point-sized test registrations. */
 export async function recoveryOutcomeCases(h,{coach,jump:baseJump}) {
   const day=86400000,persons=[]
+  const west=await h.cmd('location.save',{name:'Los Angeles outcomes',timeZone:'America/Los_Angeles'})
   const jump=async at=>{await baseJump(at);for(const p of persons)p.cookie=await h.signIn(p.email)}
   for(const name of ['OutcomeAccepted','OutcomeNoShow','OutcomeExpired','OutcomeSuppressed','OutcomeOptout','OutcomeFrozen','OutcomeUnaccepted']){
     const p=await h.cmd('person.save',{name,email:name.toLowerCase()+String.fromCharCode(64)+'studio.example',role:'member',active:true})
@@ -12,15 +13,15 @@ export async function recoveryOutcomeCases(h,{coach,jump:baseJump}) {
   const [accepted,noShow,expired,suppressed,optout,frozen,unaccepted]=persons
   const packs=new Map()
   for(const p of persons) {
-    packs.set(p.id,await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:10000,eligibleServices:['Outcome Yoga'],expiresAt:'2099-12-31T00:00:00Z'})).id}))
+    packs.set(p.id,await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:10,amountCents:10000,eligibleServices:['Outcome Yoga'],eligibleLocations:'all',expiresAt:'2099-12-31T00:00:00Z'})).id}))
     if(p!==optout)await h.cmd('preferences.save',{revision:0,requestId:'synthetic-strap-outcome-consent',marketingInApp:true,consentStatement:'Send class invitations to my studio account'},p.cookie)
   }
-  const start=new Date(Date.now()+2*day).toISOString()
-  const publish=async(title,at,room)=>{
+  const start=new Date(Date.now()+2*day).toISOString().slice(0,10)+'T05:30:00.000Z'
+  const publish=async(title,at,room,locationId='studio')=>{
     const d=new Date(at),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
-    return (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title,service:'Outcome Yoga',room,start:at,end:new Date(Date.parse(at)+3600000).toISOString(),capacity:20,instructorId:coach.id}]})).id})).classes[0]
+    return (await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title,service:'Outcome Yoga',room,locationId,start:at,end:new Date(Date.parse(at)+3600000).toISOString(),capacity:20,instructorId:coach.id}]})).id})).classes[0]
   }
-  const entry=await publish('Observed recovery class',start,'Outcome first'),later=await publish('Later recovery class',new Date(Date.parse(start)+day).toISOString(),'Outcome later'),future=await publish('Future recovery class',new Date(Date.parse(start)+20*day).toISOString(),'Outcome future')
+  const entry=await publish('Observed recovery class',start,'Outcome first',west.id),later=await publish('Later recovery class',new Date(Date.parse(start)+day).toISOString(),'Outcome later'),future=await publish('Future recovery class',new Date(Date.parse(start)+20*day).toISOString(),'Outcome future')
   const type=await h.cmd('freeze.type.save',{name:'Outcome leave',reason:'Member request',feeCents:0,defaultLengthDays:10,maxLengthDays:30})
   const freeze=await h.cmd('freeze.prepare',{personId:frozen.id,packId:packs.get(frozen.id).id,freezeTypeId:type.id,startAt:start.slice(0,10),endAt:new Date(Date.parse(start)+10*day).toISOString().slice(0,10),requestId:'synthetic-strap-outcome-freeze',channel:'phone'})
   if(freeze.requiresAcceptance)await h.cmd('freeze.accept',{id:freeze.id,key:freeze.key},frozen.cookie)
@@ -90,9 +91,14 @@ export async function recoveryOutcomeCases(h,{coach,jump:baseJump}) {
   const readBefore=(await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,readVersion=(await h.state()).version
   const detail=await report('&offer='+offerFor(noShow).id)
   assert.equal(detail.selected.source.offer.bookingId,missed.id)
-  assert.equal((await h.send(detail.selected.observations[0].url,undefined,h.owner)).status,200)
+  const visit=detail.selected.observations.find(v=>v.bookingId===missed.id)
+  const roster=await h.send(visit.url,undefined,h.owner)
+  assert.equal(roster.status,200)
+  assert.ok(roster.text.includes('id="class-'+entry.id+'"'),'source link opens the actual class on its own local day')
+  assert.ok(roster.text.includes('id="roster"')&&roster.text.includes(noShow.name)&&roster.text.includes('Paper roster confirmed completed attendance'),'source roster retains the member and correction')
+  console.log('PROBE SUCCESS-004 A: New York studio; Los Angeles '+new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',dateStyle:'short',timeStyle:'short',hourCycle:'h23'}).format(new Date(entry.start))+' completed class -> '+visit.url+'; actual class roster shows '+noShow.name+' and retained attendance correction')
   const {recoveryOutcomesBrowser}=await import('./campaign-browser.mjs')
-  await recoveryOutcomesBrowser(h,{campaignId:campaign.id,offerId:offerFor(noShow).id,bookingId:missed.id,visits:3})
+  await recoveryOutcomesBrowser(h,{campaignId:campaign.id,offerId:offerFor(noShow).id,bookingId:missed.id,classId:entry.id,memberName:noShow.name,visits:3})
   assert.deepEqual((await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,readBefore,'every report and drill-through read leaves source records unchanged')
   assert.equal((await h.state()).version,readVersion)
   assert.equal((await h.send(query,{},h.owner)).status,404,'no report write door exists')
