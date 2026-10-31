@@ -14,7 +14,7 @@ export async function widgetBrowser(h,week) {
   const pack=await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:10000,expiresAt:new Date(Date.parse(week)+90*86400_000).toISOString()});await h.cmd('pack.approve',{id:pack.id});
   await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{booking:{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}}});await h.enroll(desk.cookie);
   let embed='';const hosts=[];
-  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH??(process.platform==='linux'?'/usr/bin/chromium':undefined),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
   try {
     for(let n=0;n<3;n++) {const server=createServer((_req,res)=>{res.setHeader('content-type','text/html');res.end(`<!doctype html><html lang="en"><title>Studio website</title><body style="margin:0"><iframe title="Class schedule" src="${embed}" style="border:0;width:100%;height:1200px"></iframe></body></html>`)});await new Promise(r=>server.listen(0,'127.0.0.1',r));hosts.push({server,origin:`http://127.0.0.1:${server.address().port}`});}
     await publishWidget(h,entries[0],coach,hosts[0].origin);
