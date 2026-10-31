@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "be2beeab2473ef66d639729d77fb1e16dcd3fc3a2920fdf9fa57e681ec74fb9d",
+      "sha256": "1da617a601d7f8994e8b51ed7998ee69cc327a6d520d7bd74cca08b354fe5479",
       "executable": false
     },
     "docs/AUTOMATION.md": {
@@ -398,7 +398,7 @@
       "executable": false
     },
     "docs/packs-and-payments.md": {
-      "sha256": "9d87581f673592d355eb3b1638be63fd01529732a968fb7ca354e52eb0521d52",
+      "sha256": "44b9021246ab19497436ccf02d1ac270852edc6980d903b8e45464246885a660",
       "executable": false
     },
     "docs/people.md": {
@@ -3414,7 +3414,7 @@
       "executable": false
     },
     "src/strap/domain/money.ts": {
-      "sha256": "82af572c3e2131d9386cd82ed9720b3ba8e8e85efee46cefbe41160cbc25abd8",
+      "sha256": "b80c5529b867f7100e7f8355d02ce383ab91d4dfc4f542f078705f72f80ee95e",
       "executable": false
     },
     "src/strap/domain/notices.ts": {
@@ -3998,7 +3998,7 @@
       "executable": false
     },
     "src/strap/ui/product-catalog.ts": {
-      "sha256": "ab726183b1db22dd43e8ce1dabaa62c50b58a400914fe61bb4cd4aca853d5e7d",
+      "sha256": "f1edac7ac1764e0d5c9c4ceb1c73794ee0097c06bfff2a3ba98876eced961854",
       "executable": false
     },
     "src/strap/ui/profile.ts": {
@@ -4010,7 +4010,7 @@
       "executable": false
     },
     "src/strap/ui/receipts.ts": {
-      "sha256": "da3916a6eb89bac322298b272f8a230a0bea4a2916815a3fa4b41c15c353dcc7",
+      "sha256": "619ce6b9438a5a5b473a8cc687d53b9d748001ed97fc98747c9d253a59b963bf",
       "executable": false
     },
     "src/strap/ui/recognition.ts": {
@@ -4234,11 +4234,11 @@
       "executable": false
     },
     "tests/catalog-browser.mjs": {
-      "sha256": "283655ff6bdfbad4804deba99dca159962529486e9a912f04caeb4f290a3f316",
+      "sha256": "4f112a1c8e0ff78063e823d96a810dd1e0072e22f7b95941a60fbedbf8eeda59",
       "executable": false
     },
     "tests/catalog-cases.mjs": {
-      "sha256": "ed822bf9665450adf7b6f4bd962fc31c4482fad883df8e652702147c7d39987b",
+      "sha256": "5b3978f449defff197129b43f49f1bb51dcf2dc18826c20ce50bbaab4d46168f",
       "executable": false
     },
     "tests/checkin-browser.mjs": {
