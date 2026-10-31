@@ -50,7 +50,7 @@ import { demandEvidence, demandAvailability, prepareRecommendation, approveRecom
 import { collectFee, waiveFee, fees } from './fees';
 import { saveQualification, requestSubstitution, prepareSubstitution, approveSubstitution, substitutionSnapshot } from './substitutions';
 import { requestPlanChange, preparePlanChange, acceptPlanChange, applyDuePlanChanges, planChangeSnapshot } from './plan-changes';
-import { createLead, updateLead, appendLeadNote, leadSnapshot, saveRecoveryRule, processRecovery, completeRecovery, prepareEmptyPlaces, approveEmptyPlaces, acceptEmptyPlace, settleEmptyPlace, emptyPlaceSnapshot, saveNurtureSequence, pauseNurtureSequence, reviewNurture, purchaseNurture, suppressNurture, nurtureSnapshot, recordReferral, prepareWinback, approveWinback, purchaseWinback, reviewReferralReward, suppressWinback, winbackSnapshot } from './leads';
+import { createLead, updateLead, appendLeadNote, leadSnapshot, saveSuccessRule, prepareSuccess, confirmSuccess, saveRecoveryRule, processRecovery, completeRecovery, prepareEmptyPlaces, approveEmptyPlaces, acceptEmptyPlace, settleEmptyPlace, emptyPlaceSnapshot, saveNurtureSequence, pauseNurtureSequence, reviewNurture, purchaseNurture, suppressNurture, nurtureSnapshot, recordReferral, prepareWinback, approveWinback, purchaseWinback, reviewReferralReward, suppressWinback, winbackSnapshot } from './leads';
 import { saveMilestone, saveRecognitionPreference, processRecognition, completeRecognition, recognitionSnapshot } from './recognition';
 import { launchRecognition } from './recognition-launch';
 import { savePayRule, adjustTeachingPay, teachingPay } from './teaching-pay';
@@ -241,6 +241,9 @@ export const handlers = {
   'plan.change.request':defineCommand(requestPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change'}}),
   'plan.change.accept':defineCommand(acceptPlanChange,['member'],{member:{staff:'plan.change.prepare',right:'contract-change',ownStep:true}}),
   'plan.change.prepare':defineCommand(preparePlanChange,['owner'],{staffRight:'contract-change'}),
+  'lead.success.rule.save':defineCommand(saveSuccessRule,['owner']),
+  'lead.success.prepare':defineCommand(prepareSuccess,['owner','agent']),
+  'lead.success.confirm':defineCommand(confirmSuccess,['owner']),
   'lead.recovery.rule.save':defineCommand(saveRecoveryRule,['owner']),
   'lead.recovery.process':defineCommand(processRecovery,['owner']),
   'lead.recovery.complete':defineCommand(completeRecovery,['owner']),
@@ -362,7 +365,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
-  if (who.role === 'agent') insist(['attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
+  if (who.role === 'agent') insist(['lead.success.prepare','attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   if (name.startsWith('booking.')) {
     const target = tx.state.records.get(String(input.id))?.data;
@@ -401,9 +404,9 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privateAppointmentOffer = ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
-  // A private offer must not execute unrelated due billing, notices or entitlements.
-  if (!privateAppointmentOffer && !name.startsWith('appointment.')) {
+  const privatePreparation = name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  // Private preparations and reviews must not execute unrelated due billing, notices or entitlements.
+  if (!privatePreparation && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
   }
   const clientTarget = name.startsWith('appointment.client.') ? tx.state.records.get(String(input.id ?? input.reservationId))?.data : null;
@@ -415,7 +418,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if ((['attendance.plan.accept','attendance.plan.accept.staff'].includes(name) && !tx.state.records.has('notice:confirmation:'+result.id)) || name === 'booking.book' || (name === 'booking.desk' && result.status === 'booked')) confirmBooking(tx,result);
   const introException = (name === 'intro.preview' || name === 'intro.purchase') && !!result.exceptionReason;
   if (staff && !clientReplay) retainStaffAction(tx,name,introException ? 'price' : spec.staffRight!,input,result,before,priorIds);
-  if (!privateAppointmentOffer && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); }
+  if (!privatePreparation && !name.startsWith('appointment.')) { processRecognition(tx); suppressNurture(tx); suppressWinback(tx); suppressAutomation(tx); }
   await tx.commit(); return name.startsWith('course.') ? coursePublicResult(tx.who,result) : name.startsWith('freeze.') ? freezePublicResult(tx.who,result) : result;
 }
 /** Runs every minute (Cron Trigger): expires unclaimed MSG-004 offers and

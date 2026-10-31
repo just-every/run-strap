@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { mkdir,readFile } from 'node:fs/promises'
 import { join,extname } from 'node:path'
 import { chromium } from '@playwright/test'
+import { existsSync } from 'node:fs'
+const launchOptions={headless:true,...(existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']}
 export async function leadsBrowser(h,{ana,ownerId,lead}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -49,7 +51,7 @@ export async function leadsBrowser(h,{ana,ownerId,lead}) {
 }
 
 export async function recoveryBrowser(h,{ana,task}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -78,7 +80,7 @@ export async function recoveryBrowser(h,{ana,task}) {
 }
 
 export async function emptyPlacesBrowser(h,{member,preview,offer,acceptAt390=false}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -104,7 +106,7 @@ export async function emptyPlacesBrowser(h,{member,preview,offer,acceptAt390=fal
 }
 
 export async function nurtureBrowser(h,{member,offer,staffOffer}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try {for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
     const context=await browser.newContext({viewport:{width,height:1000}})
@@ -132,7 +134,7 @@ async function offerContext(browser,h,cookie,width) {
   const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:h.origin}]);return context
 }
 export async function referralBrowser(h,{desk,referrer,friend,phone}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']});let submitted=phone
+  const browser=await chromium.launch(launchOptions);let submitted=phone
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try{for(const width of [1440,390]) {
     const context=await offerContext(browser,h,desk.cookie,width),page=await context.newPage();await page.goto(h.origin+'/app/referrals')
@@ -145,7 +147,7 @@ export async function referralBrowser(h,{desk,referrer,friend,phone}) {
   }}finally{await browser.close()}return submitted
 }
 export async function winbackBrowser(h,{member,offer,preview,staffOffer,result=false}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   try{for(const width of [1440,390])for(const [who,cookie,url] of [['owner',h.owner,'/app/leads'],['member',member.cookie,'/app/offers']]) {
     const context=await offerContext(browser,h,cookie,width),page=await context.newPage();await page.goto(h.origin+url)
@@ -165,7 +167,7 @@ export async function winbackBrowser(h,{member,offer,preview,staffOffer,result=f
 }
 
 export async function leadAuditBrowser(h,{personId}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch(launchOptions)
   try{for(const width of [1440,390]) {
     const context=await offerContext(browser,h,h.owner,width),page=await context.newPage();await page.goto(h.origin+'/app/people?person='+encodeURIComponent(personId))
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
@@ -183,7 +185,7 @@ export async function leadAuditBrowser(h,{personId}) {
 }
 
 export async function verifyReferralBrowser(h,{referral,friend,input}) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']});let submitted=input
+  const browser=await chromium.launch(launchOptions);let submitted=input
   try{for(const width of [1440,390]) {
     const context=await offerContext(browser,h,h.owner,width),page=await context.newPage();await page.goto(h.origin+'/app/leads')
     const card=page.locator(`[data-referral="${referral.id}"]`),form=card.locator('form');await form.getByLabel('Verification of member referral request').fill(input.sourceReference)
@@ -191,4 +193,47 @@ export async function verifyReferralBrowser(h,{referral,friend,input}) {
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
     await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,`LEAD-005-owner-verify-${width}.png`),fullPage:true});await context.close()
   }}finally{await browser.close()}return submitted
+}
+
+export async function successBrowser(h,{ana,proposal,queued}) {
+  const browser=await chromium.launch(launchOptions)
+  const widths=process.env.STRAP_PROOF_DIR?[1440,390]:[1440]
+  if(process.env.STRAP_PROOF_DIR)await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
+  try {for(const width of widths) {
+    const context=await offerContext(browser,h,h.owner,width),page=await context.newPage()
+    await page.goto(h.origin+'/app/leads#attendance-review')
+    const panel=page.locator('#attendance-review'),card=panel.locator(`[data-success-proposal="${proposal.id}"]`)
+    await card.locator('summary').click()
+    const task=panel.locator(`[data-success-task="${queued.id}"]`)
+    await task.locator('summary').click()
+    if(width===1440) {
+      assert.ok(await card.getByRole('heading',{name:ana.name+' · proposed',exact:true}).isVisible())
+      for(const visit of proposal.visits)assert.ok(await card.locator(`a[href="/app?booking=${encodeURIComponent(visit.bookingId)}"]`).isVisible())
+      assert.ok((await card.innerText()).includes(proposal.opportunities[0].classIds[0]))
+      assert.ok((await card.innerText()).includes(proposal.memberships[0].packId))
+      assert.ok((await card.innerText()).includes(proposal.uncertainty))
+      assert.ok(await task.getByRole('heading',{name:ana.name+' · Private review queued',exact:true}).isVisible())
+      const before=(await h.state()).version
+      await card.getByLabel('Owner review note').fill('Review the available opportunity with current channel permission.')
+      await card.getByRole('button',{name:'Confirm private review task',exact:true}).click()
+      assert.ok((await page.locator('body').innerText()).includes('success frequency cap'))
+      assert.equal((await h.state()).version,before)
+      assert.equal((await h.state()).pipeline.successTasks.length,1)
+      await page.goto(h.origin+'/app/leads#attendance-review')
+      await panel.locator(`[data-success-proposal="${proposal.id}"] summary`).click()
+      await panel.locator(`[data-success-task="${queued.id}"] summary`).click()
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    assert.deepEqual(await page.locator('button,a,summary').evaluateAll(nodes=>nodes.filter(n=>n.checkVisibility()&&n.getBoundingClientRect().width&&n.getBoundingClientRect().height&&!n.innerText.trim()).map(n=>n.outerHTML)),[])
+    if(process.env.STRAP_PROOF_DIR)await panel.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SUCCESS-001-review-${width}.png`)})
+    await page.goto(h.origin+'/app/studio#success-review')
+    const settings=page.locator('#success-review')
+    if(width===1440) {
+      assert.equal(await settings.getByLabel('Review task cap per member per 30 days').inputValue(),'1')
+      assert.equal(await settings.getByLabel('Attendance review',{exact:true}).inputValue(),'true')
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+    if(process.env.STRAP_PROOF_DIR)await settings.screenshot({path:join(process.env.STRAP_PROOF_DIR,`SUCCESS-001-settings-${width}.png`)})
+    await context.close()
+  }}finally{await browser.close()}
 }
