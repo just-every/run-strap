@@ -4570,7 +4570,7 @@
       "executable": false
     },
     "tests/recovery-diagnostics-cases.mjs": {
-      "sha256": "c5df0924b91983f3c2c81d96a1f5f3f4bcbcab157f0ea58921c19009c67f67a4",
+      "sha256": "3d68fa3a7084a89b6a27cd459587b608521103c4de25218925d7af934d850cbc",
       "executable": false
     },
     "tests/renewal-disclosure-timing.mjs": {
