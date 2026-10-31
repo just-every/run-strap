@@ -198,7 +198,8 @@ async function ownerReviewedSignup(h,week,coach,desk,edge) {
   const guestPreview=await submitWidgetForm(h,choice,'guest.preview',{guestId:guest.id,packId:allowance.id},signedIn.cookie);assert.equal(guestPreview.status,303);assert.equal(guestPreview.headers.get('location'),choice.location);
   const guestBooked=await submitWidgetForm(h,choice,'guest.book',{confirm:'true'},signedIn.cookie);assert.equal(guestBooked.status,303);assert.equal(guestBooked.headers.get('location'),choice.location);
   const guestSeat=(await h.state()).bookings.filter(b=>b.personId===guest.id&&b.classId===entry.id&&b.status==='booked');assert.equal(guestSeat.length,1);assert.equal(guestSeat[0].sponsorId,member.id);assert.equal(guestSeat[0].guestFunding,'pass');
-  assert.match((await h.send(choice.location,undefined,signedIn.cookie)).text,/WidgetGuest is booked as your guest/);
+  assert.match((await h.send(choice.location,undefined,signedIn.cookie)).text,/WidgetGuest is booked as a guest of this host/);
+  const ownerGuestView=await h.send(choice.location+'&member='+member.id,undefined,h.owner);assert.match(ownerGuestView.text,/WidgetGuest is booked as a guest of this host/);assert.ok(ownerGuestView.text.includes('name=guest.preview'),'the owner acting for staff reaches the same guest door');
   const booked=await h.cmd('booking.book',{classId:entry.id,selection:choice.token,adultConfirmed:true},signedIn.cookie);assert.equal(booked.status,'booked');
   assert.equal((await h.state()).packs.find(p=>p.id===pack.id).remaining,1);assert.equal((await h.state()).packs.find(p=>p.id===allowance.id).remaining,1,'guest pass leaves the host credits unchanged');
   const expired=await widgetChoice(h,widgetOrigin,entry.id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE token_hash=?").bind((await import('node:crypto')).createHash('sha256').update(expired.token).digest('hex')).run();

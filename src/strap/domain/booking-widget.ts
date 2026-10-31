@@ -169,7 +169,8 @@ export const widgetMembers = (state: State, who: Actor, entry: RecordData) => st
 /** Staff see only the doors their current rights open for a member they may book; each command checks again. */
 export function widgetStaffPrerequisites(state: State, who: Actor, memberId: string, entry: RecordData) {
   const own=widgetPrerequisites(state,memberId,entry,who.id),location=entry.locationId??'studio';
-  return {...own,invoices:[],guests:null,intros:who.role==='owner' && who.isOwner ? own.intros : {offers:[],previews:[]},
+  const owner=who.role==='owner' && who.isOwner;
+  return {...own,invoices:[],guests:owner ? own.guests : null,intros:owner ? own.intros : {offers:[],previews:[]},
     rights:{signing:allowed(()=>requireSigningLaunch(state,who,memberId,location)),intake:memberRecordVisible(state,who,memberId)}};
 }
 /** Selection adds no authority. Both established booking commands still run their own fences and staff audit. */
