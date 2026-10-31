@@ -124,6 +124,7 @@ export function recurringInvoiceEligibility(state: State, terms: RecordData, con
   const due = terms.nextRenewalAt, expiresAt = nextInvoiceAt(due,terms.intervalMonths,terms.billingDay,terms.timeZone);
   const result = (status: InvoiceEligibility['status'], reason: string | null = null, amountCents = terms.amountCents, priceDisclosureId: string | null = null): InvoiceEligibility =>
     ({status,reason,dueAt:due,termEndAt:expiresAt,amountCents,priceDisclosureId});
+  if (terms.status === 'stopped' && terms.requiresFreshAcceptance) return result('reconnection_required','fresh_member_acceptance_required');
   if (['stopped','cancellation_scheduled'].includes(terms.status)) return result('canceled','agreement_stopped');
   if (!connection || connection.connection_id !== terms.connectionId || connection.origin !== origin || terms.billingOrigin !== origin)
     return result('reconnection_required',!connection || connection.connection_id !== terms.connectionId ? 'fresh_member_acceptance_required' : 'billing_origin_changed');

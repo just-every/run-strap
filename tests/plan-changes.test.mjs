@@ -205,6 +205,16 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   await refused('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-end-unaccepted'},h.owner,409,/freeze_member_acceptance_required/);
   await h.cmd('freeze.end.accept',{id:end.id,key:end.key},direct.cookie);
   await h.cmd('freeze.end.confirm',{id:end.id,key:end.key,requestId:'synthetic-strap-end-confirm',channel:'desk'})
+  for(const [agreement,freezeId] of [[terms,preview.id],[directTerms,directPreview.id]]) {
+    const before=await h.state(),current=before.recurring.terms.find(t=>t.id===agreement.id)
+    const from=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(current.nextRenewalAt))
+    const response=await h.send('/api/strap/reports/upcoming-invoices?'+new URLSearchParams({from,status:'scheduled'}),undefined,h.owner)
+    assert.equal(response.status,200,response.text)
+    const row=response.value.rows.find(r=>r.agreementId===agreement.id)
+    assert.deepEqual([row.dueAt,row.movedByFreezeId,row.status,row.forecastCents],[current.nextRenewalAt,freezeId,'scheduled',12000],'forecast follows the personally accepted freeze or early-end date')
+    assert.equal((await h.state()).version,before.version,'reviewing a moved renewal does not resume the plan or issue debt')
+  }
+  console.log('PROBE BILL-013 freeze dates: accepted finite freeze and accepted early end -> each forecast follows the retained revised renewal date and original freeze identity, 12000 cents, without writes.')
   // A retained approved calendar history, not a mocked application clock. The
   // public scheduler sees each real date behind now, then the actual due instant.
   await h.cmd('booking.cancel',{id:kept.id},member.cookie);
@@ -334,10 +344,23 @@ test('PLAN-007: one-step member, payer and guardian cancellation supersedes free
   assert.equal((await h.state()).freezes.freezes.find(f=>f.id===freeze.id).status,'withdrawn');assert.equal((await h.state()).charges.filter(c=>c.freezeId===freeze.id).reduce((n,c)=>n+c.amountCents,0),0);
   assert.deepEqual(await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-603'},nina.cookie),cancelled);
   assert.equal((await h.state(stranger.cookie)).cancellations.cancellations.length,0);assert.ok(!JSON.stringify((await h.state(nina.cookie)).cancellations).includes(unrelatedCharge.id),'member cancellation keys and valuation disclose no unrelated debt');
+  const forecastFrom=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(cancelled.effectiveAt))
+  const forecast=async()=>{
+    const version=(await h.state()).version,response=await h.send('/api/strap/reports/upcoming-invoices?from='+forecastFrom,undefined,h.owner)
+    assert.equal(response.status,200,response.text);assert.equal((await h.state()).version,version,'termination forecast reads write nothing')
+    return response.value
+  }
+  const canceledRow=(await forecast()).rows.find(r=>r.agreementId===terms.id)
+  assert.deepEqual([canceledRow.status,canceledRow.terminationAt,canceledRow.forecastCents],['canceled',cancelled.effectiveAt,0])
   await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-604'},h.owner,403);
   const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:cancelled.id,requestId:'synthetic-strap-605'},nina.cookie);await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-606'},nina.cookie);
   assert.equal((await h.state()).recurring.terms.find(t=>t.id===terms.id).status,'stopped','withdrawal never restores invoice authority');
+  const withdrawnRow=(await forecast()).rows.find(r=>r.agreementId===terms.id)
+  assert.deepEqual([withdrawnRow.status,withdrawnRow.reason,withdrawnRow.terminationAt,withdrawnRow.forecastCents],['reconnection_required','fresh_member_acceptance_required',null,0],'withdrawn termination is not presented as a current access end or revived invoice authority')
   const fresh=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-607'});assert.equal((await h.state()).recurring.terms.find(t=>t.id===fresh.id).status,'preview');await h.cmd('plan.recurring.accept',{id:fresh.id,key:fresh.key},nina.cookie);
+  const resumed=(await forecast()).rows.filter(r=>r.packId===pack.id&&r.status==='scheduled')
+  assert.deepEqual(resumed.map(r=>[r.agreementId,r.amountCents,r.forecastCents,r.terminationAt]),[[fresh.id,12000,12000,null]],'only fresh personal acceptance returns one native period to the forecast')
+  console.log('PROBE BILL-013 termination: scheduled end -> canceled and zero; personally withdrawn end -> fresh acceptance required, no obsolete termination date and zero; new exact personal acceptance -> one 12000-cent scheduled period, old authority stays stopped.')
   const authority=await h.cmd('contract.authority.save',{personId:nina.id,delegateId:payer.id,kind:'payer',evidenceReference:'synthetic-strap-608'});assert.equal((await h.state(payer.cookie)).cancellations.authorities.some(g=>g.id===authority.id),false,'an owner proposal discloses no member identity or agreement facts to the payer before participant consent');await h.cmd('contract.authority.accept',{id:authority.id},payer.cookie,404);
   await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-609'},payer.cookie,404);await h.cmd('contract.authority.accept',{id:authority.id},nina.cookie);await h.cmd('contract.authority.accept',{id:authority.id},payer.cookie);
   const payerCancel=await h.cmd('plan.cancellation.stop',{packId:pack.id,requestId:'synthetic-strap-610'},payer.cookie);assert.equal(payerCancel.terminatedBy,(await h.state(payer.cookie)).actor.id);
