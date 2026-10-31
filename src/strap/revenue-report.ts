@@ -22,9 +22,9 @@ export function recurringRevenueSources(state: State, who: Actor): Row[] {
   for (const {terms,pack,cancellation,endedAt} of nativeRecurringAgreements(state)) {
     if (terms.erased || state.people.some(p => p.id === terms.personId && p.erasedAt)) continue
     const locationId = terms.locationId ?? pack?.locationId ?? null
-    const visible = who.role === 'owner' && who.isOwner || (locationId !== null && (who.staffAccess
-      ? hasStaffRight(state,who,'exports',terms.personId,locationId)
-      : who.role === 'finance' || who.role === 'manager' && who.locationIds?.includes(locationId)))
+    const visible = who.role === 'owner' && who.isOwner || (who.staffAccess
+      ? locationId !== null && hasStaffRight(state,who,'exports',terms.personId,locationId)
+      : who.role === 'finance' || locationId !== null && who.role === 'manager' && who.locationIds?.includes(locationId))
     if (!visible) continue
     const timeZone = places.find(l => l.id === locationId)?.timeZone ?? terms.timeZone ?? 'UTC'
     const facts = (row: Row, keys: string[]) => Object.fromEntries(keys.map(key => [key,row[key] ?? null]))

@@ -118,3 +118,32 @@ export async function recurringRevenueBrowser(h,{query,report,west,march9}) {
     } finally { await context.close() }
   } finally { await browser.close() }
 }
+
+/** Missing historical locations remain visible under the existing unrestricted finance grant. */
+export async function unattributedFinanceBrowser(h,{query,sourceId,finance}) {
+  const proof=process.env.STRAP_PROOF_DIR ?? 'logs/proof/revenue-lifecycle'
+  await mkdir(proof,{recursive:true})
+  const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {
+    for(const [role,cookie] of [['owner',h.owner],['finance',finance]]) {
+      const context=await browser.newContext({viewport:{width:1440,height:1000}})
+      try {
+        await context.route(h.origin+'/**',async route=>{
+          const path=new URL(route.request().url()).pathname
+          if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+          return route.continue()
+        })
+        const index=cookie.indexOf('=')
+        await context.addCookies([{name:cookie.slice(0,index),value:cookie.slice(index+1),url:h.origin}])
+        const page=await context.newPage()
+        await page.goto(h.origin+'/app/revenue?'+query)
+        assert.deepEqual(await page.locator('[data-recurring-totals] td[data-label=Count]').allTextContents(),['1','0','0','0'])
+        assert.deepEqual(await page.locator('[data-source-id]').evaluateAll(rows=>rows.map(row=>row.dataset.sourceId)),[sourceId])
+        assert.match(await page.locator('[data-source-id] td[data-label="Kind and plan"]').innerText(),/Unattributed/)
+        await page.screenshot({path:join(proof,`RPT-001-unattributed-${role}-1440.png`),fullPage:true})
+        await page.setViewportSize({width:390,height:1000})
+        await page.screenshot({path:join(proof,`RPT-001-unattributed-${role}-390.png`),fullPage:true})
+      } finally { await context.close() }
+    }
+  } finally { await browser.close() }
+}
