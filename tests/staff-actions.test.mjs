@@ -568,6 +568,13 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const saved=await billingSucceeded(h,'billing.setup.complete',input,billingMember.cookie);
       assert.equal(saved.result.authorizedBy,(await h.state(billingMember.cookie)).actor.id);
     };
+    actions['billing.mandate.revoke']=async door=>{
+      await billingLaunch('billing.mandate.revoke',door);
+      await refused(h,'billing.mandate.revoke',{id:billingAgreement.id},h.owner);
+      const revoked=await h.cmd('billing.mandate.revoke',{id:billingAgreement.id},billingMember.cookie);
+      assert.equal(revoked.revokedBy,(await h.state(billingMember.cookie)).actor.id);
+      assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
+    };
     actions['billing.method.removal.request']=async door=>{
       await billingLaunch('billing.method.removal.request',door);
       const method=(await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0];
@@ -581,13 +588,6 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.equal(r.result.after.status,'removed');assert.equal(r.result.providerDeletion,false);
       assert.deepEqual(await h.cmd(door,input),r.result);assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1);
       assert.equal(billing.calls.length,calls);assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
-    };
-    actions['billing.mandate.revoke']=async door=>{
-      await billingLaunch('billing.mandate.revoke',door);
-      await refused(h,'billing.mandate.revoke',{id:billingAgreement.id},h.owner);
-      const revoked=await h.cmd('billing.mandate.revoke',{id:billingAgreement.id},billingMember.cookie);
-      assert.equal(revoked.revokedBy,(await h.state(billingMember.cookie)).actor.id);
-      assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
     };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {
