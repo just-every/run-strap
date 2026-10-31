@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "501bbd9ec1089777f52c467bd7ac481043150b056cac43533a080ba232eedfdc",
+      "sha256": "184bc6bb60d1a96942958c92e2199b77c3900a70ed194e53b8bd46deb99e9c75",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3682,11 +3682,11 @@
       "executable": false
     },
     "src/strap/report-exports.ts": {
-      "sha256": "75159327cd0d6f5aac99ca37981f981a57f74d0638d030ea5ef5668163680b4e",
+      "sha256": "7a041d8b9460c28194891760f1927ede3cf7a551ebd1c7d0fbb452f45cbf435f",
       "executable": false
     },
     "src/strap/retention-churn.ts": {
-      "sha256": "17488a8fdbbbf9e8a15ebb79092226ee2b1343d51927bc58ba8566a4808bb134",
+      "sha256": "84d1f7c33131be7af1038b5139acabec943ceff7eb993df667a953534fbcb99a",
       "executable": false
     },
     "src/strap/retention-report.ts": {
@@ -3694,7 +3694,7 @@
       "executable": false
     },
     "src/strap/revenue-report.ts": {
-      "sha256": "8eafb073a3e33497f995782fee0a4b8ef4a3020c0d8b84e12ce70900ddd02074",
+      "sha256": "268ebd8b308bf4df82603729ca084f3b8aba84a622df6093206f9bcb8439e982",
       "executable": false
     },
     "src/strap/security/auth-gate.ts": {
@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/strap/ui/revenue.ts": {
-      "sha256": "a9777b1e2fccda22f756e8582ed6b1e87e42902d415da9343a2cd6896fbafb1f",
+      "sha256": "5eb4352fa5f5824d3edfd15b0e45269a98661151ea5452bf314d0c5700def5d7",
       "executable": false
     },
     "src/strap/ui/roster.ts": {
@@ -4590,7 +4590,7 @@
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "26e8c6ec060bd35843ca379f8f325ad3d75c36a57af42a6847d257f3428a0262",
+      "sha256": "aa5b3f65a312259703d76abea720b91d0f31ffb9e67a9b8f645a54b5936b53c9",
       "executable": false
     },
     "tests/reservations-browser.mjs": {
@@ -4614,7 +4614,7 @@
       "executable": false
     },
     "tests/revenue-browser.mjs": {
-      "sha256": "e15334799a2d5ef24449578a0b6373fe100fc59989ae66908a3ec330ce9d6bbd",
+      "sha256": "de4233d8db01d930a2a8469267327057b489f64e645e84c629096d78ad41d86c",
       "executable": false
     },
     "tests/security-browser.mjs": {

@@ -99,16 +99,15 @@ async function appState(env: Bindings, who: Actor, target: string) {
   }
   if(url.pathname === '/app/people' && who.staffAccess && ['front-desk','manager'].includes(who.role))return {...await state(env,who),billingHandoffs:await billingStaffHandoffs(env,who)}
   if (who.role === 'instructor' && who.staffAccess && url.pathname !== '/app/people') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN,false),mfa:await mfaView(env,who),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? ''}
-  if (who.role === 'manager' && ['/app/revenue','/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
+  if (who.role === 'manager' && ['/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
   if (url.pathname === '/app/classes' && who.role==='owner') {
     const loaded=await load(env.DB,who)
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
   }
   if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) return {...await state(env,who),billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null,billing:await cleared(env,who) ? await billingState(env,who) : null}
-  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
+  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
-  if (url.pathname === '/app/revenue') return {...await state(env,who),financeReport:financeReport(loaded.state,url.searchParams)}
   if (url.pathname === '/app/leads') return {...await state(env,who),leadReport:leadReport(loaded.state,loaded.who,url.searchParams)}
   const retentionQuery = new URLSearchParams(url.searchParams)
   // Native GET forms submit blank optional fields; API query validation remains strict.

@@ -14,6 +14,7 @@ const sum = (rows: Row[]) => rows.reduce((total,row) => total + row.amountCents,
 export function recurringRevenueSources(state: State, who: Actor): Row[] {
   const sources: Row[] = [], places = locations(state)
   for (const {terms,pack,cancellation,endedAt} of nativeRecurringAgreements(state)) {
+    if (terms.erased || state.people.some(p => p.id === terms.personId && p.erasedAt)) continue
     const locationId = terms.locationId ?? pack?.locationId ?? null
     const visible = who.role === 'owner' && who.isOwner || (locationId !== null && (who.staffAccess
       ? hasStaffRight(state,who,'exports',terms.personId,locationId)
@@ -22,8 +23,9 @@ export function recurringRevenueSources(state: State, who: Actor): Row[] {
     const timeZone = places.find(l => l.id === locationId)?.timeZone ?? terms.timeZone ?? 'UTC'
     const facts = (row: Row, keys: string[]) => Object.fromEntries(keys.map(key => [key,row[key] ?? null]))
     const agreement = facts(terms,['id','personId','packId','acceptedAt','acceptedBy','stoppedAt','stoppedBy','status','intervalMonths','amountCents','entitlement','accessEndedAt'])
+    const metrics: Record<string,string> = {'recurring-start':'recurringStarts','recurring-stop':'recurringStops','recurring-end':'recurringEndings','membership-cancellation':'membershipCancellations'}
     const append = (kind: string, at: string | null, sourceId: string, record: Record<string,any>) => {
-      if (at) sources.push({id:kind+':'+sourceId,sourceId,kind,at,locationId,timeZone,personId:terms.personId,packId:terms.packId,agreementId:terms.id,
+      if (at) sources.push({id:kind+':'+sourceId,sourceId,kind,metric:metrics[kind],eventCount:1,at,locationId,timeZone,personId:terms.personId,packId:terms.packId,agreementId:terms.id,
         cancellationId:cancellation?.id ?? null,plan:reportPlan(terms),amountCents:null,record})
     }
     append('recurring-start',terms.acceptedAt,terms.id,agreement)
@@ -37,7 +39,7 @@ export function recurringRevenueSources(state: State, who: Actor): Row[] {
 
 export const revenueDefinitions = [
   'Native recurring starts count personally accepted agreement identities at acceptedAt, not pack creation, renewal packs or previews. Invoice stops count accepted agreements at stoppedAt, even when access continues. Agreement endings count the effective access-end instant, not the stop request. Applied membership cancellations count applied native cancellation identities at effectiveAt, never previews, scheduled or withdrawn cancellations. These are agreement events, not unique lost members; retained or replacement agreements may preserve membership. Unique member churn remains the separate retention report.',
-  'Recurring event location comes only from the agreement or its original retained sale pack. Missing historical locations stay Unattributed and never inherit the current studio label. Inclusive date filters use that recorded location’s time zone, or the agreement’s retained time zone when unattributed. Plan filters use the accepted agreement’s entitlement. Source IDs distinguish start, stop, ending and applied cancellation even when they refer to the same agreement. Reporting facts omit consent tokens and provider connection details.',
+  'Recurring event location comes only from the agreement or its original retained sale pack. Missing historical locations stay Unattributed and never inherit the current studio label. Inclusive date filters use that recorded location’s time zone, or the agreement’s retained time zone when unattributed. Plan filters use the accepted agreement’s entitlement. Source IDs distinguish start, stop, ending and applied cancellation even when they refer to the same agreement. Each recurring CSV source carries its metric and an eventCount of one; summing those counts reproduces the selected totals. Reporting facts omit consent tokens and provider connection details.',
   'Gift card funding is a liability charge and an actual cash or external receipt. Gift redemption is a noncash payment against the retail sale; restoring a redemption returns value to that card, never a cash refund. Both retain distinct source kinds and do not inflate cash collections or gross sales.',
   'Amounts are exact USD cents. Event dates use the studio time zone with inclusive date bounds. Gross sales sum positive non-fee charges; sales credits are negative non-fee charges; net sales is their signed sum. Fees are signed attendance and late-move assessments including reversals, not processor costs. Total assessed is net sales plus fees.',
   'Collections are positive external receipts; refunds are the magnitude of negative external payments; net collections is their signed sum. A charge credit is not a cash refund. No processor collection, ACH return or provider verification is claimed. Unallocated receipts stay Unallocated when filtering by plan; they are never apportioned across packs.',
@@ -73,7 +75,7 @@ export function revenueReport(s: any, query: URLSearchParams) {
   const sources: Row[] = []
   const append = (row: Row,kind: string,at: string,amountCents: number | null,pack?: Row) => {
     const locationId = kind === 'new-plan' ? row.locationId ?? 'studio' : place(row), zone = zoneOfLocation(places,locationId,timeZone)
-    if (matchesLocation(row) && matchesPlan(pack) && inPeriod(at,zone)) sources.push({id:row.id,kind,at,date:localDate(at,zone),locationId,personId:row.personId,packId:pack?.id ?? null,plan:pack ? reportPlan(pack) : 'Unallocated',amountCents,
+    if (matchesLocation(row) && matchesPlan(pack) && inPeriod(at,zone)) sources.push({id:row.id,kind,at,date:localDate(at,zone),locationId,timeZone:zone,personId:row.personId,packId:pack?.id ?? null,plan:pack ? reportPlan(pack) : 'Unallocated',amountCents,
       record:row,sourceUrl:`/app/revenue?sourceId=${encodeURIComponent(row.id)}#source-record`,memberUrl:`/app/people?person=${encodeURIComponent(row.personId)}#person`})
   }
   for (const row of s.charges) append(row,row.reason==='gift_card_issue' ? 'gift-liability' : feeReasons.has(row.reason) ? 'fee' : 'sale',row.createdAt,row.amountCents,packFor(row))

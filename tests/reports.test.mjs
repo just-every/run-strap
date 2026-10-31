@@ -529,7 +529,9 @@ async function recurringRevenueJourney(h) {
   await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key})
   // The old scheduled date is retained history, not an end of access after withdrawal.
   await save('contractCancellation',{...(await h.state()).cancellations.cancellations.find(c=>c.id===withdrawalSource.id),effectiveAt:endedAt})
-  await h.cmd('plan.recurring.stop',{id:future.terms.id,requestId:'synthetic-strap-stop'},future.member.cookie)
+  const stopInput={id:future.terms.id,requestId:'synthetic-strap-stop'}
+  const stop=await h.cmd('plan.recurring.stop',stopInput,future.member.cookie)
+  assert.equal((await h.cmd('plan.recurring.stop',stopInput,future.member.cookie)).id,stop.id,'replayed stops retain the same source identity')
   await h.cmd('plan.cancellation.prepare',{packId:unknown.pack.id,effectiveAt:'2098-01-01T00:00:00Z',reasonCode:'moved-away',reason:'Preview only',requestId:'synthetic-strap-preview'})
   await (await h.mf.getWorker()).scheduled();await (await h.mf.getWorker()).scheduled()
   const replacement=await sell(kept,west.id)
@@ -550,6 +552,7 @@ async function recurringRevenueJourney(h) {
   const report=await read(),t=report.totals,version=state.version
   assert.deepEqual([t.recurringStarts,t.recurringStops,t.recurringEndings,t.membershipCancellations],[7,5,3,3])
   assert.equal(t.newPlans,0,'a historical agreement acceptance is not a pack creation event')
+  assert.equal((await read(new URLSearchParams({plan:'unlimited: Lifecycle'}))).totals.newPlans,8,'eight sold packs include one whose recurring proposal was never accepted')
   assert.equal(t.bookingCancellations,0,'agreement events are not booking actions')
   const terms=state.recurring.terms.filter(t=>t.entitlement?.name==='Lifecycle'&&t.acceptedBy)
   assert.deepEqual(new Set(report.sources.filter(r=>r.kind==='recurring-start').map(r=>r.sourceId)),new Set(terms.map(t=>t.id)),'independent accepted agreement identities reconcile')
@@ -584,6 +587,10 @@ async function recurringRevenueJourney(h) {
     assert.ok(!JSON.stringify(row).includes('connectionId')&&!JSON.stringify(row).includes('termsKey'),'report facts exclude authorization material')
   }
   await assertReportDownloads(h,'revenue',[baseQuery.toString(),scoped({location:west.id}).toString(),scoped({location:'Unattributed'}).toString(),scoped({from:'2026-03-09',to:'2026-03-09'}).toString()],[multi.cookie,''])
+  const [csvKeys,...csvValues]=parseCsv((await h.send('/api/strap/reports/revenue.csv?'+baseQuery,undefined,h.owner)).text)
+  const csvSources=csvValues.map(row=>Object.fromEntries(csvKeys.map((key,i)=>[key,row[i]])))
+  for(const metric of ['recurringStarts','recurringStops','recurringEndings','membershipCancellations'])assert.equal(csvSources.filter(row=>row.metric===metric).reduce((n,row)=>n+row.eventCount,0),t[metric],'downloaded event counts reconcile independently')
+  assert.equal((await h.state()).version,version,'report and source reads create no lifecycle or financial effects')
   await h.cmd('manager.grant',{id:manager.id,locationIds:[west.id]});await h.enroll(manager.cookie)
   const managed=await read(baseQuery,manager.cookie)
   assert.deepEqual([managed.totals.recurringStarts,managed.totals.recurringStops,managed.totals.membershipCancellations],[3,2,1])
@@ -596,7 +603,9 @@ async function recurringRevenueJourney(h) {
     else await response.arrayBuffer()
   }
   await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:true,rights:{exports:{enabled:true,scopes:[{memberIds:[kept.id],locationIds:[west.id],doors:['all']}]}}});await h.enroll(finance.cookie)
-  assert.ok((await read(baseQuery,finance.cookie)).sources.every(r=>r.personId===kept.id&&r.locationId===west.id))
+  const financeReport=await read(baseQuery,finance.cookie)
+  assert.equal(financeReport.totals.recurringStarts,2)
+  assert.ok(financeReport.sources.every(r=>r.personId===kept.id&&r.locationId===west.id))
   const deniedVersion=(await h.state()).version
   await h.cmd('manager.revoke',{id:manager.id})
   await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:false,rights:{}})
@@ -605,6 +614,19 @@ async function recurringRevenueJourney(h) {
   assert.equal((await h.state()).version,afterRevoke,'denied reads leave sources untouched')
   assert.ok(deniedVersion>=version)
   if(process.env.CI||process.env.STRAP_PROOF_DIR)await (await import('./revenue-browser.mjs')).recurringRevenueBrowser(h,{query:baseQuery,report,west,march9})
+  const erasedMember=await h.person('LifecycleErased'),erasedAgreement=await sell(erasedMember)
+  const capturedId='recurring-start:'+erasedAgreement.terms.id
+  assert.equal((await read(scoped({sourceId:capturedId}))).selectedSource.sourceId,erasedAgreement.terms.id)
+  const erasure=await h.cmd('privacy.request',{personId:erasedMember.id,type:'erasure',channel:'desk',requestId:'synthetic-strap-report-erasure'})
+  await h.cmd('privacy.verify',{id:erasure.id,method:'signed-in-member',confirm:true})
+  const review=await h.cmd('privacy.erase.prepare',{id:erasure.id,obligations:'retain',reason:'Retain native financial chronology',retainUntil:'2099-01-01T00:00:00.000Z',documents:'delete',retireAccess:true})
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true})
+  await (await h.mf.getWorker()).scheduled()
+  const erased=await read(scoped({sourceId:capturedId}))
+  assert.equal(erased.selectedSource,null,'a previously captured source URL cannot restore erased recurring evidence')
+  assert.ok(!erased.sources.some(row=>row.agreementId===erasedAgreement.terms.id))
+  assert.ok(!JSON.stringify(erased).includes('LifecycleErased'))
+  assert.equal((await h.send('/api/strap/reports/revenue',undefined,erasedMember.cookie)).status,401,'erasure retires the old session')
   console.log('PROBE RPT-001 native lifecycle: public revenue route and downloads -> starts=7 stops=5 endings=3 applied cancellations=3; location sums match; replacement and withdrawal losses refused; scoped grants and revocation enforced')
 }
 

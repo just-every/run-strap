@@ -69,7 +69,7 @@ export async function recurringRevenueBrowser(h,{query,report,west,march9}) {
       await context.addCookies([{name:h.owner.slice(0,index),value:h.owner.slice(index+1),url:h.origin}])
       const page=await context.newPage(),url=h.origin+'/app/revenue?'+query
       await page.goto(url)
-      assert.deepEqual(await page.locator('[data-recurring-totals] dd').allTextContents(),['7','5','3','3'])
+      assert.deepEqual(await page.locator('[data-recurring-totals] td[data-label=Count]').allTextContents(),['7','5','3','3'])
       assert.equal(await page.locator('[data-source-id]').count(),report.sources.length)
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
       const save=async(name,width)=>page.screenshot({path:join(proof,`RPT-001-${name}-${width}.png`),fullPage:true})
@@ -83,7 +83,7 @@ export async function recurringRevenueBrowser(h,{query,report,west,march9}) {
       await page.getByLabel('Location',{exact:true}).selectOption(west.name)
       await page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()
       await page.getByRole('heading',{name:'Revenue and collections',exact:true}).waitFor()
-      assert.deepEqual(await page.locator('[data-recurring-totals] dd').allTextContents(),['2','0','0','0'])
+      assert.deepEqual(await page.locator('[data-recurring-totals] td[data-label=Count]').allTextContents(),['2','0','0','0'])
       assert.equal(await page.locator('[data-source-id]').count(),2)
       const previous=process.env.STRAP_PROOF_DIR
       process.env.STRAP_PROOF_DIR=proof
