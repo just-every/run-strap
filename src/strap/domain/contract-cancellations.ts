@@ -20,6 +20,8 @@ import { cancellationFreezeEffects, cancellationTermEnd, endCancellationFreezes,
 export interface CancellationEffects extends RecordData { effectiveAt:string; existingBalanceCents:number; projectedFinalBalanceCents:number; guestPriceReversals:RecordData[]; bookings:RecordData[]; freezes:RecordData[] }
 export interface CancellationPreview extends RecordData { personId:string; packId:string; termsId:string; status:string; effectiveAt:string; effects:CancellationEffects; basis:string; key:string }
 const live=(c:RecordData)=>c.status==='scheduled';
+const previewDeadline=(c:RecordData)=>c.timing==='immediate'?c.previewExpiresAt:c.effectiveAt;
+const previewExpired=(c:RecordData)=>!previewDeadline(c)||previewDeadline(c)<=now();
 const fingerprint=(input:Record<string,unknown>)=>JSON.stringify(Object.keys(input).sort().map(k=>[k,input[k]]));
 export function cancellationStaffVisible(state:State,who:Actor,packId:string){
   const pack=state.records.get(packId)?.data;
@@ -136,20 +138,27 @@ export async function requestCancellation(tx:Transaction,input:Record<string,unk
 export async function prepareCancellation(tx:Transaction,input:Record<string,unknown>){
   if(tx.who.role==='agent')preparer(tx.who);else authorizeCancellationCommand(tx,'plan.cancellation.prepare',input);
   const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
-  insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
+  insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId);
+  insist(input.timing===undefined||['date','term_end','immediate'].includes(String(input.timing)),'invalid_termination_timing');
+  const timing=input.timing??'date',termEnd=cancellationTermEnd(tx.state,pack);
+  insist(timing!=='date'||input.timing===undefined||!!merged.effectiveAt,'termination_date_required');
+  insist(timing==='date'||!merged.effectiveAt,'choose_one_termination_time');
+  const at=timing==='immediate'?now():timing==='term_end'?termEnd:merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):termEnd;
   const preparedInput={...input,packId:pack.id},prior=replay(tx,'contractCancellation',preparedInput).prior;if(prior)return prior;
-  insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
+  insist((timing==='immediate'?termEnd>at:at>now())&&at<=termEnd,'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
   const selected=activeTerminationReason(tx.state,input.reasonCode);
   const reason=text(merged.reason,'reason',500),c=await prepare(tx,preparedInput,'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
-  const coded={...c,reasonCode:selected.code,reasonLabel:selected.label,reasonCatalogId:selected.id,reasonCatalogRevision:selected.revision};tx.put('contractCancellation',coded);
+  // Immediate review retains this exact instant and valuation; confirmation never silently moves them.
+  const previewExpiresAt=timing==='immediate'?new Date(Math.min(Date.parse(at)+15*60*1000,Date.parse(termEnd))).toISOString():undefined;
+  const coded={...c,...(timing==='immediate'?{timing,previewExpiresAt}:{}),reasonCode:selected.code,reasonLabel:selected.label,reasonCatalogId:selected.id,reasonCatalogRevision:selected.revision};tx.put('contractCancellation',coded);
   if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
   authorizeCancellationCommand(tx,'plan.cancellation.confirm',input);
   const c=record(tx.state,input.id,'contractCancellation');insist(input.key===c.key,'preview_changed',409);
   if(c.confirmedAt){insist(c.terminatedBy===tx.who.id&&c.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return c;}
-  insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(!terminationReasonChanged(tx.state,c)&&c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
-  const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}return scheduled;
+  insist(c.status==='preview'&&!previewExpired(c),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(!terminationReasonChanged(tx.state,c)&&c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(previewDeadline(c));
+  const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}if(c.timing==='immediate')applyDueCancellations(tx);return tx.state.records.get(scheduled.id)!.data;
 }
 export function mayWithdrawCancellation(state:State,who:Actor,c:RecordData){
   if(c.terminatedBy===who.id)return canCancelContract(state,who,c.personId,c.termsId)||cancellationStaffVisible(state,who,c.packId);
@@ -193,7 +202,7 @@ export function applyDueCancellations(tx:Transaction){
     tx.put('contractCancellation',{...c,status:'applied',appliedAt:c.effectiveAt,processedAt:now(),statementId,refundId:refund?.id??null});notify(tx,c,`cancellation-effective:${c.id}`,'Membership ended',`${notice(c)} Final covered-agreement balance ${contractBalance(tx.state,c.termsId)} cents. Refund record ${refund?.id??'none'}.`);
   }
 }
-export async function cancellationPreviewStale(state:State,c:RecordData){return c.status==='preview'&&(c.effectiveAt<=now()||terminationReasonChanged(state,c)||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt));}
+export async function cancellationPreviewStale(state:State,c:RecordData){return c.status==='preview'&&(previewExpired(c)||terminationReasonChanged(state,c)||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt));}
 export async function cancellationWithdrawals(state:State,who:Actor){
   return Promise.all(list(state,'cancellationWithdrawal').filter(w=>canCancelContract(state,who,w.personId,record(state,w.cancellationId,'contractCancellation').termsId)||cancellationStaffVisible(state,who,w.packId))
     .map(async w=>({...w,canConfirm:who.id===w.createdBy,stale:w.status==='preview'&&(!live(record(state,w.cancellationId,'contractCancellation'))||w.basis!==await withdrawalBasis(state,record(state,w.cancellationId,'contractCancellation')))})));

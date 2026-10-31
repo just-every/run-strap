@@ -53,9 +53,10 @@ export function retainRefundDue(tx: Transaction, cancellation: RecordData) {
   if (prior) return prior;
   const pack=record(tx.state,cancellation.packId,'pack'),valuationAt=cancellation.coolingOff?.renewal?pack.termStartAt??pack.createdAt:cancellation.effectiveAt;
   const coolingOptions={packIds:coolingAgreementPackIds(tx.state,cancellation),regions:[studioSettings(tx.state)?.address?.region,contractRegion(tx.state,cancellation.personId)].filter(Boolean),policy:cancellation.policy};
-  const value = cancellation.reasonCode==='cooling-off'?coolingRefund(tx.state,pack,cancellation.effectiveAt,coolingOptions):unusedPrepaid(tx.state,pack,valuationAt),refundDeadline=cancellation.refundDeadline??refundSettlementWindow(tx.state,now(),[contractRegion(tx.state,cancellation.personId)].filter(Boolean));
-  if(cancellation.reasonCode==='cooling-off'&&!value.needsAllocation)voidUnpaidCoolingInvoices(tx,cancellation);
-  const due = {coolingOptions:cancellation.reasonCode==='cooling-off'?coolingOptions:null,valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,valuationAt,settleBy:refundDeadline.settleBy,refundDeadline,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
+  const statutoryCooling=cancellation.mode==='statutory'&&cancellation.reasonCode==='cooling-off';
+  const value = statutoryCooling?coolingRefund(tx.state,pack,cancellation.effectiveAt,coolingOptions):unusedPrepaid(tx.state,pack,valuationAt),refundDeadline=cancellation.refundDeadline??refundSettlementWindow(tx.state,now(),[contractRegion(tx.state,cancellation.personId)].filter(Boolean));
+  if(statutoryCooling&&!value.needsAllocation)voidUnpaidCoolingInvoices(tx,cancellation);
+  const due = {coolingOptions:statutoryCooling?coolingOptions:null,valuationPack:{...record(tx.state,cancellation.packId,'pack')},id:key,personId:cancellation.personId,packId:cancellation.packId,cancellationId:cancellation.id,effectiveAt:cancellation.effectiveAt,valuationAt,settleBy:refundDeadline.settleBy,refundDeadline,amountCents:value.amountCents,knownUnusedCents:value.knownUnusedCents,payers:value.payers,formula:value.formula,status:value.needsAllocation ? 'needs_allocation' : 'refund_due',settledCents:0,createdAt:now()};
   tx.put('cancellationRefund',due); return due;
 }
 export function reconcileCancellationRefund(tx: Transaction, input: Record<string,unknown>) {
