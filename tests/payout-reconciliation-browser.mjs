@@ -24,7 +24,7 @@ export async function payoutsBrowser(h,report,{statement=false,difference=0,unav
         if(statement) {
           assert.equal(await page.locator('[data-statement-net]').innerText(),'Provider net $88.50 USD');
           assert.equal(await page.locator('[data-statement-difference]').innerText(),difference===0?'Difference from payout $0.00 USD':'Difference from payout -$0.01 USD');
-          const details=page.locator('[data-payout-observation] details');
+          const details=page.locator('[data-payout-statement="'+report.payouts[0].id+'"]');
           if(await details.getAttribute('open')===null)await details.locator('summary').click();
           assert.equal(await page.locator('[data-payout-transaction]').count(),4);
           assert.match(await page.locator('[data-payout-transaction="synthetic-strap-refund-balance"]').innerText(),/-\$7\.00.*-\$0\.25.*-\$6\.75/s);
