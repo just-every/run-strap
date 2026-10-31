@@ -57,7 +57,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     const nativeContract=async(name)=>{const member=await h.person(name),ack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:9000,expiresAt:'2099-12-31T00:00:00Z'})).id}),proposal=await h.cmd('plan.recurring.prepare',{packId:ack.id,intervalMonths:1,requestId:randomUUID()});await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie);return {member,pack:(await h.state()).packs.find(p=>p.id===ack.id)}};
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
-    let billingMember,billingAgreement,billingSetup;
+    let billingMember,billingAgreement,billingSetup,billingRemovalRequest;
     const actions={
       ...clientAppointmentPairs(h,coach,checkAudit,{member:historyMember,staffMember:otherHistoryMember}),
       'course.accept':async door=>coursePair(h,door,checkAudit),
@@ -568,6 +568,20 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const saved=await billingSucceeded(h,'billing.setup.complete',input,billingMember.cookie);
       assert.equal(saved.result.authorizedBy,(await h.state(billingMember.cookie)).actor.id);
     };
+    actions['billing.method.removal.request']=async door=>{
+      await billingLaunch('billing.method.removal.request',door);
+      const method=(await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0];
+      billingRemovalRequest=await h.cmd('billing.method.removal.request',{methodId:method.id,confirm:true,requestId:randomUUID()},billingMember.cookie);
+      assert.equal(billingRemovalRequest.methodId,method.id);
+    };
+    actions['billing.method.remove']=async door=>{
+      const input={id:billingRemovalRequest.id,confirm:true,requestId:randomUUID(),channel:'phone'},calls=billing.calls.length;
+      const r=await checkAudit(door,input);assert.equal(r.event.removalRequestId,billingRemovalRequest.id);
+      assert.equal(r.event.requestedBy,(await h.state(billingMember.cookie)).actor.id);
+      assert.equal(r.result.after.status,'removed');assert.equal(r.result.providerDeletion,false);
+      assert.deepEqual(await h.cmd(door,input),r.result);assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1);
+      assert.equal(billing.calls.length,calls);assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
+    };
     actions['billing.mandate.revoke']=async door=>{
       await billingLaunch('billing.mandate.revoke',door);
       await refused(h,'billing.mandate.revoke',{id:billingAgreement.id},h.owner);
@@ -590,6 +604,8 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     for (const entry of memberCommands) {
       const input={id:'unknown',personId:ana.id,classId:future.id,waiverId:(await h.state()).waiver.id,requestId:randomUUID()}
       if(entry.name.startsWith('billing.'))input.id=billingAgreement.id;
+      if(entry.name==='billing.method.removal.request')Object.assign(input,{methodId:billingRemovalRequest.methodId,confirm:true});
+      if(entry.name==='billing.method.remove')Object.assign(input,{id:billingRemovalRequest.id,confirm:true});
       if(entry.name==='lead.referral.record')Object.assign(input,{personId:ben.id,friendEmail:ana.email});
       if(entry.name==='lead.winback.purchase')Object.assign(input,{id:winbackDeskOffer.id,key:winbackDeskOffer.key,confirm:true});
       if(entry.name==='lead.empty.accept')input.id=emptyDeskOffer.id;

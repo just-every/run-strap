@@ -95,11 +95,15 @@ async function archiveMembership(h,member,terms,edge) {
     edge.setCard('4242');
     assert.equal(methodResult.result.replacesMethodId,originalMethod.id);assert.equal(methodResult.result.last4,'5556');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
+    assert.equal((await h.send('/api/strap/billing',undefined,member.cookie)).value.methods.find(m=>m.id===originalMethod.id).status,'superseded');
+    const removalRequest=await h.cmd('billing.method.removal.request',{methodId:originalMethod.id,confirm:true,requestId:'synthetic-strap-archive-removal-request'},member.cookie);
+    const removal=await h.cmd('billing.method.remove.staff',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-archive-removal',channel:'desk'});
+    assert.equal(removal.providerDeletion,false);
     const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
     assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
     const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
     assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
-    assert.equal(connectedBilling.methods.find(method=>method.id===originalMethod.id).status,'superseded');
+    assert.equal(connectedBilling.methods.find(method=>method.id===originalMethod.id).status,'removed');
     assert.deepEqual(connectedBilling.methods.filter(method=>method.available).map(method=>method.last4),['5556']);
     return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore,methodHistory:connectedBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id))};
 }
@@ -556,7 +560,12 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
     assert.equal(historicalBilling.methods.length,2);
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
-    assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the superseded method and selected replacement as historical records');
+    assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the removed method and selected replacement as historical records');
+    const removedMethod=historicalBilling.methods.find(method=>method.status==='removed');assert.ok(removedMethod);
+    assert.equal(historicalBilling.removalRequests.find(r=>r.methodId===removedMethod.id).status,'removed');
+    const removedAudit=(await h.state(restoredOwner)).staffActions.filter(a=>a.command==='billing.method.remove.staff'&&a.after.methodId===removedMethod.id);assert.equal(removedAudit.length,1);
+    assert.equal(historicalBilling.removals.filter(r=>r.methodId===removedMethod.id).length,1);
+    console.log('PROBE BILL-004 restore: native archive and fresh sign-in -> removed masked history, exact request and once-only audit retained; all execution authority disconnected');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
     const restoredBilling=await billingView(h,restoredOwner);
     assert.equal(restoredBilling.connected,false);

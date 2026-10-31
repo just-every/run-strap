@@ -4,6 +4,8 @@ import { money, when } from './format'
 
 const back='/app/packs#billing'
 const request=()=>hidden('requestId',crypto.randomUUID())
+const removalMeaning='This ends use of this card in Strap. Masked history, original debt and payment consent remain. This does not delete or detach the card at Stripe.'
+const removeForm=(r: any,back: string,staff=false)=>form(staff?'billing.method.remove.staff':'billing.method.remove',back,hidden('id',r.id)+request()+(staff?hidden('channel','desk'):'')+check('confirm',`End Strap use of ${r.brand} ending ${r.last4}, as personally requested.`),staff?'Remove requested card':'End Strap use now','quiet')
 const check=(name: string,label: string)=>`<label class="check"><input type="checkbox" name="${name}" value="yes" required>${h(label)}</label>`
 
 /** Personal agreement and payment consent remain separate from staff preparation. */
@@ -24,7 +26,7 @@ export function billingPanel(s: any) {
     const signature=mine&&!a.signature ? form('billing.agreement.accept',back,hidden('id',a.id)+hidden('documentHash',a.documentHash)+hidden('financialHash',a.financialHash)
       +field('signerName','Your full name','','text','required maxlength="160" autocomplete="name"')+check('adultConfirmed','I confirm I am an adult signing for myself.')
       +check('confirm',a.agreementAffirmation)+check('authorizeRecurring',a.mandateAffirmation),'Sign and authorize') : ''
-    const pendingSetups=setups.filter((v: any)=>v.status!=='completed'),currentMethod=methods.find((m: any)=>m.id===mandate?.methodId&&m.available)
+    const pendingSetups=setups.filter((v: any)=>v.status==='awaiting-member'),currentMethod=methods.find((m: any)=>m.id===mandate?.methodId&&m.available)
     const setup=mine&&mandate?.status==='accepted'&&b.connected ? (pendingSetups.length ? pendingSetups.map((v: any)=>form('billing.setup.complete',back,hidden('id',a.id)+hidden('setupId',v.id)+request(),'Check Stripe authorization')).join('')
       : !mandate.methodAuthorized ? form('billing.setup.start',back,hidden('id',a.id)+request(),'Authorize a test card with Stripe')
       : currentMethod ? `<details><summary>Replace test card</summary><p>Your current card stays authorized until Stripe confirms the replacement. Your membership terms and payment permission stay unchanged.</p>`+form('billing.setup.start',back,hidden('id',a.id)+hidden('replaceMethodId',currentMethod.id)+request()+check('confirmReplacement','I personally request a replacement card under my existing payment permission.'),'Authorize replacement with Stripe')+'</details>' : '') : ''
@@ -37,7 +39,8 @@ export function billingPanel(s: any) {
       +`<p><strong>${money(financial.amountCents)} USD every ${h(financial.intervalMonths)} month(s)</strong> · first due ${when(s,financial.firstDueAt)}</p><p>Original service period: ${when(s,financial.servicePeriod.startAt)} to ${when(s,financial.servicePeriod.endAt)}.</p>`
       +`<details><summary>Read the exact agreement and payment permission</summary><div class="record"><div class="record-body"><p class="letter">${h(a.documentText)}</p></div></div><p>Document version ${h(a.documentVersion)} · SHA-256 <code>${h(a.documentHash)}</code></p></details>`
       +(a.signature?`<p>Personally affirmed by ${h(a.signature.signerName)} ${when(s,a.signature.completedAt)}.</p>`:'')
-      +methods.map((m: any)=>`<p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':m.status==='superseded'?'historical method; replaced':mandate?.status==='revoked'?'historical method; future payment permission revoked':'historical method; connection review required'}</p>`).join('')
+      +methods.map((m: any)=>`<div data-stored-method="${h(m.id)}"><p>${h(m.brand)} ending ${h(m.last4)} · ${m.available?'authorized in the reviewed test connection':m.status==='removed'?'Strap use ended; masked history retained':m.status==='superseded'?'historical method; replaced':mandate?.status==='revoked'?'historical method; future payment permission revoked':'historical method; connection review required'}</p>`+(mine&&m.status!=='removed'?`<details><summary>Remove card ending ${h(m.last4)}</summary><p>${h(removalMeaning)}</p>`+form('billing.method.removal.request',back,hidden('methodId',m.id)+request()+check('confirm','I personally request removal of this exact card from Strap.'),'Record removal request','quiet')+'</details>':'')+'</div>').join('')
+      +(b.removalRequests ?? []).filter((r: any)=>r.agreementId===a.id&&r.status==='requested'&&methods.some((m: any)=>m.id===r.methodId&&m.removalRequestId===r.id&&m.status!=='removed')).map((r: any)=>`<div data-removal-request="${h(r.id)}"><p>Member requested removal of ${h(r.brand)} ending ${h(r.last4)} ${when(s,r.requestedAt)}. ${h(removalMeaning)}</p>`+removeForm(r,back,!mine)+'</div>').join('')
       +(mandate?.revokedAt?`<p>Future payment permission revoked ${when(s,mandate.revokedAt)}. The original studio agreement and balance remain unchanged.</p>`:'')
       +outcome+signature+setup+revoke+(personalSteps?`<details><summary>Member personal steps</summary><p>Open the sign-in link on the member’s own device. Only they can sign, authorize or revoke.</p>${personalSteps}</details>`:'')+`<p><a href="/api/strap/billing/agreement.json?id=${encodeURIComponent(a.id)}">Download exact agreement evidence</a> · <a href="/api/strap/billing/agreement.html?id=${encodeURIComponent(a.id)}">Download readable agreement</a></p></section>`
   }).join('')
@@ -48,6 +51,6 @@ export function billingPanel(s: any) {
 export function billingStaffControls(s: any,personId: string,back: string) {
   const handoffs=(s.billingHandoffs ?? []).filter((a: any)=>a.personId===personId);
   if(!handoffs.length)return '';
-  const labels: Record<string,string>={'billing.agreement.accept':'Open personal signing','billing.setup.start':'Open card setup','billing.setup.complete':'Open authorization status','billing.mandate.revoke':'Open payment revocation'};
-  return panel('Member payment handoff',body('<p>The member signs in on their own device. Only they can sign, authorize or replace a card. No payment details or completed agreement are shown here.</p>'+handoffs.map((a: any)=>a.actions.map((command: string)=>form(command+'.launch',back,hidden('id',a.id)+request()+hidden('channel','desk'),labels[command],'quiet')).join('')).join('')),{id:'billing-handoff'});
+  const labels: Record<string,string>={'billing.agreement.accept':'Open personal signing','billing.setup.start':'Open card setup','billing.setup.complete':'Open authorization status','billing.mandate.revoke':'Open payment revocation','billing.method.removal.request':'Open card removal request'};
+  return panel('Member payment handoff',body('<p>The member signs in on their own device. Only they can sign, authorize or replace a card. No payment details or completed agreement are shown here.</p>'+handoffs.map((a: any)=>a.actions.map((command: string)=>form(command+'.launch',back,hidden('id',a.id)+request()+hidden('channel','desk'),labels[command],'quiet')).join('')+(a.removalRequests ?? []).map((r: any)=>`<div data-removal-request="${h(r.id)}"><p>Member requested removal of ${h(r.brand)} ending ${h(r.last4)} ${when(s,r.requestedAt)}. ${h(removalMeaning)}</p>`+removeForm(r,back,true)+'</div>').join('')).join('')),{id:'billing-handoff'});
 }
