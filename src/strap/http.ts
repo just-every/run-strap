@@ -1,4 +1,4 @@
-import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites, requestWidgetSignup, widgetPublication } from './domain/booking-widget';
+import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites, widgetStaffPrerequisites, widgetMembers, requestWidgetSignup, widgetPublication } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders, widgetSignup } from './ui/booking-widget';
 import { widgetReturn, widgetReturnCookie } from './widget-return';
 import { selectedCheckout } from './billing/checkout';
@@ -241,14 +241,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const staff=who.role!=='member';
         if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
         if(!staff)widgetAdult(loaded.state,who.personId!);
-        const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
-        const prerequisites=staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry);
+        const members=staff?widgetMembers(loaded.state,loaded.who,selected.entry):[],chosen=members.find(p=>p.id===url.searchParams.get('member'))?.id??'';
+        const prerequisites=staff?(chosen?widgetStaffPrerequisites(loaded.state,loaded.who,chosen,selected.entry):null):widgetPrerequisites(loaded.state,who.personId!,selected.entry,who.id);
         if(url.searchParams.has('invoice')) {
           if(staff)fail('member_required',403);
           await guard(env,who,'/api/strap/billing');
           Object.assign(prerequisites!,{payment:await selectedCheckout(env,who,token,url.searchParams.get('invoice')!)});
         }
-        const page=widgetReview(selected,token,members,staff,prerequisites);
+        const page=widgetReview(selected,token,members,staff,prerequisites,'',chosen);
         if(!staff)page.headers.set('set-cookie',await widgetReturnCookie(env,who,token,selected.selection.expires_at));
         return page;
       }
@@ -425,11 +425,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if (status >= 500) return unavailablePage(back, 'uncertain')
       if(!held && back.startsWith('/app/widget?selection=')) {
         try {
-          const token=new URL(back,env.AUTH_ORIGIN).searchParams.get('selection')??'',loaded=await load(env.DB,who),selected=await widgetSelection(env.DB,loaded.state,token),staff=who.role!=='member';
+          const params=new URL(back,env.AUTH_ORIGIN).searchParams,token=params.get('selection')??'',loaded=await load(env.DB,who),selected=await widgetSelection(env.DB,loaded.state,token),staff=who.role!=='member';
           if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
           if(!staff)widgetAdult(loaded.state,who.personId!);
-          const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
-          return widgetReview(selected,token,members,staff,staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry),message.replace(/_/g,' '));
+          const members=staff?widgetMembers(loaded.state,loaded.who,selected.entry):[],chosen=members.find(p=>p.id===params.get('member'))?.id??'';
+          return widgetReview(selected,token,members,staff,staff?(chosen?widgetStaffPrerequisites(loaded.state,loaded.who,chosen,selected.entry):null):widgetPrerequisites(loaded.state,who.personId!,selected.entry,who.id),message.replace(/_/g,' '),chosen);
         } catch(selectionError) {
           return widgetPage('<h1>Selection unavailable</h1><p>The selected class changed, filled or expired. Return to the studio website to choose again.</p>',[],Number((selectionError as any).status)||500);
         }

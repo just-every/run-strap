@@ -5,7 +5,10 @@ import { seatCapacity } from './spots';
 import { requireClassRight } from './staff-command-access';
 import { currentWaivers, currentWaiverReceipt, eligiblePacks } from './bookings';
 import { intakeMissing } from './intake';
-import { createDeskMember } from './member-records';
+import { createDeskMember, memberRecordVisible } from './member-records';
+import { requireSigningLaunch } from './signing-access';
+import { packServiceEligible } from './pack-credits';
+import { hasStaffRight } from './staff-rights';
 
 const basis = (entry: RecordData) => sha256(JSON.stringify(entry));
 const tokenHash = (token: unknown) => { insist(typeof token === 'string' && /^[0-9a-f]{64}$/.test(token),'selection_unavailable',410); return sha256(token); };
@@ -121,18 +124,40 @@ export function widgetAdult(state: State, personId: string) {
   person(state,personId);
   insist(!list(state,'household').some(h=>h.guardianIds?.length && h.participantIds?.includes(personId)) && !list(state,'contractAuthority').some(g=>g.personId===personId && g.kind==='minor-guardian' && !g.revokedAt && (!g.adultAt || g.adultAt>now())),'adult_personal_booking_required',403);
 }
+/** Active intro offers for this class. A preview stays with the actor who prepared it and is rechecked at purchase. */
+function widgetIntros(state: State, personId: string, entry: RecordData, actorId: string) {
+  const offers=list(state,'introOffer').filter(o=>o.active && packServiceEligible({id:o.id,eligibleServices:o.eligibleServices},entry))
+    .map(o=>({id:o.id,name:o.name,credits:o.credits,days:o.days,amountCents:o.amountCents,eligibility:o.eligibility,limit:o.limit,returnAfterDays:o.returnAfterDays,eligibleServices:o.eligibleServices}));
+  const previews=list(state,'introPreview').filter(p=>p.status==='preview' && p.personId===personId && p.createdBy===actorId && !p.exceptionReason && p.validUntil>now() && offers.some(o=>o.id===p.offerId))
+    .map(p=>({id:p.id,key:p.key,offerName:p.offerName,credits:p.credits,days:p.days,amountCents:p.amountCents,eligibleServices:p.eligibleServices,validUntil:p.validUntil}));
+  return {offers,previews};
+}
 /** Personal prerequisites are read from current records, never from the selection. */
-export function widgetPrerequisites(state: State, personId: string, entry: RecordData) {
+export function widgetPrerequisites(state: State, personId: string, entry: RecordData, actorId = '') {
   const member=person(state,personId),service=String(entry.service??entry.title?.split(' · ')[0]).trim().replace(/\s+/g,' ').toLowerCase();
   const packs=eligiblePacks(state,personId,entry);
   return {
+    memberId:member.id,
     memberName:member.name,
     documents:currentWaivers(state).filter(w=>!w.service || String(w.service).trim().replace(/\s+/g,' ').toLowerCase()===service)
       .map(w=>({...w,completed:currentWaiverReceipt(state,personId,w)})),
     forms:intakeMissing(state,personId,[String(entry.service??entry.title?.split(' · ')[0])]),
     hasAccess:packs.length>0,
+    intros:widgetIntros(state,personId,entry,actorId),
     invoices:list(state,'stripeInvoice').filter(i=>i.personId===personId && i.status==='open' && packs.some(p=>p.id===i.packId)).map(i=>({id:i.id,amountCents:i.amountCents})),
   };
+}
+const allowed=(check: ()=>void)=>{ try { check();return true; } catch { return false; } };
+/** Active adult members the staff actor may book into this class. */
+export const widgetMembers = (state: State, who: Actor, entry: RecordData) => state.people.filter(p=>{
+  if(p.role!=='member' || !p.active || p.erasedAt || who.role!=='owner' && !hasStaffRight(state,who,'booking',p.id,entry.locationId??'studio','class'))return false;
+  return allowed(()=>widgetAdult(state,p.id));
+});
+/** Staff see only the doors their current rights open for a member they may book; each command checks again. */
+export function widgetStaffPrerequisites(state: State, who: Actor, memberId: string, entry: RecordData) {
+  const own=widgetPrerequisites(state,memberId,entry,who.id),location=entry.locationId??'studio';
+  return {...own,invoices:[],intros:who.role==='owner' && who.isOwner ? own.intros : {offers:[],previews:[]},
+    rights:{signing:allowed(()=>requireSigningLaunch(state,who,memberId,location)),intake:memberRecordVisible(state,who,memberId)}};
 }
 /** Selection adds no authority. Both established booking commands still run their own fences and staff audit. */
 export async function validateWidgetBooking(tx: Transaction, name: string, input: Record<string,unknown>) {

@@ -106,8 +106,10 @@ export async function startCheckout(env: BillingBindings,who: Actor,input: Recor
   const c=await connection(env); reviewed(tx.state,c); await keyDigest(env);
   const pack=record(tx.state,input.packId,'pack'),member=person(tx.state,pack.personId);
   insist(member.role === 'member' && pack.expiresAt > now(),'billing_pack_not_eligible',409);
-  const draft=record(tx.state,pack.draftId,'draft');
-  insist(draft.type === 'pack' && draft.status === 'approved' && draft.personId === member.id,'billing_approved_pack_required',409);
+  // An owner-approved pack draft or the member's own confirmed intro sale; never an unreviewed pack.
+  const sale=pack.introSaleId ? record(tx.state,pack.introSaleId,'introSale') : null;
+  if(sale)insist(sale.packId === pack.id && sale.personId === member.id,'billing_approved_pack_required',409);
+  else { const draft=record(tx.state,pack.draftId,'draft');insist(draft.type === 'pack' && draft.status === 'approved' && draft.personId === member.id,'billing_approved_pack_required',409); }
   const invoiceId='stripe-invoice:'+await digest({accountId:c.account_id,packId:pack.id});
   const prior=tx.state.records.get(invoiceId);
   if(prior) { insist(prior.kind === 'stripeInvoice' && prior.data.personId === member.id,'billing_invoice_source_mismatch',409);return prior.data; }
