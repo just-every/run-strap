@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "de57572e9ac892af218e256e74a8c492ffd6a6e2fa2587c56219b84a55625635",
+      "sha256": "e6f35cbd024e41629ee05f803db33f4113fc43e3666d47a6d2aaf6fee361f1d3",
       "executable": false
     },
     "DEMO.md": {
@@ -3674,7 +3674,7 @@
       "executable": false
     },
     "src/strap/payout-access.ts": {
-      "sha256": "b8fd042425a5366803a5b3ebbd8c78ba928a0a2f77141338b7c04149a83d14ad",
+      "sha256": "a8dcae2aad2e4c68cb53e63e343ede0d546a2973aa8bdc7acfd3e8d36dcbb865",
       "executable": false
     },
     "src/strap/payout-membership.ts": {

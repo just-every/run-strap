@@ -5,11 +5,12 @@ import { cleared } from './security/gate';
 import { connection, digest, fenceConnection, reviewedConnection, type BillingBindings, type Connection } from './billing/model';
 
 /** Payout reads disclose the whole merchant statement, independently of scoped collection rights. */
-async function financeBasis(env: BillingBindings,state: State,personId: string): Promise<string|null> {
+async function financeBasis(env: BillingBindings,state: State,personId: string,legacyBases?: Map<string,string>): Promise<string|null> {
   const member=state.people.find(p=>p.id===personId && p.active && !p.erasedAt && p.role==='member' && p.email);
   if(!member)return null;
   const access=state.records.get('staff-access:'+personId);
   if(access)return access.kind==='staffAccess' && access.data.enabled && access.data.role==='finance' ? 'staff:'+access.data.version : null;
+  if(legacyBases)return legacyBases.get(personId)??null;
   const legacy=await env.DB.prepare("SELECT a.id FROM st_finance_users f JOIN st_security_audit a ON a.subject_id=f.person_id AND a.action='finance.grant' WHERE f.person_id=? ORDER BY a.rowid DESC LIMIT 1").bind(personId).first<{id:string}>();
   return legacy ? 'finance:'+legacy.id : null;
 }
@@ -39,9 +40,11 @@ export async function payoutAccessAvailable(env: BillingBindings,state: State,wh
   }
 }
 export async function payoutAccessSettings(env: BillingBindings,state: State) {
+  const legacy=(await env.DB.prepare("SELECT f.person_id,(SELECT id FROM st_security_audit WHERE subject_id=f.person_id AND action='finance.grant' ORDER BY rowid DESC LIMIT 1) AS audit_id FROM st_finance_users f").all<{person_id:string;audit_id:string|null}>()).results;
+  const legacyBases=new Map(legacy.filter(row=>row.audit_id).map(row=>[row.person_id,'finance:'+row.audit_id]));
   const candidates=[];
   for(const member of state.people) {
-    const basis=await financeBasis(env,state,member.id);
+    const basis=await financeBasis(env,state,member.id,legacyBases);
     if(basis)candidates.push({personId:member.id,financeBasis:basis});
   }
   return {candidates,grants:list(state,'payoutAccess'),history:list(state,'payoutAccessEvent')};
