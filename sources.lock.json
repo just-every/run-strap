@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/strap/ui/payout-reconciliation.ts": {
-      "sha256": "0f86f89bbddc3962f5c8df2f0bbb5c27ac5e27b550fdf0b7ed91cf2dbe9cc7c6",
+      "sha256": "18137b8ad10847d541b849b73cf6bbc6b83ca7da8b7ad90fd9b45d776fded478",
       "executable": false
     },
     "src/strap/ui/people.ts": {
@@ -4566,7 +4566,7 @@
       "executable": false
     },
     "tests/payout-reconciliation-browser.mjs": {
-      "sha256": "1ea873daa2a4cc1cdc631b213347f633e1458c43681b4845d9d0bbbc1acf86b6",
+      "sha256": "5ca2494f70908c6eec90a713174b33ab96b6fa4872c79ce8bb554a73cb232157",
       "executable": false
     },
     "tests/payout-reconciliation-cases.mjs": {
