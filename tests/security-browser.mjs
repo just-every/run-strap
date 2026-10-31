@@ -148,9 +148,9 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, secret
         await page.screenshot({path:join(proof,'SEC-001-recovery-390.png'),fullPage:true})
         await page.setViewportSize({width:1440,height:1000})
       }
-      await failed.getByRole('link',{name:'Review billing agreement',exact:true}).click()
-      assert.equal(new URL(page.url()).pathname,'/app/packs')
-      await page.getByRole('heading',{name:'Packs and payments',exact:true}).waitFor()
+      await failed.getByRole('link',{name:'Review billing connection',exact:true}).click()
+      assert.equal(new URL(page.url()).pathname,'/app/studio')
+      await page.getByRole('heading',{name:'Stripe test connection',exact:true}).waitFor()
     } finally { await context.close() }
   } finally { await browser.close() }
 }

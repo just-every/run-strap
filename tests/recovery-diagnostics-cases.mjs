@@ -99,9 +99,15 @@ export async function recoveryDiagnosticsCases() {
       const r = await h.send(path,undefined,h.owner); assert.equal(r.status,200)
       for (const secret of [...secrets, seed.member.email]) assert.ok(!r.text.includes(secret),'diagnostics exclude planted private values')
     }
+    assert.equal((await h.send(api,{name:'billing.disconnect',input:{confirm:true}},h.owner)).status,404,'diagnostic POST cannot execute an action')
     await recoveryDiagnosticsBrowser(h, {failedId:failed.id, bookingId:bookings[1].id, secrets})
     assert.deepEqual(await diagnosticStore(h),before,'repeated JSON and rendered reads preserve every table')
     assert.equal(edge.calls.length,calls); assert.equal(mailCalls,3,'reads never dispatch or retry')
+    await h.cmd('agent.revoke',{id:agent.id})
+    await h.cmd('integration.revoke',{id:(await h.state()).integrations.find(r=>r.label==='Recovery reader').id})
+    const revokedBefore=await diagnosticStore(h)
+    for(const token of [agent.token,integration.token])assert.equal((await h.send(api,undefined,'',{authorization:'Bearer '+token})).status,401)
+    assert.deepEqual(await diagnosticStore(h),revokedBefore,'revoked credentials cannot read or write diagnostic data')
     // Historical timestamps and future provider extensions stay explicitly unavailable.
     await h.db.prepare("UPDATE st_notice_deliveries SET finished_at=?,code=? WHERE source_id=?").bind(Date.now()-3*86400000,providerText,bookings[1].id).run()
     diagnostic = await diagnosticRead(h)
