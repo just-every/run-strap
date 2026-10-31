@@ -8,6 +8,7 @@ import { intakeMissing } from './intake';
 import { createDeskMember, memberRecordVisible } from './member-records';
 import { requireSigningLaunch } from './signing-access';
 import { packServiceEligible } from './pack-credits';
+import { guestAllowanceSummary } from './guest-allowances';
 import { hasStaffRight } from './staff-rights';
 
 const basis = (entry: RecordData) => sha256(JSON.stringify(entry));
@@ -132,6 +133,17 @@ function widgetIntros(state: State, personId: string, entry: RecordData, actorId
     .map(p=>({id:p.id,key:p.key,offerId:p.offerId,offerName:p.offerName,credits:p.credits,days:p.days,amountCents:p.amountCents,eligibleServices:p.eligibleServices,validUntil:p.validUntil}));
   return {offers,previews};
 }
+/** Named guests who personally authorized this host; the host learns nothing about anyone else. */
+function widgetGuests(state: State, personId: string, entry: RecordData, actorId: string) {
+  const consents=list(state,'guestConsent').filter(g=>g.active && g.type==='guest' && g.sponsorId===personId);
+  const guests=state.people.filter(p=>p.active && !p.erasedAt && consents.some(g=>g.personId===p.id)).map(p=>({id:p.id,name:p.name}));
+  const packs=list(state,'pack').filter(p=>p.personId===personId && p.guestTerms && p.expiresAt>entry.start).map(p=>({id:p.id,name:p.entitlement?.name ?? 'Guest allowance',left:guestAllowanceSummary(state,p)?.left ?? 0}));
+  const drafts=list(state,'guestBookingDraft').filter(d=>d.actorId===actorId && d.status==='preview' && d.classId===entry.id && d.sponsorId===personId)
+    .map(d=>({id:d.id,guestName:guests.find(g=>g.id===d.personId)?.name ?? 'Guest',funding:d.funding,amountCents:d.amountCents}));
+  const booked=list(state,'booking').filter(b=>b.guestPackId && b.sponsorId===personId && b.classId===entry.id && b.status==='booked')
+    .map(b=>({id:b.id,guestName:guests.find(g=>g.id===b.personId)?.name ?? 'Guest',funding:b.guestFunding}));
+  return guests.length && packs.length || booked.length ? {guests,packs,drafts,booked} : null;
+}
 /** Personal prerequisites are read from current records, never from the selection. */
 export function widgetPrerequisites(state: State, personId: string, entry: RecordData, actorId = '') {
   const member=person(state,personId),service=String(entry.service??entry.title?.split(' · ')[0]).trim().replace(/\s+/g,' ').toLowerCase();
@@ -144,6 +156,7 @@ export function widgetPrerequisites(state: State, personId: string, entry: Recor
     forms:intakeMissing(state,personId,[String(entry.service??entry.title?.split(' · ')[0])]),
     hasAccess:packs.length>0,
     intros:widgetIntros(state,personId,entry,actorId),
+    guests:widgetGuests(state,personId,entry,actorId),
     invoices:list(state,'stripeInvoice').filter(i=>i.personId===personId && i.status==='open' && packs.some(p=>p.id===i.packId)).map(i=>({id:i.id,amountCents:i.amountCents})),
   };
 }
@@ -156,7 +169,7 @@ export const widgetMembers = (state: State, who: Actor, entry: RecordData) => st
 /** Staff see only the doors their current rights open for a member they may book; each command checks again. */
 export function widgetStaffPrerequisites(state: State, who: Actor, memberId: string, entry: RecordData) {
   const own=widgetPrerequisites(state,memberId,entry,who.id),location=entry.locationId??'studio';
-  return {...own,invoices:[],intros:who.role==='owner' && who.isOwner ? own.intros : {offers:[],previews:[]},
+  return {...own,invoices:[],guests:null,intros:who.role==='owner' && who.isOwner ? own.intros : {offers:[],previews:[]},
     rights:{signing:allowed(()=>requireSigningLaunch(state,who,memberId,location)),intake:memberRecordVisible(state,who,memberId)}};
 }
 /** Selection adds no authority. Both established booking commands still run their own fences and staff audit. */
