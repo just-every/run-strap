@@ -21,6 +21,7 @@
 .data a:hover { text-decoration: underline; }
 .data .day-row td { padding-top: 16px; border-top: 0; color: var(--strap-ink); font: 700 17px/1.3 var(--rer-font-heading); }
 .table-wrap { padding: 0 8px 6px; }
+.audit-effect { white-space: break-spaces; overflow-wrap: anywhere; font-size: 13px; }
 
 /* Forms */
 .form { display: grid; gap: 14px; margin: 0; }

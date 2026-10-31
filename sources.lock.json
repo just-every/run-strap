@@ -654,7 +654,7 @@
       "executable": false
     },
     "public/brand/app/pages.css": {
-      "sha256": "52c983fcfeb008948639c0e58501929cd1e5587ab1aefba736989730ba35ab13",
+      "sha256": "56b461735b50a72251320896c493b4969048349daac3ceaaaeb08dfd4868841c",
       "executable": false
     },
     "public/brand/app/security.js": {
@@ -4074,7 +4074,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "13d61ace05d6a169a40f6b89f33647be5fcf9b38567fddd1e549c8a985205ae5",
+      "sha256": "e1582375aa72db046a4d83a62d8a30a469899cc3b0431ef2664e51579d9c86b4",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4670,7 +4670,7 @@
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
-      "sha256": "4e0e45d1d6168fcf3413f2de46112addd62c2e035d90fd13a6ebe648714222e4",
+      "sha256": "16f2d878e0b0b7cf932e09e4fa9d951b38863e6ccfdbbcbb2a270d9276f8eb39",
       "executable": false
     },
     "tests/staff-actions.test.mjs": {

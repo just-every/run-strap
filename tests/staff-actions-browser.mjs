@@ -6,14 +6,14 @@ import { chromium } from '@playwright/test'
 const cookieInto=async(context,cookie,origin)=>{const i=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,i),value:cookie.slice(i+1),url:origin}])}
 const open=async(page,label)=>{const summary=page.locator('summary').filter({hasText:new RegExp(`^${label}$`)}).first();await summary.click();return summary.locator('..')}
 
-// The existing scheduling Verify invokes this populated audit screen at desktop.
-// A proof run also captures the same changed screen on a phone.
+// The existing scheduling Verify invokes this populated audit screen at phone width.
+// A proof run also captures the same expanded screen on desktop.
 export async function studioAuditBrowser(h,{staff,query,drawer}) {
   const proof=process.env.STRAP_PROOF_DIR
   if(proof)await mkdir(proof,{recursive:true})
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
-    for(const width of proof ? [1440,390] : [1440]) {
+    for(const width of proof ? [390,1440] : [390]) {
       const context=await browser.newContext({viewport:{width,height:1000}})
       await assets(context,h);await cookieInto(context,h.owner,h.origin)
       const page=await context.newPage()
@@ -24,7 +24,7 @@ export async function studioAuditBrowser(h,{staff,query,drawer}) {
         await rights.getByLabel('Staff role',{exact:true}).selectOption('front-desk')
         await rights.getByLabel('Staff access',{exact:true}).selectOption('false')
         await rights.getByLabel('Reason for access change',{exact:true}).fill('Browser-reviewed revocation')
-        if(width===1440) {
+        if(width===390) {
           await rights.getByRole('button',{name:'Save staff rights',exact:true}).click()
           const recorded=(await h.send('/api/strap/staff-history?'+query,undefined,h.owner)).value.rows
           assert.equal(recorded.length,3)
@@ -34,7 +34,7 @@ export async function studioAuditBrowser(h,{staff,query,drawer}) {
       }
       await page.goto(h.origin+'/app/people?'+query+'#staff-actions')
       const panel=page.locator('#staff-actions')
-      if(width===1440) {
+      if(width===390) {
         assert.equal(await panel.locator('[data-staff-command]').count(),drawer?2:3)
         assert.ok(await panel.getByText(drawer?'Correct drawer count':'Staff access revoked',{exact:false}).first().isVisible())
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
@@ -42,6 +42,25 @@ export async function studioAuditBrowser(h,{staff,query,drawer}) {
         await panel.locator('details.more summary').last().click()
         assert.match(await panel.innerText(),drawer?/\$165\.00/:/front-desk/)
         if(drawer)assert.match(await panel.innerText(),/\$170\.00/)
+        const changes=panel.locator('details.more')
+        for(const [index,event] of expected.entries()) {
+          const detail=changes.nth(index)
+          if(!await detail.evaluate(node=>node.open))await detail.locator('summary').click()
+          const facts=detail.locator('dd')
+          for(const [position,name] of ['before','after'].entries()) {
+            const text=(await facts.nth(position).innerText()).trim(),value=event[name]
+            if(value===null)assert.equal(text,'Not recorded')
+            else if(typeof value==='number')assert.equal(text,new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value/100))
+            else assert.deepEqual(JSON.parse(text),value,'expanded history retains every recorded fact')
+          }
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'expanded recorded changes fit the phone viewport')
+          const overflow=await facts.evaluateAll(nodes=>nodes.flatMap(node=>{
+            const box=node.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(node)
+            const lines=[...range.getClientRects()].filter(rect=>rect.left<box.left-1||rect.right>box.right+1).map(rect=>({left:rect.left,right:rect.right}))
+            return box.left<0||box.right>innerWidth||node.scrollWidth>node.clientWidth||lines.length ? [{left:box.left,right:box.right,client:node.clientWidth,scroll:node.scrollWidth,lines}] : []
+          }))
+          assert.deepEqual(overflow,[],'before and after facts wrap visibly without clipping')
+        }
         const download=page.waitForEvent('download');await panel.getByRole('link',{name:'Download staff history CSV',exact:true}).click()
         const stream=await(await download).createReadStream(),parts=[];for await(const part of stream)parts.push(part)
         const {parseCsv}=await import('./report-downloads.mjs'),[columns,...data]=parseCsv(Buffer.concat(parts).toString())
@@ -49,6 +68,7 @@ export async function studioAuditBrowser(h,{staff,query,drawer}) {
         const jsonHref=await panel.getByRole('link',{name:'Open staff history JSON',exact:true}).getAttribute('href')
         assert.deepEqual((await h.send(jsonHref,undefined,h.owner)).value.rows,expected)
       }
+      if(width!==390)for(const detail of await panel.locator('details.more').all())await detail.locator('summary').click()
       if(proof)await panel.screenshot({path:join(proof,`SEC-002-${drawer?'drawer':'access'}-history-${width}.png`)})
       await context.close()
     }

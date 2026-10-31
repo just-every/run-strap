@@ -146,7 +146,7 @@ function historyEffect(s: any, event: any, value: any) {
   if (!event.sourceKind) return effect(s,value)
   if (value === null || value === undefined) return 'Not recorded'
   if (typeof value === 'number') return money(value)
-  return `<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px">${h(JSON.stringify(value,null,2))}</pre>`
+  return `<pre class="audit-effect">${h(JSON.stringify(value,null,2))}</pre>`
 }
 
 /** Screen and downloads share the same canonical staff-history projection. */
