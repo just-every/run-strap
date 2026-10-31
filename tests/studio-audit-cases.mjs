@@ -42,8 +42,8 @@ export async function studioAuditCases(h) {
   for(const row of grants)assert.deepEqual([row.actorId,row.actorRole,row.sourceKind,row.sourceId,row.id],[(await h.state()).actor.id,'owner','staffAccessEvent',row.id,row.id])
   const sources=(await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records.filter(row=>row.kind==='staffAccessEvent'&&JSON.parse(row.data).personId===staff.id)
   assert.deepEqual(new Set(changes.map(row=>row.sourceId)),new Set(sources.map(row=>row.id)))
-  const localDay=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago'}).format(new Date(grants[0].at))
-  const dated=new URLSearchParams(query);dated.set('auditFrom',localDay);dated.set('auditTo',localDay)
+  const sourceDays=sources.map(row=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago'}).format(new Date(JSON.parse(row.data).at))).sort()
+  const dated=new URLSearchParams(query);dated.set('auditFrom',sourceDays[0]);dated.set('auditTo',sourceDays.at(-1))
   assert.deepEqual(await auditDownload(h,dated),changes)
   for(const [key,value] of [['person',member.id],['auditRight','drawer'],['auditCommand','drawer.adjust'],['auditActor','unrecorded-actor'],['auditChannel','phone']]) {
     const excluded=new URLSearchParams(query);excluded.set(key,value)

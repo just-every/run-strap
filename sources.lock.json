@@ -4698,7 +4698,7 @@
       "executable": false
     },
     "tests/studio-audit-cases.mjs": {
-      "sha256": "515165a6fd5eec72a77ed32ccf588b391477db15f8c29e5828e0dada7e57b689",
+      "sha256": "4a740f5a741391cc760f219b90cf71c37ce50049f2b6a889e11b322a1298cc29",
       "executable": false
     },
     "tests/studio-browser.mjs": {
