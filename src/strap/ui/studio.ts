@@ -1,3 +1,4 @@
+import { productCatalogPanel } from './product-catalog';
 import { automationSettings } from './automation';
 import { terminationReasonsPanel } from './termination-reasons';
 import { successSettingsPanel } from './leads';
@@ -28,6 +29,7 @@ export function studioPage(s: any, notice: any = {}) {
   const zone = s.studio ? `<p class="meta">Classes are entered and shown on ${h(zoneName(s.studio.timeZone))}.</p>` : ''
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
+    + productCatalogPanel(s)
     + automationSettings(s)
     + terminationReasonsPanel(s)
     + locationsPanel(s)

@@ -580,3 +580,37 @@ test('Intro conversion: expiry alone never renews; member accepts or declines ex
   }
   assert.equal(state.recurring.terms.find(r=>r.id===unanswered.proposal.id).acceptedAt,undefined);
 }));
+
+
+test('Versioned finite-pack catalog preserves two purchases and refuses changed or retired previews', {timeout:120_000}, () => run(async h => {
+  await h.confirmSetup(h.owner);
+  await h.cmd('studio.save',{location:'Catalog studio',timeZone:'America/New_York'});
+  const first=await h.person('CatalogFirst'),second=await h.person('CatalogSecond');
+  const data=await (await import('./catalog-cases.mjs')).catalogPurchases(h,first,second);
+  console.log('PROBE PLAN-001 versioned purchases: public catalog and pack commands -> two distinct sold USD prices, credits, services and locations retained after third publication.');
+  console.log('PROBE PLAN-001 stale and retired previews: pack approval and preparation -> 409, unchanged state revision and no new charge or credit.');
+  await (await import('./catalog-browser.mjs')).catalogBrowser(h,data);
+  const coach=await h.person('CatalogInstructor','instructor'),week=mondayOf(addDays(today(),14));
+  const classes=await h.cmd('classes.prepare',{week,classes:[
+    {title:'Catalog Mat',service:'Mat',start:week+'T14:00:00Z',end:week+'T15:00:00Z',capacity:4,instructorId:coach.id},
+    {title:'Catalog Reformer',service:'Reformer',start:week+'T15:00:00Z',end:week+'T16:00:00Z',capacity:4,instructorId:coach.id},
+    {title:'Catalog West Mat',service:'Mat',locationId:data.v2.locationId,start:week+'T16:00:00Z',end:week+'T17:00:00Z',capacity:4,instructorId:coach.id}
+  ]});
+  await h.cmd('classes.publish',{id:classes.id});
+  const waiver=await h.cmd('waiver.publish',{text:'Catalog class safety acknowledgment'});
+  for(const member of [first,second])await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie);
+  const before=await h.state();
+  await h.cmd('booking.book',{classId:classes.classes[1].id},first.cookie,409);
+  await h.cmd('booking.book',{classId:classes.classes[2].id},first.cookie,409);
+  await h.cmd('booking.book',{classId:classes.classes[0].id},second.cookie,409);
+  assert.equal((await h.state()).version,before.version,'ineligible catalog service and location attempts change nothing');
+  const one=await h.cmd('booking.book',{classId:classes.classes[0].id},first.cookie);
+  const two=await h.cmd('booking.book',{classId:classes.classes[2].id},second.cookie);
+  assert.equal(one.packId,data.sale.id);assert.equal(two.packId,data.secondSale.id);
+  const after=await h.state();
+  assert.equal(after.packs.find(p=>p.id===data.sale.id).remaining,9);
+  assert.equal(after.packs.find(p=>p.id===data.secondSale.id).remaining,11);
+  assert.deepEqual(after.charges,before.charges,'bookings consume credits while sold USD charges stay fixed');
+  console.log('PROBE PLAN-001 service and location versions: member booking -> correct Mat location reserves one original credit; Reformer and wrong-location bookings refuse without writes.');
+
+}));

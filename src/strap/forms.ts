@@ -154,6 +154,14 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'intro.identity.verify') { input.householdChecked = input.householdChecked === 'true'; for (const key of ['samePersonAsId','householdWithId']) if (input[key] === '') delete input[key]; }
   if (name === 'intro.preview' && input.exceptionReason === '') delete input.exceptionReason;
   if (name === 'intro.purchase') input.confirm = input.confirm === 'true';
+  if (name === 'pack.prepare' && input.catalogVersionId !== undefined) return {personId:input.personId,catalogVersionId:input.catalogVersionId};
+  if (name === 'catalog.publish') {
+    const picked=Object.keys(input).filter(k=>k.startsWith('lc_')&&input[k]==='true').map(k=>k.slice(3));
+    for (const k of Object.keys(input)) if (k.startsWith('lc_')) delete input[k];
+    input.eligibleLocations=picked.length ? picked : [input.locationId];
+    for (const k of ['credits','validDays','revision']) input[k]=Number(input[k]);
+  }
+  if (name === 'catalog.retire') input.revision=Number(input.revision);
   if (name === 'pack.prepare' || name === 'pack.locations.set') {
     const picked = Object.keys(input).filter(key => key.startsWith('lc_') && input[key] === 'true').map(key => key.slice(3))
     for (const key of Object.keys(input)) if (key.startsWith('lc_')) delete input[key]
