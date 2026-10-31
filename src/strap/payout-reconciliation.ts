@@ -11,7 +11,11 @@ const sources=(state: State,accountId: string)=>list(state,'stripeInvoice').filt
 async function authority(env: BillingBindings,who: Actor) {
   const loaded=await load(env.DB,who);humanOwner(loaded.who);
   insist(await cleared(env as Bindings,loaded.who),'mfa_required',403);
+  insist(who.sessionId && await env.DB.prepare("SELECT id FROM oa_sessions WHERE id=? AND operator_id=? AND operator_version=? AND revoked_at IS NULL AND expires_at>?").bind(who.sessionId,who.id,loaded.state.operator.version,Date.now()).first(),'owner_session_required',401);
   return loaded;
+}
+function fenceAuthority(tx: Transaction) {
+  tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_sessions s JOIN st_mfa_sessions m ON m.session_id=s.id AND m.operator_id=s.operator_id WHERE s.id=? AND s.operator_id=? AND s.operator_version=? AND s.revoked_at IS NULL AND s.expires_at>unixepoch('now')*1000) THEN 1 ELSE 0 END",tx.who.sessionId,tx.who.id,tx.state.operator.version));
 }
 async function merchant(env: BillingBindings,accountId: string) {
   const {body}=await stripe(env,'/account');
@@ -33,11 +37,11 @@ export async function refreshPayouts(env: BillingBindings,who: Actor,input: Reco
   const tx=new Transaction(env.DB,checked.state,checked.who);
   const invoices=sources(tx.state,c.account_id),startedAt=now();
   const reservation={id,accountId:c.account_id,connectionId:c.connection_id,requestId,startedAt,actorId:who.id,status:'refreshing',completedAt:null};
-  fenceConnection(tx,c);tx.put(refreshKind,reservation);await tx.commit();
+  fenceConnection(tx,c);fenceAuthority(tx);tx.put(refreshKind,reservation);await tx.commit();
   const cards: RecordData[]=[],payouts: RecordData[]=[];
   let payoutError: string|null=null;
   for(const invoice of invoices) {
-    const observedAt=now(),base={id:'card-observation:'+await digest({refreshId:id,invoiceId:invoice.id}),refreshId:id,accountId:c.account_id,invoiceId:invoice.id,paymentId:invoice.paymentId,personId:invoice.personId,packId:invoice.packId,providerChargeId:invoice.providerChargeId,observedAt};
+    const observedAt=now(),base={id:'card-observation:'+await digest({refreshId:id,invoiceId:invoice.id}),refreshId:id,accountId:c.account_id,invoiceId:invoice.id,paymentId:invoice.paymentId,personId:invoice.personId,packId:invoice.packId,providerChargeId:invoice.providerChargeId,sourceAmountCents:invoice.amountCents,sourceCurrency:'usd',observedAt};
     try {
       const payment=record(checked.state,invoice.paymentId,'payment');
       insist(payment.stripeInvoiceId===invoice.id && payment.accountId===c.account_id && payment.providerChargeId===invoice.providerChargeId && payment.amountCents===invoice.amountCents,'payout_native_source_mismatch',409);
@@ -46,7 +50,7 @@ export async function refreshPayouts(env: BillingBindings,who: Actor,input: Reco
       insist(charge.refunded===false && charge.amount_refunded===0 && charge.disputed===false && !charge.dispute,'payout_refund_or_dispute_unresolved',409);
       insist(charge.balance_transaction && typeof charge.balance_transaction==='object','payout_fee_unavailable',409);
       const value=balanceTransaction(charge.balance_transaction);
-      insist(value.sourceId===charge.id && value.type==='charge' && value.grossCents===invoice.amountCents,'payout_balance_source_mismatch',502);
+      insist(value.sourceId===charge.id && value.type==='charge' && (value.currency!=='usd' || value.grossCents===invoice.amountCents),'payout_balance_source_mismatch',502);
       cards.push({...base,...value,status:'observed',errorCode:null});
     } catch(error) {cards.push({...base,status:'unresolved',errorCode:failure(error),providerTransactionId:null,grossCents:null,feeCents:null,netCents:null});}
   }
@@ -66,7 +70,7 @@ export async function refreshPayouts(env: BillingBindings,who: Actor,input: Reco
   // Never let a disconnected, changed or erased source acquire new observations.
   const fresh=await authority(env,who),finish=new Transaction(env.DB,fresh.state,fresh.who),latest=await connection(env);
   insist(latest.connection_id===c.connection_id && latest.account_id===c.account_id && latest.key_digest===c.key_digest,'billing_connection_changed',409);reviewedConnection(finish.state,latest);
-  await merchant(env,c.account_id);fenceConnection(finish,c);
+  await merchant(env,c.account_id);fenceConnection(finish,c);fenceAuthority(finish);
   const retained=record(finish.state,id,refreshKind);
   if(retained.status!=='refreshing')return retained;
   for(const card of cards) {
@@ -96,18 +100,21 @@ export async function payoutReport(env: BillingBindings,who: Actor) {
   const observations=latestBy(list(state,cardKind).filter(r=>!r.erased && state.people.some(p=>p.id===r.personId && !p.erasedAt)),'invoiceId');
   const cards: RecordData[]=observations.map(row=>({...row,stale:row.refreshId!==latest?.id}));
   for(const invoice of list(state,'stripeInvoice').filter(i=>i.status==='paid' && !i.erased && state.people.some(p=>p.id===i.personId && !p.erasedAt)))if(!cards.some(c=>c.invoiceId===invoice.id))cards.push({id:invoice.id,invoiceId:invoice.id,paymentId:invoice.paymentId,accountId:invoice.accountId,providerChargeId:invoice.providerChargeId,status:'unresolved',errorCode:'payout_refresh_required',stale:true,observedAt:null,providerTransactionId:null,grossCents:null,feeCents:null,netCents:null});
-  const current=cards.filter(r=>r.status==='observed' && !r.stale),complete=!!latest && latest.status!=='refreshing' && current.length===cards.length;
+  const current=cards.filter(r=>r.status==='observed' && !r.stale);
+  const currencies=[...new Set(current.map(r=>r.currency))].sort(),currency=currencies.length===1?currencies[0]:null;
+  const complete=!!currency && !!latest && latest.status!=='refreshing' && current.length===cards.length;
+  const byCurrency=currencies.map(currency=>{const rows=current.filter(r=>r.currency===currency);return {currency,grossCents:sum(rows,'grossCents'),feeCents:sum(rows,'feeCents'),netCents:sum(rows,'netCents'),cardCount:rows.length};});
   const payouts=latestBy(list(state,payoutKind),'providerPayoutId').map(row=>{
-    const matched=current.filter(c=>row.transactionIds?.includes(c.providerTransactionId));
+    const matched=current.filter(c=>c.currency===row.currency && row.transactionIds?.includes(c.providerTransactionId));
     const unmapped=row.transactionIds===null ? null : row.transactionIds.filter((id: string)=>!matched.some(c=>c.providerTransactionId===id)).length;
     const mappedNetCents=sum(matched,'netCents');
     return {...row,stale:row.refreshId!==latest?.id,cardObservationIds:matched.map(c=>c.id),mappedNetCents,unmappedTransactionCount:unmapped,providerDifferenceCents:row.refreshId===latest?.id && unmapped===0 && !row.mappingError ? row.amountCents-mappedNetCents : null};
   });
-  return {mode:'test',connected,latest,refreshes,cards,payouts,totals:{observedGrossCents:sum(current,'grossCents'),observedFeeCents:sum(current,'feeCents'),observedNetCents:sum(current,'netCents'),grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Retained personal one-time TEST card receipts only; payouts never establish bank receipt.'};
+  return {mode:'test',connected,latest,refreshes,cards,payouts,totals:{currency,byCurrency,observedGrossCents:currency?sum(current,'grossCents'):null,observedFeeCents:currency?sum(current,'feeCents'):null,observedNetCents:currency?sum(current,'netCents'):null,grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Retained personal one-time TEST card receipts only; payouts never establish bank receipt.'};
 }
 export function payoutCsv(report: Awaited<ReturnType<typeof payoutReport>>) {
-  const fields=['kind','id','accountId','invoiceId','paymentId','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','depositStatus','errorCode','mappingError','stale'];
+  const fields=['kind','id','refreshId','accountId','invoiceId','paymentId','packId','sourceId','type','sourceAmountCents','sourceCurrency','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','depositStatus','errorCode','mappingError','stale','automatic','mappedNetCents','unmappedTransactionCount','providerDifferenceCents','bankDepositConfirmed','cardGrossTotalCents','cardFeeTotalCents','cardNetTotalCents','bankDepositConfirmation'];
   const cell=(v: unknown)=>'"'+String(v??'').replace(/^([=+@-])/,'\t$1').replaceAll('"','""')+'"';
-  const rows=[...report.cards.map(r=>({kind:'card',...r})),...report.payouts.map(r=>({kind:'payout',...r}))];
+  const rows=[{kind:'refresh',id:report.latest?.id??'',accountId:report.latest?.accountId??'',observedAt:report.latest?.completedAt??null,status:report.latest?.status??'not_refreshed',errorCode:report.latest?.payoutError??null,cardGrossTotalCents:report.totals.grossCents,cardFeeTotalCents:report.totals.feeCents,cardNetTotalCents:report.totals.netCents,bankDepositConfirmation:report.bankDepositConfirmation,currency:report.totals.currency},...report.cards.map(r=>({kind:'card',...r})),...report.payouts.map(r=>({kind:'payout',...r}))];
   return [fields,...rows.map(row=>fields.map(field=>(row as Record<string,unknown>)[field]))].map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';
 }
