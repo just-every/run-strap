@@ -131,3 +131,8 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
 #payments section { margin-block: 18px; }
 
 .payment-reference { overflow-wrap: anywhere; }
+
+/* Provider identities stay readable without widening the reconciliation page. */
+#payout-reconciliation { overflow-wrap: anywhere; }
+#payout-reconciliation .data { table-layout: fixed; }
+#payout-reconciliation .data td { min-width: 0; max-width: 100%; }

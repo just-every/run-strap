@@ -36,3 +36,33 @@ export function savedMethod(body: Json,agreementId: string,mandateId: string,ope
   // hosted URLs or arbitrary provider bodies in the studio's portable records.
   return {sessionId:checked.id,setupIntentId:intent.id,paymentMethodId:method.id,customerId:typeof intent.customer === 'string' ? intent.customer : null,type:'card',brand:card.brand,last4:card.last4,expiryMonth:card.exp_month,expiryYear:card.exp_year,livemode:false};
 }
+
+export function providerIdentity(value: unknown): string {
+  insist(typeof value==='string' && value.length>0 && value.length<=200 && /^[A-Za-z0-9_-]+$/.test(value),'payout_provider_identity_invalid',502);return value;
+}
+function providerTime(value: unknown) {
+  insist(Number.isSafeInteger(value) && (value as number)>=0 && (value as number)<=253402300799,'payout_provider_time_invalid',502);
+  return new Date((value as number)*1000).toISOString();
+}
+/** A bounded complete list, or an explicit refusal; partial pages never claim completeness. */
+export async function stripeList(env: BillingBindings,path: string) {
+  const items: Json[]=[],seen=new Set<string>();let cursor='';
+  for(let page=0;page<20;page++) {
+    const {body}=await stripe(env,path+(path.includes('?')?'&':'?')+'limit=100'+(cursor?'&starting_after='+encodeURIComponent(cursor):''));
+    insist(body.object==='list' && Array.isArray(body.data) && body.data.length<=100 && typeof body.has_more==='boolean','payout_pagination_invalid',502);
+    for(const item of body.data) {const id=providerIdentity(item?.id);insist(!seen.has(id),'payout_pagination_incomplete',409);seen.add(id);items.push(item);}
+    if(!body.has_more)return items;
+    insist(body.data.length>0,'payout_pagination_incomplete',409);cursor=providerIdentity(body.data.at(-1).id);
+  }
+  throw new DomainError('payout_pagination_incomplete',409);
+}
+export function balanceTransaction(body: Json) {
+  insist(body.object==='balance_transaction' && body.currency==='usd' && Number.isSafeInteger(body.amount) && Number.isSafeInteger(body.fee) && body.fee>=0 && Number.isSafeInteger(body.net) && body.amount-body.fee===body.net && ['pending','available'].includes(body.status),'payout_fee_unavailable',502);
+  const sourceId=providerIdentity(typeof body.source==='object'?body.source?.id:body.source);
+  insist(typeof body.type==='string' && /^[a-z_]{1,40}$/.test(body.type),'payout_transaction_type_invalid',502);
+  return {providerTransactionId:providerIdentity(body.id),sourceId,type:body.type,currency:'usd',grossCents:body.amount as number,feeCents:body.fee as number,netCents:body.net as number,providerStatus:body.status as string,providerCreatedAt:providerTime(body.created),availableAt:providerTime(body.available_on)};
+}
+export function payoutObservation(body: Json) {
+  insist(body.object==='payout' && body.livemode===false && body.currency==='usd' && Number.isSafeInteger(body.amount) && body.amount>0 && ['pending','in_transit','paid','failed','canceled'].includes(body.status) && typeof body.automatic==='boolean','payout_observation_invalid',502);
+  return {providerPayoutId:providerIdentity(body.id),providerTransactionId:body.balance_transaction===null?null:providerIdentity(typeof body.balance_transaction==='object'?body.balance_transaction?.id:body.balance_transaction),currency:'usd',amountCents:body.amount as number,providerStatus:body.status as string,automatic:body.automatic as boolean,providerCreatedAt:providerTime(body.created),arrivalAt:providerTime(body.arrival_date)};
+}

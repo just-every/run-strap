@@ -1,3 +1,4 @@
+import { payoutReport, payoutCsv } from './payout-reconciliation';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { locations } from './domain/locations';
@@ -52,7 +53,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/payouts','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['plan.cancellation.prepare','lead.success.prepare','attendance.plan.prepare','recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -91,6 +92,7 @@ async function revenueState(env: Bindings, who: Actor) {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if(url.pathname==='/app/payouts')return {...await state(env,who),payoutReconciliation:await payoutReport(env,who)}
   if (url.pathname === '/app/revenue') {
     const current = await revenueState(env,who)
     if (who.role !== 'owner') return current
@@ -202,6 +204,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(path==='/api/strap/billing/payouts.json' || path==='/api/strap/billing/payouts.csv') {
+        const report=await payoutReport(env,who)
+        return new Response(path.endsWith('.csv')?payoutCsv(report):JSON.stringify(report,null,2)+'\n',{headers:{...headers,'content-type':path.endsWith('.csv')?'text/csv; charset=utf-8':'application/json; charset=utf-8','content-disposition':'attachment; filename=strap-payout-reconciliation.'+(path.endsWith('.csv')?'csv':'json')}})
+      }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
         const loaded=await load(env.DB,who)

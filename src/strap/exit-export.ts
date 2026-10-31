@@ -33,6 +33,10 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.refreshId', to: 'st_records.id', kind: 'payoutRefresh', when: 'kind=cardBalanceObservation or kind=payoutObservation' },
+  { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=cardBalanceObservation' },
+  { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=cardBalanceObservation' },
+  { from: 'st_records.data.providerTransactionId and providerPayoutId', to: 'Stripe TEST resources under accountId', when: 'kind=cardBalanceObservation or kind=payoutObservation', note: 'Observed references only; no bank deposit confirmation or execution authority.' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },

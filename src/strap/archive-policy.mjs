@@ -3,6 +3,8 @@
 // rate counts) do not: a restored studio re-pairs its kiosks and recreates its integrations.
 // Second factors (SEC-004: sealed authenticator secrets, passkey keys, recovery-code hashes, session checks)
 // are credentials too: a restored studio sends every person back to enrollment.
+// Payout and card balance observations live in st_records as inert history;
+// st_payment_connections stays excluded, including refresh replay authority.
 export default {
   product: 'studio/strap',
   includeTables: ['oa_operators', 'oa_bootstrap', 'oa_invitation_cancellations'],
