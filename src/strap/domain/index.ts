@@ -1,3 +1,4 @@
+import { saveWidgetSettings, publishWidgetClass, publishWidgetInstructor, validateWidgetBooking } from './booking-widget';
 import { previewAutomationDelivery, confirmAutomationDelivery, prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
 import { deliverClientAppointment, acceptClientAppointment, authorizeClientAppointment, recordAppointmentDeposit, clientAppointmentSnapshot } from './client-appointments';
 import { prepareClientAppointmentChange, confirmClientAppointmentChange } from './client-appointment-changes';
@@ -89,6 +90,9 @@ export { DomainError } from './types';
 export type { Actor, Person } from './types';
 
 export const handlers = {
+  'widget.settings.save':defineCommand(saveWidgetSettings,['owner']),
+  'widget.class.publish':defineCommand(publishWidgetClass,['owner']),
+  'widget.instructor.publish':defineCommand(publishWidgetInstructor,['owner']),
   'automation.delivery.preview':defineCommand(previewAutomationDelivery,['owner']),
   'automation.delivery.confirm':defineCommand(confirmAutomationDelivery,['owner']),
   'automation.prepare':defineCommand(prepareAutomation,['owner']),
@@ -403,10 +407,11 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
     authorizeFreezeCommand(tx,name,input);
     checkFreezeLaunch(tx,input,name.startsWith('freeze.end.'));
   }
+  await validateWidgetBooking(tx,name,input);
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privatePreparation = name==='plan.cancellation.prepare' || name.startsWith('plan.cancellation.withdraw.') || name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  const privatePreparation = name.startsWith('widget.') || name==='plan.cancellation.prepare' || name.startsWith('plan.cancellation.withdraw.') || name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // Private preparations and reviews must not execute unrelated due billing, notices or entitlements.
   if (!privatePreparation && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
@@ -414,6 +419,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const clientTarget = name.startsWith('appointment.client.') ? tx.state.records.get(String(input.id ?? input.reservationId))?.data : null;
   const clientReplay = !!clientTarget && (name === 'appointment.client.accept' && clientTarget.status === 'accepted' || name === 'appointment.client.change.confirm' && clientTarget.status === 'confirmed' || name === 'appointment.client.deposit.record' && !!clientTarget.deposit?.paymentId);
   const result = await spec.run(tx,input,context);
+  if(input.selectionHash)insist(result.status==='booked','class_full',409);
   assertIntakeEnrollments(tx.state,enrollmentBasis);
   assertSigningEnrollments(tx.state,signingEnrollmentBasis);
   if (name === 'freeze.confirm' || name === 'freeze.end.confirm') promoteAll(tx);

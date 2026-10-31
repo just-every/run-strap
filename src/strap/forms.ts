@@ -38,6 +38,12 @@ function classRow(input: Record<string, unknown>, i: number, week: string, zoneA
 
 export function formInput(name: string, raw: Record<string, unknown>, timeZone: string | undefined, locations: { id: string; timeZone: string }[] = []): Record<string, unknown> {
   const input = { ...raw }
+  if(name.startsWith('widget.')) {
+    if(name==='widget.settings.save')input.origins=String(input.origins??'').split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+    for(const key of ['enabled','approved','confirm'])if(key in input)input[key]=['true','yes'].includes(String(input[key]));
+    return input;
+  }
+  if('selection' in input && 'adultConfirmed' in input)input.adultConfirmed=input.adultConfirmed==='yes';
   if(name.startsWith('automation.')) {
     if(name==='automation.prepare') {const [trigger,sequenceId]=String(input.source).split(':');input.trigger=trigger;input.sequenceId=sequenceId;delete input.source;}
     for(const key of ['intervalMinutes','maxTasks','maxMessages','days','lowCredits'])if(key in input)input[key]=Number(input[key]);

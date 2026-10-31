@@ -1,3 +1,5 @@
+import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
+import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { hasStaffRight } from './domain/staff-rights';
@@ -51,7 +53,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/widget','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['plan.cancellation.prepare','lead.success.prepare','attendance.plan.prepare','recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -80,7 +82,7 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
   const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers','gifts','timeClock'].map(key => [key, key === 'teachingPay' || key === 'memberMail' || key === 'smsTest' ? null : []])) : {}
-  return { ...current, smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
+  return { ...current, smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env), widget: await widgetSettingsView(env.DB,(await load(env.DB,who)).state,who) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
 async function appState(env: Bindings, who: Actor, target: string) {
@@ -140,7 +142,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
-  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/profile-save','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
+  if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/widget','/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/profile-save','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
   if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !delegatedBillingRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.client.accept','appointment.client.move.prepare','appointment.client.cancel.prepare','appointment.client.change.confirm','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !(who.staffAccess && delegatedBillingRight(name) === 'collection' && ['/api/strap/command','/app/action'].includes(path)) && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
@@ -171,6 +173,17 @@ export async function strapScheduled(original: Bindings) {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if (path==='/booking/widget' || path==='/booking/select') {
+    const env=runtimeBindings(original);
+    try {
+      if(url.origin!==env.AUTH_ORIGIN || request.headers.has('host') && request.headers.get('host')!==url.host)fail('wrong_origin',403);
+      if(request.method!=='GET')fail('method_not_allowed',405);
+      if(path==='/booking/widget')return renderWidget(await publicSchedule(env.DB,url.searchParams.get('embeddingOrigin')??''),url.searchParams.get('embeddingOrigin')??'',url.searchParams.get('service')??'');
+      if(request.headers.get('sec-fetch-dest')==='iframe')fail('open_booking_in_top_level_page',403);
+      const selected=await selectWidgetClass(env.DB,url.searchParams);
+      return new Response(null,{status:303,headers:{...widgetHeaders,location:'/app/widget?selection='+selected.token,'content-security-policy':"frame-ancestors 'none'"}});
+    } catch(error) {return widgetPage('<h1>Schedule unavailable</h1><p>This class or selection is unavailable. Return to the studio website for the current schedule.</p>',[],Number((error as any).status)||500);}
+  }
   if (path==='/api/strap/billing/webhook') return billingWebhook(request,runtimeBindings(original))
   if (path===evidenceCopyPath) return evidenceCopyResponse(request,runtimeBindings(original))
   if (path === '/intake/tablet' || path === '/intake/tablet/start') return intakeTabletResponse(request,runtimeBindings(original))
@@ -191,6 +204,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if(path==='/app/widget') {
+        const loaded=await load(env.DB,who),token=url.searchParams.get('selection')??'',selected=await widgetSelection(env.DB,loaded.state,token);
+        const staff=who.role!=='member';
+        if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
+        if(!staff)widgetAdult(loaded.state,who.personId!);
+        const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
+        return widgetReview(selected,token,members,staff);
+      }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
         const loaded=await load(env.DB,who)
@@ -366,11 +387,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }
     if (pages.has(path) && held && who) {
-      const target = `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}`
+      const target = `/app/security?returnTo=${encodeURIComponent(path+url.search)}&hold=${message}`
       const page = await renderApp(await appState(env, who, target), target)
       return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
     }
-    if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
+    if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path+url.search) } })
     if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
     if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
     return json({ error: message }, status)
