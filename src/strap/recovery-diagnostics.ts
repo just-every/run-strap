@@ -18,6 +18,8 @@ const codes = ['billing_provider_refused','billing_provider_outcome_unknown','bi
   'billing_checkout_outcome_unknown','billing_checkout_payment_incomplete','billing_checkout_reconciliation_unavailable',
   'billing_checkout_source_mismatch','billing_native_comparison_mismatch','billing_refund_or_dispute_requires_review',
   'provider_outcome_unknown','transport_uncertain','provider_rejected','provider_rate_limited','provider_uncertain'];
+const bySourceTime = (a: {createdAt: string | null; id: string | null}, b: {createdAt: string | null; id: string | null}) =>
+  (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || (a.id ?? '').localeCompare(b.id ?? '');
 
 /** A read-only, explicit projection. Provider prose, identifiers, request bodies,
  * credentials, member notes and contact details never enter this response. */
@@ -51,15 +53,15 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
       createdAt: timestamp(r.createdAt), finishedAt: timestamp(r.finishedAt), freshness: freshness(timestamp(r.finishedAt ?? r.createdAt)),
       connectionState: billingConnection && r.connectionId === billingConnection.connection_id ? 'current' : 'disconnected',
       httpStatus: Number.isInteger(r.providerReceipt?.httpStatus) && r.providerReceipt.httpStatus >= 100 && r.providerReceipt.httpStatus <= 599 ? r.providerReceipt.httpStatus : null,
-      reviewUrl: '/app/packs#billing',
-    })),
+      reviewUrl: r.type === 'connect' ? '/app/studio#payment-connection' : '/app/packs#billing',
+    })).sort(bySourceTime),
     exceptions: list(loaded.state, 'billingException').map(r => ({
       id: reference(r.id), invoiceId: reference(r.invoiceId), eventId: reference(r.eventId),
       status: choice(r.status, ['open','resolved']), code: choice(r.code, codes),
       createdAt: timestamp(r.firstSeenAt ?? r.createdAt), observedAt: timestamp(r.lastSeenAt), resolvedAt: timestamp(r.resolvedAt),
       freshness: freshness(timestamp(r.lastSeenAt)), reviewUrl: '/app/packs#payments',
       connectionState: billingConnection && loaded.state.records.get(r.invoiceId ?? r.eventId)?.data.connectionId === billingConnection.connection_id ? 'current' : 'disconnected',
-    })),
+    })).sort(bySourceTime),
     notices: noticeRows.map(r => ({
       id: reference(r.id), sourceKind: choice(r.source_kind, ['closure','booking','booking_action','confirmation','reminder']), sourceId: reference(r.source_id),
       status: choice(r.status, ['queued','sending','accepted','rejected','rate_limited','uncertain','not_configured','no_address','paused','opted_out']),

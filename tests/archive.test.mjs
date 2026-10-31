@@ -272,6 +272,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.send('/api/strap/exit.json',undefined,identity.owner)).status,401)
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
+    assert.equal((await h.confirmSetup(restoredOwner)).status,303,'the restored owner completes this installation’s first-run confirmation')
     await h.enroll(restoredOwner)
     const recoveryVersion=(await h.state(restoredOwner)).version,recoveryCalls=paymentEdge.calls.length,recoveryMailCalls=copyEdge.calls.length
     const recoveryAfter=(await h.send('/api/strap/recovery-diagnostics',undefined,restoredOwner)).value
