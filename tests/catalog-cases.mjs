@@ -8,6 +8,7 @@ export async function catalogPurchases(h,first,second) {
   const draft=await prepare(first.id),sale=await h.cmd('pack.approve',{id:draft.id});
   const sold=(await h.state(first.cookie)).packs.find(p=>p.id===sale.id);
   assert.deepEqual(sold.catalogVersion,v1);
+  assert.equal(sold.purchaseExpiresAt,draft.expiresAt);
   assert.deepEqual([sold.credits,sold.remaining,sold.amountCents,sold.purchaseAmountCents],[10,10,18900,18900]);
   assert.equal(Date.parse(draft.expiresAt)-Date.parse(draft.createdAt)<=90*86400000,true);
   const stale=await prepare(second.id);
@@ -52,6 +53,7 @@ export async function assertCatalogRestored(h,data,cookie) {
   for (const [id,version] of [[data.sale.id,data.v1],[data.secondSale.id,data.v2]]) {
     const pack=state.packs.find(p=>p.id===id);
     assert.deepEqual(pack.catalogVersion,version);
+    assert.ok(pack.purchaseExpiresAt,'native restore retains original purchase expiration');
     assert.deepEqual([pack.amountCents,pack.purchaseAmountCents,pack.credits,pack.remaining],[version.amountCents,version.amountCents,version.credits,version.credits]);
     assert.equal(state.charges.find(c=>c.packId===id).amountCents,version.amountCents);
   }
