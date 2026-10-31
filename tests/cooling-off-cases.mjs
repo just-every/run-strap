@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 /** Recorded historical contracts use the real HTTP doors, not a production clock override. */
-export async function coolingOffCases(h){
+export async function coolingOffCases(h,{studioOnly=false}={}){
   let sequence=800,personIndex=0
   const names=['Georgia Reed','Grace Ward','Carmen Diaz','Clara Mills','Maya Chen','Iris Cole','Daria Lane','Nolan Vega','Alice Vale','Owen Ross','Mila Reed','Ian Cole','Nadia Park','Wren Lee','Holly Reid','Mara Stone','Gia Ford','Greta Lane','Cara Hill','James Ellis','Harper Reed','Leo Ames','Jane Vale','Jill Snow','Pat Cole','Nia Park','Lu Reed','Cora Lane','Dana Shaw','Tia Mills','Ari Vale','Tess Ames']
   const key=()=>`synthetic-strap-${sequence++}`
@@ -32,6 +32,29 @@ export async function coolingOffCases(h){
     return {member,pack,terms,window:contract.coolingOff,hours:(await h.state()).studio.businessHours,studio:(await h.state()).studio}
   }
   const cancel=async(a,at,ok=true)=>h.cmd('plan.cancellation.statutory',{packId:a.pack.id,reasonCode:'cooling-off',documentedAt:at,evidenceReference:key(),requestId:key()},a.member.cookie,ok?200:409)
+  if(studioOnly){
+    await h.cmd('studio.save',{location:'Chicago',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Chicago',region:'IL',postalCode:'60601',country:'US'},businessHours:hours})
+    const ilStudio=await agreement({region:'TX',acceptedAt:'2026-01-04T09:00:00.000Z'})
+    assert.equal(ilStudio.window.deadline,'2026-01-12T07:00:00.000Z','Illinois studio protects a member from another state for seven calendar days')
+    assert.equal(ilStudio.window.governingRule.id,'IL-645-6-off-premises')
+    assert.ok(ilStudio.window.rules.some(r=>r.region==='TX'))
+    assert.equal((await cancel(ilStudio,'2026-01-11T12:00:00.000Z')).status,'applied')
+    assert.equal((await cancel(await agreement({region:'TX',acceptedAt:'2026-01-04T09:00:00.000Z'}),'2026-01-12T07:00:00.000Z',false)).error,'cooling_off_window_ended')
+    const ilStudioPerson=await agreement({region:'TX',channel:'in-person'})
+    assert.ok(ilStudioPerson.window.rules.some(r=>r.id==='IL-645-6'))
+    assert.ok(!ilStudioPerson.window.rules.some(r=>r.id==='IL-645-6-off-premises'))
+    const ilStudioUnion=await agreement({region:'CA',amount:260000})
+    assert.equal(ilStudioUnion.window.deadline,'2026-02-20T07:00:00.000Z','the California member window remains longer than the Illinois studio window')
+    assert.equal(ilStudioUnion.window.governingRule.id,'CA-1812.85-d')
+    assert.ok(ilStudioUnion.window.rules.some(r=>r.id==='IL-645-6-off-premises'))
+    await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Pasadena',region:'CA',postalCode:'91101',country:'US'},businessHours:hours})
+    const caStudioUnion=await agreement({region:'IL',amount:260000})
+    assert.equal(caStudioUnion.window.deadline,'2026-02-20T07:00:00.000Z','the studio window remains longer than the Illinois member window')
+    assert.ok(caStudioUnion.window.rules.some(r=>r.id==='IL-645-6-off-premises'))
+    assert.equal((await cancel(caStudioUnion,'2026-02-19T12:00:00.000Z')).status,'applied')
+    await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:null,businessHours:hours})
+    return {ilStudio,ilStudioPerson,ilStudioUnion,caStudioUnion}
+  }
   const ga=await agreement({region:'GA'});assert.equal(ga.window.deadline,'2026-01-15T07:00:00.000Z');assert.equal(ga.window.governingRule.id,'GA-10-1-393.2')
   assert.equal((await cancel(ga,'2026-01-14T12:00:00.000Z')).status,'applied')
   assert.equal((await cancel(await agreement({region:'GA'}),'2026-01-15T12:00:00.000Z',false)).error,'cooling_off_window_ended')
