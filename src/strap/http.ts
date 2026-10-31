@@ -4,6 +4,7 @@ import { widgetReturn, widgetReturnCookie } from './widget-return';
 import { selectedCheckout } from './billing/checkout';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
+import { locations } from './domain/locations';
 import { hasStaffRight } from './domain/staff-rights';
 import { delegatedCommandRight } from './domain/staff-command-access';
 import { waiverEvidence, renderWaiverCopy } from './waiver-evidence'
@@ -30,7 +31,7 @@ import { teachingPay } from './domain/teaching-pay'
 import { load, loadSystem, Transaction } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { reportDownload, nativeReportDownload } from './report-exports'
-import { revenueReport } from './revenue-report'
+import { revenueReport, recurringRevenueSources } from './revenue-report'
 import { financeReport, financeDownload } from './finance-report'
 import { attendanceReport } from './attendance-report'
 import { cancellationsCsv } from './cancellations'
@@ -87,20 +88,30 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   return { ...current, smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env), widget: await widgetSettingsView(env.DB,(await load(env.DB,who)).state,who) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
+async function revenueState(env: Bindings, who: Actor) {
+  const current = await state(env,who,true), loaded = await load(env.DB,who)
+  return {...current,locations:current.locations ?? locations(loaded.state).filter(l => !loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',undefined,l.id)),recurringRevenueSources:recurringRevenueSources(loaded.state,loaded.who)}
+}
+
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if (url.pathname === '/app/revenue') {
+    const current = await revenueState(env,who)
+    if (who.role !== 'owner') return current
+    const loaded = await load(env.DB,who)
+    return {...current,financeReport:financeReport(loaded.state,url.searchParams)}
+  }
   if(url.pathname === '/app/people' && who.staffAccess && ['front-desk','manager'].includes(who.role))return {...await state(env,who),billingHandoffs:await billingStaffHandoffs(env,who)}
   if (who.role === 'instructor' && who.staffAccess && url.pathname !== '/app/people') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN,false),mfa:await mfaView(env,who),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? ''}
-  if (who.role === 'manager' && ['/app/revenue','/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
+  if (who.role === 'manager' && ['/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
   if (url.pathname === '/app/classes' && who.role==='owner') {
     const loaded=await load(env.DB,who)
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
   }
   if (url.pathname === '/app/packs' && ['owner','member'].includes(who.role)) return {...await state(env,who),billing:await cleared(env,who) ? await billingState(env,who) : null}
   if (who.role === 'owner' && url.pathname === '/app/studio') return {...await state(env,who),tax:await cleared(env,who) ? await taxState(env,who) : null,billing:await cleared(env,who) ? await billingState(env,who) : null}
-  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads','/app/revenue'].includes(url.pathname)) return state(env,who)
+  if (who.role !== 'owner' || !['/app/renewals','/app/retention','/app/leads'].includes(url.pathname)) return state(env,who)
   const loaded = await load(env.DB,who)
-  if (url.pathname === '/app/revenue') return {...await state(env,who),financeReport:financeReport(loaded.state,url.searchParams)}
   if (url.pathname === '/app/leads') return {...await state(env,who),leadReport:leadReport(loaded.state,loaded.who,url.searchParams)}
   const retentionQuery = new URLSearchParams(url.searchParams)
   // Native GET forms submit blank optional fields; API query validation remains strict.
@@ -294,7 +305,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       const exportPath = path.match(/^\/api\/strap\/reports\/(revenue|attendance)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(cancellations)\.(xlsx)$/)
       if (exportPath) {
         if (who.role !== 'owner' && !(reportStaff(who) && (exportPath[1] === 'revenue' || (who.role === 'manager' && exportPath[1] === 'attendance')))) fail('owner_required',403)
-        return reportDownload(await state(env,who,true),exportPath[1],exportPath[2],url.searchParams)
+        return reportDownload(exportPath[1] === 'revenue' ? await revenueState(env,who) : await state(env,who,true),exportPath[1],exportPath[2],url.searchParams)
       }
       const nativeExport = path.match(/^\/api\/strap\/reports\/(retention|renewals)\.(csv|xlsx)$/) ?? path.match(/^\/api\/strap\/(teaching-pay)\.(csv|xlsx)$/)
       if (nativeExport) {
@@ -329,7 +340,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
       if (path === '/api/strap/reports/revenue') {
         if (who.role !== 'owner' && !reportStaff(who)) fail('owner_required',403)
-        return json(revenueReport(await state(env,who,true),url.searchParams))
+        return json(revenueReport(await revenueState(env,who),url.searchParams))
       }
       if (path === '/api/strap/reports/attendance') {
         if (who.role !== 'owner' && who.role !== 'manager') fail('owner_required',403)
@@ -357,8 +368,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
           notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
         }
         const current=await appState(env, who, path + url.search);
-        if(path==='/app/packs')current.widgetReturn=await widgetReturn(request,env,who);
-        return renderApp(current, path + url.search, notice);
+        return renderApp({...current,...(path==='/app/packs'?{widgetReturn:await widgetReturn(request,env,who)}:{})}, path + url.search, notice);
       }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
