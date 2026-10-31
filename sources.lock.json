@@ -3610,7 +3610,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "4e0c088bf354cbe8de48d95c1b5592d34fbaa6cef81ac70866e980db39064147",
+      "sha256": "3133533615f3f5a31c8f9829a38772e4765662c71c296f0e0f5a7c6a851c7019",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
