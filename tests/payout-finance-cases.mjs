@@ -73,6 +73,9 @@ export async function financePayoutCases(h,edge) {
   await refused(legacy.cookie,'payout_read_right_required');
   await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,legacy.id,'synthetic-strap-legacy-approval'));
   assert.equal((await readPayouts(h,legacy.cookie)).totals.netCents,9625);
+  await h.cmd('finance.grant',{id:legacy.id});await refused(legacy.cookie,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,legacy.id,'synthetic-strap-reviewed-legacy-approval'));
+  assert.equal((await readPayouts(h,legacy.cookie)).totals.netCents,9625);
   await h.cmd('finance.revoke',{id:legacy.id});await refused(legacy.cookie,'payout_read_right_required');
   await h.cmd('finance.grant',{id:legacy.id});await refused(legacy.cookie,'payout_read_right_required');
   const erase=await verifiedPrivacyRequest(h,finance,'erasure','-finance-payout');
