@@ -4614,7 +4614,7 @@
       "executable": false
     },
     "tests/retail.test.mjs": {
-      "sha256": "beacd27ca73a632fc4b1b90fb1840ea56752719e9df7d01f7e819c2f1883318b",
+      "sha256": "c89053f14e90cc684c6db76487e667ee0d8ed9ffa0b98fce66b4513c6c3e255a",
       "executable": false
     },
     "tests/revenue-browser.mjs": {
