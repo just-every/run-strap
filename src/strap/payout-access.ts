@@ -10,8 +10,8 @@ async function financeBasis(env: BillingBindings,state: State,personId: string):
   if(!member)return null;
   const access=state.records.get('staff-access:'+personId);
   if(access)return access.kind==='staffAccess' && access.data.enabled && access.data.role==='finance' ? 'staff:'+access.data.version : null;
-  const legacy=await env.DB.prepare('SELECT granted_at FROM st_finance_users WHERE person_id=?').bind(personId).first<{granted_at:number}>();
-  return legacy ? 'finance:'+legacy.granted_at : null;
+  const legacy=await env.DB.prepare("SELECT a.id FROM st_finance_users f JOIN st_security_audit a ON a.subject_id=f.person_id AND a.action='finance.grant' WHERE f.person_id=? ORDER BY a.rowid DESC LIMIT 1").bind(personId).first<{id:string}>();
+  return legacy ? 'finance:'+legacy.id : null;
 }
 export async function payoutAuthority(env: BillingBindings,who: Actor,ownerOnly=true) {
   const loaded=await load(env.DB,who);
@@ -65,7 +65,7 @@ export async function changePayoutAccess(env: BillingBindings,who: Actor,input: 
     insist(input.accountId===c.account_id && input.connectionId===c.connection_id,'billing_connection_changed',409);
     fenceConnection(tx,c);
     // Legacy finance grants live outside st_meta; fence their exact reviewed identity too.
-    if(basis.startsWith('finance:'))tx.sql.push(tx.statement('INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_finance_users WHERE person_id=? AND granted_at=?) THEN 1 ELSE 0 END',target.id,Number(basis.slice(8))));
+    if(basis.startsWith('finance:'))tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_finance_users WHERE person_id=? AND (SELECT id FROM st_security_audit WHERE subject_id=? AND action='finance.grant' ORDER BY rowid DESC LIMIT 1)=?) THEN 1 ELSE 0 END",target.id,target.id,basis.slice(8)));
   }
   fencePayoutAuthority(tx);
   const grant={id:'payout-access:'+target.id,personId:target.id,enabled,version:(before?.version??0)+1,financeBasis:basis,
