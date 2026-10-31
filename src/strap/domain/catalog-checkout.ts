@@ -14,6 +14,7 @@ const staffVisible = (state: State, who: Actor, p: RecordData) => hasStaffRight(
 
 /** Resolve the saved member and sale location before any request replay. */
 export function authorizeCatalogSale(tx: Transaction, input: Record<string,unknown>) {
+  requireStaffRight(tx.state,tx.who,'membership-sale');
   const preview = input.id ? record(tx.state,input.id,'catalogPurchase') : null;
   const version = preview?.catalogVersion ?? currentProductVersion(tx.state,input.catalogVersionId);
   requireStaffRight(tx.state,tx.who,'membership-sale',preview?.personId ?? input.personId,version.locationId);

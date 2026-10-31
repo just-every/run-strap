@@ -1,11 +1,11 @@
 import { activeTerminationReason, terminationReasonChanged, terminationReasons } from './termination-reasons';
-import { requireStaffRight } from './staff-rights';
+import { hasStaffRight, requireStaffRight } from './staff-rights';
 import { coolingRefund } from './cooling-refunds';
 import { coolingAgreementPackIds } from './cooling-void';
 import { studioSettings } from './studio';
 import { coolingOffWindow, refundSettlementWindow } from './cancellation-calendar';
 import { contractCopy, contractDeliveredAt, contractRegion } from './contract-copies';
-import { humanOwner, id, insist, instant, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
+import { humanOwner, id, insist, instant, integer, list, now, person, preparer, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent, bookingCredit } from './pack-credits';
 import { bookingHistory } from './booking-history';
@@ -21,6 +21,30 @@ export interface CancellationEffects extends RecordData { effectiveAt:string; ex
 export interface CancellationPreview extends RecordData { personId:string; packId:string; termsId:string; status:string; effectiveAt:string; effects:CancellationEffects; basis:string; key:string }
 const live=(c:RecordData)=>c.status==='scheduled';
 const fingerprint=(input:Record<string,unknown>)=>JSON.stringify(Object.keys(input).sort().map(k=>[k,input[k]]));
+export function cancellationStaffVisible(state:State,who:Actor,packId:string){
+  const pack=state.records.get(packId)?.data;
+  return !!pack&&state.people.some(p=>p.id===pack.personId&&p.active&&!p.erasedAt)
+    &&hasStaffRight(state,who,'contract-change',pack.personId,pack.locationId??'studio')
+    &&hasStaffRight(state,who,'member-record',pack.personId,pack.locationId??'studio');
+}
+function requireCancellationStaff(tx:Transaction,packId:unknown){
+  const pack=record(tx.state,packId,'pack');person(tx.state,pack.personId);
+  requireStaffRight(tx.state,tx.who,'contract-change',pack.personId,pack.locationId??'studio');
+  requireStaffRight(tx.state,tx.who,'member-record',pack.personId,pack.locationId??'studio');
+}
+/** Saved termination and withdrawal targets define scope before any staff replay. */
+export function authorizeCancellationCommand(tx:Transaction,name:string,input:Record<string,unknown>){
+  requireStaffRight(tx.state,tx.who,'contract-change');
+  const target=input.id?record(tx.state,input.id,name==='plan.cancellation.withdraw.confirm'?'cancellationWithdrawal':'contractCancellation'):null;
+  const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
+  requireCancellationStaff(tx,target?.packId??request?.packId??input.packId);
+  if(input.packId)requireCancellationStaff(tx,input.packId);
+  if(name.startsWith('plan.cancellation.withdraw.')){
+    const c=name.endsWith('.confirm')?record(tx.state,target!.cancellationId,'contractCancellation'):target!;
+    authorizeWithdrawal(tx,c);
+    if(name.endsWith('.confirm'))insist(target!.createdBy===tx.who.id,'own_withdrawal_preview_required',403);
+  }
+}
 export const cancellationForTerms=(state:State,termsId:string)=>list(state,'contractCancellation').find(c=>c.termsId===termsId&&['scheduled','applied'].includes(c.status))??null;
 export const cancellationBlocks=(state:State,packId:string,classStart:string)=>list(state,'contractCancellation').some(c=>c.packId===packId&&['scheduled','applied'].includes(c.status)&&classStart>=c.effectiveAt);
 const policy=(state:State)=>state.records.get('cancellation-policy')?.data??{id:'cancellation-policy',coolingOffDays:5,relocationMiles:25};
@@ -63,7 +87,7 @@ function notice(c:RecordData){const value=c.effects.unusedPrepaid;return `Effect
 async function prepare(tx:Transaction,input:Record<string,unknown>,mode:string,at:string,reason:string,exceptionReason:string|null){
   const r=replay(tx,'contractCancellation',input);if(r.prior)return r.prior;
   const {pack,terms}=contract(tx.state,input.packId);insist(!cancellationForTerms(tx.state,terms.id),'cancellation_pending',409);
-  const preview={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,mode,effectiveAt:at,reason,exceptionReason,status:'preview',disposition:mode==='term_end'?'term_end':'refund_due',effects:effects(tx.state,pack,terms,at),basis:await source(tx.state,pack,terms,at),createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};
+  const preview={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,mode,effectiveAt:at,reason,exceptionReason,status:'preview',disposition:mode==='term_end'?'term_end':'refund_due',effects:effects(tx.state,pack,terms,at),basis:await source(tx.state,pack,terms,at),createdAt:now(),createdBy:tx.who.id,createdRole:tx.who.role,requestId:r.requestId,requestBasis:r.requestBasis};
   const saved={...preview,key:id()};tx.put('contractCancellation',saved);return saved;
 }
 function schedule(tx:Transaction,c:RecordData,input:Record<string,unknown>){
@@ -110,30 +134,33 @@ export async function requestCancellation(tx:Transaction,input:Record<string,unk
   const request={id:id(),personId:pack.personId,packId:pack.id,termsId:terms.id,effectiveAt,reason:text(input.reason,'reason',500),status:'requested',createdAt:now(),createdBy:tx.who.id,requestId:r.requestId,requestBasis:r.requestBasis};tx.put('cancellationRequest',request);return request;
 }
 export async function prepareCancellation(tx:Transaction,input:Record<string,unknown>){
-  requireStaffRight(tx.state,tx.who,'contract-change');
-  const sourcePack=record(tx.state,input.packId ?? tx.state.records.get(String(input.cancellationRequestId))?.data.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',sourcePack.personId,sourcePack.locationId ?? 'studio');const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
+  if(tx.who.role==='agent')preparer(tx.who);else authorizeCancellationCommand(tx,'plan.cancellation.prepare',input);
+  const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
   insist(!request||request.status==='requested','cancellation_request_closed',409);const merged={...request,...input}, {pack}=contract(tx.state,merged.packId),at=merged.effectiveAt?instant(merged.effectiveAt,'effectiveAt'):cancellationTermEnd(tx.state,pack);
+  const preparedInput={...input,packId:pack.id},prior=replay(tx,'contractCancellation',preparedInput).prior;if(prior)return prior;
   insist(at>now()&&at<=cancellationTermEnd(tx.state,pack),'invalid_cancellation_date',409);insist(!input.disposition||input.disposition==='refund_due','accepted_sale_terms_required',409);
   const selected=activeTerminationReason(tx.state,input.reasonCode);
-  const reason=text(merged.reason,'reason',500),c=await prepare(tx,{...input,packId:pack.id},'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
+  const reason=text(merged.reason,'reason',500),c=await prepare(tx,preparedInput,'early',at,reason,input.exceptionReason?text(input.exceptionReason,'exceptionReason',500):reason);
   const coded={...c,reasonCode:selected.code,reasonLabel:selected.label,reasonCatalogId:selected.id,reasonCatalogRevision:selected.revision};tx.put('contractCancellation',coded);
   if(request){const linked={...coded,cancellationRequestId:request.id};tx.put('contractCancellation',linked);return linked;}return coded;
 }
 export async function confirmCancellation(tx:Transaction,input:Record<string,unknown>){
-  requireStaffRight(tx.state,tx.who,'contract-change');
-  const c=record(tx.state,input.id,'contractCancellation'),sourcePack=record(tx.state,c.packId,'pack');requireStaffRight(tx.state,tx.who,'contract-change',c.personId,sourcePack.locationId ?? 'studio');insist(input.key===c.key,'preview_changed',409);
+  authorizeCancellationCommand(tx,'plan.cancellation.confirm',input);
+  const c=record(tx.state,input.id,'contractCancellation');insist(input.key===c.key,'preview_changed',409);
   if(c.confirmedAt){insist(c.terminatedBy===tx.who.id&&c.confirmationBasis===fingerprint(input),'cancellation_confirmation_closed',409);return c;}
   insist(c.status==='preview'&&c.effectiveAt>now(),'cancellation_preview_expired',409);const {pack,terms}=contract(tx.state,c.packId);insist(!terminationReasonChanged(tx.state,c)&&c.basis===await source(tx.state,pack,terms,c.effectiveAt),'cancellation_source_changed',409);tx.future(c.effectiveAt);
   const scheduled=schedule(tx,c,input);if(c.cancellationRequestId){const r=record(tx.state,c.cancellationRequestId,'cancellationRequest');tx.put('cancellationRequest',{...r,status:'approved',cancellationId:c.id});}return scheduled;
 }
-function mayWithdraw(state:State,who:Actor,c:RecordData){
-  if(c.terminatedBy===who.id)return canCancelContract(state,who,c.personId,c.termsId);
+export function mayWithdrawCancellation(state:State,who:Actor,c:RecordData){
+  if(c.terminatedBy===who.id)return canCancelContract(state,who,c.personId,c.termsId)||cancellationStaffVisible(state,who,c.packId);
   if(who.role!=='member'||who.personId!==c.personId||c.terminatedRole!=='member')return false;
   // An ended delegate grant cannot keep an adult participant from restoring access.
   return !activeContractAuthorities(state,c.personId).some(g=>c.terminatedBy===(g.delegateAcceptedBy??g.delegateId)&&(g.kind==='minor-guardian'||g.agreementIds?.includes(c.termsId)));
 }
 function authorizeWithdrawal(tx:Transaction,c:RecordData){
-  authorizeContractCancellation(tx,c.personId,c.termsId);insist(mayWithdraw(tx.state,tx.who,c),'terminator_required',403);
+  if(['front-desk','manager'].includes(tx.who.role))requireCancellationStaff(tx,c.packId);
+  else authorizeContractCancellation(tx,c.personId,c.termsId);
+  insist(mayWithdrawCancellation(tx.state,tx.who,c),'terminator_required',403);
 }
 async function withdrawalBasis(state:State,c:RecordData){const json=JSON.stringify({c,pack:record(state,c.packId,'pack'),terms:record(state,c.termsId,'recurringTerms')});const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(json));return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');}
 export async function prepareWithdrawCancellation(tx:Transaction,input:Record<string,unknown>){
@@ -158,7 +185,7 @@ export function applyDueCancellations(tx:Transaction){
       const returned=b.status==='booked';if(returned)bookingCredit(tx,b,{type:'restore',credits:1,bookingId:b.id,classId:b.classId,reason:`Cancellation ${c.id}`});
       const after={...b,status:'cancelled',cancellation:'contract-termination',cancellationId:`termination:${c.id}:${b.id}`,cancelledAt:c.effectiveAt,cancelledBy:c.terminatedBy,cancelledByRole:c.terminatedRole,refunded:returned,feeCents:0,contractCancellationId:c.id};tx.put('booking',after);
       if(b.guestPackId)contractNotice(tx,`cancellation-guest:${c.id}:${b.id}`,b.personId,'Guest booking cancelled','The host’s membership ended. This guest seat was cancelled without a fee; its original pass was returned or its original studio-balance price reversed once to the original payer. No payment or provider refund was sent.',[b.id]);
-      bookingHistory(tx,'cancel',b,after,{reason:c.reason,channel:c.channel==='member-self-service'?'desk':c.channel},{id:after.cancellationId,parentActionId:c.staffActionId,actorId:c.terminatedBy,actorRole:c.terminatedRole,staffMade:c.terminatedRole==='owner',right:c.terminatedRole==='owner'?'contract-change':null,channel:c.channel,reason:c.reason,comment:c.reason});
+      bookingHistory(tx,'cancel',b,after,{reason:c.reason,channel:c.channel==='member-self-service'?'desk':c.channel},{id:after.cancellationId,parentActionId:c.staffActionId,actorId:c.terminatedBy,actorRole:c.terminatedRole,staffMade:['owner','manager','front-desk'].includes(c.terminatedRole),right:['owner','manager','front-desk'].includes(c.terminatedRole)?'contract-change':null,channel:c.channel,reason:c.reason,comment:c.reason});
     }
     endCancellationFreezes(tx,c);appendPackEvent(tx,record(tx.state,pack.id,'pack'),{type:'adjust',credits:0,expiresAt:c.effectiveAt,reason:`Contract ended ${c.id}`});tx.put('recurringTerms',{...terms,status:'stopped',accessEndedAt:c.effectiveAt});
     const statementId=`final-statement:${c.id}`;tx.put('cancellationStatement',{id:statementId,personId:c.personId,packId:pack.id,cancellationId:c.id,effectiveAt:c.effectiveAt,additionalChargeCents:0,balanceCents:contractBalance(tx.state,c.termsId),guestPriceReversals:reversals,refundId:refund?.id??null,refundDueCents:refund?.amountCents??null,collection:'external-settlement-only',createdAt:now()});
@@ -167,10 +194,15 @@ export function applyDueCancellations(tx:Transaction){
   }
 }
 export async function cancellationPreviewStale(state:State,c:RecordData){return c.status==='preview'&&(c.effectiveAt<=now()||terminationReasonChanged(state,c)||c.basis!==await source(state,record(state,c.packId,'pack'),record(state,c.termsId,'recurringTerms'),c.effectiveAt));}
+export async function cancellationWithdrawals(state:State,who:Actor){
+  return Promise.all(list(state,'cancellationWithdrawal').filter(w=>canCancelContract(state,who,w.personId,record(state,w.cancellationId,'contractCancellation').termsId)||cancellationStaffVisible(state,who,w.packId))
+    .map(async w=>({...w,canConfirm:who.id===w.createdBy,stale:w.status==='preview'&&(!live(record(state,w.cancellationId,'contractCancellation'))||w.basis!==await withdrawalBasis(state,record(state,w.cancellationId,'contractCancellation')))})));
+}
 export async function cancellationsSnapshot(state:State,who:Actor){
+  if(who.role==='agent')return {reasonCodes:terminationReasons(state).filter(r=>r.active),contracts:list(state,'recurringTerms').filter(t=>t.acceptedAt&&t.currentPackId&&state.people.some(p=>p.id===t.personId&&p.active&&!p.erasedAt)).map(t=>({id:t.id,personId:t.personId,packId:t.currentPackId,status:t.status,nextRenewalAt:t.nextRenewalAt})),cancellations:list(state,'contractCancellation').filter(c=>c.createdBy===who.id&&c.createdRole==='agent'&&state.people.some(p=>p.id===c.personId&&p.active&&!p.erasedAt))};
   const termsOf=(r:RecordData)=>r.termsId??(r.cancellationId?state.records.get(r.cancellationId)?.data.termsId:r.refundId?state.records.get(state.records.get(r.refundId)?.data.cancellationId)?.data.termsId:undefined);
   const visible=(r:RecordData)=>canCancelContract(state,who,r.personId,termsOf(r));
-  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:mayWithdraw(state,who,c)&&live(c)&&c.effectiveAt>now(),stale:await cancellationPreviewStale(state,c)})));
+  const cancellations=await Promise.all(list(state,'contractCancellation').filter(visible).map(async c=>({...c,canWithdraw:mayWithdrawCancellation(state,who,c)&&live(c)&&c.effectiveAt>now(),stale:await cancellationPreviewStale(state,c)})));
   return {reasonCodes:who.role==='owner'?terminationReasons(state):[],policy:policy(state),statutoryPreviews:list(state,'statutoryRefundPreview').filter(p=>!p.submittedAt&&cancellationForTerms(state,p.termsId)?.status!=='applied'&&p.createdBy===who.id&&visible(p)),authorities:contractAuthoritySnapshot(state,who),contracts:await Promise.all(list(state,'recurringTerms').filter(t=>canCancelContract(state,who,t.personId,t.id)).filter(t=>t.currentPackId&&contract(state,t.currentPackId).terms.id===t.id).map(async t=>{const pack=record(state,t.currentPackId,'pack');return {id:t.id,personId:t.personId,participantName:person(state,t.personId,false).name,packId:t.currentPackId,status:t.status,acceptedAt:t.acceptedAt,nextRenewalAt:t.nextRenewalAt,pack,memberRegion:contractRegion(state,t.personId),copy:await contractCopy(state,t),deliveredAt:contractDeliveredAt(state,t.id),coolingOff:currentCooling(state,pack,t)};})),requests:list(state,'cancellationRequest').filter(visible),cancellations,
-    withdrawals:await Promise.all(list(state,'cancellationWithdrawal').filter(visible).map(async w=>({...w,canConfirm:who.id===w.createdBy,stale:w.status==='preview'&&(!live(record(state,w.cancellationId,'contractCancellation'))||w.basis!==await withdrawalBasis(state,record(state,w.cancellationId,'contractCancellation')))}))),statements:list(state,'cancellationStatement').filter(visible),refunds:list(state,'cancellationRefund').filter(visible),settlements:list(state,'cancellationRefundSettlement').filter(visible)};
+    withdrawals:await cancellationWithdrawals(state,who),statements:list(state,'cancellationStatement').filter(visible),refunds:list(state,'cancellationRefund').filter(visible),settlements:list(state,'cancellationRefundSettlement').filter(visible)};
 }

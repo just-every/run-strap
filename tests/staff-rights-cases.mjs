@@ -158,8 +158,72 @@ export async function staffContractRights(h) {
     const actions=(await h.state()).staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.requestId===confirm.requestId);
     assert.equal(actions.length,1);assert.equal(actions[0].right,'contract-change');assert.equal(actions[0].actorRole,role);assert.equal(actions[0].personId,s.ben.id);
     await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.confirm',confirm,actor.cookie);
+    const reportBefore=await h.send('/api/strap/reports/renewals?days=366&lowCredits=10000',undefined,h.owner);assert.equal(reportBefore.status,200,reportBefore.text);assert.ok(reportBefore.value.rows.some(r=>r.terminationId===committed.id));
+    const prepareWithdrawal={id:committed.id,channel:'phone',reason:'Member changed their departure plan',requestId:randomUUID()};
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    for(const [names,memberIds,locations] of [[['contract-change'],[s.ben.id],[locationId]],[['member-record','contract-change'],[ana.id],[locationId]],[['member-record','contract-change'],[s.ben.id],[locationId==='studio'?s.west.id:'studio']]]) {
+      await grant(actor,role,names,memberIds,locations);await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    }
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const other=actor===desk?s.manager:desk,otherRole=actor===desk?'manager':'front-desk';
+    await grant(other,otherRole,['member-record','contract-change'],[s.ben.id],[locationId]);
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,other.cookie);
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,h.owner);
+    const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    assert.equal(withdrawal.requiresFreshAcceptance,true);
+    const withdraw={id:withdrawal.id,key:withdrawal.key,channel:'phone',requestId:randomUUID()};
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const withdrawn=await h.cmd('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);assert.equal(withdrawn.status,'confirmed');
+    assert.deepEqual(await h.cmd('plan.cancellation.withdraw.confirm',withdraw,actor.cookie),withdrawn);
+    let current=await h.state();
+    assert.equal(current.cancellations.cancellations.find(c=>c.id===committed.id).status,'withdrawn');
+    assert.equal(current.recurring.terms.find(t=>t.id===accepted.id).status,'stopped');
+    assert.equal(current.recurring.terms.find(t=>t.id===accepted.id).requiresFreshAcceptance,true);
+    assert.equal(current.recurring.invoices.filter(i=>i.recurringTermsId===accepted.id).length,0);
+    const reportAfter=await h.send('/api/strap/reports/renewals?days=366&lowCredits=10000',undefined,h.owner);assert.equal(reportAfter.status,200,reportAfter.text);assert.equal(reportAfter.value.rows.some(r=>r.terminationId===committed.id),false);
+    for(const [command,requestId] of [['plan.cancellation.withdraw.prepare',prepareWithdrawal.requestId],['plan.cancellation.withdraw.confirm',withdraw.requestId]]) {
+      const events=current.staffActions.filter(a=>a.command===command&&a.requestId===requestId);
+      assert.equal(events.length,1);assert.deepEqual([events[0].actorRole,events[0].personId,events[0].right,events[0].channel],[role,s.ben.id,'contract-change','phone']);
+      assert.ok(events[0].before&&events[0].after);
+    }
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const renewal=await h.cmd('plan.recurring.prepare',{packId:accepted.currentPackId,intervalMonths:1,requestId:randomUUID()});
+    await refuse('plan.recurring.accept',{id:renewal.id,key:renewal.key},actor.cookie);
+    const resumed=await h.cmd('plan.recurring.accept',{id:renewal.id,key:renewal.key},s.ben.cookie);assert.equal(resumed.status,'active');
+    await h.cmd('plan.recurring.accept',{id:renewal.id,key:renewal.key},s.ben.cookie);
+    current=await h.state();assert.equal(current.recurring.invoices.filter(i=>i.recurringTermsId===resumed.id).length,0);
   }
 
+  {
+    const lifecycleMember=await h.person('TerminationLifecycle');
+    await grant(desk,'front-desk',['member-record','contract-change'],[lifecycleMember.id],['studio']);
+    const lifecyclePack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:lifecycleMember.id,credits:4,amountCents:8000,expiresAt:iso(2000)})).id});
+    const lifecycleProposal=await h.cmd('plan.recurring.prepare',{packId:lifecyclePack.id,intervalMonths:1,requestId:randomUUID()});
+    await h.cmd('plan.recurring.accept',{id:lifecycleProposal.id,key:lifecycleProposal.key},lifecycleMember.cookie);
+    const later=await s.publish('Termination later class',24),seat=await h.cmd('booking.book',{classId:later.id},lifecycleMember.cookie);
+    assert.equal(seat.packId,lifecyclePack.id);
+    const effectiveAt=new Date(Date.now()+10000).toISOString(),preview=await h.cmd('plan.cancellation.prepare',{packId:lifecyclePack.id,effectiveAt,reasonCode:reason.code,reason:'Moved away as agreed',channel:'phone',requestId:randomUUID()},desk.cookie);
+    assert.deepEqual(preview.effects.bookings.map(b=>b.id),[seat.id]);assert.equal(preview.effects.finalChargeCents,0);
+    const scheduled=await h.cmd('plan.cancellation.confirm',{id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()},desk.cookie);
+    await h.setAuth({});await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(effectiveAt)-Date.now()+100)));
+    for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+    const ended=await h.state(),endedPack=ended.packs.find(p=>p.id===lifecyclePack.id),endedSeat=ended.bookings.find(b=>b.id===seat.id);
+    assert.equal(ended.cancellations.cancellations.find(c=>c.id===scheduled.id).status,'applied');assert.equal(endedPack.expiresAt,effectiveAt);
+    assert.deepEqual([endedSeat.status,endedSeat.refunded,endedSeat.feeCents],['cancelled',true,0]);
+    assert.equal(ended.packCreditEvents.filter(e=>e.bookingId===seat.id&&e.type==='restore').length,1);
+    assert.equal(ended.cancellations.statements.filter(s=>s.cancellationId===scheduled.id&&s.additionalChargeCents===0).length,1);
+    assert.equal(ended.recurring.invoices.filter(i=>i.recurringTermsId===lifecycleProposal.id).length,0);
+    assert.equal(ended.charges.filter(c=>c.personId===lifecycleMember.id).length,1,'termination adds no native charge');
+    const child=ended.bookingActions.find(a=>a.parentActionId===scheduled.staffActionId);
+    assert.ok(child);assert.deepEqual([child.actorRole,child.staffMade,child.right],['front-desk',true,'contract-change']);
+    assert.ok((await h.state(lifecycleMember.cookie)).notices.some(n=>n.subject==='Membership ended'));
+    await refuse('plan.cancellation.withdraw.prepare',{id:scheduled.id,requestId:randomUUID()},desk.cookie,409);
+    await refuse('booking.book',{classId:later.id},lifecycleMember.cookie,409);
+    console.log('PROBE PLAN-012 native effective date: scoped front desk confirms a reason-coded termination with future booking, runtime restarts and two scheduler sweeps -> access ends, original credit returns once, one final statement and staff-made history, no invoice or extra charge; late withdrawal and rebooking refused.');
+  }
+  console.log('PROBE PLAN-012 staff withdrawal: manager and front desk at two locations -> own scheduled termination withdrawn once with canonical audit, invoices stay stopped until personal fresh acceptance; other terminator, wrong scope, missing right and revoked replay refused without writes.');
 }
 
 export async function staffAppointmentRoles(h) {

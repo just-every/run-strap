@@ -44,7 +44,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name.startsWith('appointment.client.')||name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':(name.startsWith('catalog.purchase.')||['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name))?'membership-sale':(name.startsWith('appointment.client.')||name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let emptyDeskOffer,nurtureDeskOffer,winbackDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
@@ -52,8 +52,33 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     let reservationDraft,reservation,cancellationDraft,seriesMember,guestQuote,guestPack,makeupRelation,makeupOriginal,makeupTarget,makeupCredit,makeupPreview,foreignMakeup,foreignRelation,freezePack,freezeType,freezeMember,freezePreview,freezeScheduled,freezeEnd,withdrawnRequest,invoiceMember,invoicePack,invoiceProposal,invoiceTerms
     let introMember,introDeskMember,introMemberPreview,introStaffPreview;
     let billingMember,billingAgreement,billingSetup;
+    let catalogMember,catalogDeskMember,catalogVersion,catalogMemberPreview,catalogStaffPreview;
     const actions={
       ...clientAppointmentPairs(h,coach,checkAudit,{member:historyMember,staffMember:otherHistoryMember}),
+      'catalog.purchase.preview':async door=>{
+        catalogMember=historyMember;catalogDeskMember=otherHistoryMember;
+        catalogVersion=await h.cmd('catalog.publish',{code:'synthetic-strap-canonical',name:'Canonical mat pack',productKind:'finite-pack',revision:0,amountCents:7900,credits:4,validDays:60,eligibleServices:['Catalog mat'],locationId:'studio',eligibleLocations:['studio']});
+        for(const member of [catalogMember,catalogDeskMember])for(const waiver of (await h.state()).waivers)await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:member.name,confirm:true},member.cookie);
+        catalogMemberPreview=await h.cmd('catalog.purchase.preview',{catalogVersionId:catalogVersion.id,requestId:randomUUID()},catalogMember.cookie);
+        const input={personId:catalogDeskMember.id,catalogVersionId:catalogVersion.id,requestId:randomUUID(),channel:'phone'};
+        const r=await checkAudit(door,input);catalogStaffPreview=r.result;
+        assert.deepEqual(r.result.catalogVersion,catalogMemberPreview.catalogVersion);assert.equal(r.event.personId,catalogDeskMember.id);
+        for(const key of ['credits','amountCents','eligibleServices','eligibleLocations'])assert.deepEqual(r.result.terms[key],catalogMemberPreview.terms[key]);
+        assert.equal((await h.state()).packs.some(p=>p.catalogPurchaseId===r.result.id),false,'staff preparation cannot grant access or debt');
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+      },
+      'catalog.purchase.confirm':async door=>{
+        const own=await h.cmd('catalog.purchase.confirm',{id:catalogMemberPreview.id,key:catalogMemberPreview.key,confirm:true},catalogMember.cookie);
+        const input={id:catalogStaffPreview.id,key:catalogStaffPreview.key,confirm:true,requestId:randomUUID(),channel:'phone'};
+        await refused(h,door,input,h.owner,409);
+        await refused(h,'catalog.purchase.confirm',{id:catalogStaffPreview.id,key:catalogStaffPreview.key,confirm:true},h.owner,403);
+        const accepted=await h.cmd('catalog.purchase.confirm',{id:catalogStaffPreview.id,key:catalogStaffPreview.key,confirm:true},catalogDeskMember.cookie);assert.equal(accepted.status,'accepted');
+        const r=await checkAudit(door,input);assert.equal(r.result.status,'sold');assert.equal(r.event.personId,catalogDeskMember.id);
+        const ownState=await h.state(catalogMember.cookie),deskState=await h.state(catalogDeskMember.cookie),one=ownState.packs.find(p=>p.id===own.packId),two=deskState.packs.find(p=>p.id===r.result.packId);
+        for(const key of ['catalogVersion','credits','remaining','amountCents','eligibleServices','eligibleLocations'])assert.deepEqual(two[key],one[key]);
+        assert.equal(deskState.charges.filter(c=>c.packId===two.id).length,1);assert.equal(deskState.charges.find(c=>c.packId===two.id).amountCents,7900);
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+      },
       'course.accept':async door=>coursePair(h,door,checkAudit),
       'intake.submit':async door=>{
         const form=await h.cmd('intake.form.publish',{title:'Phone intake pair',scope:'service',service:'Future intake service',required:false,questions:[{label:'Class preference',required:true,sensitive:false},{label:'Restricted preference',required:true,sensitive:true}],requestId:randomUUID()});
@@ -614,7 +639,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       await refused(h,entry.memberDoor.staff,input,ana.cookie,denial)
       if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,(entry.name.startsWith('intro.')||entry.name.startsWith('lead.'))?403:denial)
       const before=(await h.state()).version
-      assert.equal((await h.send('/api/strap/agent/command',{name:entry.memberDoor.staff,input},'',{authorization:`Bearer ${key.token}`})).status,403)
+      assert.equal((await h.send('/api/strap/agent/command',{name:entry.memberDoor.staff,input},'',{authorization:`Bearer ${key.token}`})).status,entry.memberDoor.staff==='plan.cancellation.prepare'?404:403)
       assert.equal((await h.state()).version,before)
     }
     const codeBefore=(await h.state()).checkinCodes.find(c=>c.personId===ana.id)

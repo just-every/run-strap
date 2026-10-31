@@ -180,7 +180,7 @@ export const handlers = {
   'plan.cancellation.stop':defineCommand(stopCancellation,['owner','member'],{member:{staff:'plan.cancellation.stop',right:'contract-change'},staffRight:'contract-change'}),
   'plan.cancellation.statutory':defineCommand(statutoryCancellation,['owner','member'],{member:{staff:'plan.cancellation.statutory',right:'contract-change'},staffRight:'contract-change'}),
   'plan.cancellation.request':defineCommand(requestCancellation,['member'],{member:{staff:'plan.cancellation.prepare',right:'contract-change'}}),
-  'plan.cancellation.prepare':defineCommand(prepareCancellation,['owner'],{staffRight:'contract-change'}),
+  'plan.cancellation.prepare':defineCommand(prepareCancellation,['owner','agent'],{staffRight:'contract-change'}),
   'plan.cancellation.confirm':defineCommand(confirmCancellation,['owner'],{staffRight:'contract-change'}),
   'plan.cancellation.withdraw.prepare':defineCommand(prepareWithdrawCancellation,['owner','member'],{member:{staff:'plan.cancellation.withdraw.launch',right:'contract-change',ownStep:true},staffRight:'contract-change'}),
   'plan.cancellation.withdraw.confirm':defineCommand(confirmWithdrawCancellation,['owner','member'],{member:{staff:'plan.cancellation.withdraw.launch',right:'contract-change',ownStep:true},staffRight:'contract-change'}),
@@ -375,7 +375,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   insist(input && typeof input === 'object' && !Array.isArray(input),'invalid_input');
   const loaded = await load(db,who), tx = new Transaction(db,loaded.state,loaded.who);
   tx.notices = context;
-  if (who.role === 'agent') insist(['lead.success.prepare','attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
+  if (who.role === 'agent') insist(['plan.cancellation.prepare','lead.success.prepare','attendance.plan.prepare','recommendation.prepare','classes.prepare','pack.prepare','reminder.prepare','booking.change.prepare','series.prepare','series.change.prepare'].includes(name),'agents_can_only_prepare',403);
   const spec = Object.hasOwn(handlers, name) ? handlers[name as keyof typeof handlers] : undefined;
   if (name.startsWith('booking.')) {
     const target = tx.state.records.get(String(input.id))?.data;
@@ -414,7 +414,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privatePreparation = name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  const privatePreparation = name==='plan.cancellation.prepare' || name.startsWith('plan.cancellation.withdraw.') || name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // Private preparations and reviews must not execute unrelated due billing, notices or entitlements.
   if (!privatePreparation && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);

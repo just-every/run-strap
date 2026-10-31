@@ -1,4 +1,5 @@
 import { authorizeCatalogSale } from './catalog-checkout';
+import { authorizeCancellationCommand } from './contract-cancellations';
 import { authorizeCourse } from './courses';
 import { authorizeFreezeCommand } from './freezes';
 import { hasStaffRight, requireStaffRight, staffAccess, type StaffRight } from './staff-rights';
@@ -13,7 +14,7 @@ const delegated = new Map<string,StaffRight>([
   ['attendance.checkin','check-in'],
   ['plan.recurring.prepare','membership-sale'],
   ['catalog.purchase.preview.staff','membership-sale'],['catalog.purchase.confirm.staff','membership-sale'],
-  ['plan.cancellation.prepare','contract-change'],['plan.cancellation.confirm','contract-change'],
+  ...['plan.cancellation.prepare','plan.cancellation.confirm','plan.cancellation.withdraw.prepare','plan.cancellation.withdraw.confirm'].map(name=>[name,'contract-change'] as [string,StaffRight]),
   ...['freeze.prepare','freeze.confirm','freeze.accept.launch','freeze.end.prepare','freeze.end.confirm','freeze.end.accept.launch','freeze.decline','freeze.request.withdraw','freeze.withdraw'].map(name=>[name,'contract-change'] as [string,StaffRight]),
 ]);
 export const delegatedCommandRight = (name: string) => delegated.get(name);
@@ -27,6 +28,7 @@ export function requireClassRight(tx: Transaction, right: StaffRight, personId: 
 /** Resolve saved targets before replay; a request body cannot substitute its own scope. */
 export function authorizeStaffCommand(tx: Transaction, name: string, input: Record<string,unknown>, right: StaffRight) {
   if(name.startsWith('catalog.purchase.'))return authorizeCatalogSale(tx,input);
+  if(name.startsWith('plan.cancellation.'))return authorizeCancellationCommand(tx,name,input);
   if(name.startsWith('course.'))return authorizeCourse(tx,name,input);
   if(name.startsWith('freeze.'))return authorizeFreezeCommand(tx,name,input);
   requireStaffRight(tx.state,tx.who,right);

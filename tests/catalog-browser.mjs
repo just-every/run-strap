@@ -123,6 +123,12 @@ export async function catalogBrowser(h,data) {
       assert.match(await member.locator('#receipt-'+sold.packId).innerText(),/159\.00/);
       assert.match(await member.locator('#receipt-'+sold.packId).innerText(),/8 credits/);
       await shot(member,'#receipt-'+sold.packId,'staff-sale-member-receipt');
+      await owner.goto(h.origin+'/app/people?person='+proof.deskBuyer.id+'&auditCommand=catalog.purchase.confirm.staff#staff-actions');
+      const historyRow=owner.locator('[data-staff-command="catalog.purchase.confirm.staff"]').first();
+      assert.match(await historyRow.innerText(),/membership-sale/);
+      await historyRow.locator('xpath=following-sibling::tr[1]').getByText('Recorded change',{exact:true}).click();
+      assert.match(await historyRow.locator('xpath=following-sibling::tr[1]').innerText(),/159\.00/);
+      await shot(owner,'#staff-actions [data-staff-command="catalog.purchase.confirm.staff"]:first-child','owner-catalog-audit');
       for(const {id,version,member:who} of data.breadth?.sales ?? []) {
         const page=await pageFor(who.cookie);await page.goto(h.origin+'/app/packs#receipt-'+id);
         assert.ok((await page.locator('#receipt-'+id).innerText()).includes(version.name));

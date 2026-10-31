@@ -460,6 +460,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.cmd('plan.recurring.accept',{id:terminationTerms.id,key:terminationTerms.key},member.cookie)
     const terminationPreview=await h.cmd('plan.cancellation.prepare',{packId:terminationPack.id,reasonCode:terminationReason.code,reason:'Member is moving away',effectiveAt:'2099-11-15T00:00:00Z',requestId:'synthetic-strap-archive-termination'})
     const termination=await h.cmd('plan.cancellation.confirm',{id:terminationPreview.id,key:terminationPreview.key,requestId:'synthetic-strap-archive-confirm'})
+    const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:termination.id,requestId:'synthetic-strap-archive-withdrawal'})
+    const draftPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:8000,expiresAt:'2099-12-01T00:00:00Z'})).id})
+    const draftTerms=await h.cmd('plan.recurring.prepare',{packId:draftPack.id,intervalMonths:1,requestId:'synthetic-strap-archive-agent-terms'})
+    await h.cmd('plan.recurring.accept',{id:draftTerms.id,key:draftTerms.key},member.cookie)
+    const sourceAgent=await h.cmd('agent.create',{label:'Archive termination preparation'}),agentHeaders={authorization:'Bearer '+sourceAgent.token}
+    const draftResponse=await h.send('/api/strap/agent/command',{name:'plan.cancellation.prepare',input:{packId:draftPack.id,reasonCode:terminationReason.code,reason:'Member asked about moving',effectiveAt:'2099-11-15T00:00:00Z',requestId:'synthetic-strap-archive-agent-draft'}},'',agentHeaders)
+    assert.equal(draftResponse.status,200,draftResponse.text);const agentDraft=draftResponse.value.result??draftResponse.value
     const retiredReason=await h.cmd('plan.cancellation.reason.save',{code:terminationReason.code,label:'Moved elsewhere',active:false,revision:terminationReason.revision})
 
     const catalogMember=await h.person('CatalogArchive');
@@ -504,6 +511,20 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const restoredAction=(await h.state(restoredOwner)).staffActions.find(a=>a.command==='plan.cancellation.confirm'&&a.after.id===termination.id)
     assert.equal(restoredAction.after.reasonLabel,'Moved away')
     await h.cmd('plan.cancellation.prepare',{packId:terminationPack.id,reasonCode:'moved-away',reason:'Retired selection',effectiveAt:'2099-11-02T00:00:00Z',requestId:'synthetic-strap-archive-retired'},restoredOwner,409)
+    const restoredDraft=recoveredCancellation.cancellations.find(c=>c.id===agentDraft.id)
+    assert.deepEqual([restoredDraft.status,restoredDraft.createdRole,restoredDraft.reasonCode,restoredDraft.reasonLabel,restoredDraft.stale],['preview','agent','moved-away','Moved away',true])
+    assert.equal((await h.send('/api/strap/agent/context',undefined,'',agentHeaders)).status,401,'preparation credentials never return with an archive')
+    await h.cmd('plan.cancellation.confirm',{id:restoredDraft.id,key:restoredDraft.key,requestId:'synthetic-strap-archive-stale-agent'},restoredOwner,409)
+    const withdraw={id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-archive-withdraw-confirm'}
+    await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner);await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner)
+    const withdrawnState=await h.state(restoredOwner)
+    assert.equal(withdrawnState.cancellations.cancellations.find(c=>c.id===termination.id).status,'withdrawn')
+    assert.equal(withdrawnState.recurring.terms.find(t=>t.id===terminationTerms.id).status,'stopped')
+    assert.equal(withdrawnState.recurring.terms.find(t=>t.id===terminationTerms.id).requiresFreshAcceptance,true)
+    assert.equal(withdrawnState.staffActions.filter(a=>a.command==='plan.cancellation.withdraw.confirm'&&a.after.id===withdrawal.id).length,1)
+    assert.equal(withdrawnState.recurring.invoices.length,0)
+    console.log('PROBE PLAN-012 restore: native archive and import at same origin -> historical reason and agent draft retained, retired preview refused, old preparation credential rejected, withdrawal once with invoice authority stopped.');
+
 
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_disclosure_connections').first()).count,0);
     assert.equal((await state()).renewalDisclosures.find(d=>d.id===expiryDisclosure.id).status,'scheduled');
