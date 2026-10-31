@@ -20,6 +20,7 @@ import { profileSaveStatus } from './domain/profiles'
 import { historyExport, historyCsv } from './staff-history'
 import { retentionReport } from './retention-report'
 import { leadReport } from './lead-report'
+import { recoveryOutcomes } from './recovery-outcomes'
 import { renewalWorklist } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
@@ -51,7 +52,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/recovery-outcomes','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['lead.success.prepare','attendance.plan.prepare','recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -88,6 +89,10 @@ async function appState(env: Bindings, who: Actor, target: string) {
   if(url.pathname === '/app/people' && who.staffAccess && ['front-desk','manager'].includes(who.role))return {...await state(env,who),billingHandoffs:await billingStaffHandoffs(env,who)}
   if (who.role === 'instructor' && who.staffAccess && url.pathname !== '/app/people') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN,false),mfa:await mfaView(env,who),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? ''}
   if (who.role === 'manager' && ['/app/revenue','/app/reports','/app/time-clock'].includes(url.pathname)) return state(env,who,true)
+  if (url.pathname === '/app/recovery-outcomes') {
+    const loaded = await load(env.DB,who)
+    return {...await state(env,who),recoveryOutcomes:recoveryOutcomes(loaded.state,loaded.who,url.searchParams)}
+  }
   if (url.pathname === '/app/classes' && who.role==='owner') {
     const loaded=await load(env.DB,who)
     return {...await state(env,who),evidenceCopyMail:await cleared(env,who) ? await evidenceCopyMailStatus(env,loaded.state) : null}
@@ -256,6 +261,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if (!['owner','instructor'].includes(who.role)) fail('staff_required',403)
         const loaded = await load(env.DB,who)
         return json(teachingPay(loaded.state,who.role === 'instructor' ? who.personId : url.searchParams.get('instructorId') ?? undefined,url.searchParams.get('from') ?? undefined,url.searchParams.get('to') ?? undefined))
+      }
+      if (path === '/api/strap/reports/recovery-outcomes') {
+        const loaded = await load(env.DB,who)
+        return json(recoveryOutcomes(loaded.state,loaded.who,url.searchParams))
       }
       if (path === '/api/strap/reports/leads') {
         if (who.role !== 'owner') fail('owner_required',403)

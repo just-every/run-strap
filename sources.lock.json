@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "846e343964758f1181b201ccfdea733a6750d65025699f5180ece1b3b235fe97",
+      "sha256": "4cdc55ea4b7e49bda407c940594d2a9deda3bfe14040f23535f4e018dc19e5a8",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3679,6 +3679,10 @@
     },
     "src/strap/privacy.ts": {
       "sha256": "304b2ffe57891945dd9a63720422a93b55b74e20807ce9cae9cadc52d32315a0",
+      "executable": false
+    },
+    "src/strap/recovery-outcomes.ts": {
+      "sha256": "201b15c29aaff29ad764e8d3b9facba7982a317ac816f58964feb2ad13121758",
       "executable": false
     },
     "src/strap/report-exports.ts": {
@@ -3914,7 +3918,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "e85cb2a6d3910aa43ff47966d345063fa66391cc29273aeb6c94ac6f6e291363",
+      "sha256": "49354e4dd41b7ad5e3fdc8b16ec1de1cf88cc14a3792ac7c492e72957958883e",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -3938,7 +3942,7 @@
       "executable": false
     },
     "src/strap/ui/leads.ts": {
-      "sha256": "7abaa464267886d5e6467e875d6e499f601402089a469544b92cce42b463886c",
+      "sha256": "f730446d2fbc805ec91cdfefe2d548a350517a00261e58e888fa752e7369f6c2",
       "executable": false
     },
     "src/strap/ui/locations.ts": {
@@ -4007,6 +4011,10 @@
     },
     "src/strap/ui/recognition.ts": {
       "sha256": "9be18e3032e2a1b77a3897ab413f77637d0e3762c5fa9bfdc68dbd1340f3b6c0",
+      "executable": false
+    },
+    "src/strap/ui/recovery-outcomes.ts": {
+      "sha256": "67342c78e034ebbe73fe14e26c4b9188b8575d84c50717ac2a21d3c5ddfa5f00",
       "executable": false
     },
     "src/strap/ui/renewals.ts": {
