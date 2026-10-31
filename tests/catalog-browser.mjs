@@ -78,6 +78,8 @@ export async function catalogBrowser(h,data) {
       assert.ok(text.includes(`$${(original.amountCents/100).toFixed(2)} USD`));
       assert.ok(text.includes(`${original.credits} credits`));
       assert.ok(text.includes('Mat'));assert.ok(text.includes('Catalog studio'));
+      assert.ok(text.includes('Original purchase expiration:'));
+      assert.ok(text.includes('No automatic renewal.'));
       await shot(page,'#receipt-'+id,'member-original-v'+original.version+'-'+original.code);
     }
     console.log('PROBE PLAN-001 owner catalog forms: publish, prepare, approve and change USD price -> original member receipt remains $129.00 and six credits; screens at 1440 and 390.');

@@ -9,7 +9,7 @@ Allowed commands:
 | Command | Input | Result |
 | --- | --- | --- |
 | `classes.prepare` | `week` (Monday date), `classes` array of `{title,start,end,capacity,instructorId}` with optional `service` (blank uses the class name), `room`, `equipment` (array of names), `bufferBeforeMinutes`, `bufferAfterMinutes` | Frozen weekly publication draft |
-| `pack.prepare` | `personId`, positive integer `credits`, nonnegative integer `amountCents`, ISO `expiresAt`, optional `eligibleServices` (array; empty permits all classes) | Frozen pack and charge draft |
+| `pack.prepare` | `personId` and `catalogVersionId` from `productCatalog.versions` for an active finite-pack product, with no term overrides; or `personId`, positive integer `credits`, nonnegative integer `amountCents`, ISO `expiresAt`, optional `eligibleServices` (array; empty permits all classes) | Frozen pack and charge draft; catalog preparation snapshots the selected immutable version for a personal non-household sale |
 | `reminder.prepare` | `personId` | Frozen current balance and reminder text |
 
 Keys only prepare. The owner signs in normally, reviews the exact draft, and uses **Publish** or **Approve**. `classes.publish`, `pack.approve` and `reminder.approve` require that native human owner session and an `id` for the draft. The approval is recorded with the person, draft, reviewed contents and time; stale source data refuses approval. Neither a key nor a bearer token sent to a human route grants approval authority. Reminders export text; nothing is sent externally.
