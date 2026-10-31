@@ -132,5 +132,56 @@ export async function widgetJourney(h,week,edge) {
   await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'),'deactivated instructor has no public bio');await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:true});
   await h.cmd('widget.instructor.publish',{instructorId:coach.id,publicName:'Studio teacher',bio:'An approved public biography about movement teaching.',approved:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'));
   await h.cmd('widget.settings.save',{enabled:false,origins:[widgetOrigin],confirm:true});assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404);
+  await ownerReviewedSignup(h,week,coach,desk,edge);
   return {member,coach};
+}
+
+async function ownerReviewedSignup(h,week,coach,desk,edge) {
+  await h.cmd('widget.settings.save',{enabled:true,signupRequests:true,origins:[widgetOrigin],confirm:true});
+  const draft=await h.cmd('classes.prepare',{week,classes:[{title:'New adult movement',service:'New adult movement',start:week+'T21:00:00Z',end:week+'T22:00:00Z',capacity:3,instructorId:coach.id}]});
+  await h.cmd('classes.publish',{id:draft.id});const entry=(await h.state()).classes.find(c=>c.title==='New adult movement');
+  await h.cmd('widget.class.publish',{classId:entry.id,description:'A public class for new invited adults.',approved:true});
+  const choice=await widgetChoice(h,widgetOrigin,entry.id),join='/booking/join?selection='+choice.token;
+  const page=await h.send(join);assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  const name='Synthetic new adult',email='new-adult-'+coach.email;
+  const post=async(fields,headers={})=>h.mf.dispatchFetch(h.origin+join,{method:'POST',redirect:'manual',headers:{origin:h.origin,'content-type':'application/x-www-form-urlencoded',...headers},body:new URLSearchParams(fields).toString()});
+  const fields={name,email,adultConfirmed:'yes',confirm:'yes'},before=await records(h),calls=edge.calls.length;
+  assert.equal((await post(fields,{origin:widgetOrigin})).status,403);
+  assert.equal((await post({...fields,adultConfirmed:'no'})).status,400);
+  const result=await post(fields);assert.equal(result.status,200);assert.ok(!(await result.text()).includes(email),'public response never discloses submitted account details');
+  await post({...fields,name:'Changed replay'});
+  assert.deepEqual(await records(h),before,'request creates no account, money, seat or consent');assert.equal(edge.calls.length,calls,'request sends nothing');
+  assert.equal(await h.db.prepare('SELECT 1 FROM oa_operators WHERE email=?').bind(email).first(),null);
+  const pending=(await h.send('/app/studio',undefined,h.owner)).text;assert.ok(pending.includes(name)&&pending.includes(email));
+  const request=await h.db.prepare('SELECT * FROM st_widget_signup_requests WHERE email=?').bind(email).first();assert.equal(request.name,name,'replayed form cannot change owner review facts');
+  const approval={id:request.selection_hash,name,email,confirm:true,requestId:'synthetic-strap-widget-signup'};
+  for(const cookie of [coach.cookie,desk.cookie])await h.cmd('widget.signup.approve',approval,cookie,403);
+  await h.cmd('widget.signup.approve',{...approval,name:'Changed review'},h.owner,409);
+  const member=await h.cmd('widget.signup.approve',approval);assert.equal(member.active,true);
+  assert.equal(await h.db.prepare('SELECT 1 FROM oa_operators WHERE email=?').bind(email).first(),null,'creating a record does not invite or authenticate');
+  assert.equal((await h.cmd('widget.signup.approve',approval)).id,member.id);
+  const actions=(await h.state()).staffActions.filter(a=>a.command==='widget.signup.approve'&&a.personId===member.id);assert.equal(actions.length,1);assert.equal(actions[0].right,'member-record');
+  await h.cmd('person.invite',{id:member.id,widgetSelection:choice.token});
+  const messages=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r=>JSON.parse(r.message)),mail=messages.find(m=>m.to.includes(email));
+  const token=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token');
+  const signedIn=await h.send('/auth/confirm',{token});assert.equal(signedIn.status,303);assert.equal(signedIn.headers.get('location'),choice.location);
+  const signed=await submitWidgetForm(h,choice,'waiver.acknowledge',{signerName:name,confirm:'yes'},signedIn.cookie);assert.equal(signed.status,303);assert.equal(signed.headers.get('location'),choice.location);
+  const packDraft=await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:4500,eligibleServices:[entry.service],expiresAt:new Date(Date.parse(week)+60*86400_000).toISOString()});
+  const pack=await h.cmd('pack.approve',{id:packDraft.id}),invoice=await h.cmd('billing.checkout.start',{packId:pack.id,requestId:'synthetic-strap-widget-new-payment',confirm:true});
+  assert.equal((await h.send(choice.location+'&invoice='+encodeURIComponent(invoice.id),undefined,signedIn.cookie)).status,200);
+  edge.complete(invoice.providerSessionId);await h.cmd('billing.reconcile',{id:invoice.id,requestId:'synthetic-strap-widget-new-settled'});
+  const booked=await h.cmd('booking.book',{classId:entry.id,selection:choice.token,adultConfirmed:true},signedIn.cookie);assert.equal(booked.status,'booked');
+  assert.equal((await h.state()).packs.find(p=>p.id===pack.id).remaining,1);
+  const expired=await widgetChoice(h,widgetOrigin,entry.id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE token_hash=?").bind((await import('node:crypto')).createHash('sha256').update(expired.token).digest('hex')).run();
+  assert.equal((await h.send('/booking/join?selection='+expired.token)).status,410);
+  const erasedEmail='erased-new-'+coach.email,unused=await h.cmd('person.save',{name:'Unused signup erasure',email:erasedEmail,role:'member',active:true});
+  const denied=await widgetChoice(h,widgetOrigin,entry.id);
+  await h.mf.dispatchFetch(h.origin+'/booking/join?selection='+denied.token,{method:'POST',headers:{origin:h.origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...fields,email:erasedEmail}).toString()});
+  assert.ok(await h.db.prepare('SELECT 1 FROM st_widget_signup_requests WHERE email=?').bind(erasedEmail).first());
+  await h.cmd('person.erase',{id:unused.id});assert.equal(await h.db.prepare('SELECT 1 FROM st_widget_signup_requests WHERE email=?').bind(erasedEmail).first(),null,'erasure clears pending invitation contact');
+  const deniedResponse=await h.mf.dispatchFetch(h.origin+'/booking/join?selection='+denied.token,{method:'POST',headers:{origin:h.origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...fields,email:erasedEmail}).toString()});assert.equal(deniedResponse.status,200);
+  const erasedRequest=await h.db.prepare('SELECT * FROM st_widget_signup_requests WHERE email=?').bind(erasedEmail).first(),erasedBefore=await records(h);assert.equal(erasedRequest,null,'public replay cannot retain erased contact details');
+  const deniedHash=(await import('node:crypto')).createHash('sha256').update(denied.token).digest('hex');
+  await h.cmd('widget.signup.approve',{id:deniedHash,name,email:erasedEmail,confirm:true,requestId:'synthetic-strap-widget-erased'},h.owner,409);assert.deepEqual(await records(h),erasedBefore,'owner approval cannot recreate an erased identity');
+  await h.cmd('widget.settings.save',{enabled:true,signupRequests:false,origins:[widgetOrigin],confirm:true});assert.equal((await h.send(join)).status,403,'owner can withdraw new public requests immediately');
 }

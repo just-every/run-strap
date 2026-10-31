@@ -262,7 +262,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(!archived.filter(row=>row.kind==='part').flatMap(row=>row.items).some(row=>row.kind==='row'&&row.table==='st_tax_connections'),'native archive payload excludes the tax connection table');
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name.startsWith('st_mfa_')),'native archive inventory excludes all factor, passkey, recovery and challenge tables')
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row' && r.table.startsWith('st_mfa_')),'native archive payload excludes all factor tables')
-    for(const table of ['st_widget_connections','st_widget_selections'])assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name===table),'native archive omits widget authority');
+    for(const table of ['st_widget_signup_requests','st_widget_connections','st_widget_selections'])assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name===table),'native archive omits widget authority');
     await command(restored,['import','--input',old,'--yes','--no-queue'])
     await command(restored,['export','--output',again,'--no-queue'])
     const rows=text=>text.split('\n').filter(Boolean).map(JSON.parse).filter(r=>r.kind==='part')
@@ -280,7 +280,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
     await h.enroll(restoredOwner)
     assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404,'restored publication remains disconnected');
-    for(const table of ['st_widget_connections','st_widget_selections'])assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n,0);
+    for(const table of ['st_widget_signup_requests','st_widget_connections','st_widget_selections'])assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n,0);
     const restoredPublications=(await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.tables.st_records.filter(r=>r.kind==='widgetPublicationEvent').map(r=>JSON.parse(r.data));
     assert.ok(restoredPublications.some(r=>r.publicationId===widgetProof.publication.id && r.publishedBy===widgetProof.publication.publishedBy && r.publishedAt===widgetProof.publication.publishedAt),'publication provenance survives native restore');
     assert.equal((await h.send(contactReceipt,undefined,restoredOwner)).value.status,'saved','the restored owner verifies the retained source receipt after fresh authentication')

@@ -162,9 +162,11 @@ export async function eraseUsedMember(db: D1Database, tx: Transaction, request: 
   if(review.obligations==='cancel' && review.balanceCents>0)put('charge',{id:id(),personId:member.id,kind:'privacy-obligation-cancellation',amountCents:-review.balanceCents,createdAt:at,createdBy:tx.who.id,privacyReceiptId:receipt.id,erased:true});
   sql('DELETE FROM st_notice_deliveries WHERE person_id=?',member.id);
   sql('DELETE FROM st_evidence_copies WHERE person_id=?',member.id);
+  sql('DELETE FROM st_widget_signup_requests WHERE person_id=?',member.id);
   sql('DELETE FROM st_import_people_revisions WHERE person_id=?',member.id);
   // Redact every previous identity recorded by the owner, not just the current sign-in.
   for(const email of new Set(identities.filter(value=>value.includes(String.fromCharCode(64))))) {
+    sql('DELETE FROM st_widget_signup_requests WHERE lower(email)=lower(?)',email);
     sql('INSERT OR IGNORE INTO st_erasure_journal(identity_hash,erased_at) VALUES(?,?)',await hash(email.toLowerCase()),erasedAt);
     sql('DELETE FROM rer_mail_development_outbox WHERE instr(lower(message),lower(?))>0',email);
     sql('DELETE FROM oa_auth_audit WHERE instr(lower(value),lower(?))>0',email);

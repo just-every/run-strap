@@ -1,6 +1,8 @@
 import { inviteMemberRecord } from './member-invitations'
 import { operatorAuth, type Bindings } from '../auth.server'
 import { actor, type Actor } from './domain'
+import { load } from './domain/store'
+import { widgetAdult, widgetSelection } from './domain/booking-widget'
 
 export const fail = (message: string, status = 400): never => { throw Object.assign(new Error(message), { status }) }
 export const hash = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('')
@@ -44,7 +46,16 @@ export async function credentialCommand(request: Request, env: Bindings, who: Ac
   if (name === 'person.invite') {
     const person = await env.DB.prepare('SELECT * FROM st_people WHERE id=? AND active=1 AND erased_at IS NULL').bind(String(input.id ?? '')).first<any>()
     if (!person) fail('Activate the member or instructor before inviting them', 409)
-    await operatorAuth(env).invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo: '/app' })
+    let returnTo='/app';
+    if(input.widgetSelection!==undefined) {
+      const loaded=await load(env.DB,who);widgetAdult(loaded.state,person.id);
+      await widgetSelection(env.DB,loaded.state,input.widgetSelection);
+      const reviewed=await env.DB.prepare('SELECT name,email FROM st_widget_signup_requests WHERE selection_hash=? AND person_id=?').bind(await hash(String(input.widgetSelection)),person.id).first<{name:string;email:string}>();
+      if(!reviewed || reviewed.name!==person.name || reviewed.email!==person.email)fail('invitation_review_changed',409);
+      if(person.role!=='member')fail('member_required',403);
+      returnTo='/app/widget?selection='+String(input.widgetSelection);
+    }
+    await operatorAuth(env).invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo })
     return { invited: true }
   }
   fail('Unknown access command', 404)

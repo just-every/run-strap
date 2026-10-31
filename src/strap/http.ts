@@ -1,5 +1,5 @@
-import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites } from './domain/booking-widget';
-import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
+import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites, requestWidgetSignup, widgetPublication } from './domain/booking-widget';
+import { renderWidget, widgetPage, widgetReview, widgetHeaders, widgetSignup } from './ui/booking-widget';
 import { widgetReturn, widgetReturnCookie } from './widget-return';
 import { selectedCheckout } from './billing/checkout';
 import { billingWebhook } from './billing/webhooks';
@@ -27,7 +27,7 @@ import { leadReport } from './lead-report'
 import { renewalWorklist } from './domain/renewals'
 import { reconcileReminderFailures } from './domain/class-reminders'
 import { teachingPay } from './domain/teaching-pay'
-import { load, Transaction } from './domain/store'
+import { load, loadSystem, Transaction } from './domain/store'
 import { operatorAuth, runtimeBindings, type Bindings } from '../auth.server'
 import { reportDownload, nativeReportDownload } from './report-exports'
 import { revenueReport } from './revenue-report'
@@ -175,6 +175,22 @@ export async function strapScheduled(original: Bindings) {
 
 export async function strapResponse(request: Request, original: Bindings): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname
+  if(path==='/booking/join') {
+    const env=runtimeBindings(original);
+    try {
+      if(url.origin!==env.AUTH_ORIGIN || request.headers.has('host') && request.headers.get('host')!==url.host)fail('wrong_origin',403);
+      if(request.headers.get('sec-fetch-dest')==='iframe')fail('open_booking_in_top_level_page',403);
+      const token=url.searchParams.get('selection')??'',loaded=await loadSystem(env.DB),settings=await widgetPublication(env.DB,loaded.state);
+      if(!settings.signupRequests)fail('invitation_requests_disabled',403);
+      const selected=await widgetSelection(env.DB,loaded.state,token);
+      if(request.method==='GET')return widgetSignup(selected,token);
+      if(request.method!=='POST')fail('method_not_allowed',405);
+      if(request.headers.get('origin')!==env.AUTH_ORIGIN || request.headers.get('sec-fetch-site')==='cross-site')fail('Cross-site request refused',403);
+      const body=await request.text();if(body.length>4000)fail('Request too large',413);
+      await requestWidgetSignup(env.DB,token,new URLSearchParams(body));
+      return widgetPage('<h1>Invitation request recorded</h1><p>The owner must review your request and separately invite you. No account, class place, purchase or consent has been created. If this selection expires before review, choose the class again after receiving your invitation.</p>');
+    } catch(error) {return widgetPage('<h1>Invitation request unavailable</h1><p>Return to the studio for a current invitation or class selection.</p>',[],Number((error as any).status)||500);}
+  }
   if (path==='/booking/widget' || path==='/booking/select') {
     const env=runtimeBindings(original);
     try {
@@ -183,7 +199,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if(path==='/booking/widget')return renderWidget(await publicSchedule(env.DB,url.searchParams.get('embeddingOrigin')??''),url.searchParams.get('embeddingOrigin')??'',url.searchParams.get('service')??'');
       if(request.headers.get('sec-fetch-dest')==='iframe')fail('open_booking_in_top_level_page',403);
       const selected=await selectWidgetClass(env.DB,url.searchParams);
-      return new Response(null,{status:303,headers:{...widgetHeaders,location:'/app/widget?selection='+selected.token,'content-security-policy':"frame-ancestors 'none'"}});
+      if(url.searchParams.get('join')==='true') {
+        const loaded=await loadSystem(env.DB);if(!(await widgetPublication(env.DB,loaded.state)).signupRequests)fail('invitation_requests_disabled',403);
+      }
+      return new Response(null,{status:303,headers:{...widgetHeaders,location:(url.searchParams.get('join')==='true'?'/booking/join':'/app/widget')+'?selection='+selected.token,'content-security-policy':"frame-ancestors 'none'"}});
     } catch(error) {return widgetPage('<h1>Schedule unavailable</h1><p>This class or selection is unavailable. Return to the studio website for the current schedule.</p>',[],Number((error as any).status)||500);}
   }
   if (path==='/api/strap/billing/webhook') return billingWebhook(request,runtimeBindings(original))

@@ -63,6 +63,7 @@ export async function erasePerson(tx: Transaction, input: Record<string,unknown>
   // Each profile change keeps who acted, when, through which channel and which fields; its values go.
   tx.sql.push(tx.statement("UPDATE st_records SET data=json_set(json_remove(data,'$.before','$.after','$.result','$.requestBasis'),'$.erased',json('true')),version=? WHERE kind='profileChange' AND json_extract(data,'$.personId')=?",tx.state.version+1,previous.id));
   const erasedAt = Date.now();
+  tx.sql.push(tx.statement('DELETE FROM st_widget_signup_requests WHERE person_id=? OR lower(email)=lower(?)',previous.id,previous.email));
   tx.sql.push(tx.statement('INSERT INTO st_erasure_journal(identity_hash,erased_at) VALUES(?,?)',await hash(previous.email!.toLowerCase()),erasedAt));
   tx.sql.push(tx.statement("UPDATE st_people SET name='Erased person',email=?,active=0,role='member',version=version+1,erased_at=? WHERE id=?",`erased-${previous.id}@invalid.local`,erasedAt,previous.id));
   return {id:previous.id,erased:true};

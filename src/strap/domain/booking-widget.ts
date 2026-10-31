@@ -5,6 +5,7 @@ import { seatCapacity } from './spots';
 import { requireClassRight } from './staff-command-access';
 import { currentWaivers, currentWaiverReceipt, eligiblePacks } from './bookings';
 import { intakeMissing } from './intake';
+import { createDeskMember } from './member-records';
 
 const basis = (entry: RecordData) => sha256(JSON.stringify(entry));
 const tokenHash = (token: unknown) => { insist(typeof token === 'string' && /^[0-9a-f]{64}$/.test(token),'selection_unavailable',410); return sha256(token); };
@@ -22,8 +23,10 @@ export function saveWidgetSettings(tx: Transaction, input: Record<string,unknown
   humanOwner(tx.who);
   insist(typeof input.enabled==='boolean' && input.confirm===true,'publication_confirmation_required');
   const origins=embeddingOrigins(input.origins),previous=tx.state.records.get('widget-settings')?.data;
-  const saved={id:'widget-settings',publicationId:id(),enabled:input.enabled,origins,revision:(previous?.revision??0)+1,publishedAt:now(),publishedBy:tx.who.id};
+  insist(input.signupRequests===undefined || typeof input.signupRequests==='boolean','invalid_signup_setting');
+  const saved={id:'widget-settings',publicationId:id(),enabled:input.enabled,signupRequests:input.signupRequests===true,origins,revision:(previous?.revision??0)+1,publishedAt:now(),publishedBy:tx.who.id};
   tx.put('widgetSettings',saved);tx.put('widgetPublicationEvent',{...saved,id:id(),settingsId:saved.id});
+  tx.sql.push(tx.statement('DELETE FROM st_widget_signup_requests'));
   tx.sql.push(tx.statement('INSERT INTO st_widget_connections(id,publication_id) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET publication_id=excluded.publication_id',saved.publicationId));
   return saved;
 }
@@ -78,13 +81,41 @@ export async function selectWidgetClass(db: D1Database, input: URLSearchParams) 
   return {token,expiresAt};
 }
 export async function widgetSelection(db: D1Database, state: State, token: unknown) {
+  return widgetSelectionByHash(db,state,tokenHash(token));
+}
+async function widgetSelectionByHash(db: D1Database, state: State, hash: string) {
   const settings=await widgetPublication(db,state);
-  const selection=await db.prepare("SELECT * FROM st_widget_selections WHERE token_hash=? AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND consumed_at IS NULL").bind(tokenHash(token)).first<RecordData>();
+  const selection=await db.prepare("SELECT * FROM st_widget_selections WHERE token_hash=? AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND consumed_at IS NULL").bind(hash).first<RecordData>();
   insist(selection && selection.publication_id===settings.publicationId,'selection_unavailable',410);
   const selected=publishedClass(state,selection.class_id);
   insist(basis(selected.publication)===selection.class_basis,'class_publication_changed',409);
   insist(seatCapacity(state,selected.entry).onlineOpen>0,'class_full',409);
   return {...selected,selection};
+}
+export async function requestWidgetSignup(db: D1Database,token: unknown,input: URLSearchParams) {
+  const {state}=await loadSystem(db),settings=await widgetPublication(db,state);
+  insist(settings.signupRequests===true,'invitation_requests_disabled',403);
+  const selected=await widgetSelection(db,state,token),name=text(input.get('name'),'name',160),email=text(input.get('email'),'email',254).toLowerCase();
+  insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),'invalid_email');
+  insist(input.get('adultConfirmed')==='yes' && input.get('confirm')==='yes','personal_invitation_confirmation_required');
+  await db.batch([
+    db.prepare("DELETE FROM st_widget_signup_requests WHERE expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')"),
+    db.prepare('INSERT INTO st_widget_signup_requests(selection_hash,selection_token,name,email,requested_at,expires_at) SELECT ?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM st_erasure_journal WHERE identity_hash=?) ON CONFLICT(selection_hash) DO NOTHING').bind(tokenHash(token),String(token),name,email,now(),selected.selection.expires_at,sha256(email)),
+  ]);
+}
+export async function approveWidgetSignup(tx: Transaction,input: Record<string,unknown>) {
+  humanOwner(tx.who);insist(input.confirm===true,'invitation_review_required');
+  const hash=text(input.id,'invitation_request',64),settings=await widgetPublication(tx.db,tx.state);
+  insist(settings.signupRequests===true,'invitation_requests_disabled',403);
+  const selected=await widgetSelectionByHash(tx.db,tx.state,hash);
+  const request=await tx.db.prepare('SELECT * FROM st_widget_signup_requests WHERE selection_hash=?').bind(hash).first<RecordData>();
+  insist(request && !request.person_id,'invitation_request_unavailable',409);
+  insist(input.name===request.name && input.email===request.email,'invitation_request_changed',409);
+  const member=await createDeskMember(tx,{name:request.name,email:request.email});
+  tx.future(selected.selection.expires_at);
+  tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_widget_signup_requests WHERE selection_hash=? AND person_id IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) THEN 1 ELSE 0 END",hash));
+  tx.sql.push(tx.statement('UPDATE st_widget_signup_requests SET person_id=? WHERE selection_hash=?',member.id,hash));
+  return member;
 }
 export function widgetAdult(state: State, personId: string) {
   person(state,personId);
@@ -121,4 +152,5 @@ export async function validateWidgetBooking(tx: Transaction, name: string, input
 export const widgetSettingsView = async (db: D1Database, state: State, who: Actor) => who.role==='owner' && who.isOwner ? {
   settings:state.records.get('widget-settings')?.data??null,classes:list(state,'widgetClass'),instructors:list(state,'widgetInstructor'),
   connected:!!await db.prepare('SELECT 1 FROM st_widget_connections WHERE id=1 AND publication_id=?').bind(state.records.get('widget-settings')?.data.publicationId??'').first(),
+  signupRequests:(await db.prepare("SELECT selection_hash AS id,selection_token AS selectionToken,person_id AS personId,name,email,requested_at AS requestedAt FROM st_widget_signup_requests WHERE expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY requested_at").all()).results,
 } : null;

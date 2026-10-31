@@ -1,4 +1,4 @@
-import { saveWidgetSettings, publishWidgetClass, publishWidgetInstructor, validateWidgetBooking } from './booking-widget';
+import { saveWidgetSettings, publishWidgetClass, publishWidgetInstructor, validateWidgetBooking, approveWidgetSignup } from './booking-widget';
 import { previewAutomationDelivery, confirmAutomationDelivery, prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
 import { deliverClientAppointment, acceptClientAppointment, authorizeClientAppointment, recordAppointmentDeposit, clientAppointmentSnapshot } from './client-appointments';
 import { prepareClientAppointmentChange, confirmClientAppointmentChange } from './client-appointment-changes';
@@ -91,6 +91,7 @@ export type { Actor, Person } from './types';
 
 export const handlers = {
   'widget.settings.save':defineCommand(saveWidgetSettings,['owner']),
+  'widget.signup.approve':defineCommand(approveWidgetSignup,['owner'],{staffRight:'member-record'}),
   'widget.class.publish':defineCommand(publishWidgetClass,['owner']),
   'widget.instructor.publish':defineCommand(publishWidgetInstructor,['owner']),
   'automation.delivery.preview':defineCommand(previewAutomationDelivery,['owner']),

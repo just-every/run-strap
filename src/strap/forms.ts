@@ -40,7 +40,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   const input = { ...raw }
   if(name.startsWith('widget.')) {
     if(name==='widget.settings.save')input.origins=String(input.origins??'').split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
-    for(const key of ['enabled','approved','confirm'])if(key in input)input[key]=['true','yes'].includes(String(input[key]));
+    for(const key of ['enabled','approved','confirm','signupRequests'])if(key in input)input[key]=['true','yes'].includes(String(input[key]));
     return input;
   }
   if('selection' in input && 'adultConfirmed' in input)input.adultConfirmed=input.adultConfirmed==='yes';
