@@ -448,6 +448,38 @@ test(
         requestId: "manager-reopen",
       });
       assert.equal(reopened.status, "open");
+      const {auditDownload}=await import('./studio-audit-cases.mjs');
+      const auditQuery=new URLSearchParams({auditRight:'drawer',auditActor:(await h.state()).actor.id});
+      const audit=await auditDownload(h,auditQuery);
+      assert.equal(audit.length,2,'count adjustment and reopen each join once');
+      const count=audit.find(row=>row.command==='drawer.adjust'),reopen=audit.find(row=>row.command==='drawer.reopen');
+      assert.deepEqual([count.id,count.sourceId,count.before,count.after,count.actorRole,count.reason,count.version],[adjusted.id,adjusted.id,16500,17000,'owner','Found five dollars beneath cash tray',3]);
+      assert.deepEqual([reopen.before.status,reopen.before.countedCents,reopen.after.status,reopen.after.countedCents,reopen.version],['closed',17000,'open',null,4]);
+      assert.equal(reopen.after.id,session.id);assert.equal(reopen.actorId,adjusted.actorId);
+      assert.equal(reopen.reason,'Manager recount with retained transaction history');
+      assert.equal(new Set(audit.map(row=>row.sourceId)).size,2);
+      assert.ok(audit.every(row=>row.sessionId===session.id&&row.locationId==='studio'&&row.sourceKind==='drawerAdjustment'));
+      const observer=await h.person('DrawerObserver');
+      const beforeReplay=(await h.state()).version;
+      assert.deepEqual(await h.cmd('drawer.adjust',{sessionId:session.id,countedCents:17000,reason:'Found five dollars beneath cash tray',requestId:'adjust'}),adjusted);
+      assert.deepEqual(await h.cmd('drawer.reopen',{sessionId:session.id,reason:'Manager recount with retained transaction history',requestId:'manager-reopen'}),reopened);
+      assert.deepEqual(await auditDownload(h,auditQuery),audit);
+      assert.equal((await h.state()).version,beforeReplay);
+      for(const cookie of [observer.cookie,frontDesk])for(const command of ['drawer.adjust','drawer.reopen'])await denied(h,command,{sessionId:session.id,countedCents:1,reason:'Unauthorized rewrite',requestId:command},cookie);
+      for(const path of ['/api/strap/staff-history','/api/strap/staff-history.csv']) {
+        assert.equal((await h.send(path,undefined,frontDesk)).status,403);
+        assert.equal((await h.send(path,{id:count.id,after:0},h.owner)).status,404);
+      }
+      assert.equal((await h.state()).version,beforeReplay);
+      await(await import('./staff-actions-browser.mjs')).studioAuditBrowser(h,{drawer:true,query:auditQuery});
+      // Old reopens carried no resulting snapshot or role. Keep that absence,
+      // even though today's drawer and current owner could supply guesses.
+      const old=JSON.parse((await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records.find(row=>row.id===reopen.id).data);
+      delete old.after;delete old.actorRole;delete old.version;
+      await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(old),old.id).run();
+      await h.db.prepare("DELETE FROM st_records WHERE kind='retailAction' AND json_extract(data,'$.sourceId')=?").bind(old.id).run();
+      const historical=(await auditDownload(h,new URLSearchParams({auditCommand:'drawer.reopen'})))[0];
+      assert.deepEqual([historical.after,historical.actorRole,historical.version],[null,null,null]);
       await h.cmd("drawer.close", {
         sessionId: session.id,
         denominations: [{ cents: 1000, count: 17 }],

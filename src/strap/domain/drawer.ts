@@ -93,6 +93,7 @@ export function openDrawer(tx: Transaction, input: Record<string, unknown>) {
       register,
       floatCents: integer(input.floatCents, "float", 0, 100_000_000),
       status: "open",
+      version: 1,
       openedBy: tx.who.id,
       createdAt: now(),
     };
@@ -159,6 +160,7 @@ export function closeDrawer(tx: Transaction, input: Record<string, unknown>) {
     const saved = {
       ...session,
       status: "closed",
+      version: (session.version ?? 0) + 1,
       countedCents,
       denominations: counts,
       closeReason: reason,
@@ -187,10 +189,13 @@ export function adjustDrawer(tx: Transaction, input: Record<string, unknown>) {
       after: countedCents,
       reason,
       actorId: tx.who.id,
+      actorRole: tx.who.role,
+      version: (session.version ?? 0) + 1,
+      locationId: session.locationId,
       createdAt: now(),
     };
     tx.put("drawerAdjustment", change);
-    tx.put("drawerSession", { ...session, countedCents });
+    tx.put("drawerSession", { ...session, countedCents, version: change.version });
     return change;
   });
 }
@@ -210,22 +215,28 @@ export function reopenDrawer(tx: Transaction, input: Record<string, unknown>) {
       "later_drawer_exists",
       409,
     );
-    tx.put("drawerAdjustment", {
-      id: id(),
-      sessionId: session.id,
-      before: session,
-      reason,
-      action: "reopen",
-      actorId: tx.who.id,
-      createdAt: now(),
-    });
+    const at = now();
     const saved = {
       ...session,
       status: "open",
       countedCents: null,
-      reopenedAt: now(),
+      version: (session.version ?? 0) + 1,
+      reopenedAt: at,
       reopenedBy: tx.who.id,
     };
+    tx.put("drawerAdjustment", {
+      id: id(),
+      sessionId: session.id,
+      before: session,
+      after: saved,
+      reason,
+      action: "reopen",
+      actorId: tx.who.id,
+      actorRole: tx.who.role,
+      version: saved.version,
+      locationId: session.locationId,
+      createdAt: at,
+    });
     tx.put("drawerSession", saved);
     return saved;
   });
