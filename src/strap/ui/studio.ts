@@ -3,7 +3,7 @@ import { productCatalogPanel } from './product-catalog';
 import { automationSettings } from './automation';
 import { terminationReasonsPanel } from './termination-reasons';
 import { successSettingsPanel } from './leads';
-import { paymentConnectionPanel } from './payment-connection';
+import { paymentConnectionPanel, payoutAccessPanel } from './payment-connection';
 import { privacyRetentionPanel } from './privacy';
 import { appointmentPricesPanel } from './appointment-prices';
 import { taxSettingsPanel } from './tax-settings'
@@ -44,6 +44,7 @@ export function studioPage(s: any, notice: any = {}) {
     + smsTestPanel(s)
     + taxSettingsPanel(s)
     + paymentConnectionPanel(s)
+    + payoutAccessPanel(s)
     + privacyRetentionPanel(s)
     + rulesPanel(s)
     + waitlistPanel(s)

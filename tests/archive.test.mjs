@@ -1,6 +1,7 @@
 import { formResult } from './form-result.mjs'
 import { publishWidget, widgetChoice, widgetOrigin } from './booking-widget-journey.mjs';
 import { reconciliationEdge,readPayouts } from './payout-reconciliation-cases.mjs';
+import { payoutAccessInput } from './payout-finance-cases.mjs';
 import { seedAutomationArchive, assertRestoredAutomation } from './automation-archive.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -471,6 +472,11 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
     await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true});
     const retainedPayouts=await readPayouts(h);assert.equal(retainedPayouts.cards.length,1);assert.equal(retainedPayouts.cards[0].feeCents,175);
+    const payoutFinance=await h.person('synthetic-strap-archive-finance');
+    await h.cmd('staff.access.grant',{personId:payoutFinance.id,role:'finance',enabled:true,rights:{}});await h.enroll(payoutFinance.cookie);
+    const payoutApproval=await payoutAccessInput(h,payoutFinance.id,'synthetic-strap-archive-read-approval');
+    const payoutGrant=(await h.cmd('billing.payouts.access.grant',payoutApproval)).after;
+    assert.equal((await readPayouts(h,payoutFinance.cookie)).totals.netCents,2825);
     const retainedPayments=await billingView(h);
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const terminationReason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0})
@@ -579,6 +585,12 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true},restoredOwner,409);
     await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout-new',confirm:true},restoredOwner,409);
     assert.equal(payments.reads.length,payoutReads,'restored provider history carries no refresh authority');
+    assert.deepEqual((await billingView(h,restoredOwner)).payoutAccess.grants.find(g=>g.id===payoutGrant.id),payoutGrant);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,payoutFinance.cookie)).status,401);
+    const restoredFinance=await h.signIn(payoutFinance.email);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'mfa_enrollment_required');
+    await h.enroll(restoredFinance);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required');
     console.log('PROBE BILL-011 restore: native archive at same origin -> exact fee and payout identities, times and cents retained; source session refused; old and new refresh requests disconnected.');
     const restoredBilling=await billingView(h,restoredOwner);
     assert.equal(restoredBilling.connected,false);
@@ -619,6 +631,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-restored-review'},restoredOwner);
     const reviewed=await billingView(h,restoredOwner);assert.equal(reviewed.connected,true);assert.notEqual(reviewed.connection.connectionId,oldEpoch);
     assert.equal(reviewed.methods.some(m=>m.available),false,'fresh merchant review cannot resurrect historical method authority');
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required');
+    await h.cmd('billing.payouts.access.grant',payoutApproval,restoredOwner);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required','captured source approval stays inert after reconnection');
+    const freshPayoutApproval=await payoutAccessInput(h,payoutFinance.id,'synthetic-strap-restored-fresh-read-approval',restoredOwner);
+    await h.cmd('billing.payouts.access.grant',freshPayoutApproval,restoredOwner);
+    assert.equal((await readPayouts(h,restoredFinance)).totals.netCents,2825);
+    console.log('PROBE BILL-011 finance restore: native archive retains read approvals and audit -> old session refused, fresh factor still denied after reconnection and captured approval replay; fresh owner approval alone restores retained reads.');
     payments.complete(pendingCheckout.providerSessionId);
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-after-review'},restoredOwner);
     assert.equal((await billingView(h,restoredOwner)).invoices.find(i=>i.id===pendingCheckout.id).status,'paid');

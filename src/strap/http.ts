@@ -1,6 +1,7 @@
 import { errorText } from './ui/errors'
 import { localDate } from './zone'
 import { actionResult, actionResultRedirect } from './action-result'
+import { payoutAccessAvailable } from './payout-access';
 import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
 import { payoutReport, payoutCsv } from './payout-reconciliation';
@@ -76,7 +77,8 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   if (who.role === 'front-desk' || !report && who.staffAccess && ['manager','instructor'].includes(who.role)) return {...await snapshot(env.DB,who,env.AUTH_ORIGIN),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? '',mfa};
   if (who.role === 'finance') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-    return { ...await financeSnapshot(env.DB, who), classes: [], displayName: operator?.name ?? '', mfa }
+    const loaded=await load(env.DB,who)
+    return { ...await financeSnapshot(env.DB, who), payoutAccessAvailable:await payoutAccessAvailable(env,loaded.state,loaded.who), classes: [], displayName: operator?.name ?? '', mfa }
   }
   if (who.role === 'manager') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()

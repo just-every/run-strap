@@ -1,7 +1,6 @@
-import type { Bindings } from '../auth.server';
 import { load, Transaction } from './domain/store';
-import { DomainError, humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './domain/types';
-import { cleared } from './security/gate';
+import { DomainError, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './domain/types';
+import { payoutAuthority as authority, fencePayoutAuthority as fenceAuthority } from './payout-access';
 import { connection, digest, fenceConnection, reviewedConnection, type BillingBindings } from './billing/model';
 import { balanceTransaction, payoutObservation, providerIdentity, stripe, stripeList } from './billing/provider';
 import { membershipReport, payoutMembership, sumCents as sum } from './payout-membership';
@@ -9,15 +8,6 @@ import { membershipReport, payoutMembership, sumCents as sum } from './payout-me
 const refreshKind='payoutRefresh',cardKind='cardBalanceObservation',payoutKind='payoutObservation';
 const failure=(error: unknown)=>error instanceof DomainError ? error.code : 'payout_provider_read_unavailable';
 const sources=(state: State,accountId: string)=>list(state,'stripeInvoice').filter(i=>i.accountId===accountId && i.status==='paid' && !i.erased && state.people.some(p=>p.id===i.personId && !p.erasedAt));
-async function authority(env: BillingBindings,who: Actor) {
-  const loaded=await load(env.DB,who);humanOwner(loaded.who);
-  insist(await cleared(env as Bindings,loaded.who),'mfa_required',403);
-  insist(who.sessionId && await env.DB.prepare("SELECT id FROM oa_sessions WHERE id=? AND operator_id=? AND operator_version=? AND revoked_at IS NULL AND expires_at>?").bind(who.sessionId,who.id,loaded.state.operator.version,Date.now()).first(),'owner_session_required',401);
-  return loaded;
-}
-function fenceAuthority(tx: Transaction) {
-  tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM oa_sessions s JOIN st_mfa_sessions m ON m.session_id=s.id AND m.operator_id=s.operator_id WHERE s.id=? AND s.operator_id=? AND s.operator_version=? AND s.revoked_at IS NULL AND s.expires_at>unixepoch('now')*1000) THEN 1 ELSE 0 END",tx.who.sessionId,tx.who.id,tx.state.operator.version));
-}
 async function merchant(env: BillingBindings,accountId: string) {
   const {body}=await stripe(env,'/account');
   insist(body.object==='account' && body.id===accountId,'payout_merchant_mismatch',409);
@@ -87,7 +77,7 @@ function latestBy(rows: RecordData[],key: string) {
 }
 /** Pure retained projection. It never retries reads, collects, settles or matches a bank deposit. */
 export async function payoutReport(env: BillingBindings,who: Actor) {
-  const loaded=await authority(env,who),state=loaded.state,refreshes=list(state,refreshKind),latest=refreshes.at(-1) ?? null;
+  const loaded=await authority(env,who,false),state=loaded.state,refreshes=list(state,refreshKind),latest=refreshes.at(-1) ?? null;
   let connected=false;
   try {const c=await connection(env);reviewedConnection(state,c);connected=true;} catch(error) {
     if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured','billing_connection_review_required'].includes(error.code))throw error;
@@ -100,7 +90,7 @@ export async function payoutReport(env: BillingBindings,who: Actor) {
   const complete=!!currency && !!latest && latest.status!=='refreshing' && current.length===cards.length;
   const byCurrency=currencies.map(currency=>{const rows=current.filter(r=>r.currency===currency);return {currency,grossCents:sum(rows,'grossCents'),feeCents:sum(rows,'feeCents'),netCents:sum(rows,'netCents'),cardCount:rows.length};});
   const payouts: RecordData[]=latestBy(list(state,payoutKind),'providerPayoutId').map(row=>({...row,stale:row.refreshId!==latest?.id,...membershipReport(row,current,row.refreshId===latest?.id)}));
-  return {mode:'test',connected,latest,refreshes,cards,payouts,totals:{currency,byCurrency,observedGrossCents:currency?sum(current,'grossCents'):null,observedFeeCents:currency?sum(current,'feeCents'):null,observedNetCents:currency?sum(current,'netCents'):null,grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Native coverage is limited to personal one-time TEST card receipts. Provider payout statements may include other transactions; they do not establish native refund reconciliation or bank receipt.'};
+  return {mode:'test',canRefresh:loaded.who.role==='owner',connected,latest,refreshes,cards,payouts,totals:{currency,byCurrency,observedGrossCents:currency?sum(current,'grossCents'):null,observedFeeCents:currency?sum(current,'feeCents'):null,observedNetCents:currency?sum(current,'netCents'):null,grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Native coverage is limited to personal one-time TEST card receipts. Provider payout statements may include other transactions; they do not establish native refund reconciliation or bank receipt.'};
 }
 export function payoutCsv(report: Awaited<ReturnType<typeof payoutReport>>) {
   const fields=['kind','id','refreshId','accountId','invoiceId','paymentId','packId','sourceId','type','sourceAmountCents','sourceCurrency','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','providerReconciliationStatus','depositStatus','errorCode','mappingError','stale','automatic','mappedNetCents','unmappedTransactionCount','providerDifferenceCents','nativeCoverageStatus','statementGrossCents','statementFeeCents','statementNetCents','statementDifferenceCents','bankDepositConfirmed','cardGrossTotalCents','cardFeeTotalCents','cardNetTotalCents','bankDepositConfirmation'];

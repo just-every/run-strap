@@ -3,6 +3,7 @@ import { run } from './harness.mjs';
 import { paymentEdge,paymentAuth,paymentSeed,connectPayment } from './payment-fixtures.mjs';
 import { privacyDecision,verifiedPrivacyRequest } from './privacy-journey.mjs';
 import { payoutsBrowser } from './payout-reconciliation-browser.mjs';
+import { financePayoutCases } from './payout-finance-cases.mjs';
 
 export const reportPath='/api/strap/billing/payouts.json';
 export const readPayouts=async(h,cookie=h.owner)=>{const r=await h.send(reportPath,undefined,cookie);assert.equal(r.status,200,r.text);return r.value;};
@@ -186,4 +187,6 @@ export async function payoutReconciliationCases() {
     assert.equal((await h.send(reportPath,undefined,h.owner)).status,401);
     console.log('PROBE BILL-011 session revocation: sign out while provider read is in flight -> 401, zero observations committed and subsequent reads refused.');
   },{auth:paymentAuth,outbound:revokedEdge.outbound});
+  const financeEdge=reconciliationEdge();
+  await run(h=>financePayoutCases(h,financeEdge),{auth:paymentAuth,outbound:financeEdge.outbound});
 }

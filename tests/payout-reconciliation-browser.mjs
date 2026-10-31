@@ -2,6 +2,67 @@ import assert from 'node:assert/strict';
 import { readFile,mkdir } from 'node:fs/promises';
 import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
+
+async function financePage(h,cookie,fn) {
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
+  try {
+    const context=await browser.newContext({viewport:{width:1440,height:1000}});
+    try {
+      await context.route(h.origin+'/**',async route=>{
+        const path=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon','.js':'text/javascript'};
+        if(!path.includes('..')&&types[extname(path)])return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:types[extname(path)]});return route.continue();
+      });
+      const at=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,at),value:cookie.slice(at+1),url:h.origin}]);
+      return await fn(await context.newPage());
+    } finally {await context.close();}
+  } finally {await browser.close();}
+}
+async function financeScreens(page,name) {
+  if(!process.env.STRAP_PROOF_DIR)return;
+  await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true});
+  for(const width of [1440,390]) {
+    await page.setViewportSize({width,height:1000});
+    await page.screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-011-'+name+'-'+width+'.png'),fullPage:true});
+  }
+}
+export async function payoutGrantBrowser(h,finance) {
+  return financePage(h,h.owner,async page=>{
+    await page.goto(h.origin+'/app/studio#payout-access');
+    const row=page.locator('[data-payout-access="'+finance.id+'"]');
+    await row.locator('summary').click();
+    const form=row.locator('form[action*="billing.payouts.access.grant"]');
+    await form.getByLabel('Reason',{exact:true}).fill('Reviewed whole-merchant TEST statement access');
+    await form.getByRole('checkbox').check();
+    const input=await form.evaluate(f=>Object.fromEntries(new FormData(f)));input.version=Number(input.version);input.confirm=true;
+    await form.getByRole('button',{name:'Grant reconciliation reads',exact:true}).click();
+    await page.waitForURL(h.origin+'/app/studio#payout-access');
+    await page.waitForLoadState('domcontentloaded');
+    assert.equal(await row.locator('[data-payout-access-state]').innerText(),'Read access granted');
+    await financeScreens(page,'finance-settings');
+    return input;
+  });
+}
+export async function payoutFinanceBrowser(h,finance,report) {
+  await financePage(h,finance.cookie,async page=>{
+    const version=(await h.state()).version;
+    await page.goto(h.origin+'/app/payouts');
+    assert.equal(await page.locator('[data-total=net]').innerText(),'$96.25 USD');
+    assert.equal(await page.locator('[data-card-observation]').count(),2);
+    assert.equal(await page.locator('form[action*="billing.payouts.refresh"]').count(),0);
+    assert.match(await page.locator('#payout-summary').innerText(),/Read-only finance access/);
+    for(const [name,type] of [['Download reconciliation JSON','json'],['Download reconciliation CSV','csv']]) {
+      const promise=page.waitForEvent('download');await page.getByRole('link',{name,exact:true}).click();const download=await promise;
+      const value=await readFile(await download.path(),'utf8');
+      if(type==='json')assert.deepEqual(JSON.parse(value),report);
+      else {assert.match(value,/"10000","375","9625"/);for(const card of report.cards)assert.ok(value.includes(card.providerTransactionId));}
+    }
+    assert.equal((await h.state()).version,version);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    const small=await page.locator('main').locator('p,label,button,a,h1,h2,h3,dt,dd,td,th,summary').evaluateAll(es=>es.filter(e=>e.checkVisibility()&&parseFloat(getComputedStyle(e).fontSize)<13).map(e=>e.tagName));assert.deepEqual(small,[]);
+    for(const tip of await page.locator('.has-tooltip:visible').all()) {await tip.focus();await tip.locator('[role=tooltip]').waitFor({state:'visible'});await tip.hover();await page.waitForTimeout(350);await tip.locator('[role=tooltip]').waitFor({state:'visible'});}
+    await financeScreens(page,'finance-report');
+  });
+}
 export async function payoutsBrowser(h,report,{statement=false,difference=0,unavailable=false}={}) {
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
   try {

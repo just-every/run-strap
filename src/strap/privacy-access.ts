@@ -1,8 +1,8 @@
 import { list, now, person, type RecordData, type State } from './domain/types';
 import { profileOf } from './domain/profiles';
 
-const internal=new Set('privacyRetention privacyReview privacyRequest staffAccess memberRecordGrant memberInvitation memberMergePreview familyBillPreview billingOperation billingSetup billingActionLaunch'.split(' '));
-const audits=new Set('staffAction bookingAction staffAccessEvent'.split(' '));
+const internal=new Set('privacyRetention privacyReview privacyRequest payoutAccess staffAccess memberRecordGrant memberInvitation memberMergePreview familyBillPreview billingOperation billingSetup billingActionLaunch'.split(' '));
+const audits=new Set('staffAction bookingAction staffAccessEvent payoutAccessEvent'.split(' '));
 const auditFields=new Set('id personId action command actorId actorRole staffMade right channel at createdAt changed'.split(' '));
 /** Access copies contain personal records, not replay keys, provider credentials or another household member's profile. */
 function clean(value:any):any {
