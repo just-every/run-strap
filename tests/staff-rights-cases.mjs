@@ -318,6 +318,7 @@ export async function staffRetailRights(h) {
   };
   const read=async(cookie=h.owner)=>(await h.send('/api/strap/retail',undefined,cookie)).value;
   const ownerGift=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:other.id,locationId:west.id,amountCents:7000,tender:'external',reference:'synthetic-strap-203',requestId:'rights-hidden-gift'});
+  const distantGift=await h.cmd('retail.gift.issue',{personId:buyer.id,recipientId:buyer.id,locationId:west.id,amountCents:5000,tender:'external',reference:'synthetic-strap-205',requestId:'rights-distant-gift'});
   const foreignPurchaser=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:buyer.id,amountCents:3000,tender:'external',reference:'synthetic-strap-204',requestId:'rights-foreign-purchaser'});
   const sales=[];
   for(const [staff,role] of [[manager,'manager'],[desk,'front-desk']]) {
@@ -353,6 +354,7 @@ export async function staffRetailRights(h) {
       assert.deepEqual(await h.cmd('retail.gift.issue',issue,staff.cookie),card);
       const redeem={...input,tender:'gift',giftCardId:card.id,reference:'synthetic-strap-redeem-'+suffix,requestId:'rights-redeem-'+suffix};
       await refuse('retail.sell',{...redeem,giftCardId:ownerGift.id},staff.cookie);
+      await refuse('retail.sell',{...redeem,giftCardId:locationId==='studio'?distantGift.id:foreignPurchaser.id},staff.cookie);
       const redeemed=await h.cmd('retail.sell',redeem,staff.cookie);
       assert.deepEqual(await h.cmd('retail.sell',redeem,staff.cookie),redeemed);
       const adjust={giftCardId:card.id,amountCents:100,reason:'Approved correction',requestId:'rights-adjust-'+suffix,channel:'phone'};
@@ -380,6 +382,11 @@ export async function staffRetailRights(h) {
       for(const [name,body] of [['retail.return',{...returnInput,saleId:sales.find(s=>s.locationId!==locationId)?.id ?? 'missing'}],['retail.gift.adjust',{...adjust,giftCardId:ownerGift.id}],['retail.gift.refund',{...refund,giftCardId:ownerGift.id}]])await refuse(name,{...body,personId:buyer.id,locationId},staff.cookie);
       const r=await read(),state=await h.state();
       assert.equal(r.gifts.cards.find(c=>c.id===card.id).balanceCents,5100);
+      assert.equal(r.sales.filter(s=>s.reference===input.reference).length,1,'concurrent submission retains one sale');
+      assert.equal(r.movements.filter(m=>m.sourceId===sale.id).length,1,'one stock decrement');
+      assert.equal(r.movements.filter(m=>m.sourceId===returned.id).length,1,'one stock return');
+      assert.equal(r.gifts.entries.filter(e=>e.sourceId===redeemed.id).length,1,'one gift redemption');
+      assert.equal(r.gifts.entries.filter(e=>e.sourceId===giftReturn.id).length,1,'one original gift restoration');
       assert.equal(state.payments.filter(p=>p.retailSaleId===sale.id).length,1);
       assert.equal(state.payments.filter(p=>p.retailReturnId===returned.id).length,1);
       for(const [name,body,result,right] of [['retail.sell',input,sale,'sale'],['retail.gift.issue',issue,card,'sale'],['retail.sell',redeem,redeemed,'sale'],['retail.return',returnInput,returned,'refund'],['retail.return',giftReturnInput,giftReturn,'refund'],['retail.gift.adjust',adjust,adjusted,'refund'],['retail.gift.refund',actualRefund,refunded,'refund']]) {
@@ -398,6 +405,8 @@ export async function staffRetailRights(h) {
     for(const path of ['/app/retail','/api/strap/retail'])assert.equal((await h.send(path,undefined,p.cookie)).status,403);
     for(const name of ['retail.sell','retail.return','retail.gift.issue','retail.gift.adjust','retail.gift.refund'])await refuse(name,{},p.cookie);
   }
+  const stock=(await read()).stock.filter(s=>s.skuId===sku.id && places.includes(s.locationId));
+  assert.deepEqual(stock.map(s=>s.onHand),[18,18],'each location retains its exact independently received stock after once-only sales and returns');
   await grant(manager,'manager',['sale','refund'],[buyer.id],places);
   await grant(desk,'front-desk',['sale','refund'],[buyer.id],places);
   // Cash is recorded through an existing open drawer; staff receive no drawer totals.
@@ -409,5 +418,22 @@ export async function staffRetailRights(h) {
   assert.deepEqual(await h.cmd('retail.return',cashReturn,manager.cookie),returnedCash);
   const drawer=(await read()).sessions.find(s=>s.id===sessions[west.id].id);
   assert.equal(drawer.expectedCents,10000);assert.equal(drawer.entries.filter(e=>e.sourceId===cashSale.id||e.sourceId===returnedCash.id).length,2);
+  const cashIssue={personId:buyer.id,recipientId:buyer.id,locationId:west.id,amountCents:2000,tender:'cash',sessionId:sessions[west.id].id,reference:'synthetic-strap-cash-gift',requestId:'rights-cash-gift'};
+  const cashGift=await h.cmd('retail.gift.issue',cashIssue,desk.cookie);
+  assert.deepEqual(await h.cmd('retail.gift.issue',cashIssue,desk.cookie),cashGift);
+  const cashGiftRefund={giftCardId:cashGift.id,amountCents:500,tender:'external',sessionId:sessions[west.id].id,reason:'Original cash funding returned',reference:'synthetic-strap-cash-gift-refund',requestId:'rights-cash-gift-refund'};
+  await refuse('retail.gift.refund',{...cashGiftRefund,sessionId:sessions.studio.id},desk.cookie,409);
+  const cashRefund=await h.cmd('retail.gift.refund',cashGiftRefund,desk.cookie);
+  assert.deepEqual([cashRefund.tender,cashRefund.amountCents],['cash',500]);
+  assert.deepEqual(await h.cmd('retail.gift.refund',cashGiftRefund,desk.cookie),cashRefund);
+  const cashAfter=await read();
+  assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).expectedCents,11500);
+  assert.equal(cashAfter.gifts.cards.find(c=>c.id===cashGift.id).balanceCents,1500);
+  assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).entries.filter(e=>[cashGift.id,cashRefund.id].includes(e.sourceId)).length,2);
   if(process.env.STRAP_RIGHTS_PROOF_DIR || process.env.STRAP_PROOF_DIR)await (await import('./retail-browser.mjs')).staffRetailBrowser(h,{manager,desk,buyer,sku,west});
+  console.log('PROBE STAFF-001 retail access: manager and front desk at two locations open their scoped page and read; ungranted finance and instructor reads and writes return 403.');
+  console.log('PROBE STAFF-001 sale: concurrent and replayed external, cash and gift sales retain one stock, tender and canonical staff audit effect; wrong member, location and price are refused.');
+  console.log('PROBE STAFF-001 merchandise return: separate refund authority restores original external, cash or gift value once, with explicit restock or damaged treatment.');
+  console.log('PROBE STAFF-001 gift funding: issue, redeem, adjust and refund preserve original purchaser and tender; wrong holder, funding scope, location and drawer are refused.');
+  console.log('PROBE STAFF-001 revocation: the next new request and each committed replay return 403 with unchanged stock, tender, gift and audit records.');
 }

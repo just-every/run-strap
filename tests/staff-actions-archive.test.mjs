@@ -211,51 +211,58 @@ test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original 
       .sort((a,b)=>a.id.localeCompare(b.id))
     const privateOriginals=privateRecords((await h.send('/api/strap/exit.json',undefined,h.owner)).value.tables.st_records)
     const privateMailCount=(await h.db.prepare('SELECT COUNT(*) AS n FROM st_notice_deliveries WHERE person_id=?').bind(privateMember.id).first()).n
-    const retailManager=await h.person('RestoredRetailManager');
+    const retailManager=await h.person('RestoredRetailManager'),retailDesk=await h.person('RestoredRetailDesk');
     const retailWest=await h.cmd('location.save',{name:'Restored Retail West',timeZone:'America/Los_Angeles'});
     const retailSupplier=await h.cmd('retail.supplier.add',{name:'Restore supplier',reference:'synthetic-strap-restore-supplier',requestId:'restore-retail-supplier'});
     const retailSku=await h.cmd('retail.sku.add',{supplierId:retailSupplier.id,sku:'RESTORE',barcode:'synthetic-strap-restore-barcode',name:'Restore shirt',variant:'Medium',priceCents:2000,lowStock:1,requestId:'restore-retail-sku'});
-    const retailGrantInput={personId:retailManager.id,role:'manager',enabled:true,rights:Object.fromEntries(['sale','refund'].map(right=>[right,{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio',retailWest.id],doors:['all']}]}]))};
-    const retailGrant=await h.cmd('staff.access.grant',retailGrantInput);
-    const retailSession=await h.signIn(retailManager.email);await h.enroll(retailSession);
-    const retailRequests=[];
-    for(const locationId of ['studio',retailWest.id]) {
-      await h.cmd('retail.receive',{skuId:retailSku.id,locationId,quantity:3,reference:'synthetic-strap-restore-stock-'+locationId,requestId:'restore-stock-'+locationId});
-      const issue={personId:member.id,recipientId:member.id,locationId,amountCents:6000,tender:'external',reference:'synthetic-strap-restore-gift-'+locationId,requestId:'restore-gift-'+locationId};
-      const card=await h.cmd('retail.gift.issue',issue,retailSession);
-      const sale={personId:member.id,skuId:retailSku.id,locationId,quantity:1,expectedCents:2000,tender:'gift',giftCardId:card.id,reference:'synthetic-strap-restore-sale-'+locationId,requestId:'restore-sale-'+locationId};
-      const sold=await h.cmd('retail.sell',sale,retailSession);
-      const ret={saleId:sold.id,quantity:1,restock:true,reason:'Retained return',requestId:'restore-return-'+locationId};
-      const returned=await h.cmd('retail.return',ret,retailSession);
-      const adjust={giftCardId:card.id,amountCents:100,reason:'Retained correction',requestId:'restore-adjust-'+locationId};
-      const adjusted=await h.cmd('retail.gift.adjust',adjust,retailSession);
-      const refund={giftCardId:card.id,amountCents:1000,reason:'Retained original funding refund',reference:'synthetic-strap-restore-refund-'+locationId,requestId:'restore-refund-'+locationId};
-      const refunded=await h.cmd('retail.gift.refund',refund,retailSession);
-      retailRequests.push(...[['retail.gift.issue',issue,card],['retail.sell',sale,sold],['retail.return',ret,returned],['retail.gift.adjust',adjust,adjusted],['retail.gift.refund',refund,refunded]]);
+    const retailStaff=[];
+    for(const [person,role] of [[retailManager,'manager'],[retailDesk,'front-desk']]) {
+      const grantInput={personId:person.id,role,enabled:true,rights:Object.fromEntries(['sale','refund'].map(right=>[right,{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio',retailWest.id],doors:['all']}]}]))};
+      const grant=await h.cmd('staff.access.grant',grantInput);
+      const session=await h.signIn(person.email);await h.enroll(session);
+      const requests=[];
+      for(const locationId of ['studio',retailWest.id]) {
+        const suffix=role+'-'+locationId;
+        await h.cmd('retail.receive',{skuId:retailSku.id,locationId,quantity:3,reference:'synthetic-strap-restore-stock-'+suffix,requestId:'restore-stock-'+suffix});
+        const issue={personId:member.id,recipientId:member.id,locationId,amountCents:6000,tender:'external',reference:'synthetic-strap-restore-gift-'+suffix,requestId:'restore-gift-'+suffix};
+        const card=await h.cmd('retail.gift.issue',issue,session);
+        const sale={personId:member.id,skuId:retailSku.id,locationId,quantity:1,expectedCents:2000,tender:'gift',giftCardId:card.id,reference:'synthetic-strap-restore-sale-'+suffix,requestId:'restore-sale-'+suffix};
+        const sold=await h.cmd('retail.sell',sale,session);
+        const ret={saleId:sold.id,quantity:1,restock:true,reason:'Retained return',requestId:'restore-return-'+suffix};
+        const returned=await h.cmd('retail.return',ret,session);
+        const adjust={giftCardId:card.id,amountCents:100,reason:'Retained correction',requestId:'restore-adjust-'+suffix};
+        const adjusted=await h.cmd('retail.gift.adjust',adjust,session);
+        const refund={giftCardId:card.id,amountCents:1000,reason:'Retained original funding refund',reference:'synthetic-strap-restore-refund-'+suffix,requestId:'restore-refund-'+suffix};
+        const refunded=await h.cmd('retail.gift.refund',refund,session);
+        requests.push(...[['retail.gift.issue',issue,card],['retail.sell',sale,sold],['retail.return',ret,returned],['retail.gift.adjust',adjust,adjusted],['retail.gift.refund',refund,refunded]]);
+      }
+      retailStaff.push({person,grantInput,grant,session,requests,actions:(await h.state()).staffActions.filter(a=>a.actorId===requests[0][2].actorId)});
     }
     const retailBefore=(await h.send('/api/strap/retail',undefined,h.owner)).value;
-    const retailActions=(await h.state()).staffActions.filter(a=>a.actorId===retailRequests[0][2].actorId);
     const originalOwner=h.owner
     await h.close();h=null
     await archive(source,['export','--output',file]);await archive(restored,['import','--input',file,'--yes'])
     h=await harness({root:restored,owner:originalOwner});assert.equal((await h.send('/api/strap/state',undefined,originalOwner)).status,401,'native sessions never restore');const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
     assert.equal((await h.send('/api/strap/state',undefined,sourceStaff)).status,401,'the source booking staff session does not travel')
-    assert.equal((await h.send('/api/strap/retail',undefined,retailSession)).status,401,'retail sessions do not travel');
-    const restoredRetail=await h.signIn(retailManager.email);
-    for(const path of ['/app/retail','/api/strap/retail'])assert.equal((await h.send(path,undefined,restoredRetail)).status,403,'retained grant requires fresh MFA');
-    const retailVersion=(await h.state(owner)).version;
-    for(const [name,input] of retailRequests)assert.equal((await h.send('/api/strap/command',{name,input},restoredRetail)).status,403);
-    assert.equal((await h.state(owner)).version,retailVersion);
-    await h.enroll(restoredRetail);
-    assert.deepEqual((await h.state(owner)).staffAccessGrants.find(g=>g.id===retailGrant.id),retailGrant);
-    for(const [name,input,result] of retailRequests)assert.deepEqual(await h.cmd(name,input,restoredRetail),result,'retained request identity has no second effect');
-    assert.deepEqual((await h.send('/api/strap/retail',undefined,owner)).value,retailBefore,'original stock, tender, gift and return amounts survive exactly');
-    assert.deepEqual((await h.state(owner)).staffActions.filter(a=>a.actorId===retailRequests[0][2].actorId),retailActions);
-    await h.cmd('staff.access.grant',{...retailGrantInput,rights:{sale:{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}}},owner);
-    const retailRevokedVersion=(await h.state(owner)).version;
-    for(const [name,input] of retailRequests.filter(([name,input])=>!['retail.gift.issue','retail.sell'].includes(name)||input.locationId===retailWest.id))assert.equal((await h.send('/api/strap/command',{name,input},restoredRetail)).status,403,'current refund and location revocation fences restored replay');
-    assert.equal((await h.state(owner)).version,retailRevokedVersion);
-    assert.deepEqual((await h.send('/api/strap/retail',undefined,restoredRetail)).value.retailLocations.map(l=>l.id),['studio']);
+    for(const entry of retailStaff) {
+      assert.equal((await h.send('/api/strap/retail',undefined,entry.session)).status,401,'retail sessions do not travel');
+      const session=await h.signIn(entry.person.email);
+      for(const path of ['/app/retail','/api/strap/retail'])assert.equal((await h.send(path,undefined,session)).status,403,'retained grant requires fresh MFA');
+      const version=(await h.state(owner)).version;
+      for(const [name,input] of entry.requests)assert.equal((await h.send('/api/strap/command',{name,input},session)).status,403);
+      assert.equal((await h.state(owner)).version,version);
+      await h.enroll(session);
+      assert.deepEqual((await h.state(owner)).staffAccessGrants.find(g=>g.id===entry.grant.id),entry.grant);
+      for(const [name,input,result] of entry.requests)assert.deepEqual(await h.cmd(name,input,session),result,'retained request identity has no second effect');
+      assert.deepEqual((await h.send('/api/strap/retail',undefined,owner)).value,retailBefore,'original stock, tender, gift and return amounts survive exactly');
+      assert.deepEqual((await h.state(owner)).staffActions.filter(a=>a.actorId===entry.requests[0][2].actorId),entry.actions);
+      await h.cmd('staff.access.grant',{...entry.grantInput,rights:{sale:{enabled:true,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}}},owner);
+      const revokedVersion=(await h.state(owner)).version;
+      for(const [name,input] of entry.requests.filter(([name,input])=>!['retail.gift.issue','retail.sell'].includes(name)||input.locationId===retailWest.id))assert.equal((await h.send('/api/strap/command',{name,input},session)).status,403,'current refund and location revocation fences restored replay');
+      assert.equal((await h.state(owner)).version,revokedVersion);
+      assert.deepEqual((await h.send('/api/strap/retail',undefined,session)).value.retailLocations.map(l=>l.id),['studio']);
+    }
+    console.log('PROBE STAFF-001 native restore: manager and front desk at two locations retain original retail records, grants and audit; source sessions fail, fresh MFA is required and revoked restored replay changes nothing.');
     const privateRestoredState=await h.state(owner)
     assert.deepEqual(privateRecords((await h.send('/api/strap/exit.json',undefined,owner)).value.tables.st_records),privateOriginals,'native restore keeps private classes, bookings, previews, original funding movements, notices, canonical grants and actions')
     assert.deepEqual(privateRestoredState.staffAccessGrants.find(g=>g.id===privateGrant.id),privateGrant)
