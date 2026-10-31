@@ -3,6 +3,8 @@ import { humanOwner, id, insist, list, now, person, record, text, type Actor, ty
 import { loadSystem, type Transaction } from './store';
 import { seatCapacity } from './spots';
 import { requireClassRight } from './staff-command-access';
+import { currentWaivers, currentWaiverReceipt, eligiblePacks } from './bookings';
+import { intakeMissing } from './intake';
 
 const basis = (entry: RecordData) => sha256(JSON.stringify(entry));
 const tokenHash = (token: unknown) => { insist(typeof token === 'string' && /^[0-9a-f]{64}$/.test(token),'selection_unavailable',410); return sha256(token); };
@@ -87,6 +89,17 @@ export async function widgetSelection(db: D1Database, state: State, token: unkno
 export function widgetAdult(state: State, personId: string) {
   person(state,personId);
   insist(!list(state,'household').some(h=>h.guardianIds?.length && h.participantIds?.includes(personId)) && !list(state,'contractAuthority').some(g=>g.personId===personId && g.kind==='minor-guardian' && !g.revokedAt && (!g.adultAt || g.adultAt>now())),'adult_personal_booking_required',403);
+}
+/** Personal prerequisites are read from current records, never from the selection. */
+export function widgetPrerequisites(state: State, personId: string, entry: RecordData) {
+  const member=person(state,personId),service=String(entry.service??entry.title?.split(' · ')[0]).trim().replace(/\s+/g,' ').toLowerCase();
+  return {
+    memberName:member.name,
+    documents:currentWaivers(state).filter(w=>!w.service || String(w.service).trim().replace(/\s+/g,' ').toLowerCase()===service)
+      .map(w=>({...w,completed:currentWaiverReceipt(state,personId,w)})),
+    forms:intakeMissing(state,personId,[String(entry.service??entry.title?.split(' · ')[0])]),
+    hasAccess:eligiblePacks(state,personId,entry).length>0,
+  };
 }
 /** Selection adds no authority. Both established booking commands still run their own fences and staff audit. */
 export async function validateWidgetBooking(tx: Transaction, name: string, input: Record<string,unknown>) {

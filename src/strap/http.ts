@@ -1,4 +1,4 @@
-import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
+import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
@@ -210,7 +210,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
         if(!staff)widgetAdult(loaded.state,who.personId!);
         const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
-        return widgetReview(selected,token,members,staff);
+        return widgetReview(selected,token,members,staff,staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry));
       }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
@@ -352,7 +352,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         }
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
+        const selectedBooking=(name==='booking.book'||name==='booking.desk') && typeof input.selection==='string';
         const result = await execute(request, env, who, name, input)
+        if(selectedBooking && (result as any)?.status==='booked')return new Response(null,{status:303,headers:{...headers,location:'/app'}});
         if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
         if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
@@ -380,6 +382,16 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
       if (status >= 500) return unavailablePage(back, 'uncertain')
+      if(!held && back.startsWith('/app/widget?selection=')) {
+        try {
+          const token=new URL(back,env.AUTH_ORIGIN).searchParams.get('selection')??'',loaded=await load(env.DB,who),selected=await widgetSelection(env.DB,loaded.state,token),staff=who.role!=='member';
+          if(!staff)widgetAdult(loaded.state,who.personId!);
+          const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
+          return widgetReview(selected,token,members,staff,staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry),message.replace(/_/g,' '));
+        } catch(selectionError) {
+          return widgetPage('<h1>Selection unavailable</h1><p>The selected class changed, filled or expired. Return to the studio website to choose again.</p>',[],Number((selectionError as any).status)||500);
+        }
+      }
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
       let page: Response
       try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }

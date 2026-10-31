@@ -16,6 +16,14 @@ export async function widgetChoice(h,origin=widgetOrigin,classId) {
   assert.match(token,/^[0-9a-f]{64}$/);return {path,location,token};
 }
 const records=async h=>(await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results;
+export async function submitWidgetForm(h,choice,name,fields,cookie) {
+  const page=await h.send(choice.location,undefined,cookie);assert.equal(page.status,200,page.text);
+  const form=[...page.text.matchAll(/<form\b[^>]*action="([^"]+)"[^>]*>([\s\S]*?)<\/form>/g)].find(m=>new URL(m[1].replaceAll('&amp;','&'),h.origin).searchParams.get('name')===name);
+  assert.ok(form,'selected-class page offers '+name);
+  const values=new URLSearchParams([...form[2].matchAll(/type="hidden" name="([^"]+)" value="([^"]*)"/g)].map(m=>[m[1],m[2].replaceAll('&amp;','&')]));
+  for(const [key,value] of Object.entries(fields))values.set(key,value);
+  return h.mf.dispatchFetch(h.origin+form[1].replaceAll('&amp;','&'),{method:'POST',redirect:'manual',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:values.toString()});
+}
 export async function widgetJourney(h,week) {
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Studio',timeZone:'America/New_York'});
   const member=await h.person('WidgetMember'),other=await h.person('WidgetOther'),coach=await h.person('WidgetCoach','instructor'),desk=await h.person('WidgetDesk');
@@ -23,7 +31,7 @@ export async function widgetJourney(h,week) {
   await h.cmd('classes.publish',{id:draft.id});const entries=(await h.state()).classes;
   const p=await h.cmd('pack.prepare',{personId:member.id,credits:8,amountCents:12000,expiresAt:new Date(Date.parse(week)+90*86400_000).toISOString()});await h.cmd('pack.approve',{id:p.id});
   const q=await h.cmd('pack.prepare',{personId:other.id,credits:8,amountCents:12000,expiresAt:new Date(Date.parse(week)+90*86400_000).toISOString()});await h.cmd('pack.approve',{id:q.id});
-  const waiver=await h.cmd('waiver.publish',{text:'Current safety review.'});
+  const waiver=await h.cmd('waiver.publish',{text:'Current safety review.',requiresSignature:true});
   assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404);
   await publishWidget(h,entries[0],coach);
   for(const entry of entries.slice(1))await h.cmd('widget.class.publish',{classId:entry.id,description:'A second public service description.',approved:true});
@@ -46,7 +54,26 @@ export async function widgetJourney(h,week) {
   const review=await h.send(choice.location,undefined,confirmed.cookie);assert.equal(review.status,200);assert.match(review.headers.get('content-security-policy'),/frame-ancestors 'none'/);
   const booking={classId:entries[0].id,selection:choice.token,adultConfirmed:true};
   await h.cmd('booking.book',booking,member.cookie,409);assert.equal((await h.state()).bookings.length,0,'selection never bypasses current waiver');
-  await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie);
+  const failedSignature=await submitWidgetForm(h,choice,'waiver.acknowledge',{signerName:'Wrong person',confirm:'yes'},member.cookie);
+  assert.equal(failedSignature.status,200);assert.match(await failedSignature.text(),/signer name mismatch/);
+  assert.equal((await h.state()).acknowledgements.length,0,'refused signature changes nothing');
+  const signed=await submitWidgetForm(h,choice,'waiver.acknowledge',{signerName:member.name,confirm:'yes'},member.cookie);
+  assert.equal(signed.status,303);assert.equal(signed.headers.get('location'),choice.location);
+  const matPolicy=await h.cmd('waiver.publish',{text:'Mat service personal policy.',service:'Mat',requiresSignature:true});
+  const unrelated=await h.cmd('waiver.publish',{text:'Strength personal policy.',service:'Strength',requiresSignature:true});
+  const serviceReview=await h.send(choice.location,undefined,member.cookie);assert.ok(serviceReview.text.includes(matPolicy.text));assert.ok(!serviceReview.text.includes(unrelated.text),'only selected service documents appear');
+  const staleReview=await h.cmd('waiver.publish',{text:'Updated Mat personal policy.',service:'Mat',requiresSignature:true});
+  await h.cmd('waiver.acknowledge',{id:matPolicy.id,documentHash:matPolicy.documentHash,signerName:member.name,confirm:true},member.cookie,409);
+  assert.equal((await h.state()).acknowledgements.length,1,'old document cannot become current consent');
+  const serviceSigned=await submitWidgetForm(h,choice,'waiver.acknowledge',{signerName:member.name,confirm:'yes'},member.cookie);
+  assert.equal(serviceSigned.status,303);assert.equal(serviceSigned.headers.get('location'),choice.location);
+  assert.ok((await h.state()).acknowledgements.some(a=>a.waiverId===staleReview.id&&a.signature.documentHash===staleReview.documentHash));
+  const intake=await h.cmd('intake.form.publish',{requestId:'synthetic-strap-widget-intake',title:'Class preparation',scope:'service',service:'Mat',required:true,questions:[{label:'Movement preference',required:true,sensitive:true}]});
+  const intakeSaved=await submitWidgetForm(h,choice,'intake.submit',{answer_q0:'Personal movement choice'},member.cookie);
+  assert.equal(intakeSaved.status,303);assert.equal(intakeSaved.headers.get('location'),choice.location);
+  assert.ok((await h.send(choice.location,undefined,member.cookie)).text.includes('Book my class'),'personal signing and intake return to the chosen class');
+  const privateState=await h.state(member.cookie);assert.ok(privateState.intake.responses.some(r=>r.formId===intake.id&&r.answers.q0==='Personal movement choice'));
+  const publicAfter=await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin));assert.ok(!publicAfter.text.includes('Personal movement choice')&&!publicAfter.text.includes(waiver.text),'host receives no private documents or answers');
   const expired=await widgetChoice(h,widgetOrigin,entries[1].id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE class_id=?").bind(entries[1].id).run();
   const unchanged=await records(h);
   await h.cmd('booking.book',{classId:entries[1].id,selection:expired.token,adultConfirmed:true},member.cookie,410);
@@ -57,7 +84,7 @@ export async function widgetJourney(h,week) {
   const booked=await h.cmd('booking.book',booking,member.cookie);assert.equal(booked.status,'booked');
   await h.cmd('booking.book',booking,member.cookie,410);
   assert.equal((await h.state(member.cookie)).packs.find(x=>x.personId===member.id).remaining,7);
-  const full=await widgetChoice(h,widgetOrigin,entries[2].id);await h.cmd('waiver.acknowledge',{id:waiver.id},other.cookie);await h.cmd('booking.book',{classId:entries[2].id},other.cookie);
+  const full=await widgetChoice(h,widgetOrigin,entries[2].id);await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:other.name,confirm:true},other.cookie);await h.cmd('waiver.acknowledge',{id:staleReview.id,documentHash:staleReview.documentHash,signerName:other.name,confirm:true},other.cookie);await h.cmd('intake.submit',{formId:intake.id,requestId:'synthetic-strap-widget-other',answers:{q0:'Other personal choice'}},other.cookie);await h.cmd('booking.book',{classId:entries[2].id},other.cookie);
   const fullBefore=await records(h);await h.cmd('booking.book',{classId:entries[2].id,selection:full.token,adultConfirmed:true},member.cookie,409);assert.deepEqual(await records(h),fullBefore,'full class adds no waitlist');
   const changed=await widgetChoice(h,widgetOrigin,entries[3].id);await h.cmd('widget.class.publish',{classId:entries[3].id,description:'Changed public class details.',approved:true});await h.cmd('booking.book',{classId:entries[3].id,selection:changed.token,adultConfirmed:true},member.cookie,409);
   const closed=await widgetChoice(h,widgetOrigin,entries[3].id);
@@ -79,6 +106,7 @@ export async function widgetJourney(h,week) {
   const dependentBefore=await records(h);await h.cmd('booking.book',{classId:entries[4].id,selection:revokedMember.token,adultConfirmed:true},member.cookie,403);assert.deepEqual(await records(h),dependentBefore,'adult affirmation does not override a known dependent');
   await h.cmd('household.participant.remove',{id:family.id,participantId:member.id});
   const concurrent=await widgetChoice(h,widgetOrigin,entries[4].id),concurrentBefore=await h.state();
+  for(const p of [member,other])await h.cmd('waiver.acknowledge',{id:unrelated.id,documentHash:unrelated.documentHash,signerName:p.name,confirm:true},p.cookie);
   const raced=await Promise.all([member.cookie,other.cookie].map(cookie=>h.send('/api/strap/command',{name:'booking.book',input:{classId:entries[4].id,selection:concurrent.token,adultConfirmed:true}},cookie)));
   assert.equal(raced.filter(r=>r.status===200).length,1);assert.ok(raced.filter(r=>r.status!==200).every(r=>[409,410].includes(r.status)));const concurrentAfter=await h.state();assert.equal(concurrentAfter.bookings.length,concurrentBefore.bookings.length+1);assert.equal(concurrentAfter.packs.reduce((n,p)=>n+p.remaining,0),concurrentBefore.packs.reduce((n,p)=>n+p.remaining,0)-1);
   await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'),'deactivated instructor has no public bio');await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:true});

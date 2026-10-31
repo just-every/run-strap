@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f6b28a5681c95a646bae3757e711f2de56b2d7ddf16bdc5e5026a3243ca9f9d3",
+      "sha256": "363f98819969210d4b22245648a64263bdbd4c16b8cba245c8685c167bec8d2b",
       "executable": false
     },
     "DEMO.md": {
@@ -3230,7 +3230,7 @@
       "executable": false
     },
     "src/strap/domain/booking-widget.ts": {
-      "sha256": "fdede9e3571634b55f06b66b5f819310735752749faa8fc2a4387eb081fc812f",
+      "sha256": "bd77ff5339c7e8c8d83451b328bca65cbfb7b48a37638265a57a7d60c2e85427",
       "executable": false
     },
     "src/strap/domain/bookings.ts": {
@@ -3610,7 +3610,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "3133533615f3f5a31c8f9829a38772e4765662c71c296f0e0f5a7c6a851c7019",
+      "sha256": "092e5711494d55d538d850bb89f7f06e9d12ae49e9973f2c41155f10e8744739",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3842,7 +3842,7 @@
       "executable": false
     },
     "src/strap/ui/booking-widget.ts": {
-      "sha256": "b497830ddc9d6b39594979cc81e4d8e2c0f1c4f64ecbca239d40e3efc5a218c8",
+      "sha256": "8115b60f7e20cc4d93e727163ac3501db685e636e5d4c14683f2cc1f2aa1c9bb",
       "executable": false
     },
     "src/strap/ui/checkin.ts": {
@@ -4230,7 +4230,7 @@
       "executable": false
     },
     "tests/booking-widget-journey.mjs": {
-      "sha256": "cea8d531829fa7c1ebb95a723a840a6895f857b4a9863e83e0ffa0602c49ab46",
+      "sha256": "93dc02d95598ae0ad01afeea8f516249480a0e2fd487c65366c38c79ea80ea05",
       "executable": false
     },
     "tests/campaign-browser.mjs": {
