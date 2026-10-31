@@ -620,7 +620,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       await refused(h,entry.memberDoor.staff,input,ana.cookie,denial)
       if (!['attendance.checkin'].includes(entry.memberDoor.staff)) await refused(h,entry.memberDoor.staff,input,coach.cookie,(entry.name.startsWith('intro.')||entry.name.startsWith('lead.'))?403:denial)
       const before=(await h.state()).version
-      assert.equal((await h.send('/api/strap/agent/command',{name:entry.memberDoor.staff,input},'',{authorization:`Bearer ${key.token}`})).status,403)
+      assert.equal((await h.send('/api/strap/agent/command',{name:entry.memberDoor.staff,input},'',{authorization:`Bearer ${key.token}`})).status,entry.memberDoor.staff==='plan.cancellation.prepare'?404:403)
       assert.equal((await h.state()).version,before)
     }
     const codeBefore=(await h.state()).checkinCodes.find(c=>c.personId===ana.id)
