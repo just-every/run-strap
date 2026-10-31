@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6400db9e523e7f9e3663d4534862ae0e6562b8856522a69dd738bf5afc177e7f",
+      "sha256": "68a7c07204f3ccabb2ec0080be32148b16230550bdc885d28641ab0f7313c202",
       "executable": false
     },
     "DEMO.md": {
@@ -4606,7 +4606,7 @@
       "executable": false
     },
     "tests/retail-browser.mjs": {
-      "sha256": "553764cf5b87c0752b6c2181d4e660f922d8862ca2e3342b58be50ab70d03cc1",
+      "sha256": "e131feca4692beca766e5b63fdb312473aa3fc88d337aa94a394518d23392263",
       "executable": false
     },
     "tests/retail.test.mjs": {
@@ -4678,7 +4678,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "511e04242c7eeb117b0d835698ccdf2cb6170e6b155e9e3eaf5d72ee79722dce",
+      "sha256": "2d6bc2474a46fe7bf9ffc19244552cf49ab12ff5021388c9f1f02e3b93aa09a5",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {

@@ -211,7 +211,7 @@ export async function giftBrowser(h, giftCardId, desk) {
   },desk.cookie);
 }
 
-export async function staffRetailBrowser(h, {manager,desk,buyer,other,sku,west,ownerGift,foreignSales,splitScope}) {
+export async function staffRetailBrowser(h, {manager,desk,buyer,sku,west,ownerGift,foreignSales,splitScope}) {
   for(const staff of [manager,desk]) {
     await screens(h,'STAFF-001-'+staff.name,async(page,width)=>{
       const details=label=>page.locator('details').filter({has:page.locator('summary').getByText(label,{exact:true})});
@@ -273,8 +273,30 @@ export async function staffRetailBrowser(h, {manager,desk,buyer,other,sku,west,o
         const redeemOptions=await values(scopedSale.getByLabel('Gift card',{exact:true}));
         assert.ok(!redeemOptions.includes(ownerGift.id),'redemption excludes refund-only gift cards');
         await scopedReturn.locator('summary').click();
-        await scopedSale.locator('summary').click();
-        await scopedIssue.locator('summary').click();
+        await scopedReturn.getByLabel('Original sale',{exact:true}).selectOption(foreignSales[west.id].id);
+        await scopedReturn.getByLabel('Reason',{exact:true}).fill('Stale refund authority');
+        await splitScope(staff,true);
+        const beforeReturn=await h.state();
+        await scopedReturn.getByRole('button',{name:'Record return',exact:true}).click();
+        await page.getByRole('alert').waitFor();
+        assert.match(await page.getByRole('alert').innerText(),/retail right required/);
+        assert.equal((await h.state()).version,beforeReturn.version,'stale refund form writes nothing');
+        await splitScope(staff);
+        await page.goto(h.origin+'/app/retail');
+        const staleSale=details('Sell retail');await staleSale.locator('summary').click();
+        await staleSale.getByLabel('Member',{exact:true}).selectOption(buyer.id);
+        await staleSale.getByLabel('SKU variant',{exact:true}).selectOption(sku.id);
+        await staleSale.getByLabel('Confirm total in USD',{exact:true}).fill('20.00');
+        await staleSale.getByLabel('Tender reference',{exact:true}).fill('synthetic-strap-stale-form-'+staff.name);
+        await splitScope(staff,true);
+        const beforeSale=await h.state();
+        await staleSale.getByRole('button',{name:'Record sale',exact:true}).click();
+        await page.getByRole('alert').waitFor();
+        assert.match(await page.getByRole('alert').innerText(),/retail right required/);
+        assert.equal((await h.state()).version,beforeSale.version,'stale sale form writes nothing');
+        await splitScope(staff);
+        await page.goto(h.origin+'/app/retail');
+        await details('Return retail').evaluate(e=>e.open=true);
       }
       for(const label of ['Sell retail','Issue gift card','Refund gift funding'])await details(label).evaluate(e=>e.open=true);
     },staff.cookie);
