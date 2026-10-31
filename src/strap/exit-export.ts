@@ -33,6 +33,9 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.classId', to: 'st_records.id', kind: 'class', when: 'kind=widgetClass' },
+  { from: 'st_records.data.instructorId', to: 'st_people.id', when: 'kind=widgetInstructor' },
+  { from: 'st_records.data.publicationId', to: 'st_records.id', when: 'kind=widgetPublicationEvent and publicationId names a public class or biography', note: 'Publication provenance only; restored public delivery and selections require new installation authority.' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },
