@@ -4,6 +4,7 @@ import { DomainError, humanOwner, insist, list, now, person, record, text, type 
 import { cleared } from './security/gate';
 import { connection, digest, fenceConnection, reviewedConnection, type BillingBindings } from './billing/model';
 import { balanceTransaction, payoutObservation, providerIdentity, stripe, stripeList } from './billing/provider';
+import { membershipReport, payoutMembership, sumCents as sum } from './payout-membership';
 
 const refreshKind='payoutRefresh',cardKind='cardBalanceObservation',payoutKind='payoutObservation';
 const failure=(error: unknown)=>error instanceof DomainError ? error.code : 'payout_provider_read_unavailable';
@@ -58,13 +59,8 @@ export async function refreshPayouts(env: BillingBindings,who: Actor,input: Reco
     const observations=await stripeList(env,'/payouts');
     for(const body of observations) {
       const value=payoutObservation(body),observedAt=now();
-      let transactionIds: string[]|null=null,mappingError: string|null=null;
-      try {
-        // Stripe supports payout membership reads for automatic payouts only.
-        if(value.automatic)transactionIds=(await stripeList(env,'/balance_transactions?payout='+encodeURIComponent(value.providerPayoutId))).map(item=>balanceTransaction(item).providerTransactionId);
-        else mappingError='payout_membership_unavailable';
-      } catch(error) {mappingError=failure(error);}
-      payouts.push({id:'payout-observation:'+await digest({refreshId:id,payoutId:value.providerPayoutId}),refreshId:id,accountId:c.account_id,observedAt,...value,transactionIds,mappingError,depositStatus:'unmatched',bankDepositConfirmed:false});
+      const membership=await payoutMembership(env,value);
+      payouts.push({id:'payout-observation:'+await digest({refreshId:id,payoutId:value.providerPayoutId}),refreshId:id,accountId:c.account_id,observedAt,...value,...membership,depositStatus:'unmatched',bankDepositConfirmed:false});
     }
   } catch(error) {payoutError=failure(error);}
   // Never let a disconnected, changed or erased source acquire new observations.
@@ -89,7 +85,6 @@ function latestBy(rows: RecordData[],key: string) {
   for(const row of rows)if(!map.has(row[key]) || map.get(row[key])!.observedAt<=row.observedAt)map.set(row[key],row);
   return [...map.values()].sort((a,b)=>String(a[key]).localeCompare(String(b[key])));
 }
-const sum=(rows: RecordData[],key: string)=>{const value=rows.reduce((total,row)=>total+row[key],0);insist(Number.isSafeInteger(value),'payout_total_out_of_range',409);return value;};
 /** Pure retained projection. It never retries reads, collects, settles or matches a bank deposit. */
 export async function payoutReport(env: BillingBindings,who: Actor) {
   const loaded=await authority(env,who),state=loaded.state,refreshes=list(state,refreshKind),latest=refreshes.at(-1) ?? null;
@@ -104,17 +99,15 @@ export async function payoutReport(env: BillingBindings,who: Actor) {
   const currencies=[...new Set(current.map(r=>r.currency))].sort(),currency=currencies.length===1?currencies[0]:null;
   const complete=!!currency && !!latest && latest.status!=='refreshing' && current.length===cards.length;
   const byCurrency=currencies.map(currency=>{const rows=current.filter(r=>r.currency===currency);return {currency,grossCents:sum(rows,'grossCents'),feeCents:sum(rows,'feeCents'),netCents:sum(rows,'netCents'),cardCount:rows.length};});
-  const payouts=latestBy(list(state,payoutKind),'providerPayoutId').map(row=>{
-    const matched=current.filter(c=>c.currency===row.currency && row.transactionIds?.includes(c.providerTransactionId));
-    const unmapped=row.transactionIds===null ? null : row.transactionIds.filter((id: string)=>!matched.some(c=>c.providerTransactionId===id)).length;
-    const mappedNetCents=sum(matched,'netCents');
-    return {...row,stale:row.refreshId!==latest?.id,cardObservationIds:matched.map(c=>c.id),mappedNetCents,unmappedTransactionCount:unmapped,providerDifferenceCents:row.refreshId===latest?.id && unmapped===0 && !row.mappingError ? row.amountCents-mappedNetCents : null};
-  });
+  const payouts: RecordData[]=latestBy(list(state,payoutKind),'providerPayoutId').map(row=>({...row,stale:row.refreshId!==latest?.id,...membershipReport(row,current,row.refreshId===latest?.id)}));
   return {mode:'test',connected,latest,refreshes,cards,payouts,totals:{currency,byCurrency,observedGrossCents:currency?sum(current,'grossCents'):null,observedFeeCents:currency?sum(current,'feeCents'):null,observedNetCents:currency?sum(current,'netCents'):null,grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Retained personal one-time TEST card receipts only; payouts never establish bank receipt.'};
 }
 export function payoutCsv(report: Awaited<ReturnType<typeof payoutReport>>) {
-  const fields=['kind','id','refreshId','accountId','invoiceId','paymentId','packId','sourceId','type','sourceAmountCents','sourceCurrency','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','depositStatus','errorCode','mappingError','stale','automatic','mappedNetCents','unmappedTransactionCount','providerDifferenceCents','bankDepositConfirmed','cardGrossTotalCents','cardFeeTotalCents','cardNetTotalCents','bankDepositConfirmation'];
+  const fields=['kind','id','refreshId','accountId','invoiceId','paymentId','packId','sourceId','type','sourceAmountCents','sourceCurrency','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','providerReconciliationStatus','depositStatus','errorCode','mappingError','stale','automatic','mappedNetCents','unmappedTransactionCount','providerDifferenceCents','nativeCoverageStatus','statementGrossCents','statementFeeCents','statementNetCents','statementDifferenceCents','bankDepositConfirmed','cardGrossTotalCents','cardFeeTotalCents','cardNetTotalCents','bankDepositConfirmation'];
   const cell=(v: unknown)=>'"'+String(v??'').replace(/^([=+@-])/,'\t$1').replaceAll('"','""')+'"';
-  const rows=[{kind:'refresh',id:report.latest?.id??'',accountId:report.latest?.accountId??'',observedAt:report.latest?.completedAt??null,status:report.latest?.status??'not_refreshed',errorCode:report.latest?.payoutError??null,cardGrossTotalCents:report.totals.grossCents,cardFeeTotalCents:report.totals.feeCents,cardNetTotalCents:report.totals.netCents,bankDepositConfirmation:report.bankDepositConfirmation,currency:report.totals.currency},...report.cards.map(r=>({kind:'card',...r})),...report.payouts.map(r=>({kind:'payout',...r}))];
+  const rows=[{kind:'refresh',id:report.latest?.id??'',accountId:report.latest?.accountId??'',observedAt:report.latest?.completedAt??null,status:report.latest?.status??'not_refreshed',errorCode:report.latest?.payoutError??null,cardGrossTotalCents:report.totals.grossCents,cardFeeTotalCents:report.totals.feeCents,cardNetTotalCents:report.totals.netCents,bankDepositConfirmation:report.bankDepositConfirmation,currency:report.totals.currency},...report.cards.map(r=>({kind:'card',...r})),...report.payouts.flatMap(r=>[
+    {kind:'payout',...r,statementGrossCents:r.statementTotals?.grossCents,statementFeeCents:r.statementTotals?.feeCents,statementNetCents:r.statementTotals?.netCents},
+    ...(r.transactions??[]).map((t: ReturnType<typeof balanceTransaction>)=>({kind:'payout_transaction',...t,id:r.id+':'+t.providerTransactionId,refreshId:r.refreshId,accountId:r.accountId,providerPayoutId:r.providerPayoutId,observedAt:r.observedAt,stale:r.stale})),
+  ])];
   return [fields,...rows.map(row=>fields.map(field=>(row as Record<string,unknown>)[field]))].map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';
 }

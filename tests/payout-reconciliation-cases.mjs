@@ -9,7 +9,7 @@ export const readPayouts=async(h,cookie=h.owner)=>{const r=await h.send(reportPa
 export function reconciliationEdge() {
   const edge=paymentEdge(),reads=[];let change=null,onRead=null;
   const transactions=()=>[...edge.sessions.values()].filter(s=>s.payment_intent).map((s,i)=>({id:'synthetic-strap-balance-'+s.id,object:'balance_transaction',source:s.payment_intent.latest_charge.id,currency:'usd',amount:s.amount_total,fee:175+i*25,net:s.amount_total-175-i*25,type:'charge',status:i?'pending':'available',created:1800000000,available_on:1800086400}));
-  const payout=()=>({id:'synthetic-strap-payout-1',object:'payout',livemode:false,currency:'usd',amount:9625,status:'in_transit',automatic:true,balance_transaction:'synthetic-strap-payout-balance',created:1800000000,arrival_date:1800172800,destination:{secretSentinel:'synthetic-strap-private-bank'}});
+  const payout=()=>({id:'synthetic-strap-payout-1',object:'payout',livemode:false,currency:'usd',amount:9625,status:'in_transit',reconciliation_status:'completed',automatic:true,balance_transaction:'synthetic-strap-payout-balance',created:1800000000,arrival_date:1800172800,destination:{secretSentinel:'synthetic-strap-private-bank'}});
   const outbound=async request=>{
     const u=new URL(request.url);
     if(['/v1/payouts','/v1/balance_transactions'].includes(u.pathname)||u.pathname.startsWith('/v1/charges/')){
@@ -55,12 +55,42 @@ export async function payoutReconciliationCases() {
     assert.ok(report.cards.every(c=>c.observedAt && c.providerCreatedAt && c.availableAt && c.accountId==='synthetic-strap-10'));
     for(const seed of seeds) {const card=report.cards.find(c=>c.invoiceId===seed.checkout.id);assert.equal(card.providerChargeId,edge.sessions.get(seed.checkout.providerSessionId).payment_intent.latest_charge.id);assert.equal(card.grossCents,5000);assert.ok(card.paymentId);}
     assert.deepEqual([report.payouts[0].amountCents,report.payouts[0].mappedNetCents,report.payouts[0].providerDifferenceCents,report.payouts[0].bankDepositConfirmed,report.payouts[0].depositStatus],[9625,9625,0,false,'unmatched']);
+    assert.deepEqual(report.payouts[0].statementTotals,{grossCents:10000,feeCents:375,netCents:9625});
+    assert.equal(report.payouts[0].statementDifferenceCents,0);assert.equal(report.payouts[0].nativeCoverageStatus,'complete');
     assert.equal(report.bankDepositConfirmation,'unavailable');assert.doesNotMatch(JSON.stringify(report),/synthetic-strap-private/);
     const version=(await h.state()).version,readCount=edge.reads.length,calls=edge.calls.length;
     assert.deepEqual(await h.cmd('billing.payouts.refresh',input),refreshed);assert.equal(edge.reads.length,readCount);assert.equal((await h.state()).version,version);
     for(const path of ['/app/payouts',reportPath,'/api/strap/billing/payouts.csv'])assert.equal((await h.send(path,undefined,h.owner)).status,200);
     assert.equal(edge.reads.length,readCount);assert.equal(edge.calls.length,calls);assert.equal((await h.state()).version,version,'page and downloads are pure');
     await payoutsBrowser(h,report);
+    // A provider batch can agree while refunds and other entries still lack native coverage.
+    const mixed=({u,body})=>{
+      if(u.pathname==='/v1/payouts')body.data[0].amount=8850;
+      if(u.pathname==='/v1/balance_transactions')body.data.push(
+        {...body.data[0],id:'synthetic-strap-refund-balance',source:'synthetic-strap-refund',type:'refund',amount:-700,fee:-25,net:-675},
+        {...body.data[0],id:'synthetic-strap-fee-balance',source:null,type:'stripe_fee',amount:-100,fee:0,net:-100},
+      );
+    };
+    edge.setReconciliationChange(mixed);
+    await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-provider-statement'});
+    report=await readPayouts(h);const statement=report.payouts[0];
+    assert.deepEqual(statement.statementTotals,{grossCents:9200,feeCents:350,netCents:8850});assert.equal(statement.statementDifferenceCents,0);
+    assert.equal(statement.transactions.length,4);assert.equal(statement.transactions.find(t=>t.type==='stripe_fee').sourceId,null);
+    assert.deepEqual([statement.mappedNetCents,statement.unmappedTransactionCount,statement.providerDifferenceCents,statement.nativeCoverageStatus],[9625,2,null,'unresolved']);
+    assert.equal(report.refundAndDisputeReconciliation,'unavailable');assert.equal(statement.bankDepositConfirmed,false);assert.equal(statement.depositStatus,'unmatched');
+    assert.deepEqual([report.totals.grossCents,report.totals.feeCents,report.totals.netCents],[10000,375,9625],'provider-only entries never rewrite native card totals');
+    const statementReads=edge.reads.length,statementVersion=(await h.state()).version;
+    await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-provider-statement'});
+    assert.equal(edge.reads.length,statementReads);assert.equal((await h.state()).version,statementVersion);
+    await payoutsBrowser(h,report,{statement:true});
+    edge.setReconciliationChange(({u,body})=>{mixed({u,body});if(u.pathname==='/v1/payouts')body.data[0].amount=8849;});
+    await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-statement-difference'});
+    const mismatch=(await readPayouts(h)).payouts[0];assert.equal(mismatch.statementDifferenceCents,-1);assert.equal(mismatch.depositStatus,'unmatched');assert.equal(mismatch.bankDepositConfirmed,false);
+    edge.setReconciliationChange(({u,body})=>{if(u.pathname==='/v1/balance_transactions')body.data[0].source='synthetic-strap-unrelated-source';});
+    await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-membership-source'});
+    const wrongSource=(await readPayouts(h)).payouts[0];assert.equal(wrongSource.statementDifferenceCents,0);assert.equal(wrongSource.nativeCoverageStatus,'unresolved');assert.equal(wrongSource.unmappedTransactionCount,1);assert.equal(wrongSource.providerDifferenceCents,null);
+    edge.setReconciliationChange(null);
+    console.log('PROBE BILL-011 payout statement: source-linked card, refund and fee observations -> provider gross 9200 minus fees 350 equals net 8850 cents; two native sources unresolved, one-cent difference visible, bank unmatched; replay has zero reads.');
     const unverified=await h.signIn(h.auth.OWNER_EMAIL);assert.equal((await h.send(reportPath,undefined,unverified)).value.error,'mfa_required');await h.cmd('billing.payouts.refresh',input,unverified,403);
     const denied=async cookie=>{const version=(await h.state()).version,n=edge.reads.length,m=edge.calls.length;for(const door of ['/app/payouts',reportPath,'/api/strap/billing/payouts.csv'])assert.equal((await h.send(door,undefined,cookie)).status,403);await h.cmd('billing.payouts.refresh',input,cookie,403);assert.equal((await h.state()).version,version);assert.equal(edge.reads.length,n);assert.equal(edge.calls.length,m);};
     await denied(seeds[0].member.cookie);
@@ -97,13 +127,22 @@ export async function payoutReconciliationCases() {
       ['refused',({u})=>u.pathname.startsWith('/v1/charges/')?Response.json({error:{code:'synthetic-strap-private-error'}},{status:403}):null],
       ['payout-refused',({u})=>u.pathname==='/v1/payouts'?Response.json({error:{code:'synthetic-strap-private-error'}},{status:403}):null],
       ['pagination',({u,body})=>{if(u.pathname==='/v1/payouts'){body.has_more=true;body.data=[];}}],
+      ['membership-pagination',({u,body})=>{if(u.pathname==='/v1/balance_transactions'){body.has_more=true;if(u.searchParams.has('starting_after'))body.data=[];}}],
+      ['membership-refused',({u})=>u.pathname==='/v1/balance_transactions'?Response.json({error:{code:'synthetic-strap-private-error'}},{status:403}):null],
+      ['membership-pending',({u,body})=>{if(u.pathname==='/v1/payouts')body.data[0].reconciliation_status='in_progress';}],
+      ['membership-currency',({u,body})=>{if(u.pathname==='/v1/balance_transactions')body.data[0].currency='cad';}],
     ];
     for(const [name,change] of faulty) {
       edge.setReconciliationChange(change);
       const r=await h.cmd('billing.payouts.refresh',{...input,requestId:'synthetic-strap-'+name});assert.equal(r.status,'incomplete');
       report=await readPayouts(h);
       if(['pagination','payout-refused'].includes(name)){assert.equal(report.latest.payoutError,name==='pagination'?'payout_pagination_incomplete':'payout_provider_read_unavailable');assert.equal(report.payouts[0].stale,true);}
-      else {assert.equal(report.totals.feeCents,null);assert.equal(report.totals.netCents,null);assert.equal(report.cards.filter(c=>c.status==='unresolved').length,2);}
+      else if(name.startsWith('membership-')) {
+        const p=report.payouts.find(p=>p.providerPayoutId==='synthetic-strap-payout-1');
+        assert.equal(p.transactions,null);assert.equal(p.transactionIds,null);assert.equal(p.statementTotals,null);assert.equal(p.statementDifferenceCents,null);assert.equal(p.providerDifferenceCents,null);assert.equal(p.nativeCoverageStatus,'unresolved');
+        assert.equal(p.mappingError,{'membership-pagination':'payout_pagination_incomplete','membership-refused':'payout_provider_read_unavailable','membership-pending':'payout_membership_not_ready','membership-currency':'payout_membership_currency_mismatch'}[name]);
+        assert.equal(p.depositStatus,'unmatched');assert.equal(p.bankDepositConfirmed,false);assert.equal(report.totals.netCents,9625);
+      } else {assert.equal(report.totals.feeCents,null);assert.equal(report.totals.netCents,null);assert.equal(report.cards.filter(c=>c.status==='unresolved').length,2);}
       assert.doesNotMatch(JSON.stringify(report),/synthetic-strap-private/);
     }
     edge.setReconciliationChange(null);

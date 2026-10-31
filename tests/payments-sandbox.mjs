@@ -121,6 +121,25 @@ await run(async h=>{
       assert.equal(edge.length,readCount);assert.equal(edge.filter(c=>c.method==='POST').length,beforePosts);
       const afterPayouts=await h.state();for(const key of ['charges','payments','packs'])assert.deepEqual(afterPayouts[key],beforePayouts[key]);
       assert.ok(payoutReport.payouts.every(p=>p.depositStatus==='unmatched'&&!p.bankDepositConfirmed));
+      for(const payout of payoutReport.payouts) {
+        if(!payout.transactions) {assert.equal(payout.statementTotals,null);assert.equal(payout.statementDifferenceCents,null);continue;}
+        const canonical=[];let cursor='';
+        for(let page=0;page<20;page++) {
+          const batch=await provider('/balance_transactions?payout='+payout.providerPayoutId+'&limit=100'+(cursor?'&starting_after='+cursor:''));
+          canonical.push(...batch.data);
+          if(!batch.has_more)break;
+          assert.ok(batch.data.length);cursor=batch.data.at(-1).id;
+          assert.ok(page<19,'canonical payout membership must finish');
+        }
+        assert.equal(payout.transactions.length,canonical.length);
+        for(const t of payout.transactions) {
+          const original=canonical.find(row=>row.id===t.providerTransactionId);assert.ok(original);
+          assert.deepEqual([t.sourceId,t.type,t.currency,t.grossCents,t.feeCents,t.netCents],[original.source,original.type,original.currency,original.amount,original.fee,original.net]);
+          assert.equal(t.providerCreatedAt,new Date(original.created*1000).toISOString());assert.equal(t.availableAt,new Date(original.available_on*1000).toISOString());
+        }
+        const independent={grossCents:canonical.reduce((n,t)=>n+t.amount,0),feeCents:canonical.reduce((n,t)=>n+t.fee,0),netCents:canonical.reduce((n,t)=>n+t.net,0)};
+        assert.deepEqual(payout.statementTotals,independent);assert.equal(payout.statementDifferenceCents,payout.amountCents-independent.netCents);
+      }
       console.log('PROBE BILL-011 live TEST: original canonical card charge and balance transaction -> independent gross, fee and net cents retained; refresh and reads create no provider POST or native money effect.');
       console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST',accountId:account.id,chargeId:canonicalCharge.id,balanceTransactionId:canonicalCharge.balance_transaction.id,sourceAmountCents:observation.sourceAmountCents,sourceCurrency:observation.sourceCurrency,settlementCurrency:observation.currency,grossCents:observation.grossCents,feeCents:observation.feeCents,netCents:observation.netCents,observedAt:observation.observedAt,payoutRefresh:refresh.status,payoutReadError:refresh.payoutError??null,payouts:payoutReport.payouts.map(p=>({id:p.providerPayoutId,status:p.providerStatus,mappingError:p.mappingError,bankDepositConfirmed:false})),bankReceipt:'unavailable'}));
       const summary=await billingView(h);

@@ -62,12 +62,13 @@ function centsCurrency(value: unknown): string {
   return value;
 }
 export function balanceTransaction(body: Json) {
-  insist(body.object==='balance_transaction' && Number.isSafeInteger(body.amount) && Number.isSafeInteger(body.fee) && body.fee>=0 && Number.isSafeInteger(body.net) && body.amount-body.fee===body.net && ['pending','available'].includes(body.status),'payout_fee_unavailable',502);
-  const sourceId=providerIdentity(typeof body.source==='object'?body.source?.id:body.source);
+  insist(body.object==='balance_transaction' && Number.isSafeInteger(body.amount) && Number.isSafeInteger(body.fee) && Number.isSafeInteger(body.net) && body.amount-body.fee===body.net && ['pending','available'].includes(body.status),'payout_fee_unavailable',502);
+  const sourceId=body.source===null?null:providerIdentity(typeof body.source==='object'?body.source?.id:body.source);
   insist(typeof body.type==='string' && /^[a-z_]{1,40}$/.test(body.type),'payout_transaction_type_invalid',502);
   return {providerTransactionId:providerIdentity(body.id),sourceId,type:body.type,currency:centsCurrency(body.currency),grossCents:body.amount as number,feeCents:body.fee as number,netCents:body.net as number,providerStatus:body.status as string,providerCreatedAt:providerTime(body.created),availableAt:providerTime(body.available_on)};
 }
 export function payoutObservation(body: Json) {
   insist(body.object==='payout' && body.livemode===false && Number.isSafeInteger(body.amount) && body.amount>0 && ['pending','in_transit','paid','failed','canceled'].includes(body.status) && typeof body.automatic==='boolean','payout_observation_invalid',502);
-  return {providerPayoutId:providerIdentity(body.id),providerTransactionId:body.balance_transaction===null?null:providerIdentity(typeof body.balance_transaction==='object'?body.balance_transaction?.id:body.balance_transaction),currency:centsCurrency(body.currency),amountCents:body.amount as number,providerStatus:body.status as string,automatic:body.automatic as boolean,providerCreatedAt:providerTime(body.created),arrivalAt:providerTime(body.arrival_date)};
+  insist(body.reconciliation_status===undefined || ['not_applicable','in_progress','completed'].includes(body.reconciliation_status),'payout_reconciliation_status_invalid',502);
+  return {providerPayoutId:providerIdentity(body.id),providerTransactionId:body.balance_transaction===null?null:providerIdentity(typeof body.balance_transaction==='object'?body.balance_transaction?.id:body.balance_transaction),currency:centsCurrency(body.currency),amountCents:body.amount as number,providerStatus:body.status as string,providerReconciliationStatus:body.reconciliation_status as string ?? null,automatic:body.automatic as boolean,providerCreatedAt:providerTime(body.created),arrivalAt:providerTime(body.arrival_date)};
 }
