@@ -46,6 +46,9 @@ export function retailPage(s: any, query: URLSearchParams) {
     places = (s.locations ?? []).map(
       (l: any) => [l.id, l.name] as [string, string],
     );
+  const salePeople = desk ? s.retailSalePeople ?? [] : s.people;
+  const salePlaces = desk ? (s.retailSaleLocations ?? []).map((l: any)=>[l.id,l.name]) : places;
+  const saleLoc = () => select('locationId','Location',salePlaces,'studio');
   const loc = () => select("locationId", "Location", places, "studio"),
     sku = () =>
       select(
@@ -189,9 +192,9 @@ export function retailPage(s: any, query: URLSearchParams) {
             "retail.sell",
             path,
             req() +
-              personSelect(s) +
+              personSelect({...s,people:salePeople}) +
               sku() +
-              loc() +
+              saleLoc() +
               quantity() +
               field(
                 "expected",
@@ -209,7 +212,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               select(
                 "giftCardId",
                 "Gift card",
-                (s.gifts?.cards ?? []).map((c: any) => [
+                (s.gifts?.cards ?? []).filter((c: any)=>!desk || c.canRedeem).map((c: any) => [
                   c.id,
                   c.id + " · " + money(c.balanceCents),
                 ]),
@@ -230,7 +233,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               select(
                 "saleId",
                 "Original sale",
-                r.sales.map((v: any) => [
+                r.sales.filter((v: any)=>!desk || v.canReturn).map((v: any) => [
                   v.id,
                   v.name + " · " + v.variant + " · " + v.reference,
                 ]),
@@ -343,15 +346,15 @@ export function retailPage(s: any, query: URLSearchParams) {
             "retail.gift.issue",
             path,
             req() +
-              personSelect(s, "", "Purchaser") +
+              personSelect({...s,people:salePeople}, "", "Purchaser") +
               select(
                 "recipientId",
                 "Gift recipient",
-                (s.people ?? [])
+                (salePeople ?? [])
                   .filter((p: any) => p.active && p.role === "member")
                   .map((p: any) => [p.id, p.name]),
               ) +
-              loc() +
+              saleLoc() +
               field(
                 "amount",
                 "Gift value in USD",
