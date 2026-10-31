@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "4e757b963ffd342e0fc1f2a3dad5f1467dbf44831db34d239eb97e45d1d20af8",
+      "sha256": "24e490c390e3605e812c988c7163a040ce0378a634b3e4ec205951403122f274",
       "executable": false
     },
     "DEMO.md": {
@@ -3870,7 +3870,7 @@
       "executable": false
     },
     "src/strap/ui/contract-cancellations.ts": {
-      "sha256": "bcf2ec04f41d6c2c0f3903f91f70fc3337138891a1ccc610e848db3e93acbbd8",
+      "sha256": "eeeff98b8603edab5cf53df222f8984b85b9d280b287f7bda93ee954f7b102b0",
       "executable": false
     },
     "src/strap/ui/contract-invoices.ts": {
@@ -4310,11 +4310,11 @@
       "executable": false
     },
     "tests/cooling-off-browser.mjs": {
-      "sha256": "7270a962f9d63eb2eb78c5c09ad39e4d7eb4e55981dc0f2287e6c71c9c21661b",
+      "sha256": "c4421cf227ba37c909583df40fd41d1d7d8caf5d3ee5545e83ca2c806a303999",
       "executable": false
     },
     "tests/cooling-off-cases.mjs": {
-      "sha256": "a9dbbec9ffacc1ff1f6911cecfc36a9d835a7c2fef72f763ac739830d0a97603",
+      "sha256": "183de8d45be233bf17229b98c62ecdb0917d449da8e925e78699fe7c7adaed03",
       "executable": false
     },
     "tests/cooling-refund-cases.mjs": {
@@ -4322,7 +4322,7 @@
       "executable": false
     },
     "tests/cooling-refunds-browser.mjs": {
-      "sha256": "9419e17a0da1af5471933b5f947720385a29f417bac5f16136156822b2dfaafe",
+      "sha256": "6834825e7501151b6d1ba9b887e0de6918276a72f47a0eb3dc94ec92c80e05f5",
       "executable": false
     },
     "tests/course-pair.mjs": {
@@ -4514,7 +4514,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "5d6d1a940ffff2b216627e03c5acb3163b94d1eacf47a86d6e677cd658120ae1",
+      "sha256": "81c3a7880766aaec2f83f95056500cfd8b058e3d8ea46c8618ff93fcb2adde07",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {

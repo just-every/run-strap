@@ -61,7 +61,7 @@ export async function coolingOffBrowser(h,cases){
 export async function studioCoolingBrowser(h,cases,{width=1440,proofDir=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR}={}){
   if(proofDir)await mkdir(proofDir,{recursive:true})
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
-  try{for(const [label,a] of Object.entries(cases)){
+  try{for(const [label,a] of Object.entries(cases.agreements)){
     await h.cmd('studio.save',{location:a.studio.location,timeZone:'America/Phoenix',address:a.studio.address,businessHours:a.hours})
     for(const [role,cookie] of [['member',a.member.cookie],['owner',h.owner]]){
       const context=await browser.newContext({viewport:{width,height:1000}})
@@ -82,5 +82,14 @@ export async function studioCoolingBrowser(h,cases,{width=1440,proofDir=process.
         if(proofDir)await page.screenshot({path:join(proofDir,`PLAN-007-state-${label}-${role}-${width}.png`)})
       }finally{await context.close()}
     }
-  }}finally{await browser.close()}
+  }
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try{
+      const cookie=cases.outsider.cookie,eq=cookie.indexOf('=')
+      await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}])
+      const page=await context.newPage()
+      await page.goto(h.origin+'/app/packs#cancellations')
+      assert.equal(await page.locator('[data-contract-copy]').count(),0,'another member cannot read any recorded contract or jurisdiction')
+    }finally{await context.close()}
+  }finally{await browser.close()}
 }

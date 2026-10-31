@@ -364,16 +364,18 @@ test('PLAN-007: delivered contract copies and state-specific cooling clocks pres
   await h.confirmSetup(h.owner);const cases=await(await import('./cooling-off-cases.mjs')).coolingOffCases(h);
   if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-off-browser.mjs')).coolingOffBrowser(h,cases);
 });await run(async h=>{await h.confirmSetup(h.owner);const cases=await(await import('./cooling-refund-cases.mjs')).coolingRefundCases(h);if(process.env.STRAP_PROOF_DIR)await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,cases);});
-  await run(async h=>{
-    await h.confirmSetup(h.owner)
-    const cases=await(await import('./cooling-off-cases.mjs')).coolingOffCases(h,{studioOnly:true})
-    await(await import('./cooling-off-browser.mjs')).studioCoolingBrowser(h,cases)
-  })
-  await run(async h=>{
-    await h.confirmSetup(h.owner)
-    const fixtures=await(await import('./cooling-refund-cases.mjs')).statutoryPreviewCases(h)
-    await(await import('./cooling-refunds-browser.mjs')).statutoryPreviewBrowser(h,fixtures)
-  })
+  for(const width of [1440,390]){
+    await run(async h=>{
+      await h.confirmSetup(h.owner)
+      const cases=await(await import('./cooling-off-cases.mjs')).coolingOffCases(h,{studioOnly:true})
+      await(await import('./cooling-off-browser.mjs')).studioCoolingBrowser(h,cases,{width})
+    })
+    await run(async h=>{
+      await h.confirmSetup(h.owner)
+      const fixtures=await(await import('./cooling-refund-cases.mjs')).statutoryPreviewCases(h)
+      await(await import('./cooling-refunds-browser.mjs')).statutoryPreviewBrowser(h,fixtures,{width})
+    })
+  }
   // Keep the extra real sign-ins within the same per-installation auth limits.
   if(process.env.STRAP_PROOF_DIR)await run(async h=>{await h.confirmSetup(h.owner);await(await import('./cooling-refunds-browser.mjs')).coolingRefundsBrowser(h,null,{fixOnly:true});});})
 

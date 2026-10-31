@@ -232,13 +232,20 @@ export async function statutoryPreviewBrowser(h,fixtures,{width=1440,proofDir=pr
       const confirmation=page.locator(`[data-contract-cancellation="${ended.id}"]`)
       assert.ok((await confirmation.innerText()).includes('$'+(a.expected/100).toFixed(2)))
       await confirmation.scrollIntoViewIfNeeded();await shot(page,a.change+'-confirmed')
-      assert.match(await page.locator(`[data-cancellation-statement="${statement.id}"]`).innerText(),/Final statement/)
+      const finalStatement=page.locator(`[data-cancellation-statement="${statement.id}"]`)
+      assert.match(await finalStatement.innerText(),/Final statement/)
+      assert.ok((await finalStatement.innerText()).includes('Refund due $'+(a.expected/100).toFixed(2)))
+      assert.ok((await finalStatement.innerText()).includes('additional bill $0.00'))
+      assert.ok((await finalStatement.innerText()).includes('covered-agreement balance $0.00'))
+      await finalStatement.scrollIntoViewIfNeeded();await shot(page,a.change+'-final-statement')
       const input=Object.fromEntries(JSON.parse(ended.requestBasis))
       const {version:beforeVersion,...replayBefore}=cancellationWriteState(await h.state())
       const {canWithdraw,stale,...recorded}=ended
       assert.deepEqual(await h.cmd('plan.cancellation.statutory',input,a.cookie),recorded)
-      const {version:afterVersion,...replayAfter}=cancellationWriteState(await h.state())
+      state=await h.state()
+      const {version:afterVersion,...replayAfter}=cancellationWriteState(state)
       assert.deepEqual(replayAfter,replayBefore,'confirmation replay retains exactly one money and entitlement effect')
+      assert.equal(state.cancellations.cancellations.filter(r=>r.packId===a.pack.id&&r.status==='applied').length,1)
       assert.equal(state.cancellations.refunds.filter(r=>r.cancellationId===ended.id).length,1)
       assert.equal(state.cancellations.statements.filter(r=>r.cancellationId===ended.id).length,1)
       if(a.cookie===h.owner)assert.equal(state.staffActions.filter(r=>r.command==='plan.cancellation.statutory'&&r.after?.id===ended.id).length,1)
@@ -246,6 +253,11 @@ export async function statutoryPreviewBrowser(h,fixtures,{width=1440,proofDir=pr
         const view=(await h.state(cookie)).cancellations
         assert.equal(view.refunds.find(r=>r.id===refund.id).amountCents,a.expected)
         assert.equal(view.statements.find(r=>r.id===statement.id).refundDueCents,a.expected)
+        const reader=await pageFor(cookie)
+        await reader.goto(h.origin+'/app/packs#cancellations')
+        const final=reader.locator(`[data-cancellation-statement="${statement.id}"]`)
+        assert.ok((await final.innerText()).includes('Refund due $'+(a.expected/100).toFixed(2)))
+        await final.scrollIntoViewIfNeeded();await shot(reader,a.change+'-statement-'+(cookie===h.owner?'owner':'member'))
       }
     }
     for(const [label,who] of [['other-member',fixtures.outsider],['revoked-staff',fixtures.desk]]){

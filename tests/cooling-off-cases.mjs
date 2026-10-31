@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {cancellationWriteState} from './cooling-refund-cases.mjs'
 
 /** Recorded historical contracts use the real HTTP doors, not a production clock override. */
 export async function coolingOffCases(h,{studioOnly=false}={}){
@@ -29,7 +30,7 @@ export async function coolingOffCases(h,{studioOnly=false}={}){
       await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:amount,reference:key()})
     }
     contract=(await h.state(member.cookie)).cancellations.contracts.find(t=>t.id===terms.id)
-    return {member,pack,terms,window:contract.coolingOff,hours:(await h.state()).studio.businessHours,studio:(await h.state()).studio}
+    return {member,memberRegion:region,pack,terms,window:contract.coolingOff,hours:(await h.state()).studio.businessHours,studio:(await h.state()).studio}
   }
   const cancel=async(a,at,ok=true)=>h.cmd('plan.cancellation.statutory',{packId:a.pack.id,reasonCode:'cooling-off',documentedAt:at,evidenceReference:key(),requestId:key()},a.member.cookie,ok?200:409)
   if(studioOnly){
@@ -50,10 +51,33 @@ export async function coolingOffCases(h,{studioOnly=false}={}){
     await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Pasadena',region:'CA',postalCode:'91101',country:'US'},businessHours:hours})
     const caStudioUnion=await agreement({region:'IL',amount:260000})
     assert.equal(caStudioUnion.window.deadline,'2026-02-20T07:00:00.000Z','the studio window remains longer than the Illinois member window')
+    assert.equal(caStudioUnion.window.governingRule.id,'CA-1812.85-d')
     assert.ok(caStudioUnion.window.rules.some(r=>r.id==='IL-645-6-off-premises'))
     assert.equal((await cancel(caStudioUnion,'2026-02-19T12:00:00.000Z')).status,'applied')
+    await h.cmd('studio.save',{location:ilStudioUnion.studio.location,timeZone:'America/Phoenix',address:ilStudioUnion.studio.address,businessHours:hours})
+    const before=cancellationWriteState(await h.state())
+    assert.equal((await cancel(ilStudioUnion,'2026-02-20T07:00:00.000Z',false)).error,'cooling_off_window_ended')
+    assert.deepEqual(cancellationWriteState(await h.state()),before,'an expired two-state window cannot terminate or record a refund')
+    const cases={ilStudio,ilStudioPerson,ilStudioUnion,caStudioUnion}
+    // Together these recorded jurisdictions exercise every shipped state row.
+    for(const [studioRegion,memberRegion,deadline] of [
+      ['MA','GA','2026-01-15T07:00:00.000Z'],
+      ['NJ','FL','2026-01-13T07:00:00.000Z'],
+      ['NY','TX','2026-01-13T07:00:00.000Z'],
+    ]){
+      await h.cmd('studio.save',{location:'State union studio',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Studio City',region:studioRegion,postalCode:'10001',country:'US'},businessHours:hours})
+      const a=await agreement({region:memberRegion})
+      assert.equal(a.window.deadline,deadline,'recorded studio and member rules preserve the longest available right')
+      cases[studioRegion+'-'+memberRegion]=a
+    }
+    for(const a of Object.values(cases)){
+      for(const region of new Set([a.studio.address.region,a.memberRegion].filter(Boolean)))
+        assert.ok(a.window.rules.some(r=>r.region===region),'both recorded jurisdictions participate')
+      assert.equal(a.window.deadline,a.window.rules.map(r=>r.deadline).sort().at(-1),'the latest applicable closing instant governs')
+    }
+    const outsider=await h.person(key())
     await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/Phoenix',address:null,businessHours:hours})
-    return {ilStudio,ilStudioPerson,ilStudioUnion,caStudioUnion}
+    return {agreements:cases,outsider}
   }
   const ga=await agreement({region:'GA'});assert.equal(ga.window.deadline,'2026-01-15T07:00:00.000Z');assert.equal(ga.window.governingRule.id,'GA-10-1-393.2')
   assert.equal((await cancel(ga,'2026-01-14T12:00:00.000Z')).status,'applied')
