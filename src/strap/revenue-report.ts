@@ -1,4 +1,7 @@
-import { insist, type RecordData } from './domain/types'
+import { insist, type Actor, type State, type RecordData } from './domain/types'
+import { nativeRecurringAgreements } from './retention-churn'
+import { hasStaffRight } from './domain/staff-rights'
+import { locations } from './domain/locations'
 import { countsCredits } from './domain/entitlements'
 import { localDate } from './zone'
 import { ledgerLocation, zoneOfLocation } from './location-scope'
@@ -7,20 +10,48 @@ type Row = RecordData
 export const reportPlan = (pack: Row) => `${pack.entitlement?.kind ?? 'credits'}: ${pack.entitlement?.name ?? 'Unnamed'}`
 const feeReasons = new Set(['late_cancel_fee','no_show_fee','late_move_fee','fee_reversal'])
 const sum = (rows: Row[]) => rows.reduce((total,row) => total + row.amountCents,0)
+/** Reporting facts only: no consent tokens, private proposal basis or provider connection travels. */
+export function recurringRevenueSources(state: State, who: Actor): Row[] {
+  const sources: Row[] = [], places = locations(state)
+  for (const {terms,pack,cancellation,endedAt} of nativeRecurringAgreements(state)) {
+    const locationId = terms.locationId ?? pack?.locationId ?? null
+    const visible = who.role === 'owner' && who.isOwner || (locationId !== null && (who.staffAccess
+      ? hasStaffRight(state,who,'exports',terms.personId,locationId)
+      : who.role === 'finance' || who.role === 'manager' && who.locationIds?.includes(locationId)))
+    if (!visible) continue
+    const timeZone = places.find(l => l.id === locationId)?.timeZone ?? terms.timeZone ?? 'UTC'
+    const facts = (row: Row, keys: string[]) => Object.fromEntries(keys.map(key => [key,row[key] ?? null]))
+    const agreement = facts(terms,['id','personId','packId','acceptedAt','acceptedBy','stoppedAt','stoppedBy','status','intervalMonths','amountCents','entitlement','accessEndedAt'])
+    const append = (kind: string, at: string | null, sourceId: string, record: Record<string,any>) => {
+      if (at) sources.push({id:kind+':'+sourceId,sourceId,kind,at,locationId,timeZone,personId:terms.personId,packId:terms.packId,agreementId:terms.id,
+        cancellationId:cancellation?.id ?? null,plan:reportPlan(terms),amountCents:null,record})
+    }
+    append('recurring-start',terms.acceptedAt,terms.id,agreement)
+    append('recurring-stop',terms.stoppedAt ?? terms.stop?.at ?? null,terms.id,{...agreement,stop:terms.stop ? facts(terms.stop,['at','effectiveAt','accessEndsAt','actorId','channel']) : null})
+    append('recurring-end',endedAt,terms.id,{...agreement,endedAt,cancellationId:cancellation?.id ?? null})
+    if (cancellation) append('membership-cancellation',cancellation.effectiveAt,cancellation.id,
+      facts(cancellation,['id','personId','packId','termsId','status','confirmedAt','terminatedBy','effectiveAt','appliedAt','reasonCode','reasonLabel','statementId']))
+  }
+  return sources
+}
+
 export const revenueDefinitions = [
+  'Native recurring starts count personally accepted agreement identities at acceptedAt, not pack creation, renewal packs or previews. Invoice stops count accepted agreements at stoppedAt, even when access continues. Agreement endings count the effective access-end instant, not the stop request. Applied membership cancellations count applied native cancellation identities at effectiveAt, never previews, scheduled or withdrawn cancellations. These are agreement events, not unique lost members; retained or replacement agreements may preserve membership. Unique member churn remains the separate retention report.',
+  'Recurring event location comes only from the agreement or its original retained sale pack. Missing historical locations stay Unattributed and never inherit the current studio label. Inclusive date filters use that recorded location’s time zone, or the agreement’s retained time zone when unattributed. Plan filters use the accepted agreement’s entitlement. Source IDs distinguish start, stop, ending and applied cancellation even when they refer to the same agreement. Reporting facts omit consent tokens and provider connection details.',
   'Gift card funding is a liability charge and an actual cash or external receipt. Gift redemption is a noncash payment against the retail sale; restoring a redemption returns value to that card, never a cash refund. Both retain distinct source kinds and do not inflate cash collections or gross sales.',
   'Amounts are exact USD cents. Event dates use the studio time zone with inclusive date bounds. Gross sales sum positive non-fee charges; sales credits are negative non-fee charges; net sales is their signed sum. Fees are signed attendance and late-move assessments including reversals, not processor costs. Total assessed is net sales plus fees.',
   'Collections are positive external receipts; refunds are the magnitude of negative external payments; net collections is their signed sum. A charge credit is not a cash refund. No processor collection, ACH return or provider verification is claimed. Unallocated receipts stay Unallocated when filtering by plan; they are never apportioned across packs.',
   'New plans counts packs created in the period, including explicitly accepted renewals, not people or drafts. Active members is a current snapshot of active member identities with an unexpired pack and available credits or period/unlimited entitlement; it is independent of the event date window. Booking cancellations count retained cancel action identities even after restoration, not membership churn.',
-  'Outstanding balances sum positive member balances across all time and plans; member credit sums the magnitude of negative balances separately. Both are unavailable under a plan filter because receipts can be unallocated. Due dates, historical active-member trends, membership cancellations, ACH returns and processor fees are not implemented and remain unavailable. Each charge, receipt and plan belongs to one location: the one named on it, else its class, else the pack’s sale location, else the original location. A source’s date is its own location’s local date; the report’s time zone is the original location’s. Filtering by location narrows every total, balance and active-member count to that location; with no filter the report consolidates every location and lists each location’s totals. Balances are a member’s balance from that location’s rows when filtered.'
+  'Outstanding balances sum positive member balances across all time and plans; member credit sums the magnitude of negative balances separately. Both are unavailable under a plan filter because receipts can be unallocated. Due dates, historical active-member trends, ACH returns and processor fees are not implemented and remain unavailable. Each charge, receipt and plan belongs to one location: the one named on it, else its class, else the pack’s sale location, else the original location. A source’s date is its own location’s local date; the report’s time zone is the original location’s. Filtering by location narrows every total, balance and active-member count to that location; with no filter the report consolidates every location and lists each location’s totals. Balances are a member’s balance from that location’s rows when filtered.'
 ]
 
 /** RPT-001: all totals are projections of retained public ledger records. */
 export function revenueReport(s: any, query: URLSearchParams) {
   const generatedAt = new Date().toISOString(), timeZone = s.studio?.timeZone ?? 'UTC', places: Row[] = s.locations ?? []
   const wanted = query.get('location')?.trim().toLowerCase(), chosen = wanted ? places.find(l => l.id.toLowerCase() === wanted || l.name.trim().toLowerCase() === wanted) : undefined
-  const unknown = !!wanted && !chosen && !(!places.length && wanted === (s.studio?.location ?? 'Studio').trim().toLowerCase())
-  const location = chosen?.name ?? (unknown ? query.get('location')!.trim() : wanted ? (s.studio?.location ?? 'Studio') : places.length > 1 ? 'All locations' : places[0]?.name ?? s.studio?.location ?? 'Studio')
+  const unattributed = wanted === 'unattributed'
+  const unknown = !!wanted && !unattributed && !chosen && !(!places.length && wanted === (s.studio?.location ?? 'Studio').trim().toLowerCase())
+  const location = unattributed ? 'Unattributed' : chosen?.name ?? (unknown ? query.get('location')!.trim() : wanted ? (s.studio?.location ?? 'Studio') : places.length > 1 ? 'All locations' : places[0]?.name ?? s.studio?.location ?? 'Studio')
   const ledger = {classes:s.classes,bookings:s.bookings,packs:s.packs,charges:s.charges}, place = (row: Row) => ledgerLocation(row,ledger)
   for (const name of ['from','to']) {
     const value = query.get(name)
@@ -34,7 +65,7 @@ export function revenueReport(s: any, query: URLSearchParams) {
     return byId(s.packs,packId)
   }
   const matchesPlan = (pack?: Row) => !query.get('plan') || (pack ? reportPlan(pack) : 'Unallocated') === query.get('plan')
-  const matchesLocation = (row: Row) => !unknown && (!chosen || place(row) === chosen.id)
+  const matchesLocation = (row: Row) => !unknown && !unattributed && (!chosen || place(row) === chosen.id)
   const inPeriod = (at: string, zone = timeZone) => {
     const date = localDate(at,zone)
     return at <= generatedAt && (!query.get('from') || date >= query.get('from')!) && (!query.get('to') || date <= query.get('to')!)
@@ -49,19 +80,24 @@ export function revenueReport(s: any, query: URLSearchParams) {
   for (const row of s.payments) append(row,row.reason==='gift_card_redemption' ? 'gift-redemption' : row.amountCents < 0 ? 'refund' : 'receipt',row.createdAt,row.amountCents,packFor(row))
   for (const row of s.packs) append(row,'new-plan',row.createdAt,null,row)
   for (const row of s.bookingActions.filter((row: Row) => row.action === 'cancel')) append(row,'booking-cancellation',row.at,null,packFor(row))
+  for (const event of s.recurringRevenueSources ?? []) {
+    if (!unknown && (unattributed ? event.locationId === null : !chosen || event.locationId === chosen.id) && (!query.get('plan') || event.plan === query.get('plan')) && inPeriod(event.at,event.timeZone)) {
+      sources.push({...event,date:localDate(event.at,event.timeZone),sourceUrl:`/app/revenue?${new URLSearchParams({...Object.fromEntries(query),sourceId:event.id})}#source-record`,memberUrl:`/app/people?person=${encodeURIComponent(event.personId)}#person`})
+    }
+  }
   sources.sort((a,b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id))
   const sales = sources.filter(row => row.kind === 'sale'), fees = sources.filter(row => row.kind === 'fee'), receipts = sources.filter(row => row.kind === 'receipt'), refunds = sources.filter(row => row.kind === 'refund')
   const rowsHere = [...s.charges,...s.payments].filter(matchesLocation)
-  const balances: Row[] = unknown ? [] : chosen ? [...new Set(rowsHere.map(r => r.personId))].sort().map(personId => ({personId,balanceCents:s.charges.filter((r: Row) => matchesLocation(r) && r.personId === personId).reduce((n: number,r: Row) => n+r.amountCents,0)-s.payments.filter((r: Row) => matchesLocation(r) && r.personId === personId).reduce((n: number,r: Row) => n+r.amountCents,0)})) : s.balances
+  const balances: Row[] = unknown || unattributed ? [] : chosen ? [...new Set(rowsHere.map(r => r.personId))].sort().map(personId => ({personId,balanceCents:s.charges.filter((r: Row) => matchesLocation(r) && r.personId === personId).reduce((n: number,r: Row) => n+r.amountCents,0)-s.payments.filter((r: Row) => matchesLocation(r) && r.personId === personId).reduce((n: number,r: Row) => n+r.amountCents,0)})) : s.balances
   const balanceRows = !query.get('plan') ? balances.map((row: Row) => ({...row,sourceIds:rowsHere.filter((r: Row) => r.personId === row.personId).map((r: Row) => r.id)})) : []
-  const activePacks = s.packs.filter((pack: Row) => !unknown && (!chosen || (pack.locationId ?? 'studio') === chosen.id) && matchesPlan(pack) && pack.createdAt <= generatedAt && pack.expiresAt > generatedAt && (!countsCredits(pack) || pack.remaining > 0))
+  const activePacks = s.packs.filter((pack: Row) => !unknown && !unattributed && (!chosen || (pack.locationId ?? 'studio') === chosen.id) && matchesPlan(pack) && pack.createdAt <= generatedAt && pack.expiresAt > generatedAt && (!countsCredits(pack) || pack.remaining > 0))
   const activeMemberIds = s.people.filter((p: Row) => p.role === 'member' && p.active && activePacks.some((pack: Row) => pack.personId === p.id)).map((p: Row) => p.id)
   const totals = {grossSalesCents:sum(sales.filter(row => row.amountCents > 0)),salesCreditsCents:sum(sales.filter(row => row.amountCents < 0)),netSalesCents:sum(sales),feesCents:sum(fees),assessedCents:sum(sales)+sum(fees),
     collectionsCents:sum(receipts),refundsCents:0-sum(refunds),netCollectionsCents:sum(receipts)+sum(refunds),newPlans:sources.filter(row => row.kind === 'new-plan').length,bookingCancellations:sources.filter(row => row.kind === 'booking-cancellation').length,activeMembers:activeMemberIds.length,
-    outstandingCents:query.get('plan') ? null : balanceRows.reduce((n: number,row: Row) => n+Math.max(0,row.balanceCents),0),memberCreditCents:query.get('plan') ? null : balanceRows.reduce((n: number,row: Row) => n+Math.max(0,-row.balanceCents),0),overdueCents:null,membershipCancellations:null,returnedAchCents:null,processorFeesCents:null}
-  const locationTotals = (places.length > 1 && !chosen ? places : []).map(l => {
+    outstandingCents:query.get('plan') ? null : balanceRows.reduce((n: number,row: Row) => n+Math.max(0,row.balanceCents),0),memberCreditCents:query.get('plan') ? null : balanceRows.reduce((n: number,row: Row) => n+Math.max(0,-row.balanceCents),0),overdueCents:null,recurringStarts:sources.filter(row => row.kind === 'recurring-start').length,recurringStops:sources.filter(row => row.kind === 'recurring-stop').length,recurringEndings:sources.filter(row => row.kind === 'recurring-end').length,membershipCancellations:sources.filter(row => row.kind === 'membership-cancellation').length,returnedAchCents:null,processorFeesCents:null}
+  const locationTotals = (places.length > 1 && !chosen && !unattributed ? [...places,...(sources.some(row => row.locationId === null) ? [{id:null,name:'Unattributed',timeZone:null}] : [])] : []).map(l => {
     const mine = sources.filter(row => row.locationId === l.id), kinds = (kind: string) => mine.filter(row => row.kind === kind)
-    return {locationId:l.id,name:l.name,timeZone:l.timeZone,netSalesCents:sum(kinds('sale')),feesCents:sum(kinds('fee')),collectionsCents:sum(kinds('receipt')),refundsCents:0-sum(kinds('refund')),newPlans:kinds('new-plan').length}
+    return {locationId:l.id,name:l.name,timeZone:l.timeZone,netSalesCents:sum(kinds('sale')),feesCents:sum(kinds('fee')),collectionsCents:sum(kinds('receipt')),refundsCents:0-sum(kinds('refund')),newPlans:kinds('new-plan').length,recurringStarts:kinds('recurring-start').length,recurringStops:kinds('recurring-stop').length,recurringEndings:kinds('recurring-end').length,membershipCancellations:kinds('membership-cancellation').length}
   })
-  return {generatedAt,timeZone,location,locationId:chosen?.id ?? null,locations:places.map(l => ({id:l.id,name:l.name})),locationTotals,plans:[...new Set(s.packs.map(reportPlan))].sort(),totals,activeMemberIds,balanceRows,sources,selectedSource:query.get('sourceId') ? sources.find(row => row.id === query.get('sourceId')) ?? null : null,definitions:revenueDefinitions}
+  return {generatedAt,timeZone,location,locationId:chosen?.id ?? null,locations:places.map(l => ({id:l.id,name:l.name})),locationTotals,plans:[...new Set([...s.packs.map(reportPlan),...(s.recurringRevenueSources ?? []).map((row: Row) => row.plan)])].sort(),totals,activeMemberIds,balanceRows,sources,selectedSource:query.get('sourceId') ? sources.find(row => row.id === query.get('sourceId')) ?? null : null,definitions:revenueDefinitions}
 }

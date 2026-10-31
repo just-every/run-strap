@@ -1,16 +1,29 @@
 import { instant, insist, list, type State } from './domain/types'
 
+/** Accepted native agreements retain their original sale, distinct from a later renewal pack. */
+export function nativeRecurringAgreements(state: State) {
+  const cancellations = list(state,'contractCancellation'), packs = list(state,'pack')
+  return list(state,'recurringTerms').filter(t => t.acceptedAt && t.acceptedBy && !t.erased).map(terms => {
+    const cancellation = cancellations.find(c => c.termsId === terms.id && c.status === 'applied') ?? null
+    const pending = cancellations.some(c => c.termsId === terms.id && c.status === 'scheduled')
+    const withdrawn = cancellations.some(c => c.termsId === terms.id && c.status === 'withdrawn')
+    const pack = packs.find(p => p.id === terms.packId)
+    const currentPack = packs.find(p => p.id === (terms.currentPackId ?? terms.packId))
+    // Withdrawing restores access, not invoicing. The withdrawn effective date is no longer an access end.
+    const endedAt = cancellation?.effectiveAt ?? terms.accessEndedAt ?? (terms.status === 'stopped' && !pending
+      ? (withdrawn ? currentPack?.expiresAt : terms.stop?.accessEndsAt) : null) ?? null
+    return {terms,pack,cancellation,endedAt:endedAt as string | null}
+  })
+}
+
 /** Read-only native recurring agreement losses, with an explicit opening denominator. */
 export function retentionChurn(state: State, query: URLSearchParams, asOf: string) {
   const from = query.get('churnFrom'), to = query.get('churnTo')
   const end = to === null ? asOf.slice(0,10)+'T00:00:00.000Z' : instant(to,'churnTo')
   const start = from === null ? new Date(Date.parse(end)-30*86400000).toISOString() : instant(from,'churnFrom')
   insist(start < end && end <= asOf,'invalid_churn_period')
-  const cancellations = list(state,'contractCancellation').filter(c => c.status === 'applied')
   const packs = list(state,'pack'), invoices = list(state,'recurringInvoice')
-  const agreements = list(state,'recurringTerms').filter(t => t.acceptedAt && t.acceptedBy).map(t => {
-    const cancellation = cancellations.find(c => c.termsId === t.id)
-    const endedAt = cancellation?.effectiveAt ?? (t.status === 'stopped' ? t.stop?.accessEndsAt : null) ?? null
+  const agreements = nativeRecurringAgreements(state).map(({terms:t,cancellation,endedAt}) => {
     // The acknowledgement preserves the accepted price; later invoice prices apply only from their due instant.
     const priorInvoices = invoices.filter(i => i.recurringTermsId === t.id && i.status !== 'void' && i.dueAt <= start).sort((a,b) => b.dueAt.localeCompare(a.dueAt))
     const openingAmount = priorInvoices[0]?.amountCents ?? t.acknowledgement?.amountCents
