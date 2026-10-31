@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict';
+export const widgetOrigin='https://studio.example';
+export async function publishWidget(h,entry,coach,origin=widgetOrigin) {
+  await h.cmd('widget.settings.save',{enabled:true,origins:[origin],confirm:true});
+  const publication=await h.cmd('widget.class.publish',{classId:entry.id,description:'Gentle whole-body movement. Bring a mat.',approved:true});
+  const bio=await h.cmd('widget.instructor.publish',{instructorId:coach.id,publicName:'Studio teacher',bio:'An approved public biography about movement teaching.',approved:true});
+  return {publication,bio};
+}
+export async function widgetChoice(h,origin=widgetOrigin,classId) {
+  const response=await h.send('/booking/widget?'+new URLSearchParams({embeddingOrigin:origin}),undefined,'');
+  assert.equal(response.status,200,response.text);
+  const links=[...response.text.matchAll(/href="(\/booking\/select\?[^"]+)"/g)].map(m=>m[1].replaceAll('&amp;','&'));
+  const path=classId ? links.find(path=>new URL(path,h.origin).searchParams.get('classId')===classId) : links[0];assert.ok(path,'selectable published class');
+  const selected=await h.send(path,undefined,'');assert.equal(selected.status,303,selected.text);
+  const location=selected.headers.get('location'),token=new URL(location,h.origin).searchParams.get('selection');
+  assert.match(token,/^[0-9a-f]{64}$/);return {path,location,token};
+}
+const records=async h=>(await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results;
+export async function widgetJourney(h,week) {
+  await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Studio',timeZone:'America/New_York'});
+  const member=await h.person('WidgetMember'),other=await h.person('WidgetOther'),coach=await h.person('WidgetCoach','instructor'),desk=await h.person('WidgetDesk');
+  const draft=await h.cmd('classes.prepare',{week,classes:[0,1,2,3,4].map(n=>({title:'Public movement '+n,service:n===4?'Strength':'Mat',start:week+`T${String(10+n*2).padStart(2,'0')}:00:00Z`,end:week+`T${String(11+n*2).padStart(2,'0')}:00:00Z`,capacity:1,instructorId:coach.id}))});
+  await h.cmd('classes.publish',{id:draft.id});const entries=(await h.state()).classes;
+  const p=await h.cmd('pack.prepare',{personId:member.id,credits:8,amountCents:12000,expiresAt:new Date(Date.parse(week)+90*86400_000).toISOString()});await h.cmd('pack.approve',{id:p.id});
+  const q=await h.cmd('pack.prepare',{personId:other.id,credits:8,amountCents:12000,expiresAt:new Date(Date.parse(week)+90*86400_000).toISOString()});await h.cmd('pack.approve',{id:q.id});
+  const waiver=await h.cmd('waiver.publish',{text:'Current safety review.'});
+  assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404);
+  await publishWidget(h,entries[0],coach);
+  for(const entry of entries.slice(1))await h.cmd('widget.class.publish',{classId:entry.id,description:'A second public service description.',approved:true});
+  const before=await records(h),publicPage=await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin),undefined,h.owner);
+  assert.equal(publicPage.status,200);assert.match(publicPage.text,/Gentle whole-body movement/);assert.match(publicPage.text,/approved public biography/);
+  assert.match(publicPage.headers.get('content-security-policy'),/frame-ancestors https:\/\/studio\.example$/);
+  for(const value of [member.name,member.email,coach.name,coach.email,other.name,desk.name,p.id,'12000','roster','balanceCents'])assert.ok(!publicPage.text.includes(value),'public schedule contains approved data only');
+  const filtered=await h.send('/booking/widget?'+new URLSearchParams({embeddingOrigin:widgetOrigin,service:'Strength'}));assert.ok(filtered.text.includes(entries[4].title));assert.ok(!filtered.text.includes(entries[0].title));
+  for(const bad of ['https://unapproved.example','https://studio.example.evil.example','https://studio.example:444','null'])assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(bad))).status,403);
+  await h.cmd('widget.settings.save',{enabled:true,origins:['https://studio.example/path'],confirm:true},h.owner,400);
+  for(const cookie of [member.cookie,coach.cookie,desk.cookie])await h.cmd('widget.instructor.publish',{instructorId:coach.id,publicName:'Unauthorized',bio:'Not approved',approved:true},cookie,403);
+  const choice=await widgetChoice(h,widgetOrigin,entries[0].id);
+  assert.deepEqual(await records(h),before,'public reads and selection change no product records');
+  const signedOut=await h.send(choice.location);assert.equal(signedOut.status,303);const signin=signedOut.headers.get('location');assert.equal(new URL(signin,h.origin).searchParams.get('returnTo'),choice.location);
+  const signinPage=await h.send(signin);assert.equal(signinPage.status,200);assert.match(signinPage.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  await h.send('/auth/magic-link',{email:member.email,returnTo:choice.location});
+  const mail=(await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r=>JSON.parse(r.message)).find(m=>m.to.includes(member.email));
+  const authToken=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token');
+  const confirmed=await h.send('/auth/confirm',{token:authToken});assert.equal(confirmed.status,303);assert.equal(confirmed.headers.get('location'),choice.location);
+  const review=await h.send(choice.location,undefined,confirmed.cookie);assert.equal(review.status,200);assert.match(review.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  const booking={classId:entries[0].id,selection:choice.token,adultConfirmed:true};
+  await h.cmd('booking.book',booking,member.cookie,409);assert.equal((await h.state()).bookings.length,0,'selection never bypasses current waiver');
+  await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie);
+  const expired=await widgetChoice(h,widgetOrigin,entries[1].id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE class_id=?").bind(entries[1].id).run();
+  const unchanged=await records(h);
+  await h.cmd('booking.book',{classId:entries[1].id,selection:expired.token,adultConfirmed:true},member.cookie,410);
+  await h.cmd('booking.book',{...booking,selection:'0'.repeat(64)},member.cookie,410);
+  await h.cmd('booking.book',{...booking,classId:entries[2].id},member.cookie,409);
+  await h.cmd('booking.book',{...booking,adultConfirmed:false},member.cookie,400);
+  assert.deepEqual(await records(h),unchanged,'invalid selections have no booking, credit or consent effect');
+  const booked=await h.cmd('booking.book',booking,member.cookie);assert.equal(booked.status,'booked');
+  await h.cmd('booking.book',booking,member.cookie,410);
+  assert.equal((await h.state(member.cookie)).packs.find(x=>x.personId===member.id).remaining,7);
+  const full=await widgetChoice(h,widgetOrigin,entries[2].id);await h.cmd('waiver.acknowledge',{id:waiver.id},other.cookie);await h.cmd('booking.book',{classId:entries[2].id},other.cookie);
+  const fullBefore=await records(h);await h.cmd('booking.book',{classId:entries[2].id,selection:full.token,adultConfirmed:true},member.cookie,409);assert.deepEqual(await records(h),fullBefore,'full class adds no waitlist');
+  const changed=await widgetChoice(h,widgetOrigin,entries[3].id);await h.cmd('widget.class.publish',{classId:entries[3].id,description:'Changed public class details.',approved:true});await h.cmd('booking.book',{classId:entries[3].id,selection:changed.token,adultConfirmed:true},member.cookie,409);
+  const grant=enabled=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{booking:{enabled,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}}});
+  await grant(true);await h.enroll(desk.cookie);
+  const staffChoice=await widgetChoice(h,widgetOrigin,entries[1].id),staffInput={classId:entries[1].id,selection:staffChoice.token,personId:member.id,pay:'auto',channel:'desk',requestId:'synthetic-strap-widget-staff'};
+  await h.cmd('booking.desk',{...staffInput,personId:other.id},desk.cookie,403);
+  const staffBooking=await h.cmd('booking.desk',staffInput,desk.cookie);assert.equal(staffBooking.status,'booked');
+  const actions=(await h.state()).staffActions.filter(a=>a.command==='booking.desk'&&a.after.id===staffBooking.id);assert.equal(actions.length,1);assert.equal(actions[0].right,'booking');assert.equal(actions[0].personId,member.id);assert.equal(actions[0].actorRole,'front-desk');assert.ok(!JSON.stringify(actions).includes(staffChoice.token),'portable audit holds no handoff credential');
+  const revoked=await widgetChoice(h,widgetOrigin,entries[4].id);await grant(false);const revokedBefore=await records(h);
+  await h.cmd('booking.desk',{...staffInput,classId:entries[4].id,selection:revoked.token,requestId:'synthetic-strap-widget-revoked'},desk.cookie,403);await h.cmd('booking.desk',staffInput,desk.cookie,403);assert.deepEqual(await records(h),revokedBefore);
+  await h.cmd('widget.instructor.publish',{instructorId:coach.id,publicName:'Studio teacher',bio:'An approved public biography about movement teaching.',approved:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'));
+  await h.cmd('widget.settings.save',{enabled:false,origins:[widgetOrigin],confirm:true});assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404);
+  return {member,coach};
+}

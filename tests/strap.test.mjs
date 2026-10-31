@@ -451,3 +451,11 @@ test('Separate membership-sale and contract-change rights preserve personal acce
 test('Manager and assigned-instructor private grants preserve personal views and revoke reviewed changes and replays immediately',()=>run(async h=>{
   await (await import('./staff-rights-cases.mjs')).staffAppointmentRoles(h);
 }));
+
+test('Public schedule publishes approved details and preserves private booking authority through expiring top-level sign-in',()=>run(async h=>{
+  await (await import('./booking-widget-journey.mjs')).widgetJourney(h,week());
+}));
+
+test('Public schedule frames on exact approved origins and returns to private booking at desktop and phone widths',()=>run(async h=>{
+  await (await import('./booking-widget-browser.mjs')).widgetBrowser(h,week());
+}));

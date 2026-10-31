@@ -1,0 +1,9 @@
+.widget { max-width: 960px; margin: 0 auto; padding: 24px; overflow-wrap: anywhere; }
+.widget h1 { color: var(--strap-ink); font: 700 32px/1.2 var(--rer-font-heading); }
+.widget h3 { font-size: 18px; }
+.widget p { font-size: 15px; }
+.widget-classes { display: grid; gap: 16px; margin-top: 20px; }
+.widget .panel { margin: 0; }
+.widget .form { max-width: 640px; }
+.widget .brand { margin-left: 0; }
+@media (max-width: 600px) { .widget { padding: 16px; } }
