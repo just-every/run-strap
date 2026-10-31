@@ -112,7 +112,7 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
 }
 
 /** The recovery page uses real authenticated HTTP, with assets served locally. */
-export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, secrets}) {
+export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checkoutId, failedTaxId, uncertainTaxId, secrets}) {
   const browser = await chromium.launch({headless:true, executablePath:process.env.STRAP_CHROMIUM_PATH, args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     const context = await browser.newContext({viewport:{width:1440,height:1000}})
@@ -132,6 +132,14 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, secret
       assert.match(await failed.innerText(),/Failed/)
       assert.match(await failed.innerText(),/HTTP 403/)
       assert.match(await page.getByRole('row').filter({hasText:bookingId}).innerText(),/Rate limited/)
+      const checkout = page.getByRole('row').filter({has:page.getByText(checkoutId,{exact:true})}).filter({hasText:'Pack'})
+      assert.match(await checkout.innerText(),/Paid/)
+      const failedTax = page.getByRole('row').filter({hasText:failedTaxId})
+      assert.match(await failedTax.innerText(),/Failed/)
+      assert.match(await failedTax.innerText(),/HTTP 403/)
+      assert.match(await page.getByRole('row').filter({hasText:uncertainTaxId}).innerText(),/Uncertain/)
+      assert.equal(await page.getByRole('row').filter({hasText:checkoutId}).filter({hasText:'Payment recorded by this attempt: Yes'}).count(),1)
+      assert.equal(await page.getByRole('row').filter({hasText:checkoutId}).filter({hasText:'Payment recorded by this attempt: No'}).count(),1)
       assert.match(await page.locator('.recovery-diagnostics').innerText(),/provider health unknown/)
       for (const secret of secrets) assert.ok(!(await page.content()).includes(secret))
       assert.equal(await page.locator('.recovery-diagnostics form, .recovery-diagnostics button').count(),0,'diagnostics contain no execution controls')
@@ -148,6 +156,15 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, secret
         await page.screenshot({path:join(proof,'SEC-001-recovery-390.png'),fullPage:true})
         await page.setViewportSize({width:1440,height:1000})
       }
+      await failedTax.getByRole('link',{name:'Review tax connection',exact:true}).click()
+      assert.equal(new URL(page.url()).pathname,'/app/studio')
+      assert.equal(new URL(page.url()).hash,'#tax')
+      await page.getByRole('heading',{name:'Sales tax',exact:true}).waitFor()
+      await page.goBack()
+      await checkout.getByRole('link',{name:'Review payment',exact:true}).click()
+      assert.equal(new URL(page.url()).pathname,'/app/packs')
+      await page.getByRole('heading',{name:'Plan payments and reconciliation',exact:true}).waitFor()
+      await page.goBack()
       await failed.getByRole('link',{name:'Review billing connection',exact:true}).click()
       assert.equal(new URL(page.url()).pathname,'/app/studio')
       await page.getByRole('heading',{name:'Stripe test connection',exact:true}).waitFor()

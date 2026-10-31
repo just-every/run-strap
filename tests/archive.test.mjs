@@ -212,7 +212,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(copyEvidenceBefore.status,200);assert.equal(copyHtmlBefore.status,200)
     Object.assign(privacyFixture,{retained:copyTablet.person,retainedEvidence:copyEvidenceBefore.value,copyToken})
     const recoveryBefore=(await h.send('/api/strap/recovery-diagnostics',undefined,h.owner)).value
-    assert.equal(recoveryBefore.billing.connectionState,'connected');assert.equal(recoveryBefore.mail.connectionState,'connected');assert.ok(recoveryBefore.operations.length>0);assert.ok(recoveryBefore.notices.length>0)
+    assert.equal(recoveryBefore.billing.connectionState,'connected');assert.equal(recoveryBefore.mail.connectionState,'connected');assert.equal(recoveryBefore.tax.connectionState,'connected');assert.ok(recoveryBefore.taxOperations.length>0);assert.ok(recoveryBefore.operations.length>0);assert.ok(recoveryBefore.notices.length>0)
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -276,9 +276,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await h.enroll(restoredOwner)
     const recoveryVersion=(await h.state(restoredOwner)).version,recoveryCalls=paymentEdge.calls.length,recoveryMailCalls=copyEdge.calls.length
     const recoveryAfter=(await h.send('/api/strap/recovery-diagnostics',undefined,restoredOwner)).value
-    assert.equal(recoveryAfter.billing.connectionState,'disconnected');assert.equal(recoveryAfter.mail.connectionState,'disconnected')
+    assert.equal(recoveryAfter.billing.connectionState,'disconnected');assert.equal(recoveryAfter.mail.connectionState,'disconnected');assert.equal(recoveryAfter.tax.connectionState,'disconnected')
     assert.deepEqual(recoveryAfter.operations,recoveryBefore.operations.map(r=>({...r,connectionState:'disconnected'})))
     assert.deepEqual(recoveryAfter.exceptions,recoveryBefore.exceptions.map(r=>({...r,connectionState:'disconnected'})))
+    for(const key of ['checkouts','reconciliations','taxOperations'])assert.deepEqual(recoveryAfter[key],recoveryBefore[key].map(r=>({...r,connectionState:'disconnected'})),'native restore retains '+key+' with no execution authority')
     assert.deepEqual(recoveryAfter.notices,recoveryBefore.notices,'native recovery retains notice source identities, outcomes and timestamps')
     assert.equal((await h.send('/app/recovery-diagnostics',undefined,restoredOwner)).status,200)
     assert.equal((await h.state(restoredOwner)).version,recoveryVersion);assert.equal(paymentEdge.calls.length,recoveryCalls);assert.equal(copyEdge.calls.length,recoveryMailCalls)
@@ -465,6 +466,10 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
     const retainedPayments=await billingView(h);
+    const paymentDiagnostics=(await h.send('/api/strap/recovery-diagnostics',undefined,h.owner)).value
+    assert.deepEqual(paymentDiagnostics.checkouts.map(r=>r.status).sort(),['open','paid'])
+    assert.ok(paymentDiagnostics.reconciliations.some(r=>r.invoiceId===paidCheckout.id && r.paymentRecorded===true))
+
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const terminationReason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0})
     const terminationPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:4,amountCents:8000,expiresAt:'2099-12-01T00:00:00Z'})).id})
@@ -543,6 +548,11 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(restoredBilling.connected,false);
     assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)),retainedPayments.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)));
     for(const key of ['events','reconciliations','exceptions'])assert.deepEqual([...restoredBilling[key]].sort((a,b)=>a.id.localeCompare(b.id)),[...retainedPayments[key]].sort((a,b)=>a.id.localeCompare(b.id)));
+    const diagnosticBefore=await h.state(restoredOwner),diagnosticCalls=providerEdge.calls.length
+    const restoredDiagnostics=(await h.send('/api/strap/recovery-diagnostics',undefined,restoredOwner)).value
+    for(const key of ['checkouts','reconciliations'])assert.deepEqual(restoredDiagnostics[key],paymentDiagnostics[key].map(r=>({...r,connectionState:'disconnected'})),'restored payment diagnostics retain '+key+' without authority')
+    assert.equal((await h.state(restoredOwner)).version,diagnosticBefore.version);assert.equal(providerEdge.calls.length,diagnosticCalls)
+    console.log('PROBE SEC-001 checkout recovery: paid and open checkout plus canonical reconciliation -> original history after same-origin restore, disconnected authority and no read effects')
     const noCalls=providerEdge.calls.length;
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-reconcile'},restoredOwner,409);
     assert.equal((await signedEvent(h,paidEvent)).status,409);assert.equal(providerEdge.calls.length,noCalls);

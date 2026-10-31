@@ -4,6 +4,7 @@ import { load } from './domain/store';
 import { DomainError, humanOwner, list, type Actor } from './domain/types';
 import { memberMail } from './domain/notices';
 import { memberMailConfigured } from './notice-mail';
+import { connected as taxConnection } from './tax/model';
 
 const choice = (value: unknown, allowed: string[]) => typeof value === 'string' && allowed.includes(value) ? value : 'unknown';
 const reference = (value: unknown) => typeof value === 'string' && /^[\w:.-]{1,200}$/.test(value) ? value : null;
@@ -17,7 +18,12 @@ const codes = ['billing_provider_refused','billing_provider_outcome_unknown','bi
   'billing_webhook_provider_mismatch','billing_webhook_source_mismatch','billing_webhook_event_unsupported',
   'billing_checkout_outcome_unknown','billing_checkout_payment_incomplete','billing_checkout_reconciliation_unavailable',
   'billing_checkout_source_mismatch','billing_native_comparison_mismatch','billing_refund_or_dispute_requires_review',
+  'billing_checkout_amount_or_mode_mismatch','billing_checkout_not_captured','billing_checkout_refunded_or_disputed',
+  'billing_native_payment_mismatch','billing_native_reconciliation_failed',
+  'tax_provider_refused','tax_provider_outcome_unknown','tax_provider_evidence_invalid','tax_connection_review_required',
+  'tax_owner_authority_changed','tax_test_settings_not_active','tax_active_registration_required',
   'provider_outcome_unknown','transport_uncertain','provider_rejected','provider_rate_limited','provider_uncertain'];
+const httpStatus = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599 ? value : null;
 const bySourceTime = (a: {createdAt: string | null; id: string | null}, b: {createdAt: string | null; id: string | null}) =>
   (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || (a.id ?? '').localeCompare(b.id ?? '');
 
@@ -37,6 +43,12 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
   }
   const review = billingConnection ? list(loaded.state, 'billingConnectionReview').filter(r => r.connectionId === billingConnection.connection_id).at(-1) : null;
   const mail = memberMail(loaded.state), mailConfigured = memberMailConfigured(env);
+  let tax = null;
+  try { tax = await taxConnection(env, loaded.state); }
+  catch (error) {
+    if (!(error instanceof DomainError) || !['taxConfig_not_found','tax_connection_review_required','stripe_tax_test_not_configured'].includes(error.code)) throw error;
+  }
+  const billingSource = (connectionId: unknown) => billingConnection && connectionId === billingConnection.connection_id ? 'current' : 'disconnected';
   const noticeRows = (await env.DB.prepare('SELECT id,source_kind,source_id,status,code,created_at,attempted_at,finished_at FROM st_notice_deliveries ORDER BY created_at DESC,id').all()).results;
   return {
     generatedAt: new Date(time).toISOString(), readOnly: true,
@@ -46,14 +58,36 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
     mail: { configured: mailConfigured, connectionState: mailConfigured && mail?.origin === env.AUTH_ORIGIN ? 'connected' : 'disconnected',
       reason: !mailConfigured ? 'not_configured' : mail?.origin !== env.AUTH_ORIGIN ? 'review_required' : 'reviewed_here',
       reviewedAt: timestamp(mail?.connectedAt), freshness: freshness(timestamp(mail?.connectedAt)), providerHealth: 'unknown', reviewUrl: '/app/studio#member-mail' },
+    tax: { configured: !!env.STRIPE_TAX_TEST_KEY && env.RER_DEMO !== '1', connectionState: tax ? 'connected' : 'disconnected',
+      reason: tax ? 'reviewed_here' : 'review_required', reviewedAt: timestamp(tax?.updatedAt), freshness: freshness(timestamp(tax?.updatedAt)),
+      providerHealth: 'unknown', reviewUrl: '/app/studio#tax' },
     operations: list(loaded.state, 'billingOperation').map(r => ({
       id: reference(r.id), type: choice(r.type, ['connect','setup.start','setup.complete']),
       status: choice(r.status, ['pending','succeeded','failed','uncertain','incomplete']), code: r.errorCode == null ? null : choice(r.errorCode, codes),
       agreementId: reference(r.agreementId), setupId: reference(r.setupId),
       createdAt: timestamp(r.createdAt), finishedAt: timestamp(r.finishedAt), freshness: freshness(timestamp(r.finishedAt ?? r.createdAt)),
       connectionState: billingConnection && r.connectionId === billingConnection.connection_id ? 'current' : 'disconnected',
-      httpStatus: Number.isInteger(r.providerReceipt?.httpStatus) && r.providerReceipt.httpStatus >= 100 && r.providerReceipt.httpStatus <= 599 ? r.providerReceipt.httpStatus : null,
+      httpStatus: httpStatus(r.providerReceipt?.httpStatus),
       reviewUrl: r.type === 'connect' ? '/app/studio#payment-connection' : '/app/packs#billing',
+    })).sort(bySourceTime),
+    checkouts: list(loaded.state, 'stripeInvoice').map(r => ({
+      id: reference(r.id), packId: reference(r.packId), status: choice(r.status, ['creating','open','uncertain','paid','expired']),
+      createdAt: timestamp(r.createdAt), observedAt: timestamp(r.reconciledAt ?? r.updatedAt ?? r.createdAt), paidAt: timestamp(r.paidAt),
+      freshness: freshness(timestamp(r.reconciledAt ?? r.updatedAt ?? r.createdAt)), connectionState: billingSource(r.connectionId),
+      reviewUrl: '/app/packs#payments',
+    })).sort(bySourceTime),
+    reconciliations: list(loaded.state, 'billingReconciliation').map(r => ({
+      id: reference(r.id), invoiceId: reference(r.invoiceId), status: choice(r.status, ['exception','reconciled']),
+      code: r.errorCode == null ? null : choice(r.errorCode, codes), createdAt: timestamp(r.at), freshness: freshness(timestamp(r.at)),
+      paymentRecorded: typeof r.paymentRecorded === 'boolean' ? r.paymentRecorded : null,
+      connectionState: billingSource(r.connectionId), reviewUrl: '/app/packs#payments',
+    })).sort(bySourceTime),
+    taxOperations: list(loaded.state, 'taxOperation').map(r => ({
+      id: reference(r.id), type: choice(r.type, ['config','calculate','confirm','refund']), targetId: reference(r.targetId), resultId: reference(r.resultId),
+      status: choice(r.status, ['pending','succeeded','failed','uncertain']), code: r.errorCode == null ? null : choice(r.errorCode, codes),
+      createdAt: timestamp(r.createdAt), finishedAt: timestamp(r.finishedAt), freshness: freshness(timestamp(r.finishedAt ?? r.createdAt)),
+      connectionState: tax && r.connectionHash === tax.connectionHash ? 'current' : 'disconnected',
+      httpStatus: httpStatus(r.providerResponse?.httpStatus), reviewUrl: '/app/studio#tax',
     })).sort(bySourceTime),
     exceptions: list(loaded.state, 'billingException').map(r => ({
       id: reference(r.id), invoiceId: reference(r.invoiceId), eventId: reference(r.eventId),
