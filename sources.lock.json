@@ -4361,6 +4361,10 @@
       "sha256": "34ac8cf449ce386fcff48879f2a4bfab1b3e84f63cd05bc8db1527578031bef3",
       "executable": false
     },
+    "tests/export-rights-cases.mjs": {
+      "sha256": "5409883e0568a87eb0c8434174fbeb3da2aed8dd2ded7b4e6ab927e59c255922",
+      "executable": false
+    },
     "tests/fees-browser.mjs": {
       "sha256": "06f1258b657b1f34eccd5696e2c5c4cb9913d369ff8249bb0cac5e9f451512cb",
       "executable": false
@@ -4634,7 +4638,7 @@
       "executable": false
     },
     "tests/security.test.mjs": {
-      "sha256": "5b7e50ed6b489d1d4c5e3b6306c5da5b0bddf66f54b630ad5a288f13daf195f3",
+      "sha256": "92222bffd430a86587d6577f658da36ad372ea77dfc89f329d7bc6bc97a13742",
       "executable": false
     },
     "tests/series-browser.mjs": {
