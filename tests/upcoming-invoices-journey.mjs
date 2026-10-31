@@ -167,11 +167,39 @@ export async function upcomingInvoicesJourney() {
       const invoice=invoices.find(i=>i.recurringTermsId===row.agreementId)
       assert.deepEqual([invoice.previousPackId,invoice.dueAt,invoice.amountCents,invoice.termEndAt],[row.packId,row.dueAt,row.amountCents,row.termEndAt])
       assert.equal(after.charges.filter(c=>c.invoiceId===invoice.id).length,1)
+      const renewed=after.packs.find(p=>p.id===invoice.packId),original=five.find(a=>a.terms.id===row.agreementId).pack
+      assert.deepEqual([renewed.locationId,renewed.eligibleLocations],[original.locationId,original.eligibleLocations],'renewal retains its original sale location and permitted booking locations')
     }
     for(const a of [stopped,frozen,changed,overdue,stalePrice,erased,beyond])assert.equal(after.recurring.invoices.filter(i=>i.recurringTermsId===a.terms.id).length,0)
     assert.equal(invoices.reduce((sum,i)=>sum+i.amountCents,0),total)
     assert.equal((await h.send(api,undefined,h.owner)).value.totals.forecastCents,0,'issued periods leave the forecast once')
     assert.equal(providerCalls,calls,'native invoice issuance grants no provider collection authority')
+    const nextDue=after.recurring.terms.find(t=>t.id===five[3].terms.id).nextRenewalAt
+    const nextDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date(nextDue))
+    const nextForecast=await filtered({from:nextDate,location:west.id,status:'scheduled'},[five[3].terms.id,five[4].terms.id],31560)
+    for(const row of nextForecast.rows) {
+      const original=five.find(a=>a.terms.id===row.agreementId),invoice=invoices.find(i=>i.recurringTermsId===row.agreementId)
+      assert.equal(row.originalPackId,original.pack.id);assert.equal(row.packId,invoice.packId)
+    }
+    const start=iso(Date.now()+day),d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)
+    const classes=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[
+      {title:'synthetic-strap-west-renewal',locationId:west.id,start,end:iso(Date.parse(start)+3600000),capacity:2,instructorId:instructor.id},
+      {title:'synthetic-strap-other-renewal',locationId:'studio',start:iso(Date.parse(start)+7200000),end:iso(Date.parse(start)+10800000),capacity:2,instructorId:instructor.id},
+    ]})).id})).classes
+    const outsideVersion=(await h.state()).version
+    await h.cmd('booking.book',{classId:classes[1].id},five[3].member.cookie,409)
+    assert.equal((await h.state()).version,outsideVersion,'renewal cannot grant access to an unaccepted location')
+    const booked=await h.cmd('booking.book',{classId:classes[0].id},five[3].member.cookie)
+    assert.equal(booked.packId,invoices.find(i=>i.recurringTermsId===five[3].terms.id).packId,'renewed credits fund the accepted location')
+    // Native renewals made by the earlier implementation retained their original pack
+    // but omitted location fields on the successor. Reading them must not invent a new sale location.
+    const {locationId,eligibleLocations,...legacy}=after.packs.find(p=>p.id===invoices.find(i=>i.recurringTermsId===five[3].terms.id).packId)
+    await save('pack',legacy)
+    const legacyBefore=await retained(),legacyCalls=providerCalls
+    await filtered({from:nextDate,location:west.id,status:'scheduled'},[five[3].terms.id,five[4].terms.id],31560)
+    assert.deepEqual(await retained(),legacyBefore,'legacy location recovery is a pure projection of retained original terms')
+    assert.equal(providerCalls,legacyCalls)
     console.log('PROBE BILL-013 issuance: elapsed due instant and duplicate scheduler invocation -> exactly five invoices and five charges, dates and cents equal the forecast, excluded controls create no invoice and no provider collection occurs.')
+    console.log('PROBE BILL-013 location continuity: duplicate native issuance -> renewed packs retain original sale and booking locations; next west forecast and both downloads still select exactly two invoices totaling 31560 cents with original and successor identities.')
   },{outbound:()=>{providerCalls++;throw Error('Unexpected provider request')}})
 }

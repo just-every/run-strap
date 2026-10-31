@@ -13,6 +13,12 @@ import { acceptedSaleContext, previewSaleContext, proposalSaleContext, saleConte
 /** Native invoice agreement: consent to studio debt, never authority to debit a payment method. */
 export const recurringForPack = (state: State, packId: string) => list(state,'recurringTerms').find(r => r.status === 'active' && r.currentPackId === packId) ?? null;
 export const recurringBasis = (state: State, packId: string) => recurringForPack(state,packId);
+/** Older native renewals omitted location fields; the retained original pack supplies their scope. */
+export function recurringPackScope(state: State, terms: RecordData, pack: RecordData) {
+  const source = state.records.get(terms.packId), original = source?.kind === 'pack' ? source.data : null;
+  const locationId: string = pack.locationId ?? original?.locationId ?? 'studio';
+  return {locationId,eligibleLocations:pack.eligibleLocations ?? original?.eligibleLocations ?? [locationId]};
+}
 const packTerms = (pack: RecordData) => ({credits:pack.credits,amountCents:pack.amountCents,entitlement:pack.entitlement ?? null,eligibleServices:pack.eligibleServices ?? [],priorityBooking:pack.priorityBooking === true,guestTerms:pack.guestTerms ?? null});
 const proposalBasis = (state: State, pack: RecordData) => JSON.stringify({pack,member:person(state,pack.personId,false),recurring:recurringForPack(state,pack.id),changes:list(state,'planChange').filter(c => c.packId === pack.id && c.status === 'accepted'),freezes:list(state,'freeze').filter(f => f.packId === pack.id && ['scheduled','active'].includes(f.status))});
 export function contractNotice(tx: Transaction, source: string, personId: string, subject: string, body: string, bookingIds: string[] = [], requiredEmail = false) {
@@ -169,7 +175,7 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
     const invoiceId = `invoice:${terms.id}:${due}`;
     insist(!tx.state.records.has(invoiceId),'recurring_invoice_already_exists',409);
     tx.reached(due); tx.future(expiresAt);
-    const next = {id:id(),personId:pack.personId,...packTerms(pack),amountCents:invoiceAmountCents,creditLedgerVersion:1,creditRevision:0,remaining:0,
+    const next = {id:id(),personId:pack.personId,...packTerms(pack),...recurringPackScope(tx.state,terms,pack),amountCents:invoiceAmountCents,creditLedgerVersion:1,creditRevision:0,remaining:0,
       termStartAt:due,expiresAt,recurringTermsId:terms.id,renewedFromPackId:pack.id,invoiceId,createdAt:at};
     tx.put('pack',next); appendPackEvent(tx,next,{type:'grant',credits:terms.credits});
     const chargeId = `charge:${invoiceId}`;

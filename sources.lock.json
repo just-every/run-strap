@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "a7eebf1397508317876e0e259cc3425e731aa207fa6501731994deb894425545",
+      "sha256": "fdd887703ba7116baea07ca5d64232e80078783a6f185936bcffcc99b64db982",
       "executable": false
     },
     "DEMO.md": {
@@ -3278,7 +3278,7 @@
       "executable": false
     },
     "src/strap/domain/contract-billing.ts": {
-      "sha256": "85aa4d731dc749127ba6659ba995856a88c71f62145593b07b47262e058146e4",
+      "sha256": "445e35e69a4a76a9b791e0bbbf508f5b1d46412c5a92c41dd8d59e8f26da493d",
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
@@ -4138,7 +4138,7 @@
       "executable": false
     },
     "src/strap/upcoming-invoices.ts": {
-      "sha256": "48975abf0c49fdffe9a17d60d64bb67e3c144044cee13cef3995df38df595357",
+      "sha256": "1f65a11622128d2d3d4709af526b48c3dd0b3b8d266b95e7c3e38418a1ab669e",
       "executable": false
     },
     "src/strap/waiver-evidence.ts": {
@@ -4758,7 +4758,7 @@
       "executable": false
     },
     "tests/upcoming-invoices-journey.mjs": {
-      "sha256": "8708e67eca39d03c328571c507825065f5f6d4ecb80ccd1951aafd3c33bcd609",
+      "sha256": "acc98f23ba93ce74818b5369132d8b35450fdd214d283eb710d6b68ff703b599",
       "executable": false
     },
     "tests/waitlist-browser.mjs": {

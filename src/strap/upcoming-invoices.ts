@@ -1,4 +1,4 @@
-import { recurringInvoiceEligibility, type BillingConnection } from './domain/contract-billing'
+import { recurringInvoiceEligibility, recurringPackScope, type BillingConnection } from './domain/contract-billing'
 import { humanOwner, insist, instant, list, now, type Actor, type State } from './domain/types'
 import { studioSettings } from './domain/studio'
 import { locations } from './domain/locations'
@@ -30,7 +30,7 @@ export function upcomingInvoices(state: State, who: Actor, connection: BillingCo
       const projected = recurringInvoiceEligibility(state,t,connection,origin,asOf)
       const packId = t.currentPackId ?? t.packId
       const source = state.records.get(packId), pack = source?.kind === 'pack' ? source.data : null
-      const locationId: string | null = pack ? pack.locationId ?? 'studio' : null
+      const locationId = pack ? recurringPackScope(state,t,pack).locationId : null
       return {...projected,agreementId:t.id,personId:t.personId as string,member:state.people.find(p => p.id === t.personId)!.name,
         locationId,location:places.find(p => p.id === locationId)?.name ?? 'Unavailable',plan:reportPlan(t),
         originalPackId:t.packId as string,packId:packId as string,localDate:localDate(projected.dueAt,timeZone),agreedTimeZone:t.timeZone as string,
