@@ -71,6 +71,8 @@ export async function terminationAgentCases(h,{sell,agree}) {
   assert.deepEqual([draft.status,draft.createdRole,draft.reasonCode,draft.reasonLabel],['preview','agent','agent-move','Moved away']);
   for(const field of ['charges','payments','bookings','packCreditEvents','staffNotices','staffActions'])assert.deepEqual(after[field],before[field],field+' stays unchanged during preparation');
   assert.deepEqual(after.recurring,before.recurring);assert.deepEqual(after.packs,before.packs);
+  const draftReport=await h.send('/api/strap/reports/renewals?days=366&lowCredits=10000',undefined,h.owner);assert.equal(draftReport.status,200,draftReport.text);
+  const draftRow=draftReport.value.rows.find(r=>r.packId===pack.id);assert.ok(draftRow);assert.equal(draftRow.terminationId,null,'a preparation never appears as a scheduled termination');
   const context=await h.send('/api/strap/agent/context',undefined,'',headers);assert.equal(context.status,200,context.text);
   assert.ok(context.value.cancellations.contracts.some(t=>t.id===terms.id&&t.packId===pack.id));
   assert.ok(context.value.cancellations.reasonCodes.some(r=>r.code===code.code));
@@ -98,6 +100,8 @@ export async function terminationAgentCases(h,{sell,agree}) {
   const committed=await h.cmd('plan.cancellation.confirm',{id:final.id,key:final.key,channel:'inbox',requestId:'synthetic-strap-human-termination'});
   assert.deepEqual([committed.status,committed.terminatedRole,committed.effectiveAt,committed.reasonLabel],['scheduled','owner',input.effectiveAt,'Relocation']);
   assert.deepEqual(committed.effects,final.effects);
+  const scheduledReport=await h.send('/api/strap/reports/renewals?days=366&lowCredits=10000',undefined,h.owner);assert.equal(scheduledReport.status,200,scheduledReport.text);
+  const scheduledRow=scheduledReport.value.rows.find(r=>r.terminationId===committed.id);assert.ok(scheduledRow);assert.deepEqual([scheduledRow.reasonCode,scheduledRow.reasonLabel],['agent-move','Relocation']);
   const state=await h.state(),audit=state.staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===final.id);
   assert.equal(audit.length,1);assert.equal(audit[0].actorRole,'owner');assert.equal(state.recurring.invoices.length,before.recurring.invoices.length);
   await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false});

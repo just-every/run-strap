@@ -377,15 +377,15 @@ export async function staffTerminationsBrowser(h,s){
           await page.setViewportSize({width:390,height:1000});
           await s.grant(s.desk,'front-desk',['member-record'],[s.ben.id],['studio']);
           const version=(await h.state()).version;
-          await withdrawalCard.getByRole('button',{name:'Confirm withdrawal; keep invoices stopped',exact:true}).click();
+          await withdrawalCard.getByRole('button',{name:'Confirm withdrawal',exact:true}).click();
           assert.equal((await h.state()).version,version);assert.equal(await commandForm(page,'plan.cancellation.withdraw.confirm').count(),0);
           await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio']);
           await page.goto(url);await page.reload();
-          await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).getByRole('button',{name:'Confirm withdrawal; keep invoices stopped',exact:true}).click();
+          await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).getByRole('button',{name:'Confirm withdrawal',exact:true}).click();
           const after=await h.state();assert.equal(after.cancellations.cancellations.find(c=>c.id===preview.id).status,'withdrawn');
           assert.equal(after.recurring.terms.find(t=>t.currentPackId===pack.id).status,'stopped');
           assert.equal(after.staffActions.filter(a=>a.command==='plan.cancellation.withdraw.confirm'&&a.after.id===withdrawal.id).length,1);
-          assert.match(await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).innerText(),/confirmed/);
+          assert.match(await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).innerText(),/Confirmed/);
           for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-staff-withdrawn-${proofWidth}.png`)});}
         }
       }finally{await context.close()}

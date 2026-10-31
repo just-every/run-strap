@@ -34,6 +34,7 @@ function requireCancellationStaff(tx:Transaction,packId:unknown){
 }
 /** Saved termination and withdrawal targets define scope before any staff replay. */
 export function authorizeCancellationCommand(tx:Transaction,name:string,input:Record<string,unknown>){
+  requireStaffRight(tx.state,tx.who,'contract-change');
   const target=input.id?record(tx.state,input.id,name==='plan.cancellation.withdraw.confirm'?'cancellationWithdrawal':'contractCancellation'):null;
   const request=input.cancellationRequestId?record(tx.state,input.cancellationRequestId,'cancellationRequest'):null;
   requireCancellationStaff(tx,target?.packId??request?.packId??input.packId);

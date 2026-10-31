@@ -39,7 +39,7 @@ function cancellation(s:any,c:any,staff=owner(s),back=path){
     + '<p>No payment is collected, account credit issued or provider refund sent.</p></article>';
 }
 function withdrawal(s:any,w:any,staff=owner(s),back=path){
-  return `<article data-cancellation-withdrawal="${h(w.id)}"><h3>Cancellation withdrawal · ${statusPill(w.stale?'stale':w.status)}</h3><p>The terminator may withdraw while authorized. Once a delegate’s authority ends, only the participant may restore access before the effective instant. Invoice authority stays stopped. Resuming needs a fresh proposal and the member’s own exact acceptance; no old charge is replayed.</p>`+(w.canConfirm&&w.status==='preview'&&!w.stale?form('plan.cancellation.withdraw.confirm',back,hidden('id',w.id)+hidden('key',w.key)+identity()+(staff?channel():''),'Confirm withdrawal; keep invoices stopped'):'')+'</article>';
+  return `<article data-cancellation-withdrawal="${h(w.id)}"><h3>Cancellation withdrawal · ${statusPill(w.stale?'stale':w.status)}</h3><p>The terminator may withdraw while authorized. Once a delegate’s authority ends, only the participant may restore access before the effective instant. Invoice authority stays stopped. Resuming needs a fresh proposal and the member’s own exact acceptance; no old charge is replayed.</p>`+(w.canConfirm&&w.status==='preview'&&!w.stale?form('plan.cancellation.withdraw.confirm',back,hidden('id',w.id)+hidden('key',w.key)+identity()+(staff?channel():''),back===path?'Confirm withdrawal; keep invoices stopped':'Confirm withdrawal'):'')+'</article>';
 }
 function authorityForms(s:any,data:any){
   const staff=owner(s),members=rows(s,'people').filter(p=>p.active&&p.role==='member').map(p=>[p.id,p.name] as [unknown,unknown]);
