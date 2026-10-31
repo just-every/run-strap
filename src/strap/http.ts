@@ -1,5 +1,7 @@
 import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
+import { widgetReturn, widgetReturnCookie } from './widget-return';
+import { selectedCheckout } from './billing/checkout';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { hasStaffRight } from './domain/staff-rights';
@@ -210,7 +212,15 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
         if(!staff)widgetAdult(loaded.state,who.personId!);
         const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
-        return widgetReview(selected,token,members,staff,staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry));
+        const prerequisites=staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry);
+        if(url.searchParams.has('invoice')) {
+          if(staff)fail('member_required',403);
+          await guard(env,who,'/api/strap/billing');
+          Object.assign(prerequisites!,{payment:await selectedCheckout(env,who,token,url.searchParams.get('invoice')!)});
+        }
+        const page=widgetReview(selected,token,members,staff,prerequisites);
+        if(!staff)page.headers.set('set-cookie',await widgetReturnCookie(env,who,token,selected.selection.expires_at));
+        return page;
       }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
@@ -327,7 +337,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
           });
           notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
         }
-        return renderApp(await appState(env, who, path + url.search), path + url.search, notice);
+        const current=await appState(env, who, path + url.search);
+        if(path==='/app/packs')current.widgetReturn=await widgetReturn(request,env,who);
+        return renderApp(current, path + url.search, notice);
       }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
@@ -385,6 +397,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if(!held && back.startsWith('/app/widget?selection=')) {
         try {
           const token=new URL(back,env.AUTH_ORIGIN).searchParams.get('selection')??'',loaded=await load(env.DB,who),selected=await widgetSelection(env.DB,loaded.state,token),staff=who.role!=='member';
+          if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
           if(!staff)widgetAdult(loaded.state,who.personId!);
           const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
           return widgetReview(selected,token,members,staff,staff?null:widgetPrerequisites(loaded.state,who.personId!,selected.entry),message.replace(/_/g,' '));

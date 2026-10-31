@@ -93,12 +93,14 @@ export function widgetAdult(state: State, personId: string) {
 /** Personal prerequisites are read from current records, never from the selection. */
 export function widgetPrerequisites(state: State, personId: string, entry: RecordData) {
   const member=person(state,personId),service=String(entry.service??entry.title?.split(' · ')[0]).trim().replace(/\s+/g,' ').toLowerCase();
+  const packs=eligiblePacks(state,personId,entry);
   return {
     memberName:member.name,
     documents:currentWaivers(state).filter(w=>!w.service || String(w.service).trim().replace(/\s+/g,' ').toLowerCase()===service)
       .map(w=>({...w,completed:currentWaiverReceipt(state,personId,w)})),
     forms:intakeMissing(state,personId,[String(entry.service??entry.title?.split(' · ')[0])]),
-    hasAccess:eligiblePacks(state,personId,entry).length>0,
+    hasAccess:packs.length>0,
+    invoices:list(state,'stripeInvoice').filter(i=>i.personId===personId && i.status==='open' && packs.some(p=>p.id===i.packId)).map(i=>({id:i.id,amountCents:i.amountCents})),
   };
 }
 /** Selection adds no authority. Both established booking commands still run their own fences and staff audit. */

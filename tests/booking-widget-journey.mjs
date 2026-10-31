@@ -24,7 +24,7 @@ export async function submitWidgetForm(h,choice,name,fields,cookie) {
   for(const [key,value] of Object.entries(fields))values.set(key,value);
   return h.mf.dispatchFetch(h.origin+form[1].replaceAll('&amp;','&'),{method:'POST',redirect:'manual',headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'},body:values.toString()});
 }
-export async function widgetJourney(h,week) {
+export async function widgetJourney(h,week,edge) {
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Studio',timeZone:'America/New_York'});
   const member=await h.person('WidgetMember'),other=await h.person('WidgetOther'),coach=await h.person('WidgetCoach','instructor'),desk=await h.person('WidgetDesk');
   const draft=await h.cmd('classes.prepare',{week,classes:[0,1,2,3,4].map(n=>({title:'Public movement '+n,service:n===4?'Strength':'Mat',start:week+`T${String(10+n*2).padStart(2,'0')}:00:00Z`,end:week+`T${String(11+n*2).padStart(2,'0')}:00:00Z`,capacity:1,instructorId:coach.id}))});
@@ -52,6 +52,24 @@ export async function widgetJourney(h,week) {
   const authToken=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token');
   const confirmed=await h.send('/auth/confirm',{token:authToken});assert.equal(confirmed.status,303);assert.equal(confirmed.headers.get('location'),choice.location);
   const review=await h.send(choice.location,undefined,confirmed.cookie);assert.equal(review.status,200);assert.match(review.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  await (await import('./payment-fixtures.mjs')).connectPayment(h);
+  const invoice=await h.cmd('billing.checkout.start',{packId:(await h.state()).packs.find(p=>p.personId===member.id).id,requestId:'synthetic-strap-widget-payment',confirm:true});
+  const checkoutPath=choice.location+'&invoice='+encodeURIComponent(invoice.id),checkoutBefore=await records(h),calls=edge.calls.length;
+  assert.equal((await h.send(checkoutPath,undefined,other.cookie)).status,404);assert.equal((await h.send(checkoutPath,undefined,coach.cookie)).status,403);assert.equal(edge.calls.length,calls,'other identities cannot read the provider checkout');
+  const checkout=await h.send(checkoutPath,undefined,member.cookie);assert.equal(checkout.status,200,checkout.text);assert.ok(checkout.text.includes(invoice.launchURL));
+  assert.deepEqual(await records(h),checkoutBefore,'reading an existing hosted checkout never creates or settles money');
+  assert.ok(edge.calls.filter(c=>c.path.includes('/checkout/sessions')).every(c=>c.method==='GET'||!c.form.toString().includes(choice.token)),'provider receives no selection credential');
+  const returnCookie=checkout.cookie;assert.ok(returnCookie);assert.match(checkout.headers.get('set-cookie'),/HttpOnly; SameSite=Lax/);
+  const returned=await h.send('/app/packs?billing=returned',undefined,member.cookie+'; '+returnCookie);assert.ok(returned.text.includes('Return to selected class'));assert.ok(returned.text.includes(choice.location));
+  const wrongSession=await h.send('/app/packs?billing=returned',undefined,other.cookie+'; '+returnCookie);assert.ok(!wrongSession.text.includes('Return to selected class'),'return pointer is bound to the personal session');
+  const altered=returnCookie.slice(0,-1)+(returnCookie.endsWith('0')?'1':'0');assert.ok(!(await h.send('/app/packs?billing=canceled',undefined,member.cookie+'; '+altered)).text.includes('Return to selected class'));
+  edge.setChange(s=>{s.amount_total+=1;});assert.equal((await h.send(checkoutPath,undefined,member.cookie)).status,503);edge.setChange(null);
+  assert.deepEqual(await records(h),checkoutBefore,'changed provider amount cannot grant payment or class authority');
+  edge.complete(invoice.providerSessionId);
+  assert.equal((await h.send(checkoutPath,undefined,member.cookie)).status,409,'completed provider session is never reopened');
+  await h.cmd('billing.reconcile',{id:invoice.id,requestId:'synthetic-strap-widget-reconcile'});
+  assert.equal((await h.state(member.cookie)).payments.filter(p=>p.packId===invoice.packId).length,1);
+  assert.equal((await h.state()).bookings.length,0,'payment settlement reserves no class');
   const booking={classId:entries[0].id,selection:choice.token,adultConfirmed:true};
   await h.cmd('booking.book',booking,member.cookie,409);assert.equal((await h.state()).bookings.length,0,'selection never bypasses current waiver');
   const failedSignature=await submitWidgetForm(h,choice,'waiver.acknowledge',{signerName:'Wrong person',confirm:'yes'},member.cookie);
@@ -76,12 +94,14 @@ export async function widgetJourney(h,week) {
   const publicAfter=await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin));assert.ok(!publicAfter.text.includes('Personal movement choice')&&!publicAfter.text.includes(waiver.text),'host receives no private documents or answers');
   const expired=await widgetChoice(h,widgetOrigin,entries[1].id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE class_id=?").bind(entries[1].id).run();
   const unchanged=await records(h);
+  const expiredCalls=edge.calls.length;assert.equal((await h.send(expired.location+'&invoice='+encodeURIComponent(invoice.id),undefined,member.cookie)).status,410);assert.equal(edge.calls.length,expiredCalls,'expired selection never opens a provider session');
   await h.cmd('booking.book',{classId:entries[1].id,selection:expired.token,adultConfirmed:true},member.cookie,410);
   await h.cmd('booking.book',{...booking,selection:'0'.repeat(64)},member.cookie,410);
   await h.cmd('booking.book',{...booking,classId:entries[2].id},member.cookie,409);
   await h.cmd('booking.book',{...booking,adultConfirmed:false},member.cookie,400);
   assert.deepEqual(await records(h),unchanged,'invalid selections have no booking, credit or consent effect');
   const booked=await h.cmd('booking.book',booking,member.cookie);assert.equal(booked.status,'booked');
+  assert.ok(!(await h.send('/app/packs?billing=returned',undefined,member.cookie+'; '+returnCookie)).text.includes('Return to selected class'),'consumed selection cannot be replayed from a payment return');
   await h.cmd('booking.book',booking,member.cookie,410);
   assert.equal((await h.state(member.cookie)).packs.find(x=>x.personId===member.id).remaining,7);
   const full=await widgetChoice(h,widgetOrigin,entries[2].id);await h.cmd('waiver.acknowledge',{id:waiver.id,documentHash:waiver.documentHash,signerName:other.name,confirm:true},other.cookie);await h.cmd('waiver.acknowledge',{id:staleReview.id,documentHash:staleReview.documentHash,signerName:other.name,confirm:true},other.cookie);await h.cmd('intake.submit',{formId:intake.id,requestId:'synthetic-strap-widget-other',answers:{q0:'Other personal choice'}},other.cookie);await h.cmd('booking.book',{classId:entries[2].id},other.cookie);

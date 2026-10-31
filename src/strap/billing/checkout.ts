@@ -3,6 +3,8 @@ import { load, loadSystem, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
 import { connection, digest, keyDigest, type BillingBindings, type Connection, type Json } from './model';
 import { hostedURL, stripe } from './provider';
+import { widgetAdult, widgetSelection } from '../domain/booking-widget';
+import { eligiblePacks } from '../domain/bookings';
 
 type Trigger = {kind:string;id:string};
 const providerId = (value: unknown, prefix: string): string => {
@@ -71,6 +73,30 @@ function projection(body: Json|null) {
   const bounded=(value: unknown)=>typeof value === 'string' && value.length <= 100 ? value : null;
   return {sessionId:bounded(body.id),status:bounded(body.status),paymentStatus:bounded(body.payment_status),currency:bounded(body.currency),amountCents:Number.isSafeInteger(body.amount_total)?body.amount_total:null,livemode:body.livemode === false ? false : null,
     paymentIntentId:bounded(body.payment_intent?.id),paymentIntentStatus:bounded(body.payment_intent?.status),chargeId:bounded(body.payment_intent?.latest_charge?.id),refunded:body.payment_intent?.latest_charge?.refunded === true,disputed:body.payment_intent?.latest_charge?.disputed === true,providerInvoiceId:bounded(body.invoice?.id)};
+}
+
+/** Read an existing owner-started checkout. This never starts or settles a payment. */
+export async function selectedCheckout(env: BillingBindings,who: Actor,token: string,invoiceId: string) {
+  const validate=async()=>{
+    const loaded=await load(env.DB,who);
+    insist(loaded.who.role==='member' && loaded.who.personId,'member_required',403);
+    widgetAdult(loaded.state,loaded.who.personId!);
+    const selected=await widgetSelection(env.DB,loaded.state,token),invoice=retained(loaded.state,invoiceId);
+    insist(invoice.personId===loaded.who.personId,'billing_invoice_not_found',404);
+    const c=await connection(env);reviewed(loaded.state,c);
+    insist(invoice.accountId===c.account_id && invoice.connectionId===c.connection_id && invoice.origin===env.AUTH_ORIGIN,'billing_reconnection_required',409);
+    insist(invoice.status==='open' && invoice.providerSessionId,'billing_checkout_not_open',409);
+    unchangedDebt(loaded.state,invoice);noReceipts(loaded.state,invoice);
+    insist(eligiblePacks(loaded.state,loaded.who.personId!,selected.entry).some(p=>p.id===invoice.packId),'billing_pack_not_eligible',409);
+    return invoice;
+  };
+  const invoice=await validate();
+  const response=await stripe(env,'/checkout/sessions/'+encodeURIComponent(invoice.providerSessionId));
+  session(response.body,invoice);
+  insist(response.body.status==='open' && response.body.payment_status==='unpaid' && (!response.body.expires_at || response.body.expires_at*1000>Date.now()),'billing_checkout_not_open',409);
+  const fresh=await validate();
+  insist(fresh.providerSessionId===invoice.providerSessionId && fresh.amountCents===invoice.amountCents,'billing_checkout_changed',409);
+  return {url:hostedURL(response.body.url),amountCents:invoice.amountCents};
 }
 
 /** The native identity is once per connected account and approved pack, including lost responses. */

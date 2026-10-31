@@ -141,6 +141,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await h.cmd('classes.publish',{id:timetable.id})
     const widgetProof=await publishWidget(h,(await h.state()).classes[0],coach);
     const archivedSelection=await widgetChoice(h);
+    const archivedReturnCookie=(await h.send(archivedSelection.location,undefined,member.cookie)).cookie;
     await h.cmd('waiver.publish',{text:'Earlier studio waiver.'})
     const waiver=await h.cmd('waiver.publish',{text:'Studio waiver, "current"\nKeep your own limits.'})
     await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
@@ -293,6 +294,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await h.cmd('widget.settings.save',{enabled:true,origins:[widgetOrigin],confirm:true},restoredOwner);
     const widgetRestoredMember=await h.signIn(member.email);
     await h.cmd('booking.book',{classId:timetable.classes[0].id,selection:archivedSelection.token,adultConfirmed:true},widgetRestoredMember,410);
+    assert.ok(!(await h.send('/app/packs?billing=returned',undefined,widgetRestoredMember+'; '+archivedReturnCookie)).text.includes('Return to selected class'),'restored sign-in cannot revive a captured provider return');
     await h.cmd('widget.settings.save',{enabled:false,origins:[widgetOrigin],confirm:true},restoredOwner);
     assertPortableTax(restoredDownload.value,taxProof);
     await assertRestoredTax(h,restoredOwner,taxProof,taxProvider);

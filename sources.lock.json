@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "363f98819969210d4b22245648a64263bdbd4c16b8cba245c8685c167bec8d2b",
+      "sha256": "233f69e08417ef73db46d7e789f52151f3354a1bd5a67d3dd9044ec54a1b1f30",
       "executable": false
     },
     "DEMO.md": {
@@ -3118,7 +3118,7 @@
       "executable": false
     },
     "src/strap/billing/checkout.ts": {
-      "sha256": "195736584f30cb624307127ad7d56e822413a8cdb796d092cd6d2d34e36b4ebb",
+      "sha256": "9fa3df5852f468a47f1042990974e30387837a2a5c33155916f86f08584773b2",
       "executable": false
     },
     "src/strap/billing/document.ts": {
@@ -3230,7 +3230,7 @@
       "executable": false
     },
     "src/strap/domain/booking-widget.ts": {
-      "sha256": "bd77ff5339c7e8c8d83451b328bca65cbfb7b48a37638265a57a7d60c2e85427",
+      "sha256": "59849db23c24b0e6ba973f0bad8f88c669aa6ed3de67b94b793c34cbd1211424",
       "executable": false
     },
     "src/strap/domain/bookings.ts": {
@@ -3610,7 +3610,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "092e5711494d55d538d850bb89f7f06e9d12ae49e9973f2c41155f10e8744739",
+      "sha256": "591904cedd9d8f311e0f58f86dc22f29087728e36d8a07947d22b86f8e56854d",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3842,7 +3842,7 @@
       "executable": false
     },
     "src/strap/ui/booking-widget.ts": {
-      "sha256": "8115b60f7e20cc4d93e727163ac3501db685e636e5d4c14683f2cc1f2aa1c9bb",
+      "sha256": "5d1db09147c63ca77f9c575fd13a97d8bffcee932a22b82d4dfaf55073610bdb",
       "executable": false
     },
     "src/strap/ui/checkin.ts": {
@@ -3930,7 +3930,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "e85cb2a6d3910aa43ff47966d345063fa66391cc29273aeb6c94ac6f6e291363",
+      "sha256": "dbd42c2194ece424e0ae099f2d95d608daef80aa1ba099bb60fa5577c0a13394",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -4157,6 +4157,10 @@
       "sha256": "c4bbb7cb2da0ab64b9b7a01a8cefad192a2faabe1e4ea8bd61b11ca31f5372df",
       "executable": false
     },
+    "src/strap/widget-return.ts": {
+      "sha256": "09ce70dc795089e14e500d487d392b09e6dbf019404c10c698a32b9cdd433ecf",
+      "executable": false
+    },
     "src/strap/zone.ts": {
       "sha256": "b1d0eb94c2a897a230e47cb578b530b722bfd6612b033edbcfcf140ffc9797bc",
       "executable": false
@@ -4174,7 +4178,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "6b80b935573353683c85541761ba61fcfdedc36f2cff827134c46c6b3df5c4a4",
+      "sha256": "4057137c90416daf9678bf291941a47363341efe66d30345eedb8a76f500084c",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4226,11 +4230,11 @@
       "executable": false
     },
     "tests/booking-widget-browser.mjs": {
-      "sha256": "e0d20f5c55e151958f422765b7d5b06a34b94fe2bfc9cb6d3b10cfb372f9ea46",
+      "sha256": "8be445c7e1d4f7038107e6c878506422150e3670b87b594ddaec7575b8252d62",
       "executable": false
     },
     "tests/booking-widget-journey.mjs": {
-      "sha256": "93dc02d95598ae0ad01afeea8f516249480a0e2fd487c65366c38c79ea80ea05",
+      "sha256": "d6742af43f871fc2b907cb131e7b7d7141b9ba419fd523c08d8cc83a6f214636",
       "executable": false
     },
     "tests/campaign-browser.mjs": {
@@ -4714,7 +4718,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "e8192b5a4d4751340f6be37055daeda7a02ad036bdd77be157c8684e70fb6e63",
+      "sha256": "976ce5d5d6ae7a1cce15b099db3a487b8d725ee598b5f11c46875d27cde0a585",
       "executable": false
     },
     "tests/studio-browser.mjs": {
