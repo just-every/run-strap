@@ -135,7 +135,7 @@ async function sandbox() {
     if(actual) {
       const desk=await h.person('HostedCollectionDesk');
       const grant=async right=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{[right]:{enabled:true,scopes:[{memberIds:[seed.member.id],locationIds:['studio'],doors:['all']}]}}});
-      await grant('member-record');await h.enroll(desk.cookie);
+      await grant('member-record');const factor=await h.enroll(desk.cookie);
       const launch={id:agreement.id,requestId:'synthetic-strap-hosted-replacement-launch',channel:'phone'};
       await h.cmd('billing.setup.start.launch',launch,desk.cookie,403);
       await grant('collection');
@@ -150,13 +150,31 @@ async function sandbox() {
       const methods=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods;
       assert.deepEqual(methods.filter(m=>m.available).map(m=>[m.id,m.last4]),[[replacement.method.id,'5556']]);
       assert.equal(methods.find(m=>m.id===hosted.method.id).status,'superseded');
+      const nativeCalls=edge.length;
+      const personalDefault=await h.cmd('billing.method.default.request',{methodId:hosted.method.id,confirm:true,requestId:'synthetic-strap-hosted-default-personal'},seed.member.cookie);
+      await h.cmd('billing.method.default',{id:personalDefault.id,confirm:true,requestId:'synthetic-strap-hosted-default-select'},seed.member.cookie);
+      const staffDefault=await h.cmd('billing.method.default.request',{methodId:replacement.method.id,confirm:true,requestId:'synthetic-strap-hosted-default-staff-request'},seed.member.cookie);
+      await grant('collection');await h.cmd('mfa.verify',{code:factor.recoveryCodes[0]},desk.cookie);
+      await h.cmd('billing.method.default.staff',{id:staffDefault.id,confirm:true,requestId:'synthetic-strap-hosted-default-staff',channel:'desk'},desk.cookie);
+      const permission={methodId:replacement.method.id,revision:0,enabled:true,contexts:['phone'],confirm:true,requestId:'synthetic-strap-hosted-purchase-grant'};
+      const granted=await h.cmd('billing.purchase-consent.set',permission,seed.member.cookie);assert.deepEqual(granted.contexts,['phone']);
+      await h.cmd('billing.purchase-consent.set',{...permission,revision:1,enabled:false,requestId:'synthetic-strap-hosted-purchase-withdraw'},seed.member.cookie);
+      await h.cmd('billing.purchase-consent.set',permission,seed.member.cookie,409);
+      const removal=await h.cmd('billing.method.removal.request',{methodId:hosted.method.id,confirm:true,requestId:'synthetic-strap-hosted-removal-request'},seed.member.cookie);
+      await h.cmd('billing.method.remove.staff',{id:removal.id,confirm:true,requestId:'synthetic-strap-hosted-removal-staff',channel:'desk'},desk.cookie);
+      const current=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
+      assert.deepEqual(current.methods.filter(m=>m.available).map(m=>m.id),[replacement.method.id]);
+      assert.equal(current.methods.find(m=>m.id===hosted.method.id).status,'removed');assert.equal(current.purchaseConsents[0].status,'withdrawn');
+      assert.equal(edge.length,nativeCalls,'default changes, separate purchase consent and requested removal perform no provider work');
+      console.log('PROBE BILL-004 Stripe TEST: two real hosted authorizations -> personal and scoped staff default changes, separate phone purchase grant and withdrawal, requested historical removal; no provider calls or money effects for native controls');
+
     }
     const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
     assert.equal(state.methods.length,actual?2:0);assert.equal(state.mandates[0].methodAuthorized,actual);
     await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
     assert.equal((await h.send('/api/strap/command',{name:'billing.setup.complete',input:{id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-13'}},seed.member.cookie)).status,409);
     const ledgerAfter=await h.state();assert.deepEqual(ledgerAfter.charges,ledgerBefore.charges);assert.deepEqual(ledgerAfter.payments,ledgerBefore.payments);
-    console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,setupIntentId:hosted?.method.setupIntentId ?? null,paymentMethodId:hosted?.method.paymentMethodId ?? null,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:actual,storedMethodAuthorized:actual,replacementMethodId:replacement?.method.paymentMethodId ?? null,replacementSetupIntentId:replacement?.method.setupIntentId ?? null,collectionLaunchAndRevocationProved:!!replacement,collectionRightHandoff:!!replacement,revokedStaffReplayRefused:!!replacement,replacementLast4:replacement?.method.last4 ?? null,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:actual?'Synthetic member completed real Stripe-hosted TEST method authorization; recurring collection remains unproved':'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
+    console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),at:new Date().toISOString(),provider:'Stripe TEST',accountId:connection.result.accountId,sessionId:setup.result.providerSessionId,setupIntentId:hosted?.method.setupIntentId ?? null,paymentMethodId:hosted?.method.paymentMethodId ?? null,agreementId:agreement.id,originalAgreementHash:agreement.originalAgreementHash,documentHash:agreement.documentHash,edge,hostedSetupCreated:true,memberCompletedHostedSetup:actual,storedMethodAuthorized:actual,replacementMethodId:replacement?.method.paymentMethodId ?? null,replacementSetupIntentId:replacement?.method.setupIntentId ?? null,collectionLaunchAndRevocationProved:!!replacement,collectionRightHandoff:!!replacement,revokedStaffReplayRefused:!!replacement,replacementLast4:replacement?.method.last4 ?? null,nativeDefaultSelectionProved:actual,separatePurchasePermissionProved:actual,requestedNativeRemovalProved:actual,paymentsCollected:0,replayProviderPosts:0,revocationRefusedNextRequest:true,scope:actual?'Synthetic member completed real Stripe-hosted TEST method authorization; recurring collection remains unproved':'Signed-agreement and hosted setup foundation; real member hosted completion and recurring collection remain unproved'}));
   },{auth:{STRIPE_BILLING_TEST_KEY:key},outbound:async request=>{
     const url=new URL(request.url);assert.equal(url.origin,'https://api.stripe.com');
     assert.ok(url.pathname === '/v1/account' || url.pathname.startsWith('/v1/checkout/sessions'));

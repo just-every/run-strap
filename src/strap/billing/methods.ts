@@ -1,3 +1,4 @@
+import { endPurchaseConsent } from './purchase-consent';
 import { requireStaffRight } from '../domain/staff-rights';
 import { staffChannel } from '../domain/staff-actions';
 import type { Transaction } from '../domain/store';
@@ -51,6 +52,7 @@ export function removeMethod(tx: Transaction,input: Record<string,unknown>,staff
     if(mandate!.status==='accepted')tx.put('billingAgreement',{...agreement,status:'signed-awaiting-method'});
     for(const setup of list(tx.state,'billingSetup').filter(s=>s.mandateId===mandate!.id && s.status==='awaiting-member'))tx.put('billingSetup',{...setup,status:'invalidated',invalidatedAt:at,reason:'method_removed'});
   }
+  endPurchaseConsent(tx,method.id,'method_removed',at);
   const result={id:'billing-removal:'+request.id,personId:method.personId,agreementId:agreement.id,methodId:method.id,removalRequestId:request.id,requestedBy:request.actorId,requestedAt:request.requestedAt,actorId:tx.who.id,actorRole:tx.who.role,staffMade:staff,channel,at,requestId,requestBasis:basis,before,after:{methodId:method.id,status:'removed',methodAuthorized:false},providerDeletion:false};
   tx.put('billingMethodRemoval',result);
   tx.put('billingMethodRemovalRequest',{...request,status:'removed',removedAt:at,removalId:result.id});

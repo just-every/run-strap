@@ -17,7 +17,7 @@ export function launchBillingAction(tx: Transaction,input: Record<string,unknown
   person(tx.state,target.personId);
   const terms=record(tx.state,target.termsId,'recurringTerms'),pack=record(tx.state,terms.currentPackId,'pack');
   requireStaffRight(tx.state,tx.who,right as StaffRight,target.personId,pack.locationId ?? 'studio');
-  const agreement=['billing.mandate.revoke','billing.method.removal.request'].includes(memberCommand) ? target : currentAgreement(tx.state,target.id);
+  const agreement=['billing.mandate.revoke','billing.method.removal.request','billing.purchase-consent.set'].includes(memberCommand) ? target : currentAgreement(tx.state,target.id);
   const requestId=text(input.requestId,'requestId',100), channel=input.channel ?? 'desk';
   insist(['desk','phone','inbox'].includes(String(channel)),'invalid_channel');
   const basis=canonical({agreementId:agreement.id,memberCommand,channel});
@@ -25,7 +25,7 @@ export function launchBillingAction(tx: Transaction,input: Record<string,unknown
   if(prior) { insist(prior.requestBasis === basis,'billing_request_changed',409); return prior; }
   const mandate=mandateFor(tx.state,agreement.id);
   if(memberCommand === 'billing.agreement.accept')insist(!agreement.signature,'billing_agreement_already_signed',409);
-  else if(memberCommand !== 'billing.method.removal.request')insist(agreement.signature && mandate?.status === 'accepted','payment_mandate_required',409);
+  else if(!['billing.method.removal.request','billing.purchase-consent.set'].includes(memberCommand))insist(agreement.signature && mandate?.status === 'accepted','payment_mandate_required',409);
   const before={status:agreement.status,documentHash:agreement.documentHash,financialHash:agreement.financialHash,mandateStatus:mandate?.status ?? null,methodAuthorized:mandate?.methodAuthorized ?? false};
   const launch={id:id(),personId:agreement.personId,agreementId:agreement.id,memberCommand,status:'member_action_required',url:'/signin?returnTo='+encodeURIComponent('/app/packs#billing-'+agreement.id),actorId:tx.who.id,createdAt:now(),requestId,requestBasis:basis,channel};
   tx.put('billingActionLaunch',launch);

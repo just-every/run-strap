@@ -62,6 +62,11 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     if('depositAmount' in input) {input[name.endsWith('.deposit.record')?'amountCents':'depositCents']=cents(input.depositAmount,'the deposit');delete input.depositAmount;}
     return input;
   }
+  if(name==='billing.purchase-consent.set') {
+    input.enabled=input.enabled==='yes';input.confirm=input.confirm==='yes';input.revision=Number(input.revision);
+    input.contexts=['in-person','phone'].filter(value=>input['context_'+value]==='yes');
+    delete input['context_in-person'];delete input.context_phone;return input;
+  }
   if(name.startsWith('billing.')) {
     for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
     return input

@@ -1,6 +1,6 @@
 import type { RecordData } from './domain/types';
 
-export const privacyBillingKinds=new Set('billingAgreement paymentMandate billingOperation billingSetup storedPaymentMethod billingMethodRemovalRequest billingMethodRemoval billingMethodDefaultRequest billingMethodDefaultChange billingConsentEvent billingActionLaunch stripeInvoice billingException billingReconciliation stripeEvent recurringTerms recurringInvoice recurringReminder contractPrepayment'.split(' '));
+export const privacyBillingKinds=new Set('billingAgreement paymentMandate billingOperation billingSetup storedPaymentMethod billingMethodRemovalRequest billingMethodRemoval billingMethodDefaultRequest billingMethodDefaultChange billingPurchaseConsent billingPurchaseConsentEvent billingConsentEvent billingActionLaunch stripeInvoice billingException billingReconciliation stripeEvent recurringTerms recurringInvoice recurringReminder contractPrepayment'.split(' '));
 const authorizationKinds=new Set(['billingSetup','storedPaymentMethod','billingActionLaunch','billingMethodRemovalRequest','billingMethodDefaultRequest']);
 /** Retained financial references are not reusable payment permission or hosted setup credentials. */
 export function retireBilling(kind:string,original:RecordData,redacted:RecordData,at:string,actorId:string) {
@@ -8,6 +8,7 @@ export function retireBilling(kind:string,original:RecordData,redacted:RecordDat
   if(authorizationKinds.has(kind))return Object.fromEntries(Object.entries({...saved,status:'retired',revokedAt:at,revokedBy:actorId}).filter(([key])=>[
     'id','personId','agreementId','mandateId','setupId','operationId','createdAt','authorizedAt','status','revokedAt','revokedBy','erased','privacyRetiredAt','privacyReceiptId',
   ].includes(key))) as RecordData;
+  if(kind==='billingPurchaseConsent')Object.assign(saved,{status:'withdrawn',contexts:[],actorId:null,connectionId:null});
   if(kind==='paymentMandate')Object.assign(saved,{status:'revoked',revokedAt:original.revokedAt??at,revokedBy:actorId,revocationChannel:'verified-privacy-request',methodAuthorized:false,methodId:null,signerName:null});
   if(kind==='billingAgreement')Object.assign(saved,{status:'privacy-retired',signature:null,documentText:null,originalAgreement:null,adultEvidenceReference:null,requestBasis:null});
   if(kind==='billingOperation')Object.assign(saved,{status:'retired',inputHash:null,launchURL:null});

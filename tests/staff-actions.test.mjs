@@ -587,6 +587,13 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       assert.deepEqual(await h.cmd(door,input),r.result);assert.equal((await h.state()).staffActions.filter(a=>a.command===door&&a.requestId===input.requestId).length,1);
       assert.equal(billing.calls.length,calls);assert.deepEqual((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods.filter(m=>m.available).map(m=>m.id),[billingDefaultRequest.methodId]);
     };
+    actions['billing.purchase-consent.set']=async door=>{
+      await billingLaunch('billing.purchase-consent.set',door);
+      const method=(await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods.find(m=>m.available);
+      const input={methodId:method.id,enabled:true,contexts:['phone'],revision:0,confirm:true,requestId:randomUUID()};
+      await refused(h,'billing.purchase-consent.set',input,h.owner);
+      const consent=await h.cmd('billing.purchase-consent.set',input,billingMember.cookie);assert.equal(consent.actorId,(await h.state(billingMember.cookie)).actor.id);assert.deepEqual(consent.contexts,['phone']);
+    };
     actions['billing.mandate.revoke']=async door=>{
       await billingLaunch('billing.mandate.revoke',door);
       await refused(h,'billing.mandate.revoke',{id:billingAgreement.id},h.owner);

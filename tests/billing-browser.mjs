@@ -52,7 +52,7 @@ export async function billingBrowser(h,edge) {
         assert.equal(target.pathname,'/signin');assert.equal(target.searchParams.get('returnTo'),'/app/packs#billing-'+agreement.id)
         await capture('staff-'+name+'-launch')
         const after=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
-        for(const key of ['agreements','mandates','methods','setups','operations'])assert.deepEqual(after[key],before[key],'the staff form preserves the personal act')
+        for(const key of ['agreements','mandates','methods','setups','operations','purchaseConsents','purchaseConsentEvents'])assert.deepEqual(after[key],before[key],'the staff form preserves the personal act')
         assert.equal(edge.calls.length,calls)
         const fresh=(await h.state()).staffActions.filter(a=>!history.some(old=>old.id===a.id))
         assert.equal(fresh.length,1);assert.equal(fresh[0].command,command+'.launch');assert.equal(fresh[0].personId,seed.member.id)
@@ -150,6 +150,23 @@ export async function billingBrowser(h,edge) {
       if(width===1440){assert.equal(deniedDefault.status(),403);assert.equal((await h.state()).version,defaultVersion)}
       await grant();await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       if(width===1440)assert.deepEqual((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.filter(m=>m.available).map(m=>m.id),[secondMethod.id])
+      const purchasePanel=section.locator('[data-purchase-method="'+secondMethod.id+'"]')
+      await purchasePanel.locator('summary').click()
+      const purchaseForm=purchasePanel.locator('form').filter({has:page.getByRole('button',{name:'Save purchase permission',exact:true})})
+      if(width===1440)for(const checkbox of await purchaseForm.getByRole('checkbox').all())assert.equal(await checkbox.isChecked(),false)
+      await purchaseForm.getByLabel('Phone purchases I request',{exact:true}).check()
+      await purchaseForm.getByLabel('I personally grant this separate purchase permission for the selected channels.',{exact:true}).check()
+      await capture('member-purchase-review')
+      await purchaseForm.getByRole('button',{name:'Save purchase permission',exact:true}).click()
+      await purchasePanel.locator('summary').click();await purchasePanel.getByRole('status').filter({hasText:'Personal purchase permission: phone'}).waitFor();await capture('member-purchase-permission')
+      if(width===1440){const consent=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.purchaseConsents.find(r=>r.methodId===secondMethod.id);assert.equal(consent.available,true);assert.deepEqual(consent.contexts,['phone']);assert.equal(edge.calls.length,defaultCalls)}
+      await staffLaunch('billing.purchase-consent.set','Open purchase permission','purchase-permission')
+      await purchasePanel.locator('summary').click()
+      await purchasePanel.getByRole('button',{name:'Withdraw purchase permission',exact:true}).click()
+      if(width===1440){const current=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;assert.equal(current.purchaseConsents.find(r=>r.methodId===secondMethod.id).available,false);assert.equal(current.mandates.find(r=>r.agreementId===agreement.id).status,'accepted');assert.equal(current.mandates.find(r=>r.agreementId===agreement.id).methodId,secondMethod.id)}
+      await purchasePanel.locator('summary').click();await capture('member-purchase-withdrawn')
+      await purchaseForm.getByLabel('In-person purchases I request',{exact:true}).check();await purchaseForm.getByLabel('Phone purchases I request',{exact:true}).check()
+      await purchaseForm.getByLabel('I personally grant this separate purchase permission for the selected channels.',{exact:true}).check();await purchaseForm.getByRole('button',{name:'Save purchase permission',exact:true}).click()
       edge.setCard('4242')
       await staffLaunch('billing.method.removal.request','Open card removal request','removal-request')
       const removalCalls=edge.calls.length
@@ -200,7 +217,7 @@ export async function billingBrowser(h,edge) {
       if(width===1440)assert.equal(await section.count(),0,'another member cannot read removed-card history')
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('member-removed-history')
-      if(width===1440){const removed=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;assert.equal(removed.methods.filter(m=>m.agreementId===agreement.id).every(m=>m.status==='removed'&&!m.available),true);assert.equal(edge.calls.length,removalCalls)}
+      if(width===1440){const removed=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;assert.equal(removed.methods.filter(m=>m.agreementId===agreement.id).every(m=>m.status==='removed'&&!m.available),true);assert.equal(removed.purchaseConsents.find(r=>r.methodId===secondMethod.id).available,false);assert.equal(removed.purchaseConsents.find(r=>r.methodId===secondMethod.id).status,'withdrawn');assert.equal(edge.calls.length,removalCalls)}
       // Preserve the existing revocation proof on a currently usable method.
       edge.setCard('4444')
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
@@ -221,7 +238,7 @@ export async function billingBrowser(h,edge) {
       assert.equal(await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).count(),0)
       await sign(h.owner);await page.goto(h.origin+'/app/people?person='+seed.member.id+'#staff-actions')
       const audit=page.locator('#staff-actions')
-      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff','billing.method.default.request.launch','billing.method.default.staff'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1,command)
+      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff','billing.method.default.request.launch','billing.method.default.staff','billing.purchase-consent.set.launch'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1,command)
       for(const details of await audit.locator('details').all())await details.locator('summary').click()
       await capture('staff-history')
       edge.setComplete(false);edge.setCard('4242')

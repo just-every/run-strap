@@ -2,11 +2,12 @@ import { hasStaffRight } from '../domain/staff-rights';
 import { load, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, type Actor } from '../domain/types';
 import { acceptAgreement, prepareAgreement, revokeMandate } from './agreements';
-import { connection, type BillingBindings } from './model';
+import { connection, currentAgreement, type BillingBindings } from './model';
 import { providerCommand } from './operations';
 import { launchBillingAction } from './launch';
 import { requestMethodRemoval, removeMethod } from './methods';
 import { defaultMethodCommand } from './default-method';
+import { purchaseConsent } from './purchase-consent';
 import type { MemberDoor } from '../domain/command-catalogue';
 import { startCheckout, reconcileCheckout } from './checkout';
 import { balance } from '../domain/money';
@@ -45,6 +46,8 @@ const handlers = {
   'billing.setup.start.launch':launch('billing.setup.start','collection'),
   'billing.setup.complete':defineBilling(hosted('billing.setup.complete'),['member'],member('billing.setup.complete','collection')),
   'billing.setup.complete.launch':launch('billing.setup.complete','collection'),
+  'billing.purchase-consent.set':defineBilling(purchaseConsent,['member'],member('billing.purchase-consent.set','collection')),
+  'billing.purchase-consent.set.launch':launch('billing.purchase-consent.set','collection'),
   'billing.method.default.request':defineBilling((env,who,input)=>defaultMethodCommand(env,who,input,'request'),['member'],member('billing.method.default.request','collection')),
   'billing.method.default.request.launch':launch('billing.method.default.request','collection'),
   'billing.method.default':defineBilling((env,who,input)=>defaultMethodCommand(env,who,input,'member'),['member'],{member:{staff:'billing.method.default.staff',right:'collection'}}),
@@ -73,14 +76,20 @@ export async function billingState(env: BillingBindings,who: Actor) {
     // invalid live credential or unexpected validator failure must remain visible.
     if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured'].includes(error.code))throw error;
   }
+  const usable=(m: any)=>{
+    if(!c || !m || m.erased || !['authorized','superseded'].includes(m.status) || m.connectionId!==c.connection_id || m.accountId!==c.account_id || loaded.state.records.get(m.mandateId)?.data.status!=='accepted')return false;
+    try {return !!currentAgreement(loaded.state,m.agreementId).signature;}
+    catch(error) {if(error instanceof DomainError)return false;throw error;}
+  };
   const reviews=list(loaded.state,'billingConnectionReview');
   return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id,review:reviews.filter(r=>r.connectionId===c.connection_id).at(-1)} : null,
     reviews:who.role === 'owner'?reviews:[],connectionEvents:who.role === 'owner'?list(loaded.state,'billingConnectionEvent'):[],
     invoices:list(loaded.state,'stripeInvoice').filter(visible).map(r=>({...r,balanceCents:balance(loaded.state,r.personId),access:loaded.state.records.get(r.packId)?.data.remaining ?? null})),
     events:who.role === 'owner'?list(loaded.state,'stripeEvent'):[],exceptions:who.role === 'owner'?list(loaded.state,'billingException'):[],reconciliations:who.role === 'owner'?list(loaded.state,'billingReconciliation'):[],
+    purchaseConsents:list(loaded.state,'billingPurchaseConsent').filter(visible).map(r=>({...r,available:r.status==='authorized' && r.connectionId===c?.connection_id && usable(loaded.state.records.get(r.methodId)?.data)})),purchaseConsentEvents:list(loaded.state,'billingPurchaseConsentEvent').filter(visible).map(({requestBasis,...r})=>r),
     defaultRequests:list(loaded.state,'billingMethodDefaultRequest').filter(visible).map(({requestBasis,...r})=>r),defaultChanges:list(loaded.state,'billingMethodDefaultChange').filter(visible).map(({requestBasis,...r})=>r),
     removalRequests:list(loaded.state,'billingMethodRemovalRequest').filter(visible).map(({requestBasis,...r})=>r),removals:list(loaded.state,'billingMethodRemoval').filter(visible).map(({requestBasis,...r})=>r),
-    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,selectable:!!c && ['authorized','superseded'].includes(m.status) && !m.erased && m.connectionId===c.connection_id && loaded.state.records.get(m.mandateId)?.data.status==='accepted',available:!!c && m.status === 'authorized' && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
+    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,selectable:usable(m),available:usable(m) && m.status === 'authorized' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
 }
 
 /** A scoped staff page reveals action handles, never agreement or payment evidence. */
@@ -91,7 +100,8 @@ export async function billingStaffHandoffs(env: BillingBindings,who: Actor) {
     if(!pack)return [];
     const permitted=(right: 'collection'|'membership-sale')=>hasStaffRight(loaded.state,loaded.who,right,a.personId,pack.locationId ?? 'studio');
     const mandate=list(loaded.state,'paymentMandate').find(m=>m.agreementId===a.id);
-    const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request','billing.method.default.request'] : [];
+    const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request','billing.method.default.request','billing.purchase-consent.set'] : [];
+    if(permitted('collection') && !actions.includes('billing.purchase-consent.set') && list(loaded.state,'billingPurchaseConsent').some(r=>r.agreementId===a.id && r.status==='authorized'))actions.push('billing.purchase-consent.set');
     const removalRequests=permitted('collection') ? list(loaded.state,'billingMethodRemovalRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && loaded.state.records.get(r.methodId)?.data.removalRequestId===r.id).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
     const defaultRequests=terms?.status==='active' && mandate?.status==='accepted' && permitted('collection') ? list(loaded.state,'billingMethodDefaultRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && r.sourceMethodId===(mandate.methodId ?? null) && r.methodEpoch===(mandate.methodEpoch ?? 0) && loaded.state.records.get(r.methodId)?.data.defaultRequestId===r.id && ['authorized','superseded'].includes(loaded.state.records.get(r.methodId)?.data.status)).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
     const defaultChanges=permitted('collection') ? list(loaded.state,'billingMethodDefaultChange').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method && !method.erased ? [{id:r.id,methodId:r.methodId,at:r.at,brand:method.brand,last4:method.last4}] : [];}) : [];

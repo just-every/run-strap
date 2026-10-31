@@ -104,6 +104,7 @@ async function archiveMembership(h,member,terms,edge) {
     const removalRequest=await h.cmd('billing.method.removal.request',{methodId:originalMethod.id,confirm:true,requestId:'synthetic-strap-archive-removal-request'},member.cookie);
     const removal=await h.cmd('billing.method.remove.staff',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-archive-removal',channel:'desk'});
     assert.equal(removal.providerDeletion,false);
+    await h.cmd('billing.purchase-consent.set',{methodId:methodResult.result.id,enabled:true,contexts:['phone'],revision:0,confirm:true,requestId:'synthetic-strap-archive-purchase'},member.cookie);
     const membershipBefore=await h.send('/api/strap/billing/agreement.json?id='+membership.id,undefined,member.cookie),membershipHtmlBefore=await h.send('/api/strap/billing/agreement.html?id='+membership.id,undefined,member.cookie);
     assert.equal(membershipBefore.status,200);assert.equal(membershipHtmlBefore.status,200);
     const connectedBilling=(await h.send('/api/strap/billing',undefined,member.cookie)).value;
@@ -571,6 +572,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const removedAudit=(await h.state(restoredOwner)).staffActions.filter(a=>a.command==='billing.method.remove.staff'&&a.after.methodId===removedMethod.id);assert.equal(removedAudit.length,1);
     assert.equal(historicalBilling.removals.filter(r=>r.methodId===removedMethod.id).length,1);
     assert.equal(historicalBilling.methods.some(m=>m.selectable),false);
+    assert.equal(historicalBilling.purchaseConsents.length,1);assert.equal(historicalBilling.purchaseConsents[0].status,'authorized');assert.equal(historicalBilling.purchaseConsents[0].available,false);assert.deepEqual(historicalBilling.purchaseConsents[0].contexts,['phone']);
     assert.equal(historicalBilling.defaultChanges.length,2);assert.equal(historicalBilling.defaultRequests.length,2);
     assert.equal((await h.state(restoredOwner)).staffActions.filter(a=>a.command==='billing.method.default.staff'&&a.after.methodId===removedMethod.id).length,1);
     const retainedDefault=historicalBilling.defaultRequests.find(r=>r.methodId===methodResult.result.id);
@@ -615,6 +617,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const oldEpoch=retainedPayments.connection.connectionId;
     await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-restored-review'},restoredOwner);
     const reviewed=await billingView(h,restoredOwner);assert.equal(reviewed.connected,true);assert.notEqual(reviewed.connection.connectionId,oldEpoch);
+    assert.equal(reviewed.purchaseConsents.some(r=>r.available),false);
+    await h.cmd('billing.purchase-consent.set',{methodId:methodResult.result.id,enabled:true,contexts:['phone'],revision:1,confirm:true,requestId:'synthetic-strap-restored-purchase'},restoredMember,409);
     assert.equal(reviewed.methods.some(m=>m.available||m.selectable),false,'fresh merchant review cannot resurrect historical method authority');
     await h.cmd('billing.method.default.staff',{id:retainedDefault.id,confirm:true,requestId:'synthetic-strap-reconnected-default',channel:'desk'},restoredOwner,409);
     payments.complete(pendingCheckout.providerSessionId);
