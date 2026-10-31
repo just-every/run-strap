@@ -1,0 +1,94 @@
+import assert from 'node:assert/strict';
+
+/** Native owner confirmation is a real message door, distinct from private task completion. */
+export async function automationDeliveryCases(h) {
+  const choose=async(member,value)=>h.cmd('preferences.save',{revision:(await h.state(member.cookie)).memberPreferences.preference.revision,requestId:'synthetic-strap-'+crypto.randomUUID(),marketingInApp:value,consentStatement:'I request the studio in-app messages'},member.cookie);
+  const member=await h.person('AutomationDeliveryOne'),other=await h.person('AutomationDeliveryTwo');
+  for(const p of [member,other])await choose(p,true);
+  const pack=async p=>h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:p.id,credits:2,amountCents:5000,expiresAt:new Date(Date.now()+80*86400000).toISOString()})).id});
+  const packs=[];for(const p of [member,other])packs.push(await pack(p));
+  const sequencePreview=await h.cmd('renewal.sequence.prepare',{name:'Exact renewal review',channel:'inApp',text:'Your retained renewal choices are ready.',maxMessages:10});
+  const sequence=await h.cmd('renewal.sequence.approve',{id:sequencePreview.id,key:sequencePreview.key});
+  const config={name:'Reviewed native delivery',trigger:'renewal',sequenceId:sequence.id,channel:'inApp',startAt:new Date(Date.now()-86400000).toISOString(),endAt:new Date(Date.now()+30*86400000).toISOString(),intervalMinutes:60,maxTasks:100,maxMessages:1,days:100,lowCredits:1};
+  const preview=await h.cmd('automation.prepare',config),rule=await h.cmd('automation.enable',{id:preview.id,key:preview.key});
+  await h.cmd('automation.evaluate',{id:rule.id,requestId:'synthetic-strap-delivery-evaluate'});
+  const tasks=(await h.state()).automation.tasks.filter(t=>packs.some(p=>p.id===t.sourceId));assert.equal(tasks.length,2);
+  const previews=[];
+  for(const task of tasks)previews.push(await h.cmd('automation.delivery.preview',{id:task.id}));
+  assert.ok(previews.every(p=>p.messages.length===1 && p.messages[0].text===sequence.text));
+  const input=p=>({id:p.id,key:p.key,confirm:true});
+  const before=await h.state();
+  await h.cmd('automation.delivery.confirm',input(previews[0]),member.cookie,403);
+  await h.cmd('automation.delivery.confirm',{...input(previews[0]),confirm:false},h.owner,409);
+  assert.equal((await h.state()).version,before.version);
+  const race=await Promise.all(previews.map(p=>h.send('/api/strap/command',{name:'automation.delivery.confirm',input:input(p)},h.owner)));
+  assert.equal(race.filter(r=>r.status===200).length,1);assert.ok(race.every(r=>[200,409].includes(r.status)));
+  const winner=race.findIndex(r=>r.status===200),loser=1-winner,receipt=race[winner].value.result ?? race[winner].value;
+  assert.equal(receipt.messageCount,1);assert.equal(receipt.sourceId,tasks[winner].sourceId);
+  assert.deepEqual(await h.cmd('automation.delivery.confirm',input(previews[winner])),receipt);
+  assert.equal((await h.cmd('automation.delivery.confirm',input(previews[loser]),h.owner,409)).error,'automation_message_budget_exhausted');
+  const after=await h.state();assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.payments,before.payments);
+  for(let i=0;i<2;i++) {
+    const p=tasks[i].personId===member.id?member:other;
+    const messages=(await h.state(p.cookie)).memberMessages.filter(m=>m.sequenceId===sequence.id);
+    assert.equal(messages.length,i===winner?1:0);
+    if(i===winner)assert.equal(messages[0].text,previews[i].messages[0].text);
+  }
+  await h.cmd('automation.pause',{id:rule.id,enabled:false});
+  const resume=await h.cmd('automation.resume.preview',{id:rule.id});await h.cmd('automation.resume',{id:resume.id,key:resume.key});
+  await h.cmd('automation.evaluate',{id:rule.id,requestId:'synthetic-strap-after-resume'});
+  assert.equal((await h.cmd('automation.delivery.preview',{id:tasks[loser].id},h.owner,409)).error,'automation_message_budget_exhausted');
+  console.log('PROBE AUTO-001 native renewal delivery: exact source previews, concurrent confirmations and retry with message budget 1 -> one in-app message, matching retained receipt, no unrelated send or charge; resume preserves exhausted budget');
+
+  const intro=await h.cmd('intro.offer.save',{name:'Reviewed intro delivery',days:7,credits:2,amountCents:2000,eligibility:'new',limit:'person',eligibleServices:['Automation Yoga']});
+  const nurture=await h.cmd('lead.nurture.save',{introOfferId:intro.id,welcome:'Welcome to the retained intro.',guidance:'Review your first-class preparation.',offerText:'Review this finite membership offer.',planName:'Finite reviewed Yoga',days:30,amountCents:9000});
+  const buy=async name=>{
+    const p=await h.person(name);await choose(p,true);
+    await h.cmd('intro.identity.verify',{personId:p.id,householdChecked:true,reason:'Owner checked the actual intro eligibility'});
+    const p0=await h.cmd('intro.preview',{offerId:intro.id,requestId:'synthetic-strap-intro-delivery'},p.cookie);
+    const sale=await h.cmd('intro.purchase',{id:p0.id,key:p0.key,confirm:true},p.cookie);return {member:p,sale};
+  };
+  const first=await buy('AutomationMessageIntro'),unrelated=await buy('AutomationMessageUnrelated');
+  const introPreview=await h.cmd('automation.prepare',{...config,name:'Reviewed intro messages',trigger:'intro',sequenceId:nurture.id,maxMessages:10});
+  const introRule=await h.cmd('automation.enable',{id:introPreview.id,key:introPreview.key});
+  await h.cmd('automation.evaluate',{id:introRule.id,requestId:'synthetic-strap-intro-delivery-evaluate'});
+  const introTask=(await h.state()).automation.tasks.find(t=>t.sourceId===first.sale.id);
+  const exact=await h.cmd('automation.delivery.preview',{id:introTask.id});assert.deepEqual(exact.messages.map(m=>m.text),[nurture.welcome,nurture.guidance]);
+  await h.cmd('automation.pause',{id:introRule.id,enabled:false});
+  await h.cmd('automation.delivery.confirm',input(exact),h.owner,409);
+  const current=await h.cmd('automation.resume.preview',{id:introRule.id});await h.cmd('automation.resume',{id:current.id,key:current.key});
+  await h.cmd('automation.evaluate',{id:introRule.id,requestId:'synthetic-strap-intro-after-resume'});
+  assert.equal((await h.cmd('automation.delivery.confirm',input(exact),h.owner,409)).error,'automation_review_disconnected','resumption requires a new message review');
+  const stale=await h.cmd('automation.delivery.preview',{id:introTask.id});
+  await h.cmd('profile.save',{name:'Current intro member',requestId:'synthetic-strap-delivery-name-change'},first.member.cookie);
+  await h.cmd('automation.delivery.confirm',input(stale),h.owner,409);
+  const fresh=await h.cmd('automation.delivery.preview',{id:introTask.id});
+  const introReceipt=await h.cmd('automation.delivery.confirm',input(fresh));assert.equal(introReceipt.messageCount,2);
+  await h.setAuth({AUTOMATION_RUNTIME_GENERATION:'synthetic-strap-delivery-restart'});
+  assert.deepEqual(await h.cmd('automation.delivery.confirm',input(fresh)),introReceipt);
+  await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+  assert.equal((await h.state(first.member.cookie)).nurture.messages.length,2);assert.equal((await h.state(unrelated.member.cookie)).nurture.messages.length,0);
+  assert.equal((await h.cmd('automation.delivery.preview',{id:introTask.id},h.owner,409)).error,'automation_no_pending_messages');
+  // Only completed attendance may produce the next native offer; no membership is purchased by approval.
+  const coach=await h.person('AutomationDeliveryCoach','instructor'),start=new Date(Date.now()+3600000).toISOString(),d=new Date(start),week=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10);
+  const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Automation Yoga',service:'Automation Yoga',room:'Automation room',start,end:new Date(Date.parse(start)+3600000).toISOString(),capacity:4,instructorId:coach.id}]})).id})).classes[0];
+  const booking=await h.cmd('booking.book',{classId:entry.id},first.member.cookie);
+  await h.cmd('attendance.checkin',{id:booking.id},coach.cookie);
+  assert.equal((await h.cmd('automation.delivery.preview',{id:introTask.id},h.owner,409)).error,'automation_no_pending_messages');
+  await h.db.prepare("UPDATE st_records SET data=? WHERE kind='class' AND id=?").bind(JSON.stringify({...entry,start:new Date(Date.now()-120000).toISOString(),end:new Date(Date.now()-60000).toISOString()}),entry.id).run();
+  const offerPreview=await h.cmd('automation.delivery.preview',{id:introTask.id});assert.equal(offerPreview.messages.length,1);assert.equal(offerPreview.messages[0].bookingId,booking.id);assert.equal(offerPreview.messages[0].terms.amountCents,9000);
+  const money=(await h.state()).charges;
+  await h.cmd('automation.delivery.confirm',input(offerPreview));
+  assert.deepEqual((await h.state()).charges,money);
+  assert.equal((await h.state(first.member.cookie)).nurture.offers[0].status,'offered');
+  assert.equal((await h.state(first.member.cookie)).nurture.messages.length,3);
+  const unrelatedTask=(await h.state()).automation.tasks.find(t=>t.sourceId===unrelated.sale.id),withdrawn=await h.cmd('automation.delivery.preview',{id:unrelatedTask.id});
+  await choose(unrelated.member,false);const withdrawnVersion=(await h.state()).version;
+  await h.cmd('automation.delivery.confirm',input(withdrawn),h.owner,409);assert.equal((await h.state()).version,withdrawnVersion);
+  await choose(unrelated.member,true);await h.cmd('automation.delivery.preview',{id:unrelatedTask.id},h.owner,409);
+  assert.equal((await h.state(unrelated.member.cookie)).nurture.messages.length,0);
+  console.log('PROBE AUTO-001 native intro delivery: approve exact welcome and guidance, restart and replay, then complete authoritative attendance -> two messages plus one reviewed offer once; pause, stale member facts and withdrawn consent refuse without effects');
+  const browser=await buy('AutomationBrowserApproval');
+  await h.cmd('automation.evaluate',{id:introRule.id,requestId:'synthetic-strap-browser-delivery-evaluate'});
+  return {task:(await h.state()).automation.tasks.find(t=>t.sourceId===browser.sale.id),member:browser.member};
+}

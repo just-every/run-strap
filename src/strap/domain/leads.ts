@@ -505,31 +505,37 @@ export function reviewNurture(tx: Transaction) {
   humanOwner(tx.who);suppressNurture(tx);
   for(const sale of list(tx.state,'introSale')) {
     const sequence=list(tx.state,'nurtureSequence').find(s=>s.introOfferId === sale.offerId && s.enabled);
-    if(!sequence)continue;
-    let enrollment=list(tx.state,'nurtureEnrollment').find(e=>e.introSaleId === sale.id);
-    if(!enrollment) {
-      const candidate={id:crypto.randomUUID(),personId:sale.personId,introSaleId:sale.id,sequenceId:sequence.id,status:'active',createdAt:now(),reviewedBy:tx.who.id};
-      const reason=nurtureStopReason(tx.state,candidate);
-      enrollment=reason ? {...candidate,status:'stopped',stopReason:reason,stoppedAt:now()} : candidate;
-      tx.put('nurtureEnrollment',enrollment);
-    }
-    if(enrollment.status !== 'active')continue;
-    for(const [step,message] of [['welcome',sequence.welcome],['first-visit-guidance',sequence.guidance]]) {
-      const key=`nurture-message:${enrollment.id}:${step}`;
-      if(!tx.state.records.has(key))tx.put('memberMessage',{id:key,personId:sale.personId,nurtureEnrollmentId:enrollment.id,step,text:message,
-        introSaleId:sale.id,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
-    }
-    const taskId='nurture-task:'+enrollment.id;
-    if(!tx.state.records.has(taskId))tx.put('nurtureTask',{id:taskId,enrollmentId:enrollment.id,personId:sale.personId,introSaleId:sale.id,status:'open',nextAction:'Review the member’s first-class preparation and questions',createdAt:now(),createdBy:tx.who.id});
-    const visit=introVisit(tx.state,enrollment);
-    if(visit && !list(tx.state,'nurtureOffer').some(o=>o.enrollmentId === enrollment!.id)) {
-      const offer={id:crypto.randomUUID(),personId:sale.personId,enrollmentId:enrollment.id,introSaleId:sale.id,bookingId:visit.id,sequenceId:sequence.id,
-        terms:sequence.terms,text:sequence.offerText,key:crypto.randomUUID(),status:'offered',createdAt:now(),approvedBy:sequence.approvedBy,reviewedBy:tx.who.id,expiresAt:sale.expiresAt};
-      tx.put('nurtureOffer',offer);
-      tx.put('memberMessage',{id:'nurture-offer-message:'+offer.id,personId:sale.personId,nurtureEnrollmentId:enrollment.id,nurtureOfferId:offer.id,step:'membership-offer',text:offer.text,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
-    }
+    if(sequence)reviewNurtureSource(tx,sale.id,sequence.id);
   }
   return {enrollments:list(tx.state,'nurtureEnrollment'),tasks:list(tx.state,'nurtureTask'),offers:list(tx.state,'nurtureOffer')};
+}
+/** Apply only the retained purchase and sequence the owner is reviewing. */
+export function reviewNurtureSource(tx: Transaction, saleId: string, sequenceId: string) {
+  humanOwner(tx.who);
+  const sale=record(tx.state,saleId,'introSale'),sequence=record(tx.state,sequenceId,'nurtureSequence');
+  insist(sequence.enabled && sequence.introOfferId === sale.offerId,'sequence_paused',409);
+  let enrollment=list(tx.state,'nurtureEnrollment').find(e=>e.introSaleId === sale.id);
+  if(!enrollment) {
+    const candidate={id:crypto.randomUUID(),personId:sale.personId,introSaleId:sale.id,sequenceId:sequence.id,status:'active',createdAt:now(),reviewedBy:tx.who.id};
+    const reason=nurtureStopReason(tx.state,candidate);
+    enrollment=reason ? {...candidate,status:'stopped',stopReason:reason,stoppedAt:now()} : candidate;
+    tx.put('nurtureEnrollment',enrollment);
+  }
+  if(enrollment.status !== 'active')return;
+  for(const [step,message] of [['welcome',sequence.welcome],['first-visit-guidance',sequence.guidance]]) {
+    const key=`nurture-message:${enrollment.id}:${step}`;
+    if(!tx.state.records.has(key))tx.put('memberMessage',{id:key,personId:sale.personId,nurtureEnrollmentId:enrollment.id,step,text:message,
+      introSaleId:sale.id,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
+  }
+  const taskId='nurture-task:'+enrollment.id;
+  if(!tx.state.records.has(taskId))tx.put('nurtureTask',{id:taskId,enrollmentId:enrollment.id,personId:sale.personId,introSaleId:sale.id,status:'open',nextAction:'Review the member’s first-class preparation and questions',createdAt:now(),createdBy:tx.who.id});
+  const visit=introVisit(tx.state,enrollment);
+  if(visit && !list(tx.state,'nurtureOffer').some(o=>o.enrollmentId === enrollment!.id)) {
+    const offer={id:crypto.randomUUID(),personId:sale.personId,enrollmentId:enrollment.id,introSaleId:sale.id,bookingId:visit.id,sequenceId:sequence.id,
+      terms:sequence.terms,text:sequence.offerText,key:crypto.randomUUID(),status:'offered',createdAt:now(),approvedBy:sequence.approvedBy,reviewedBy:tx.who.id,expiresAt:sale.expiresAt};
+    tx.put('nurtureOffer',offer);
+    tx.put('memberMessage',{id:'nurture-offer-message:'+offer.id,personId:sale.personId,nurtureEnrollmentId:enrollment.id,nurtureOfferId:offer.id,step:'membership-offer',text:offer.text,at:now(),actorId:tx.who.id,actorRole:'owner',channel:'in-app-marketing'});
+  }
 }
 function purchaseFiniteMembership(tx: Transaction, offer: RecordData, kind: string) {
   const at=now(),terms=offer.terms,pack={id:'membership:'+offer.id,personId:offer.personId,amountCents:terms.amountCents,
