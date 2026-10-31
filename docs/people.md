@@ -61,10 +61,10 @@ After a restore, staff waiver links stay paused with member email. Review and re
 
 ## Find and download staff actions
 
-In People, **Staff action history** shows recorded staff-made actions. Select a person to focus on that member, then
+In People, **Staff action history** shows recorded staff-made member actions, retained staff-access grants and revocations, and drawer count corrections and reopens. Select a person to focus on that member, then
 filter by acting staff member, action right, channel, command and from/through date. Both date bounds include the whole day in the studio's
 time zone. The newest event is first; event identity orders simultaneous events. Clear a field to include all its values.
-Open **Recorded change** for the before/after effect and the retained actor, right, channel and reason.
+Open **Recorded change** for the before and after effect and the retained actor, right, channel and reason. Access changes show their exact grant version and original source identity. Drawer changes retain their original session and source identity, count or status change and recorded reason. New changes retain the acting role; older missing roles, versions, channels or resulting snapshots remain explicitly unavailable. The view never substitutes current grants or drawer balances for historical facts.
 
 **Download staff history CSV** and **Open staff history JSON** use the same filters. These are private owner downloads;
 members, instructors and preparation agents cannot use them. Reads and downloads never create or rewrite history.
