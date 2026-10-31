@@ -107,6 +107,16 @@ export async function recoveryDiagnosticsCases() {
       bookings.push(await h.cmd('booking.book', {classId: classes[i].id}, seed.member.cookie))
     }
     assert.equal(mailCalls, 3)
+    // A waiver sign-in link request goes through native sign-in over the same member mail edge, which now fails.
+    const policy = await h.cmd('waiver.publish', {text: 'synthetic-strap-945 exact recovery policy.', requiresSignature: true, service: 'Recovery policy'})
+    const link = await h.cmd('waiver.launch', {personId: seed.member.id, waiverId: policy.id, channel: 'desk', requestId: 'synthetic-strap-946'})
+    // Native sign-in refuses repeated link requests; the refusal is retained as its own outcome.
+    const links = [link]
+    while (links.at(-1).status === 'requested' && links.length < 12) links.push(await h.cmd('waiver.launch', {personId: seed.member.id, waiverId: policy.id, channel: 'desk', requestId: 'synthetic-strap-947-' + links.length}))
+    const refusedLink = links.at(-1)
+    assert.equal(link.status, 'requested'); assert.equal(refusedLink.status, 'not_sent')
+    await h.cmd('waiver.copy.mail.review', {confirm: true})
+    const mailSent = mailCalls
     // The owner's SMS transport test: a provider refusal, then a submission whose provider identifier stays private.
     await h.setAuth({TWILIO_TEST_ACCOUNT_SID: 'synthetic-strap-940', TWILIO_TEST_AUTH_TOKEN: 'synthetic-strap-941'})
     await h.cmd('sms.test.connect', {confirm: true})
@@ -121,6 +131,11 @@ export async function recoveryDiagnosticsCases() {
     assert.equal(diagnostic.billing.connectionState, 'connected'); assert.equal(diagnostic.mail.connectionState, 'connected')
     assert.equal(diagnostic.tax.connectionState,'connected')
     assert.equal(diagnostic.sms.connectionState,'connected'); assert.ok(diagnostic.sms.reviewedAt)
+    assert.deepEqual([diagnostic.copyMail.connectionState,diagnostic.copyMail.reason],['connected','reviewed_here']); assert.ok(diagnostic.copyMail.reviewedAt)
+    assert.equal(diagnostic.waiverLinks.length,links.length)
+    assert.deepEqual(['status','code'].map(k=>diagnostic.waiverLinks.find(r=>r.id===link.id)[k]),['requested',null])
+    assert.deepEqual(['status','code'].map(k=>diagnostic.waiverLinks.find(r=>r.id===refusedLink.id)[k]),['not_sent','authentication_request_refused'])
+    assert.ok(diagnostic.waiverLinks.every(r=>r.waiverId===policy.id && r.createdAt && r.attemptedAt && r.finishedAt && r.reviewUrl==='/app/people?person='+seed.member.id))
     assert.deepEqual(diagnostic.smsSubmissions.map(r=>[r.id,r.status,r.code,r.connectionState]).sort(),[[rejectedSms.id,'rejected','21211','current'],[submittedSms.id,'submitted',null,'current']].sort())
     assert.equal(diagnostic.smsSubmissions.find(r=>r.id===submittedSms.id).providerStatus,'queued')
     assert.ok(diagnostic.smsSubmissions.every(r=>r.createdAt && r.finishedAt))
@@ -176,9 +191,9 @@ export async function recoveryDiagnosticsCases() {
       for (const secret of [...secrets, seed.member.email]) assert.ok(!r.text.includes(secret),'diagnostics exclude planted private values')
     }
     assert.equal((await h.send(api,{name:'billing.disconnect',input:{confirm:true}},h.owner)).status,404,'diagnostic POST cannot execute an action')
-    await recoveryDiagnosticsBrowser(h, {failedId:failed.id, bookingId:bookings[1].id, checkoutId:checkout.id, failedTaxId:failedTax.id, uncertainTaxId:uncertainTax.id, rejectedSmsId:rejectedSms.id, integrationId:keyDiagnostic[0].id, secrets})
+    await recoveryDiagnosticsBrowser(h, {failedId:failed.id, bookingId:bookings[1].id, checkoutId:checkout.id, failedTaxId:failedTax.id, uncertainTaxId:uncertainTax.id, rejectedSmsId:rejectedSms.id, integrationId:keyDiagnostic[0].id, refusedLinkId:refusedLink.id, memberId:seed.member.id, secrets})
     assert.deepEqual(await diagnosticStore(h),before,'repeated JSON and rendered reads preserve every table')
-    assert.equal(edge.calls.length,calls); assert.equal(tax.calls.length,taxCalls); assert.equal(mailCalls,3,'reads never dispatch or retry'); assert.equal(smsCalls,2,'reads never resend an SMS test')
+    assert.equal(edge.calls.length,calls); assert.equal(tax.calls.length,taxCalls); assert.equal(mailCalls,mailSent,'reads never dispatch or retry'); assert.equal(smsCalls,2,'reads never resend an SMS test')
     const replayBefore = await diagnosticStore(h)
     assert.equal((await signedEvent(h,forged)).value.status,'exception')
     assert.deepEqual(await diagnosticStore(h),replayBefore,'replayed capture retains the original exception without new effects')
@@ -191,15 +206,21 @@ export async function recoveryDiagnosticsCases() {
     const revokedKey = (await diagnosticRead(h)).integrations[0]
     assert.equal(revokedKey.state,'revoked'); assert.ok(revokedKey.revokedAt); assert.equal(revokedKey.lastCode,'scope_not_granted','revocation keeps the last observed refusal')
     // Historical timestamps and future provider extensions stay explicitly unavailable.
+    // Dispatch outcomes are installation-bound and excluded from archives: a launch without one reads as unknown.
+    await h.db.prepare('DELETE FROM st_waiver_launch_dispatches WHERE id=?').bind(link.id).run()
+    const unretained = (await diagnosticRead(h)).waiverLinks.find(r=>r.id===link.id)
+    assert.deepEqual([unretained.status,unretained.code,unretained.attemptedAt,unretained.finishedAt],['unknown',null,null,null]); assert.ok(unretained.createdAt,'the retained launch record keeps its own time')
     await h.db.prepare("UPDATE st_notice_deliveries SET finished_at=?,code=? WHERE source_id=?").bind(Date.now()-3*86400000,providerText,bookings[1].id).run()
     diagnostic = await diagnosticRead(h)
     assert.equal(diagnostic.notices.find(r=>r.sourceId===bookings[1].id).freshness,'stale')
     assert.equal(diagnostic.notices.find(r=>r.sourceId===bookings[1].id).code,'unknown')
-    await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-917',STRIPE_TAX_TEST_KEY:'synthetic-strap-928',TWILIO_TEST_AUTH_TOKEN:'synthetic-strap-944'})
+    await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-917',STRIPE_TAX_TEST_KEY:'synthetic-strap-928',TWILIO_TEST_AUTH_TOKEN:'synthetic-strap-944',MAIL_API_KEY:'synthetic-strap-948'})
     diagnostic = await diagnosticRead(h)
     assert.equal(diagnostic.billing.connectionState,'disconnected'); assert.ok(diagnostic.operations.every(r=>r.connectionState==='disconnected'))
     assert.equal(diagnostic.tax.connectionState,'disconnected')
     assert.deepEqual([diagnostic.sms.connectionState,diagnostic.sms.reason],['disconnected','review_required'])
+    assert.deepEqual([diagnostic.copyMail.connectionState,diagnostic.copyMail.reason],['disconnected','review_required'],'a changed mail credential needs a fresh personal-copy review')
+    assert.equal(diagnostic.waiverLinks.length,links.length,'link history survives the credential change')
     assert.equal(diagnostic.smsSubmissions.length,2); assert.ok(diagnostic.smsSubmissions.every(r=>r.connectionState==='disconnected'),'a changed SMS credential keeps history without its authority')
     assert.ok(diagnostic.taxOperations.every(r=>r.connectionState==='disconnected'))
     assert.ok(diagnostic.checkouts.every(r=>r.connectionState==='disconnected'))
@@ -213,6 +234,7 @@ export async function recoveryDiagnosticsCases() {
     console.log('PROBE SEC-001 checkout and tax: failed comparison then canonical payment; refused tax setup then uncertain confirmation -> distinct source-linked redacted outcomes, no implicit retry')
     console.log('PROBE SEC-001 diagnostics: owner MFA GET with failed billing, an exception and three notice outcomes -> redacted source-linked history, explicit connection states and timestamps')
     console.log('PROBE SEC-001 authority: other roles, bearer credentials and an unchecked owner -> refused with unchanged database; repeated authorized reads -> zero dispatch and unchanged records')
+    console.log(`PROBE SEC-001 waiver links and copy mail: ${links.length} member waiver link requests, then a removed dispatch outcome and a changed mail credential -> first ${unretained.status}, last ${diagnostic.waiverLinks.find(r=>r.id===refusedLink.id).status} ${diagnostic.waiverLinks.find(r=>r.id===refusedLink.id).code}; personal-copy mail ${diagnostic.copyMail.connectionState} ${diagnostic.copyMail.reason}`)
     console.log(`PROBE SEC-001 SMS and integration keys: Twilio TEST refusal and submission, roster read then ungranted attendance read, then revocation and credential change -> ${diagnostic.smsSubmissions.map(r=>r.status+' '+(r.code ?? 'no error')+' '+r.connectionState).join(', ')}; key ${revokedKey.state} with last HTTP ${revokedKey.lastStatus} ${revokedKey.lastCode}; no provider identifier, body, label or token shown`)
     console.log('PROBE SEC-001 stale and rotated connection: old notice observation and changed credential -> stale and unknown detail; billing disconnected with history retained')
   }, {mfa:false,auth:paymentAuth,outbound,log:new CapturedLog(LogLevel.INFO),handleStructuredLogs:({message})=>logs.push(message)})

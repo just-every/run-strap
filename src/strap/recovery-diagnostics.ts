@@ -4,6 +4,7 @@ import { load } from './domain/store';
 import { DomainError, humanOwner, list, type Actor } from './domain/types';
 import { memberMail } from './domain/notices';
 import { memberMailConfigured } from './notice-mail';
+import { evidenceCopyMailStatus } from './evidence-copy';
 import { connected as taxConnection } from './tax/model';
 import { testConnected as smsConnected, testIdentity as smsIdentity } from './twilio/config';
 
@@ -25,7 +26,8 @@ const codes = ['billing_provider_refused','billing_provider_outcome_unknown','bi
   'tax_owner_authority_changed','tax_test_settings_not_active','tax_active_registration_required',
   'provider_outcome_unknown','transport_uncertain','provider_rejected','provider_rate_limited','provider_uncertain','provider_refused',
   'integration_credential_invalid','integration_credential_required','integration_credential_revoked','invalid_cursor','invalid_limit',
-  'location_not_granted','rate_limited','read_only','schema_version_required','scope_not_granted','unsupported_schema_version','wrong_origin'];
+  'location_not_granted','rate_limited','read_only','schema_version_required','scope_not_granted','unsupported_schema_version','wrong_origin',
+  'member_unavailable','member_uses_identity_provider','authentication_request_refused','authentication_outcome_unknown'];
 // Twilio reports numbered errors; the number is kept, never its prose.
 const providerCode = (value: unknown) => typeof value === 'string' && /^\d{1,6}$/.test(value) ? value : typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 1e6 ? String(value) : value == null ? null : choice(value, codes);
 const smsStatuses = ['queued','sending','sent','delivered','undelivered','failed'];
@@ -59,6 +61,10 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
   const sms = await smsIdentity(env), smsLive = await smsConnected(env);
   const smsReview = await env.DB.prepare("SELECT connected_at FROM st_sms_connections WHERE id='twilio-test'").first<{connected_at: unknown}>();
   const smsCallbacks = list(loaded.state, 'smsTestStatus');
+  const copyMail = await evidenceCopyMailStatus(env, loaded.state);
+  const copyReview = await env.DB.prepare("SELECT approved_at FROM st_evidence_copy_mail WHERE id='mail'").first<{approved_at: unknown}>();
+  // Link dispatch outcomes are installation-bound and never travel; a restored launch keeps its record with an unknown outcome.
+  const dispatches = (await env.DB.prepare('SELECT id,status,code,attempted_at,finished_at FROM st_waiver_launch_dispatches').all()).results;
   // Inbound keys are credentials: their request log never travels in an archive, so a restored studio lists none.
   const keys = (await env.DB.prepare(`SELECT i.id,i.created_at,i.revoked_at,r.at AS last_at,r.status AS last_status,r.code AS last_code,
     (SELECT COUNT(*) FROM st_integration_requests f WHERE f.integration_id=i.id AND f.status>=400) AS refused
@@ -77,6 +83,8 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
       providerHealth: 'unknown', reviewUrl: '/app/studio#tax' },
     sms: { configured: !!sms, connectionState: smsLive ? 'connected' : 'disconnected', reason: !sms ? 'not_configured' : smsLive ? 'reviewed_here' : 'review_required',
       reviewedAt: timestamp(smsReview?.connected_at), freshness: freshness(timestamp(smsReview?.connected_at)), providerHealth: 'unknown', reviewUrl: '/app/studio#sms-test' },
+    copyMail: { configured: copyMail.configured, connectionState: copyMail.reviewed ? 'connected' : 'disconnected', reason: !copyMail.configured ? 'not_configured' : copyMail.reviewed ? 'reviewed_here' : 'review_required',
+      reviewedAt: timestamp(copyReview?.approved_at), freshness: freshness(timestamp(copyReview?.approved_at)), providerHealth: 'unknown', reviewUrl: '/app/classes' },
     operations: list(loaded.state, 'billingOperation').map(r => ({
       id: reference(r.id), type: choice(r.type, ['connect','setup.start','setup.complete']),
       status: choice(r.status, ['pending','succeeded','failed','uncertain','incomplete']), code: r.errorCode == null ? null : choice(r.errorCode, codes),
@@ -119,6 +127,12 @@ export async function recoveryDiagnostics(env: Bindings, who: Actor) {
         createdAt: timestamp(r.at), finishedAt: timestamp(r.finishedAt), callbackStatus: callback ? choice(callback.providerStatus, smsStatuses) : null, callbackAt: timestamp(callback?.at),
         freshness: freshness(timestamp(callback?.at ?? r.finishedAt ?? r.at)), connectionState: smsLive && r.configurationHash === sms?.configurationHash ? 'current' : 'disconnected',
         reviewUrl: '/app/studio#sms-test' };
+    }).sort(bySourceTime),
+    waiverLinks: list(loaded.state, 'waiverLaunch').map(r => {
+      const d = dispatches.find(row => row.id === r.id), member = loaded.state.people.find(p => p.id === r.personId && p.active && !p.erasedAt);
+      return { id: reference(r.id), waiverId: reference(r.waiverId), status: d ? choice(d.status, ['queued','sending','requested','not_sent','uncertain']) : 'unknown',
+        code: d?.code == null ? null : choice(d.code, codes), createdAt: timestamp(r.createdAt), attemptedAt: timestamp(d?.attempted_at), finishedAt: timestamp(d?.finished_at),
+        freshness: freshness(timestamp(d?.finished_at ?? d?.attempted_at ?? r.createdAt)), reviewUrl: member ? '/app/people?person=' + encodeURIComponent(member.id) : '/app/people' };
     }).sort(bySourceTime),
     integrations: keys.map(r => ({
       id: reference(r.id), state: r.revoked_at == null ? 'active' : 'revoked', createdAt: timestamp(r.created_at), revokedAt: timestamp(r.revoked_at),

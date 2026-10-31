@@ -112,7 +112,7 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
 }
 
 /** The recovery page uses real authenticated HTTP, with assets served locally. */
-export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checkoutId, failedTaxId, uncertainTaxId, rejectedSmsId, integrationId, secrets}) {
+export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checkoutId, failedTaxId, uncertainTaxId, rejectedSmsId, integrationId, refusedLinkId, memberId, secrets}) {
   const browser = await chromium.launch({headless:true, executablePath:process.env.STRAP_CHROMIUM_PATH, args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     const context = await browser.newContext({viewport:{width:1440,height:1000}})
@@ -143,6 +143,8 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checko
       assert.match(await page.locator('.recovery-diagnostics').innerText(),/provider health unknown/)
       const rejectedSms = page.getByRole('row').filter({hasText:rejectedSmsId})
       assert.match(await rejectedSms.innerText(),/Rejected/); assert.match(await rejectedSms.innerText(),/Provider error 21211/)
+      const refusedLink = page.getByRole('row').filter({hasText:refusedLinkId})
+      assert.match(await refusedLink.innerText(),/Not sent/); assert.match(await refusedLink.innerText(),/authentication request refused/)
       const key = page.getByRole('row').filter({hasText:integrationId})
       assert.match(await key.innerText(),/HTTP 403; scope not granted/); assert.match(await key.innerText(),/Refused among retained requests: 1/)
       for (const secret of secrets) assert.ok(!(await page.content()).includes(secret))
@@ -155,7 +157,7 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checko
       // The phone layout keeps every history readable without sideways scrolling.
       await page.setViewportSize({width:390,height:1000})
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'390 layout does not overflow')
-      assert.ok(await rejectedSms.isVisible()); assert.ok(await key.isVisible())
+      assert.ok(await rejectedSms.isVisible()); assert.ok(await key.isVisible()); assert.ok(await refusedLink.isVisible())
       await page.setViewportSize({width:1440,height:1000})
       const proof = process.env.STRAP_RECOVERY_PROOF_DIR
       if (proof) {
@@ -168,6 +170,9 @@ export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, checko
       await rejectedSms.getByRole('link',{name:'Review SMS test',exact:true}).click()
       assert.equal(new URL(page.url()).hash,'#sms-test')
       await page.getByRole('heading',{name:'Twilio SMS test',exact:true}).waitFor()
+      await page.goBack()
+      await refusedLink.getByRole('link',{name:'Review member waiver',exact:true}).click()
+      assert.equal(new URL(page.url()).pathname,'/app/people'); assert.equal(new URL(page.url()).searchParams.get('person'),memberId)
       await page.goBack()
       await key.getByRole('link',{name:'Review integration key',exact:true}).click()
       assert.equal(new URL(page.url()).pathname,'/app/integrations')
