@@ -6,9 +6,10 @@ import { chromium } from "@playwright/test";
 async function screens(h, name, act, cookie = h.owner) {
   const browser = await chromium.launch({
     headless: true,
-    args: ["--use-mock-keychain", "--password-store=basic"],
+    executablePath: process.env.STRAP_CHROMIUM,
+    args: ["--no-sandbox", "--use-mock-keychain", "--password-store=basic"],
   });
-  await mkdir(process.env.STRAP_PROOF_DIR, { recursive: true });
+  await mkdir((process.env.STRAP_PROOF_DIR ?? process.env.STRAP_RIGHTS_PROOF_DIR), { recursive: true });
   try {
     for (const width of [1440, 390]) {
       const context = await browser.newContext({
@@ -74,7 +75,7 @@ async function screens(h, name, act, cookie = h.owner) {
       );
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
-        path: join(process.env.STRAP_PROOF_DIR, `${name}-${width}.png`),
+        path: join((process.env.STRAP_PROOF_DIR ?? process.env.STRAP_RIGHTS_PROOF_DIR), `${name}-${width}.png`),
         fullPage: true,
       });
       await context.close();
@@ -208,4 +209,57 @@ export async function giftBrowser(h, giftCardId, desk) {
     assert.equal(saved.sales.filter(s=>s.reference==="synthetic-strap-132"+width).length,1);
     assert.equal(await page.getByRole("button",{name:"Adjust gift value",exact:true}).count(),0);
   },desk.cookie);
+}
+
+export async function staffRetailBrowser(h, {manager,desk,buyer,sku,west}) {
+  for(const staff of [manager,desk]) {
+    await screens(h,'STAFF-001-'+staff.name,async(page,width)=>{
+      const details=label=>page.locator('details').filter({has:page.locator('summary').getByText(label,{exact:true})});
+      // Each flow asserts at phone width; desktop is the same populated screen proof.
+      if(width===390) {
+        const issue=details('Issue gift card');await issue.locator('summary').click();
+        await issue.getByLabel('Purchaser',{exact:true}).selectOption(buyer.id);
+        await issue.getByLabel('Gift recipient',{exact:true}).selectOption(buyer.id);
+        await issue.getByLabel('Location',{exact:true}).selectOption(west.id);
+        await issue.getByLabel('Gift value in USD',{exact:true}).fill('60.00');
+        await issue.getByLabel('Funding reference',{exact:true}).fill('synthetic-strap-browser-gift-'+staff.name);
+        await issue.getByRole('button',{name:'Issue gift card',exact:true}).click();
+        const read=async()=>(await h.send('/api/strap/retail',undefined,h.owner)).value;
+        const card=(await read()).gifts.cards.find(c=>c.reference==='synthetic-strap-browser-gift-'+staff.name);
+        assert.ok(card,'staff form issues the named gift');
+        const sale=details('Sell retail');await sale.locator('summary').click();
+        await sale.getByLabel('Member',{exact:true}).selectOption(buyer.id);
+        await sale.getByLabel('SKU variant',{exact:true}).selectOption(sku.id);
+        await sale.getByLabel('Location',{exact:true}).selectOption(west.id);
+        await sale.getByLabel('Confirm total in USD',{exact:true}).fill('20.00');
+        await sale.getByLabel('Tender',{exact:true}).selectOption('gift');
+        await sale.getByLabel('Gift card',{exact:true}).selectOption(card.id);
+        await sale.getByLabel('Tender reference',{exact:true}).fill('synthetic-strap-browser-sale-'+staff.name);
+        await sale.getByRole('button',{name:'Record sale',exact:true}).click();
+        const saved=(await read()).sales.find(s=>s.reference==='synthetic-strap-browser-sale-'+staff.name);
+        assert.ok(saved);assert.equal((await read()).gifts.cards.find(c=>c.id===card.id).balanceCents,4000);
+        const ret=details('Return retail');await ret.locator('summary').click();
+        await ret.getByLabel('Original sale',{exact:true}).selectOption(saved.id);
+        await ret.getByLabel('Restock treatment',{exact:true}).selectOption('true');
+        await ret.getByLabel('Reason',{exact:true}).fill('Returned unworn');
+        await ret.getByRole('button',{name:'Record return',exact:true}).click();
+        assert.equal((await read()).returns.find(r=>r.saleId===saved.id).tender,'gift');
+        const adjustment=page.getByRole('row').filter({has:page.locator('input[name="giftCardId"][value="'+card.id+'"]')}).locator('details');
+        await adjustment.locator('summary').click();
+        await adjustment.getByLabel('Signed adjustment in USD',{exact:true}).fill('1.00');
+        await adjustment.getByLabel('Reason',{exact:true}).fill('Reviewed correction');
+        await adjustment.getByRole('button',{name:'Adjust gift value',exact:true}).click();
+        const refund=details('Refund gift funding');await refund.locator('summary').click();
+        await refund.getByLabel('Original gift card',{exact:true}).selectOption(card.id);
+        await refund.getByLabel('Original-tender refund in USD',{exact:true}).fill('10.00');
+        await refund.getByLabel('Refund reference',{exact:true}).fill('synthetic-strap-browser-refund-'+staff.name);
+        await refund.getByLabel('Reason',{exact:true}).fill('Original external funding returned');
+        await refund.getByRole('button',{name:'Record original-tender refund',exact:true}).click();
+        assert.equal((await read()).gifts.cards.find(c=>c.id===card.id).balanceCents,5100);
+        assert.ok((await read()).gifts.refunds.some(r=>r.giftCardId===card.id&&r.tender==='external'&&r.amountCents===1000));
+        for(const label of ['Receiving and stock controls','Cash drawers','Drawer sources and manager history'])assert.equal(await page.getByRole('heading',{name:label,exact:true}).count(),0);
+      }
+      for(const label of ['Sell retail','Issue gift card','Refund gift funding'])await details(label).evaluate(e=>e.open=true);
+    },staff.cookie);
+  }
 }

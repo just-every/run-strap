@@ -128,7 +128,7 @@ export const handlers = {
   'retail.count':defineCommand(countStock,['owner']),
   'retail.transfer':defineCommand(transferStock,['owner']),
   'retail.sell':defineCommand(sellRetail,['owner','front-desk'],{staffRight:'sale'}),
-  'retail.return':defineCommand(returnRetail,['owner']),
+  'retail.return':defineCommand(returnRetail,['owner','front-desk'],{staffRight:'refund'}),
   'drawer.open':defineCommand(openDrawer,['owner']),
   'drawer.close':defineCommand(closeDrawer,['owner']),
   'drawer.cash':defineCommand(drawerCash,['owner']),
@@ -394,7 +394,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if(name === 'intake.submit.staff') authorizeIntakeSubmission(tx,input);
   const enrollmentBasis = intakeEnrollmentBasis(tx.state);
   const signingEnrollmentBasis=new Set(list(tx.state,'pack').map(p=>p.id));
-  if (name.startsWith('retail.') && ['front-desk','manager'].includes(who.role)) requireRetail(tx, name === 'retail.sell' ? 'sale' : name.slice(7), input);
+  if (name.startsWith('retail.') && who.role !== 'owner') requireRetail(tx, name === 'retail.sell' ? 'sale' : name.slice(7), input);
   if (name.startsWith('appointment.client.')) authorizeClientAppointment(tx,name,input);
   if (name.startsWith('appointment.') && !name.startsWith('appointment.client.') && !name.includes('.offer.') && !['appointment.booking.grant','appointment.price.save'].includes(name)) authorizeAppointmentCommand(tx,input);
   if(tx.who.role==='front-desk' && name.startsWith('attendance.') && !delegatedStaff) {const offer=tx.state.records.get(String(input.id))?.data,personId=String(input.personId ?? offer?.personId ?? '');const grant=legacyStaffGrant(tx.state,tx.who,'attendance-plan');const entry=tx.state.records.get(String(input.classId))?.data;requireAttendanceBooking(tx,personId,entry?[entry.locationId ?? 'studio']:grant?.locationIds ?? []);}
@@ -525,13 +525,22 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
 }
 
 export function deskRetailSnapshot(state: State, who: Actor) {
-  const grant = retailGrant(state,who);
   if (!['front-desk','manager'].includes(who.role)) return {};
-  if (!grant?.enabled || (!grant.sale && !grant.refund)) return {};
-  const inventory = inventorySnapshot(state), all = giftSnapshot(state);
-  const visible = (c: RecordData) => hasStaffRight(state,who,'sale',c.personId,c.locationId,'retail') || hasStaffRight(state,who,'refund',c.personId,c.locationId,'retail');
-  const cards = all.cards.filter(visible);
-  const gifts = {cards:cards.map(({id,personId,locationId,balanceCents}: any) => ({id,personId,locationId,balanceCents})),entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
-  const retail = {...inventory,suppliers:[],receipts:[],returns:[],movements:[],actions:[],sales:inventory.sales.filter(c => visible(c)),stock:inventory.stock.filter(c => grant.locationIds.includes(c.locationId))};
-  return {saleGrant:grant,gifts,retail,drawers:{sessions:[],adjustments:[]},locations:locations(state).filter(l => grant.locationIds.includes(l.id)),retailPeople:state.people.filter(p => grant.memberIds.includes(p.id)).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}))};
+  const permits = (right: 'sale'|'refund', memberId?: string, locationId?: string) => hasStaffRight(state,who,right,memberId,locationId,'retail');
+  const sale = permits('sale'), refund = permits('refund');
+  if (!sale && !refund) return {};
+  const visible = (c: RecordData) => permits('sale',c.personId,c.locationId) || permits('refund',c.personId,c.locationId);
+  const places = locations(state).filter(l => permits('sale',undefined,l.id) || permits('refund',undefined,l.id));
+  const people = state.people.filter(p => p.active && !p.erasedAt && places.some(l => permits('sale',p.id,l.id) || permits('refund',p.id,l.id))).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}));
+  const grant = {...retailGrant(state,who),enabled:true,sale,refund,memberIds:people.map(p=>p.id),locationIds:places.map(l=>l.id)};
+  const inventory = inventorySnapshot(state), all = giftSnapshot(state), cards = all.cards.filter(visible);
+  const gifts = {cards:cards.map((c: RecordData) => ({id:c.id,personId:c.personId,locationId:c.locationId,balanceCents:c.balanceCents,
+    canAdjust:permits('refund',c.personId,c.locationId),canRefund:permits('refund',c.personId,c.locationId) && permits('refund',c.purchaserId,c.locationId)})),
+    entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
+  const sales = inventory.sales.filter(visible);
+  const retail = {...inventory,suppliers:[],receipts:[],returns:inventory.returns.filter(r=>sales.some(s=>s.id===r.saleId)),movements:[],actions:[],sales,
+    stock:inventory.stock.filter(c => places.some(l=>l.id===c.locationId))};
+  const sessions = drawerSnapshot(state).sessions.filter(c=>c.status==='open' && places.some(l=>l.id===c.locationId)).map(c=>({id:c.id,register:c.register,locationId:c.locationId,status:c.status,entries:[]}));
+  return {saleGrant:grant,retailPermissions:{sale,refund,merchandiseSale:hasStaffRight(state,who,'sale'),merchandiseRefund:hasStaffRight(state,who,'refund')},
+    gifts,retail,drawers:{sessions,adjustments:[]},retailLocations:places,locations:places,retailPeople:people};
 }

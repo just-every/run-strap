@@ -76,23 +76,29 @@ export async function grantRetailStaff(tx: Transaction, input: Record<string, un
 
 export function requireRetail(tx: Transaction, action: string, input: Record<string,unknown>) {
   if (tx.who.role === 'owner' && tx.who.isOwner) { humanOwner(tx.who); return; }
-  insist(['manager','front-desk','finance'].includes(tx.who.role),'retail_right_required',403);
+  insist(['manager','front-desk'].includes(tx.who.role),'retail_right_required',403);
   const giftAction = ['sale','gift.issue','gift.adjust','gift.refund'].includes(action);
   insist(giftAction || action === 'return','retail_right_required',403);
   const right = action === 'sale' || action === 'gift.issue' ? 'sale' : 'refund';
-  const card = input.giftCardId ? tx.state.records.get(String(input.giftCardId))?.data : null;
+  const giftRecord = tx.state.records.get(String(input.giftCardId));
+  const card = giftRecord?.kind === 'giftCard' ? giftRecord.data : null;
   const cardAction = action === 'gift.adjust' || action === 'gift.refund';
   const sale = action === 'return' ? tx.state.records.get(String(input.saleId)) : null;
   const memberId = cardAction ? card?.personId : action === 'return' ? sale?.kind === 'retailSale' ? sale.data.personId : undefined : input.personId;
-  const locationId = cardAction ? card?.locationId : action === 'return' ? sale?.data.locationId : input.locationId ?? 'studio';
+  const locationId = cardAction ? card?.locationId : action === 'return' ? sale?.kind === 'retailSale' ? sale.data.locationId : undefined : input.locationId ?? 'studio';
   const common = hasStaffRight(tx.state,tx.who,right,memberId,locationId);
   const legacy = giftAction && hasStaffRight(tx.state,tx.who,right,memberId,locationId,'retail');
   insist(common || legacy,'retail_right_required',403);
   insist(typeof memberId === 'string' && typeof locationId === 'string','retail_scope_required',403);
   const door = common ? 'all' : 'retail';
-  if (action === 'sale' && !common) {
+  if (action === 'sale' && !common) insist(input.tender === 'gift','gift_redemption_only',403);
+  if (action === 'sale' && input.tender === 'gift') {
     insist(card && hasStaffRight(tx.state,tx.who,right,card.personId,card.locationId ?? locationId,door),'retail_scope_required',403);
-    insist(input.tender === 'gift','gift_redemption_only',403);
   }
+  if (action === 'return' && sale?.data.tender === 'gift') {
+    const original = tx.state.records.get(sale.data.giftCardId);
+    insist(original?.kind === 'giftCard' && hasStaffRight(tx.state,tx.who,right,original.data.personId,original.data.locationId),'retail_scope_required',403);
+  }
+  if (action === 'gift.refund') insist(card && hasStaffRight(tx.state,tx.who,right,card.purchaserId,locationId,door),'retail_scope_required',403);
   if (action === 'gift.issue') insist(typeof input.recipientId === 'string' && hasStaffRight(tx.state,tx.who,right,input.recipientId,locationId,door),'retail_scope_required',403);
 }

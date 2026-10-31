@@ -250,6 +250,7 @@ test(
           records.some((r) => r.kind === kind),
           kind + " is portable",
         );
+      await (await import("./staff-rights-cases.mjs")).staffRetailRights(h);
       if (process.env.STRAP_PROOF_DIR)
         await (
           await import("./retail-browser.mjs")

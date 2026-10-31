@@ -12,6 +12,7 @@ export const requestBasis = (input: Record<string,unknown>) => JSON.stringify(Ob
 const codeEffect = (value: RecordData | null) => ({issued:!!value?.code,codeRevision:value?.codeRevision ?? 0,codeIssuedAt:value?.codeIssuedAt ?? null});
 const noticeEffect = (value: RecordData) => ({id:value.id,personId:value.personId,dismissedAt:value.dismissedAt ?? null,dismissedByStaff:value.dismissedByStaff ?? null});
 export function staffBefore(tx: Transaction, name: string, input: Record<string,unknown>) {
+  if (name === 'retail.return') { const sale=record(tx.state,input.saleId,'retailSale'); return {sale:structuredClone(sale),returns:list(tx.state,'retailReturn').filter(r=>r.saleId===sale.id)}; }
   if (name.startsWith('retail.')) { const gift=tx.state.records.get(String(input.giftCardId))?.data; return gift ? {giftCardId:gift.id,entries:list(tx.state,'giftEntry').filter(e=>e.giftCardId===gift.id)} : null; }
   if (name === 'lead.referral.record')return list(tx.state,'referral').find(r=>r.personId === input.personId && r.friendEmail === String(input.friendEmail ?? '').trim().toLowerCase()) ?? null;
   if (name === 'intake.submit.staff') return list(tx.state,'intakeResponse').filter(r => r.personId === input.personId && r.formId === input.formId).at(-1) ?? null;
