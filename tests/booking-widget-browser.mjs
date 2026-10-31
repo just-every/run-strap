@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { chromium } from '@playwright/test';
+import { auditPage } from './accessibility-browser.mjs';
 import { publishWidget, widgetChoice } from './booking-widget-journey.mjs';
 
 export async function widgetBrowser(h,week) {
@@ -31,6 +32,7 @@ export async function widgetBrowser(h,week) {
         await page.goto(hosts[0].origin);const frame=page.frameLocator('iframe');await frame.getByRole('heading',{name:'Class schedule',exact:true}).waitFor();
         await capture('embedded-schedule',page.frames().find(f=>f.url()===embed));
         if(width===1440) {
+          await auditPage(page.frames().find(f=>f.url()===embed),'public embedded schedule');
           assert.equal(await page.evaluate(()=>document.querySelector('iframe').contentDocument),null,'host cannot inspect cross-origin document');
           await frame.getByLabel('Service',{exact:true}).selectOption('Strength');await Promise.all([page.waitForEvent('framenavigated',{predicate:f=>f.url().includes('service=Strength')}),frame.getByRole('button',{name:'Show classes'}).click()]);await frame.getByRole('heading',{name:entries[2].title,exact:true}).waitFor();assert.equal(await frame.getByRole('heading',{name:entries[0].title,exact:true}).count(),0);
           await page.goto(hosts[1].origin);await page.frameLocator('iframe').getByRole('heading',{name:'Class schedule',exact:true}).waitFor();
@@ -38,7 +40,7 @@ export async function widgetBrowser(h,week) {
           await page.goto(hosts[0].origin);
           await page.frameLocator('iframe').getByRole('link',{name:'Select class',exact:true}).first().click();await page.waitForURL('**/signin?returnTo=*');assert.equal(page.frames().length,1,'sign-in opens at top level');
           const returnTo=new URL(page.url()).searchParams.get('returnTo');assert.ok(returnTo.startsWith('/app/widget?selection='));
-          await login(member.cookie);await page.goto(h.origin+returnTo);await page.getByRole('heading',{name:'Review selected class'}).waitFor();await capture('private-review');
+          await login(member.cookie);await page.goto(h.origin+returnTo);await page.getByRole('heading',{name:'Review selected class'}).waitFor();await capture('private-review');await auditPage(page,'private selected class review');
           await page.getByLabel('I am an adult booking for myself.').check();const posted=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('name=booking.book'));await page.getByRole('button',{name:'Book my class',exact:true}).click();const result=await posted;if(result.status()!==303)assert.fail(((await result.text()).match(/role="alert"[^>]*>([^<]+)/)?.[1]??'form refused')+' origin='+result.request().headers().origin);await page.waitForURL(h.origin+'/app');assert.equal((await h.state(member.cookie)).bookings.filter(b=>b.classId===entries[0].id).length,1);
         } else {
           const selection=await widgetChoice(h,hosts[0].origin,entries[1].id);await login(desk.cookie);await page.goto(h.origin+selection.location);await page.getByRole('heading',{name:'Review selected class'}).waitFor();await page.getByLabel('Invited adult member',{exact:true}).selectOption(member.id);await page.getByLabel('Booking reference',{exact:true}).fill('synthetic-strap-widget-phone');await capture('staff-review');await page.getByRole('button',{name:'Book for member',exact:true}).click();await page.waitForURL(h.origin+'/app');assert.ok((await h.state()).bookings.some(b=>b.personId===member.id&&b.classId===entries[1].id&&b.madeByRole==='front-desk'));
