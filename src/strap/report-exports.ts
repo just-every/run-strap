@@ -16,7 +16,7 @@ export function reportDownload(s: any, name: string, format: string, query: URLS
   let rows: Cell[][], totals: Row | undefined, definitions: string[] = [], timeZone = s.studio?.timeZone ?? 'UTC'
   if (name === 'revenue') {
     const report = revenueReport(s,query)
-    rows = table(['id','kind','at','date','locationId','timeZone','personId','packId','agreementId','cancellationId','sourceId','plan','amountCents','externalReference','sourceUrl'],report.sources.map(row=>({...row,externalReference:row.record.reference ?? null})))
+    rows = table(['id','kind','metric','eventCount','at','date','locationId','timeZone','personId','packId','agreementId','cancellationId','sourceId','plan','amountCents','externalReference','sourceUrl'],report.sources.map(row=>({...row,externalReference:row.record.reference ?? null})))
     totals = report.totals; definitions = report.definitions; timeZone = report.timeZone
   } else if (name === 'attendance') {
     const report = attendanceReport(s,query)

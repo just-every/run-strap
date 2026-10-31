@@ -3,7 +3,7 @@ import { instant, insist, list, type State } from './domain/types'
 /** Accepted native agreements retain their original sale, distinct from a later renewal pack. */
 export function nativeRecurringAgreements(state: State) {
   const cancellations = list(state,'contractCancellation'), packs = list(state,'pack')
-  return list(state,'recurringTerms').filter(t => t.acceptedAt && t.acceptedBy && !t.erased).map(terms => {
+  return list(state,'recurringTerms').filter(t => t.acceptedAt && t.acceptedBy).map(terms => {
     const cancellation = cancellations.find(c => c.termsId === terms.id && c.status === 'applied') ?? null
     const pending = cancellations.some(c => c.termsId === terms.id && c.status === 'scheduled')
     const withdrawn = cancellations.some(c => c.termsId === terms.id && c.status === 'withdrawn')
