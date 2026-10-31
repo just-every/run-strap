@@ -2,6 +2,7 @@
 // sale location's address and US phone, the exact USD amounts charged and the sale time on that location's clock;
 // members and staff read the same facts. It records the charge added to the balance: payments are recorded separately,
 // and delivering a receipt by email or itemizing tax is BILL-009.
+import { catalogTerms } from './product-catalog';
 import { money } from './format'
 import { packName } from './facts'
 import { addressText } from './locations'
@@ -24,6 +25,7 @@ export function receipt(s: any, pack: any, staff: boolean) {
     + `<p>${h(place?.name ?? s.studio?.location ?? 'Studio')} · ${h(addressText(place?.address))}${place?.phone ? ` · ${h(phoneText(place.phone))}` : ''}</p>`
     + `<p><time datetime="${h(pack.createdAt)}">${h(saleTime(pack.createdAt, zone))}</time>${staff ? ` · ${h(person(s, pack.personId))}` : ''}</p>`
     + `<div class="table-wrap">${table(['Item', '>Amount (USD)'], lines.map(([label, cents]) => `<tr>${cell('Item', h(label))}${cell('Amount (USD)', money(cents), 'right')}</tr>`).join('') + `<tr>${cell('Item', '<strong>Total charged</strong>')}${cell('Amount (USD)', `<strong>${money(total)}</strong>`, 'right')}</tr>`)}</div>`
+    + catalogTerms(pack.catalogVersion)
     + (pack.proration ? `<p>First-term calculation: ${money(pack.proration.fullAmountCents)} × ${pack.proration.remainingSeconds} remaining ÷ ${pack.proration.totalSeconds} cycle seconds (UTC), rounded half-up to the cent. Join ${h(pack.proration.joinAt)}; cycle ${h(pack.proration.cycleStartAt)} to ${h(pack.proration.cycleEndAt)}.</p>` : '')
     + (adjustmentLines ? `<h4>Itemized adjustments</h4><div class="table-wrap">${table(['Item','Effective','>Amount (USD)'], adjustmentLines)}</div><p>Adjustments added to the studio balance: ${money(adjustments.reduce((n,c)=>n+c.amountCents,0))}. The original purchase total above stays unchanged. No payment collected.</p>` : '')
     + (s.studio?.receiptDetails ? `<p>${h(s.studio.receiptDetails)}</p>` : '')
