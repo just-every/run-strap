@@ -7,7 +7,7 @@ import { saveIntroOffer, closeIntroOffer } from './intro-offers';
 export const catalogKinds = ['finite-pack','drop-in','fixed-term','intro','monthly','annual'] as const;
 
 /** Published terms are append-only. The product only selects the version offered for a new sale. */
-export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
+export async function publishProduct(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);
   const code = text(input.code,'code',40);
   insist(/^[a-z][a-z0-9-]*$/.test(code),'invalid_product_code');
@@ -32,6 +32,14 @@ export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
   const credits = ['fixed-term','monthly','annual'].includes(String(kind)) ? 0 : kind === 'drop-in' ? 1 : integer(input.credits,'credits',1,10_000);
   const validDays = integer(input.validDays,'validDays',1,kind === 'intro' ? 366 : 3660);
   const version = (prior?.data.version ?? 0)+1, at = now();
+  if (kind === 'monthly' || kind === 'annual') {
+    // Publication is the owner's explicit review of native invoice sale terms.
+    // Restored historical versions cannot reconnect the installation by themselves.
+    const origin=text(tx.notices.origin,'billing_origin',2000);
+    const connection=await tx.db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
+    insist(!connection || connection.origin===origin,'billing_origin_changed',409);
+    if (!connection) tx.sql.push(tx.statement("INSERT INTO st_contract_connections(id,connection_id,origin,approved_by,approved_at) VALUES('billing',?,?,?,?)",crypto.randomUUID(),origin,tx.who.id,at));
+  }
   const versionId = productId+':v'+version;
   const intro = kind === 'intro' ? saveIntroOffer(tx,{...input,days:validDays,credits,eligibleServices}) : null;
   if (intro) tx.put('introOffer',{...intro,catalogVersionId:versionId,...places});

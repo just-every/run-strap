@@ -38,7 +38,9 @@ export async function previewCatalogPurchase(tx: Transaction, input: Record<stri
   const terms={personId:member.id,catalogVersion:structuredClone(version),credits:version.credits,amountCents:version.amountCents,expiresAt,termStartAt:at,
     eligibleServices:version.eligibleServices,locationId:version.locationId,eligibleLocations:version.eligibleLocations,
     ...(unlimited ? {entitlement:{kind:'unlimited',name:version.name,visits:null,period:null,rollover:0,days:null,from:null,to:null,maxUpcoming:null}} : {})};
-  const recurring=intervalMonths ? {id:termsId!,amountCents:version.amountCents,intervalMonths,noticeLeadDays:30,timeZone:version.timeZone,firstDueAt:expiresAt,stopPath:'/app/packs#recurring-'+termsId,originalInitiationFeeCents:0} : null;
+  const billing=intervalMonths ? await tx.db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>() : null;
+  if (intervalMonths) insist(billing && billing.origin===tx.notices.origin,'catalog_owner_billing_review_required',409);
+  const recurring=intervalMonths ? {id:termsId!,connectionId:billing!.connection_id,amountCents:version.amountCents,intervalMonths,noticeLeadDays:30,timeZone:version.timeZone,firstDueAt:expiresAt,stopPath:'/app/packs#recurring-'+termsId,originalInitiationFeeCents:0} : null;
   const creatorSessionCreatedAt=await tx.db.prepare('SELECT created_at FROM oa_sessions WHERE id=? AND operator_id=? AND revoked_at IS NULL').bind(tx.who.sessionId,tx.who.id).first<{created_at:number}>();
   insist(creatorSessionCreatedAt,'native_session_required',403);
   const preview={id:id(),personId:member.id,personVersion:member.version,catalogVersion:structuredClone(version),terms,recurring,
@@ -98,10 +100,9 @@ async function complete(tx: Transaction, preview: RecordData) {
   if (preview.recurring) {
     const r=preview.recurring,origin=text(tx.notices.origin,'billing_origin',2000);
     const connection=await tx.db.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>();
-    insist(!connection || connection.origin===origin,'billing_origin_changed',409);
-    const connectionId=connection?.connection_id ?? id();
-    if (!connection) tx.sql.push(tx.statement("INSERT INTO st_contract_connections(id,connection_id,origin,approved_by,approved_at) VALUES('billing',?,?,?,?)",connectionId,origin,preview.acceptedBy,preview.acceptedAt));
-    else tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_contract_connections WHERE id='billing' AND connection_id=? AND origin=?) THEN 1 ELSE 0 END",connectionId,origin));
+    insist(connection && connection.origin===origin && connection.connection_id===r.connectionId,'catalog_owner_billing_review_required',409);
+    const connectionId=connection.connection_id;
+    tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_contract_connections WHERE id='billing' AND connection_id=? AND origin=?) THEN 1 ELSE 0 END",connectionId,origin));
     const terms={...r,...packTerms(pack),personId:preview.personId,packId:pack.id,currentPackId:pack.id,status:'active',collection:'studio-balance-only',continuesUntilStopped:true,
       nextRenewalAt:pack.expiresAt,billingDay:Number(new Intl.DateTimeFormat('en-US',{day:'numeric',timeZone:r.timeZone}).format(new Date(pack.expiresAt))),connectionId,billingOrigin:origin,proposalOrigin:origin,
       consent:consentText(r),catalogVersion:preview.catalogVersion,catalogPurchaseId:preview.id,createdBy:preview.createdBy,createdAt:preview.createdAt,acceptedBy:preview.acceptedBy,acceptedAt:preview.acceptedAt,acceptedChannel:'member-self-service',contractAcceptanceChannel:'online',retention:consentRetention(preview.acceptedAt)};

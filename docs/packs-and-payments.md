@@ -47,8 +47,10 @@ cannot use this door to activate fixed-term, monthly or annual memberships: BILL
 personal payment-method authorization and signing requirements remain required.
 
 Original purchase evidence and native invoice agreements survive backup and restore.
-Restore disconnects recurring billing and invalidates uncompleted purchase authority;
-prepare a fresh review. Full provider-backed member checkout, staff-sold memberships,
+Restore disconnects recurring billing and invalidates uncompleted purchase authority.
+For new native invoice purchases, the owner first publishes a reviewed monthly or annual
+version in Settings, then the member accepts a fresh purchase. This never reactivates
+historical agreements. Prepare fresh reviews for uncompleted purchases. Full provider-backed member checkout, staff-sold memberships,
 commitment and fee catalog rules remain separate work.
 
 ## Give a member a pack

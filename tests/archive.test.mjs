@@ -561,6 +561,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal((await billingView(h,restoredOwner)).invoices.find(i=>i.id===pendingCheckout.id).status,'paid');
     assert.equal((await h.state(restoredOwner)).payments.filter(p=>p.stripeInvoiceId===pendingCheckout.id).length,1);
     assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM st_contract_connections').first()).count,0,'Stripe review never revives native renewal authority');
+    await(await import('./catalog-cases.mjs')).reviewRestoredCatalogBilling(h,catalogCheckout,restoredOwner);
+
 
   } finally {if(h)await h.close();await rm(temporary,{recursive:true,force:true})}
 })

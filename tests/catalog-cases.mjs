@@ -248,8 +248,26 @@ export async function assertCatalogCheckoutRestored(h,data,cookie) {
     assert.equal(state.charges.find(c=>c.packId===pack.id).amountCents,version.amountCents);
   }
   const person=await h.signIn(data.outsider.email),before=await h.state(cookie);
+  await h.cmd('catalog.purchase.preview',{catalogVersionId:data.annual.id,requestId:'synthetic-strap-restored-invoices'},person,409);
   for(const preview of [data.retired,data.waiting])await h.cmd('catalog.purchase.confirm',{id:preview.id,key:preview.key,confirm:true},person,409);
   const member=await h.signIn(data.deskBuyer.email);
   await h.cmd('catalog.purchase.confirm',{id:data.staffWaiting.id,key:data.staffWaiting.key,confirm:true},member,409);
   assert.equal((await h.state(cookie)).version,before.version);
+}
+
+
+export async function reviewRestoredCatalogBilling(h,data,cookie) {
+  const reviewed=await h.cmd('catalog.publish',{...catalogTerms,code:data.annual.code,productKind:'annual',name:'Reviewed annual mat',revision:1,amountCents:data.annual.amountCents},cookie);
+  const member=await h.signIn(data.outsider.email);
+  const preview=await h.cmd('catalog.purchase.preview',{catalogVersionId:reviewed.id,requestId:'synthetic-strap-owner-reviewed-restore'},member);
+  const sale=await h.cmd('catalog.purchase.confirm',{id:preview.id,key:preview.key,confirm:true},member);
+  assert.equal(sale.status,'sold');
+  const state=await h.state(cookie),terms=state.recurring.terms.find(t=>t.catalogPurchaseId===sale.id);
+  assert.equal(terms.status,'active');assert.equal(terms.requiresFreshAcceptance,false);
+  for(const {sale:old,version} of data.sales.filter(s=>s.version.intervalMonths)) {
+    const oldTerms=state.recurring.terms.find(t=>t.catalogPurchaseId===old.id);
+    assert.equal(oldTerms.requiresFreshAcceptance,true,'owner publication and fresh personal purchase cannot revive historical invoice authority');
+    assert.equal(oldTerms.amountCents,version.amountCents);
+  }
+  console.log('PROBE PLAN-001 restored invoice authority: fresh member purchase before owner publication -> 409; reviewed owner publication and fresh personal consent -> new invoice agreement only, historical authority remains disconnected.');
 }
