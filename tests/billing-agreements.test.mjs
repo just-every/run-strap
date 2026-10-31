@@ -1,3 +1,4 @@
+import { methodRemovalCases } from './method-removal-cases.mjs';
 import { billingBrowser } from './billing-browser.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -173,9 +174,10 @@ test('Personal membership signatures bind immutable originals and separate payme
 });
 
 test('Stripe-hosted method setup uses durable once-only reservations, exact member consent, masked evidence and immediate revocation and reconnect fences',{timeout:120000},async()=>{
-  const edge=billingEdge();let mismatch=null;
+  const edge=billingEdge();let mismatch=null,onRead=null;
   const outbound=async request=>{
     const response=await edge.outbound(request);
+    if(onRead && new URL(request.url).pathname.startsWith('/v1/checkout/sessions/')){const callback=onRead;onRead=null;await callback();}
     if(!mismatch || !new URL(request.url).pathname.startsWith('/v1/checkout/sessions/'))return response;
     const body=await response.json();mismatch(body);
     return Response.json(body,{status:response.status,headers:response.headers});
@@ -302,6 +304,7 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     }
     const after=await h.state();assert.deepEqual(after.packs,before.packs);assert.deepEqual(after.recurring.terms,before.recurring.terms);assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.payments,before.payments);
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'});
+    await methodRemovalCases(h,edge,callback=>onRead=callback);
     const second=await billingSeed(h,'UncertainMember');
     const pendingAgreement=await h.cmd('billing.agreement.prepare',second.prepare);
     await h.cmd('billing.agreement.accept',acceptance(pendingAgreement,second.member.name),second.member.cookie);

@@ -22,6 +22,7 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
     if(name === 'billing.setup.complete') {
       setup=tx.state.records.get(text(input.setupId,'setupId',100))?.data ?? null;
       insist(setup?.agreementId === agreement.id && setup.connectionId === c.connection_id && setup.personId === who.personId,'billing_setup_not_found',404);
+      insist(setup.status!=='invalidated' && (setup.methodEpoch ?? 0)===(mandate.methodEpoch ?? 0) && !list(tx.state,'storedPaymentMethod').some(m=>m.setupId===setup!.id && m.status==='removed'),'billing_method_removed',409);
     }
   }
   if(prior) {
@@ -32,10 +33,10 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
   if(name === 'billing.setup.start') {
     if(mandate!.methodAuthorized)insist(input.replaceMethodId === mandate!.methodId && input.confirmReplacement === true,'billing_replacement_confirmation_required',409);
     else insist(!input.replaceMethodId,'billing_replacement_changed',409);
-    insist(!list(tx.state,'billingOperation').some(o=>o.type === 'setup.start' && o.agreementId === agreement!.id && (['pending','uncertain'].includes(o.status) || o.status === 'succeeded' && tx.state.records.get(o.resultId)?.data.status !== 'completed')),'billing_setup_already_started',409);
+    insist(!list(tx.state,'billingOperation').some(o=>o.type === 'setup.start' && o.agreementId === agreement!.id && (o.methodEpoch ?? 0)===(mandate!.methodEpoch ?? 0) && (['pending','uncertain'].includes(o.status) || o.status === 'succeeded' && tx.state.records.get(o.resultId)?.data.status !== 'completed')),'billing_setup_already_started',409);
   }
   const previous=name === 'billing.connect' ? await env.DB.prepare("SELECT connection_id,account_id,origin FROM st_payment_connections WHERE id='billing'").first<{connection_id:string;account_id:string;origin:string}>() : null;
-  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? (previous?.origin === env.AUTH_ORIGIN && previous.account_id === input.accountId ? previous.connection_id : id()),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',previousMethodId:mandate?.methodId ?? null,replacesMethodId:setup?.replacesMethodId ?? (name === 'billing.setup.start' ? input.replaceMethodId ?? null : null),resultId:null};
+  const reservation={id:operationId,type:name.slice(8),personId:agreement?.personId ?? null,agreementId:agreement?.id ?? null,mandateId:mandate?.id ?? null,setupId:setup?.id ?? null,requestId,inputHash,origin:env.AUTH_ORIGIN,connectionId:c?.connection_id ?? (previous?.origin === env.AUTH_ORIGIN && previous.account_id === input.accountId ? previous.connection_id : id()),actorId:who.id,actorRole:who.role,createdAt:now(),status:'pending',mode:'test',methodEpoch:mandate?.methodEpoch ?? 0,previousMethodId:mandate?.methodId ?? null,replacesMethodId:setup?.replacesMethodId ?? (name === 'billing.setup.start' ? input.replaceMethodId ?? null : null),resultId:null};
   if(name === 'billing.connect')tx.sql.push(tx.statement("INSERT INTO st_payment_control(id,operation_id,origin) VALUES('billing',?,?) ON CONFLICT(id) DO UPDATE SET operation_id=excluded.operation_id,origin=excluded.origin",operationId,env.AUTH_ORIGIN));
   if(c)fence(tx,c);
   tx.put('billingOperation',reservation); await tx.commit();
@@ -70,13 +71,15 @@ export async function providerCommand(env: BillingBindings,who: Actor,name: stri
       const current=await connection(env); insist(current.connection_id === c!.connection_id,'billing_connection_changed',409); fence(finish,current);
       const accepted=requireMandate(finish.state,agreement!.id,finish.who);
       insist(accepted.mandate.financialHash === mandate!.financialHash,'billing_mandate_changed',409);
+      insist((accepted.mandate.methodEpoch ?? 0)===reservation.methodEpoch,'billing_method_removed',409);
       if(name === 'billing.setup.start') {
         insist((accepted.mandate.methodId ?? null) === reservation.previousMethodId,'billing_method_changed',409);
         const checked=session(body,agreement!.id,mandate!.id,operationId);
-        result={id:'billing-setup:'+operationId,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,operationId,connectionId:c!.connection_id,accountId:c!.account_id,previousMethodId:reservation.previousMethodId,replacesMethodId:reservation.replacesMethodId,providerSessionId:checked.id,status:'awaiting-member',expiresAt:checked.expiresAt,createdAt:now()};finish.put('billingSetup',result);
+        result={id:'billing-setup:'+operationId,personId:agreement!.personId,agreementId:agreement!.id,mandateId:mandate!.id,operationId,connectionId:c!.connection_id,accountId:c!.account_id,methodEpoch:reservation.methodEpoch,previousMethodId:reservation.previousMethodId,replacesMethodId:reservation.replacesMethodId,providerSessionId:checked.id,status:'awaiting-member',expiresAt:checked.expiresAt,createdAt:now()};finish.put('billingSetup',result);
       } else {
         const method=savedMethod(body,agreement!.id,mandate!.id,setup!.operationId);
         const existing=list(finish.state,'storedPaymentMethod').find(m=>m.setupId === setup!.id);
+        insist(!existing || existing.status!=='removed','billing_method_removed',409);
         if(existing)result=existing;
         else {
           insist((accepted.mandate.methodId ?? null) === (setup!.previousMethodId ?? null),'billing_method_changed',409);
