@@ -50,6 +50,10 @@ export function assertPrivacyArchive(bytes,fixture) {
 export async function assertPrivacyRestored(db,fixture) {
   const automationTask=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE id=? AND kind='automationTask'").bind(fixture.automation.task.id).first()).data);
   assert.equal(automationTask.status,'suppressed');assert.equal(automationTask.reason,'member_erased');assert.equal(automationTask.erased,true);
+  const delivery=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='automationDelivery' AND id=?").bind(fixture.automation.delivery.id).first()).data);
+  assert.equal(delivery.status,'suppressed');assert.equal(delivery.messageCount,1);assert.equal(delivery.erased,true);
+  const preview=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='automationDeliveryPreview' AND id=?").bind(fixture.automation.pendingDelivery.id).first()).data);
+  assert.equal(preview.status,'suppressed');assert.equal(preview.messages,undefined);assert.equal(preview.key,undefined);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM st_automation_connections').first()).n,0,'restored erasure history has no execution authority');
   const shared=JSON.parse((await db.prepare("SELECT data FROM st_records WHERE kind='courseEnrollment' AND id=?").bind(fixture.sharedCourse.id).first()).data)
   for(const key of ['personId','payerId','amountCents','status','installments','acceptedAt','acceptedBy','previewId','withdrawalId'])assert.deepEqual(shared[key],fixture.sharedCourse[key],'restored shared course keeps original '+key)

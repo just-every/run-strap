@@ -22,6 +22,13 @@ export async function consentQueueCases(h) {
   const before=(await h.state()).version;assert.equal(await callback('YES','synthetic-strap-yes',false),403);assert.equal((await h.state()).version,before)
   assert.equal(await callback('YES','synthetic-strap-yes'),200);assert.equal((await preference()).marketing.sms,'confirmed')
   const queued=await enroll(sms);assert.equal(queued.status,'queued')
+  const automationPreview=await h.cmd('automation.prepare',{name:'Held SMS review',trigger:'renewal',sequenceId:sms.id,channel:'sms',startAt:new Date(Date.now()-86400000).toISOString(),endAt:new Date(Date.now()+30*86400000).toISOString(),intervalMinutes:60,maxTasks:2,maxMessages:1});
+  const automation=await h.cmd('automation.enable',{id:automationPreview.id,key:automationPreview.key});
+  await h.cmd('automation.evaluate',{id:automation.id,requestId:'synthetic-strap-sms-private-evaluation'});
+  const automationTask=(await h.state()).automation.tasks.find(t=>t.ruleId===automation.id&&t.sourceId===pack.id),providerVersion=(await h.state()).version;
+  assert.equal((await h.cmd('automation.delivery.preview',{id:automationTask.id},h.owner,409)).error,'provider_delivery_unavailable');
+  assert.equal((await h.state()).version,providerVersion,'native automation never manufactures provider delivery authority');
+  console.log('PROBE AUTO-001 provider boundary: confirmed SMS source and enabled rule -> private task retained, message approval refused as provider delivery unavailable, zero writes');
   const shared=await h.person('SharedPhone')
   await h.cmd('profile.save',{phone:'5125550130',requestId:'synthetic-strap-shared-phone'},shared.cookie)
   const sharedPreference=async()=> (await h.send('/api/strap/preferences.json',undefined,shared.cookie)).value.preference
