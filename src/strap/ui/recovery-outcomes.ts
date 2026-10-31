@@ -12,7 +12,7 @@ export function recoveryOutcomesPage(s: any) {
     + cell('Sample',`${c.audienceMembers} audience members<small>${c.measuredMembers} measured members · ${c.excluded} excluded</small>`)
     + cell('Offers',`${c.accepted} accepted · ${c.declined} declined · ${c.unaccepted} unaccepted<small>${c.suppressed} suppressed · ${c.expired} expired</small>`)
     + cell('Observation',`${c.attendedVisits} completed visits · ${c.membersWithVisits} members<small>${c.completeWindows} complete windows · ${c.incompleteWindows} incomplete · ${c.windowDays} days</small>${c.design === 'randomized_holdout' ? c.groups.map(g => `<small>${label(g.group)}: ${g.measuredMembers} measured members · ${g.attendedVisits} visits</small>`).join('') : ''}`)
-    + cell('Incentives',`$${(c.budgetCents/100).toFixed(2)} approved budget<small>$${(c.reservedIncentiveCents/100).toFixed(2)} reserved · ${c.postedCreditCents === null ? 'Unavailable' : '$'+(c.postedCreditCents/100).toFixed(2)} posted studio credits</small>`)
+    + cell('Incentives',`$${(c.budgetCents/100).toFixed(2)} approved budget<small>$${(c.reservedIncentiveCents/100).toFixed(2)} reserved in displayed sample · ${c.postedCreditCents === null ? 'Unavailable' : '$'+(c.postedCreditCents/100).toFixed(2)} posted studio credits</small>`)
     + cell('Conclusion','Inconclusive<small>Collected renewal revenue unavailable</small>')+'</tr>').join('')
   const rows = report.rows.map(r => `<tr data-outcome-offer="${h(r.offerId ?? r.personId)}">`
     + cell('Member',r.memberUrl ? `<a href="${h(r.memberUrl)}">${h(r.member)}</a>` : h(r.member))

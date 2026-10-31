@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "9ee00d0677d8ee491cd9d49678dfda99b1d4995432f99e0ff31d523da2e275c9",
+      "sha256": "d590783febda7fad19bfb8404d787ae61bb3973b23be7552a1c00f70fd7f2a80",
       "executable": false
     },
     "DEMO.md": {
@@ -3458,7 +3458,7 @@
       "executable": false
     },
     "src/strap/domain/recovery-measurement.ts": {
-      "sha256": "d6cd82b5d63075ebf3f023bee7614830aa15d7d27812f0c491a96b9cff9c92be",
+      "sha256": "801db06c47daa3e2765e8f4ee038451f52b6033aa22164086bb3697319ef89d7",
       "executable": false
     },
     "src/strap/domain/renewal-disclosures.ts": {
@@ -3686,7 +3686,7 @@
       "executable": false
     },
     "src/strap/recovery-outcomes.ts": {
-      "sha256": "cd2a17d1860cf5faed92feae827fe41cc408e29a3517f47590eec074f8a4ccba",
+      "sha256": "ed99bb40b51ac9a11e27846bfbf4ae6b60c482323c37cc84f71bfabb28d3f401",
       "executable": false
     },
     "src/strap/report-exports.ts": {
@@ -3962,7 +3962,7 @@
       "executable": false
     },
     "src/strap/ui/member-records.ts": {
-      "sha256": "c5c865af8dfeef049e266b5f4a92f4500424a6fdfee13ee9708ef4ff53bc4ede",
+      "sha256": "9b87ab482748c975d93d4ddb05b4a99bec97310caa36784100a8066a8b316810",
       "executable": false
     },
     "src/strap/ui/member.ts": {
@@ -4018,7 +4018,7 @@
       "executable": false
     },
     "src/strap/ui/recovery-outcomes.ts": {
-      "sha256": "8a8d0b7d5bbc94ad363828e35362be2a32cde2b2bdd4daecee354c8127b4c0ee",
+      "sha256": "dd959e7151fd2ea07801e92963f7545d86acba8ed8aeabe02a1d0ade525f5129",
       "executable": false
     },
     "src/strap/ui/renewals.ts": {
@@ -4082,7 +4082,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "14cf45066b337c6bfccc68ea4552afef03e271c1ef58a1009368fe97a487aa47",
+      "sha256": "2b68ff4c884d8d15cf6bcac5817d32de63f3919db5529197d00c760ddef1eb09",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4222,7 +4222,7 @@
       "executable": false
     },
     "tests/campaign-browser.mjs": {
-      "sha256": "97b1adff60dfa367c4291f49b81028f0193b098485726481affa025f4c501468",
+      "sha256": "d991d5469c13b77fb9f45aacbf1ad80ab183813e623c06b0df731864cdf57f8d",
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/recovery-outcomes-cases.mjs": {
-      "sha256": "ced630fce9fdb15c7928d9a231d6a218455eb8203432ce2eaa20b1604a004850",
+      "sha256": "5f59d2c44981ebb5f67c95664eba3fecd9c5814b724930c0a1a9e04e5db1c578",
       "executable": false
     },
     "tests/renewal-disclosure-timing.mjs": {
@@ -4686,7 +4686,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "ae772cc5dfd4992050dd91f885a1c153b10aad7edfb7641bc164afdf6061fc58",
+      "sha256": "43a0e6d1c1dff596f787c05c8422d8a8133505e85d634608945204befdcc4fb1",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {

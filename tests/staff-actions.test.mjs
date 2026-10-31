@@ -44,7 +44,7 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const fresh=after.staffActions.filter(a=>!ids.has(a.id))
       assert.equal(fresh.length,1,`${name}: exactly one canonical staff entry`)
       assert.deepEqual([fresh[0].actorId,fresh[0].actorRole,fresh[0].channel],[after.actor.id,'owner',input.channel??'desk'])
-      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name.startsWith('appointment.client.')||name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
+      assert.equal(fresh[0].command,name);assert.equal(fresh[0].right,name.startsWith('billing.')?catalogue.find(c=>c.name===name).staffRight:name==='family.bill.launch'?'collection':(name.startsWith('intro.')||name.startsWith('course.enrollment.'))?'sale':(name==='plan.change.prepare'||name.startsWith('plan.cancellation.')||name.startsWith('plan.disclosure.')||name.startsWith('freeze.')||['plan.recurring.stop','plan.recurring.reconnect'].includes(name))?'contract-change':['plan.recurring.prepare','lead.nurture.purchase','lead.winback.purchase'].includes(name)?'membership-sale':(name.startsWith('appointment.client.')||name==='attendance.plan.accept.staff'||name==='lead.empty.accept'||name.startsWith('booking.')||name.startsWith('reservation.')||name.startsWith('guest.')||name.startsWith('absence.')||name==='makeup.book')?'booking':name.startsWith('contract.authority.')||name.startsWith('household.')||['attendance.availability.launch','lead.intervention.launch','lead.referral.record','intake.submit.staff','preferences.save.staff','member.message.send.staff','notice.dismiss.staff','recognition.launch','mail.preference.launch','profile.save.staff','makeup.guardian.save','makeup.guardian.launch','makeup.guardian.revoke'].includes(name)?'member-record':'check-in');assert.ok('before'in fresh[0]&&'after'in fresh[0]);return {result,event:fresh[0],after}
     }
     let emptyDeskOffer,nurtureDeskOffer,winbackDeskOffer;
     let contractMember,contractDelegate,contractPack,contractGrant,contractCancel,contractWithdrawal,contractRequest;
@@ -568,6 +568,31 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
       const revoked=await h.cmd('billing.mandate.revoke',{id:billingAgreement.id},billingMember.cookie);
       assert.equal(revoked.revokedBy,(await h.state(billingMember.cookie)).actor.id);
       assert.equal((await h.send('/api/strap/billing',undefined,billingMember.cookie)).value.methods[0].available,false);
+    };
+    actions['lead.intervention.decline']=async door=>{
+        const recipient=ben,desk=otherHistoryMember;
+        const current=await h.state();if(!current.acknowledgements.some(a=>a.personId===recipient.id&&a.waiverId===current.waiver.id))await h.cmd('waiver.acknowledge',{id:current.waiver.id},recipient.cookie);
+        await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:recipient.id,credits:2,amountCents:2000,expiresAt:'2099-12-31T00:00:00Z'})).id});
+        await h.cmd('preferences.save',{revision:(await h.send('/api/strap/preferences.json',undefined,recipient.cookie)).value.preference.revision,marketingInApp:true,consentStatement:'Review studio offers',requestId:randomUUID()},recipient.cookie);
+        const entry=await publish('Recovery decision pair',6,4),campaign=await h.cmd('lead.empty.prepare',{classId:entry.id,personIds:[recipient.id],leadMinutes:1440,maxPer30Days:30,incentiveCents:0,budgetCents:0,text:'Review this studio class'});
+        assert.equal(campaign.audience[0].reason,null);await h.cmd('lead.empty.approve',{id:campaign.id,key:campaign.key});
+        const offer=(await h.state()).emptyPlaces.offers.find(o=>o.campaignId===campaign.id),input={personId:recipient.id,requestId:randomUUID(),channel:'phone'};
+        const r=await checkAudit(door,input);
+        assert.equal(r.event.personId,recipient.id);assert.equal(r.result.status,'member_action_required');assert.ok(r.result.url.startsWith('/signin?'));
+        assert.equal((await h.state()).emptyPlaces.offers.find(o=>o.id===offer.id).status,'offered','staff opens a door without recording a personal response');
+        await h.cmd(door,input);assert.equal((await h.state()).staffActions.filter(a=>a.requestId===input.requestId).length,1);
+        await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{'member-record':{enabled:true,canCreate:false,scopes:[{memberIds:[recipient.id],locationIds:['studio'],doors:['all']}]}}});await h.enroll(desk.cookie);
+        const scoped={personId:recipient.id,requestId:randomUUID(),channel:'desk'},launched=await h.cmd(door,scoped,desk.cookie);
+        const event=(await h.state()).staffActions.find(a=>a.requestId===scoped.requestId);
+        assert.deepEqual([event.actorRole,event.personId,event.right,event.channel],['front-desk',recipient.id,'member-record','desk']);
+        assert.equal(launched.status,'member_action_required');
+        await(await import('./campaign-browser.mjs')).recoveryHandoffBrowser(h,{desk,personId:recipient.id,offerId:offer.id});
+        await refused(h,door,{personId:ana.id,requestId:randomUUID()},desk.cookie);
+        await refused(h,'lead.intervention.decline',{kind:'empty-place',id:offer.id,requestId:randomUUID()},h.owner);
+        const declined=await h.cmd('lead.intervention.decline',{kind:'empty-place',id:offer.id,requestId:randomUUID()},recipient.cookie);
+        assert.equal(declined.status,'declined');assert.equal(declined.declinedBy,(await h.state(recipient.cookie)).actor.id);
+        await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:false,rights:{}});
+        await refused(h,door,scoped,desk.cookie);
     };
     // Work in actual action order so every pair has a real member state to change.
     for (const name of Object.keys(actions)) {

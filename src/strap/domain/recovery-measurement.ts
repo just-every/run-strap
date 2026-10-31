@@ -39,7 +39,7 @@ export function interventionCost(state: State, kind: string, offer: RecordData) 
   const posted = !!offer.rewardedAt && (expected === 0 || !!charge && charge.kind === 'charge' && charge.data.personId === beneficiary && charge.data.amountCents === -expected)
   return {reservedCents:offer.reservedCents ?? offer.reservedRewardCents ?? 0,
     postedCreditCents:posted ? expected : null,postedAt:posted ? offer.rewardedAt : null,
-    chargeId:posted && expected ? chargeId : null,beneficiaryId:posted && expected ? beneficiary : null,
+    chargeId:posted && expected ? chargeId : null,
     status:posted ? 'posted_non_cash_credit' : offer.rewardedAt ? 'source_unavailable' : 'not_posted'}
 }
 

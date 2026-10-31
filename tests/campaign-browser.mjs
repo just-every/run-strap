@@ -256,6 +256,41 @@ export async function recoveryComparisonBrowser(h,{campaignId,personId,bookingId
       await page.locator('[data-empty-campaign="'+campaignId+'"] summary').click()
       await page.locator('[data-empty-campaign="'+campaignId+'"]').scrollIntoViewIfNeeded()
       await shot('approved-cohorts')
+      const history=await page.goto(h.origin+'/app/people?person='+rewardPersonId+'#staff-actions')
+      if(width===1440){assert.equal(history.status(),200);assert.equal(await page.locator('[data-staff-command="lead.intervention.launch"]').count(),1)}
+      await shot('owner-handoff-history')
+    } finally {await context.close()}
+  }} finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
+}
+
+export async function recoveryHandoffBrowser(h,{desk,personId,offerId}) {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os')
+  const temporary=!process.env.STRAP_PROOF_DIR,dir=process.env.STRAP_PROOF_DIR ?? await mkdtemp(join(tmpdir(),'strap-recovery-handoff-'))
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {for(const width of temporary ? [390] : [1440,390]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try {
+      await context.route(h.origin+'/**',async route=>{
+        const path=new URL(route.request().url()).pathname
+        if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+        return route.continue()
+      })
+      const i=desk.cookie.indexOf('=');await context.addCookies([{name:desk.cookie.slice(0,i),value:desk.cookie.slice(i+1),url:h.origin}])
+      const page=await context.newPage(),response=await page.goto(h.origin+'/app/people?person='+personId)
+      const handoff=page.locator('[data-intervention-handoff]')
+      await handoff.locator('summary').click()
+      if(width===390) {
+        assert.equal(response.status(),200)
+        const requestId=await handoff.locator('input[name="requestId"]').inputValue()
+        await handoff.getByRole('button',{name:'Open personal offer decision',exact:true}).click()
+        const state=await h.state(),audit=state.staffActions.filter(a=>a.requestId===requestId)
+        assert.equal(audit.length,1);assert.deepEqual([audit[0].command,audit[0].right,audit[0].personId,audit[0].actorRole],['lead.intervention.launch','member-record',personId,'front-desk'])
+        assert.equal(state.emptyPlaces.offers.find(o=>o.id===offerId).status,'offered','staff handoff records no personal response')
+        await handoff.locator('summary').click()
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+      }
+      await handoff.scrollIntoViewIfNeeded();await page.evaluate(()=>document.fonts.ready)
+      if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-staff-handoff-'+width+'.png'),fullPage:true})
     } finally {await context.close()}
   }} finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
 }

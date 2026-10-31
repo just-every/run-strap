@@ -222,10 +222,13 @@ export async function recoveryOutcomeCases(h,{coach,jump:baseJump}) {
   await h.cmd('attendance.checkin',{id:controlBooking.id},coach.cookie)
   compared=(await h.send(comparisonQuery,undefined,h.owner)).value
   assert.deepEqual(compared.groups.map(g=>[g.group,g.measuredMembers,g.attendedVisits]),[['intervention',2,1],['holdout',2,1]])
+  assert.equal(compared.totals.excluded,0,'assigned holdouts are measured controls, not excluded audience members')
+  assert.ok(compared.rows.filter(r=>r.group==='holdout').every(r=>r.measured&&!r.exclusionReason))
   const controlDetail=compared.rows.find(r=>r.personId===controlMember.id)
   assert.equal((await h.send(controlDetail.detailUrl,undefined,h.owner)).status,200,'independent holdout booking retains its source drill-through')
   assert.equal(compared.totals.causalConclusion,'inconclusive')
   const {recoveryComparisonBrowser}=await import('./campaign-browser.mjs')
+  await h.cmd('lead.intervention.launch',{personId:rewarded.id,requestId:'synthetic-strap-outcome-owner-handoff',channel:'desk'})
   const readRecords=(await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,readRevision=(await h.state()).version
   await recoveryComparisonBrowser(h,{campaignId:comparison.id,personId:controlMember.id,bookingId:controlBooking.id,paidCampaignId:paid.id,rewardPersonId:rewarded.id})
   assert.deepEqual((await h.db.prepare('SELECT id,kind,data FROM st_records ORDER BY id').all()).results,readRecords,'populated comparisons, incentives and holdout drill-through are pure reads')
@@ -299,7 +302,7 @@ export async function recoveryOutcomeJourney(h) {
     await uncleared.confirmSetup(uncleared.owner)
     for(const path of ['/app/recovery-outcomes','/api/strap/reports/recovery-outcomes']) {
       const response=await uncleared.send(path,undefined,uncleared.owner)
-      assert.equal(response.status,403);assert.ok(response.text.includes('mfa_enrollment_required'),'financial outcome report requires a second factor')
+      assert.equal(response.status,403);assert.equal(response.headers.get('x-strap-refusal') ?? response.value.error,'mfa_enrollment_required','financial outcome report requires a second factor')
     }
   } finally {await uncleared.close()}
 }
