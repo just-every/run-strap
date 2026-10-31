@@ -25,7 +25,7 @@ export async function payoutsBrowser(h,report,{statement=false}={}) {
           assert.equal(await page.locator('[data-statement-net]').innerText(),'Provider net $88.50 USD');
           assert.equal(await page.locator('[data-statement-difference]').innerText(),'Difference from payout $0.00 USD');
           const details=page.locator('[data-payout-observation] details');
-          if(!await details.getAttribute('open'))await details.locator('summary').click();
+          if(await details.getAttribute('open')===null)await details.locator('summary').click();
           assert.equal(await page.locator('[data-payout-transaction]').count(),4);
           assert.match(await page.locator('[data-payout-transaction="synthetic-strap-refund-balance"]').innerText(),/-\$7\.00.*-\$0\.25.*-\$6\.75/s);
           assert.match(await page.locator('[data-payout-observation]').innerText(),/Native card coverage: unresolved/);
