@@ -2,22 +2,30 @@ import assert from 'node:assert/strict';
 export async function seedAutomationArchive(h,member) {
   const preference=(await h.state(member.cookie)).memberPreferences.preference;
   await h.cmd('preferences.save',{revision:preference.revision,requestId:'synthetic-strap-archive-automation-consent',marketingInApp:true,consentStatement:'I request in-app renewal messages'},member.cookie);
+  const pendingPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,kind:'unlimited',planName:'Pending reviewed renewal',amountCents:0,expiresAt:new Date(Date.now()+20*86400000).toISOString()})).id});
   const preview=await h.cmd('renewal.sequence.prepare',{name:'Archive renewal review',channel:'inApp',text:'Review renewal choices with the studio.',maxMessages:5});
   const sequence=await h.cmd('renewal.sequence.approve',{id:preview.id,key:preview.key});
-  const rulePreview=await h.cmd('automation.prepare',{name:'Retained private renewal work',trigger:'renewal',sequenceId:sequence.id,channel:'inApp',startAt:new Date(Date.now()-86400000).toISOString(),endAt:new Date(Date.now()+30*86400000).toISOString(),intervalMinutes:60,maxTasks:10,days:30,lowCredits:10000});
+  const rulePreview=await h.cmd('automation.prepare',{name:'Retained private renewal work',trigger:'renewal',sequenceId:sequence.id,channel:'inApp',startAt:new Date(Date.now()-86400000).toISOString(),endAt:new Date(Date.now()+30*86400000).toISOString(),intervalMinutes:60,maxTasks:10,maxMessages:2,days:30,lowCredits:10000});
   const rule=await h.cmd('automation.enable',{id:rulePreview.id,key:rulePreview.key});
   const run=await h.cmd('automation.evaluate',{id:rule.id,requestId:'synthetic-strap-archive-evaluate'});
-  const a=(await h.state()).automation,task=a.tasks.find(t=>t.ruleId===rule.id&&t.personId===member.id);
+  const a=(await h.state()).automation,task=a.tasks.find(t=>t.ruleId===rule.id&&t.personId===member.id&&t.sourceId!==pendingPack.id);
   assert.ok(task);assert.equal(task.status,'queued');
   const pendingResume=await h.cmd('automation.resume.preview',{id:rule.id});
-  return {rule,run,task,pendingResume,taskCount:a.tasks.filter(t=>t.ruleId===rule.id).length,history:a.outcomes.filter(o=>o.ruleId===rule.id)};
+  const deliveryPreview=await h.cmd('automation.delivery.preview',{id:task.id});
+  const delivery=await h.cmd('automation.delivery.confirm',{id:deliveryPreview.id,key:deliveryPreview.key,confirm:true});
+  const pendingTask=a.tasks.find(t=>t.ruleId===rule.id&&t.sourceId===pendingPack.id);
+  const pendingDelivery=await h.cmd('automation.delivery.preview',{id:pendingTask.id});
+  return {rule,run,task,pendingResume,deliveryPreview,delivery,pendingTask,pendingDelivery,taskCount:a.tasks.filter(t=>t.ruleId===rule.id).length,history:a.outcomes.filter(o=>o.ruleId===rule.id)};
 }
 export async function assertRestoredAutomation(h,owner,fixture) {
   let a=(await h.state(owner)).automation;
   assert.equal(a.rules.find(r=>r.id===fixture.rule.id).connected,false);
   assert.equal(a.tasks.filter(t=>t.ruleId===fixture.rule.id).length,fixture.taskCount);assert.ok(a.runs.some(r=>r.id===fixture.run.id));
-  assert.deepEqual(a.outcomes.filter(o=>o.ruleId===fixture.rule.id),fixture.history);
+  assert.deepEqual(a.outcomes.filter(o=>o.ruleId===fixture.rule.id).sort((a,b)=>a.id.localeCompare(b.id)),[...fixture.history].sort((a,b)=>a.id.localeCompare(b.id)));
+  assert.deepEqual(a.deliveries.find(d=>d.id===fixture.delivery.id),fixture.delivery);
   const before=(await h.state(owner)).version;
+  await h.cmd('automation.delivery.confirm',{id:fixture.deliveryPreview.id,key:fixture.deliveryPreview.key,confirm:true},owner,409);
+  await h.cmd('automation.delivery.confirm',{id:fixture.pendingDelivery.id,key:fixture.pendingDelivery.key,confirm:true},owner,409);
   await h.cmd('automation.task.complete',{id:fixture.task.id},owner,409);
   await h.cmd('automation.resume',{id:fixture.pendingResume.id,key:fixture.pendingResume.key},owner,409);
   assert.equal((await h.state(owner)).version,before,'captured review cannot reconnect restored authority');
@@ -30,5 +38,15 @@ export async function assertRestoredAutomation(h,owner,fixture) {
   await h.cmd('automation.evaluate',{id:fixture.rule.id,requestId:'synthetic-strap-restored-reviewed'},owner);
   a=(await h.state(owner)).automation;
   assert.equal(a.rules.find(r=>r.id===fixture.rule.id).connected,true);assert.equal(a.tasks.filter(t=>t.ruleId===fixture.rule.id).length,fixture.taskCount);
+  const afterReconnect=(await h.state(owner)).version;
+  await h.cmd('automation.delivery.confirm',{id:fixture.pendingDelivery.id,key:fixture.pendingDelivery.key,confirm:true},owner,409);
+  assert.equal((await h.state(owner)).version,afterReconnect,'fresh rule authority never validates an archived message confirmation');
+  const fresh=await h.cmd('automation.delivery.preview',{id:fixture.pendingTask.id},owner);
+  const delivered=await h.cmd('automation.delivery.confirm',{id:fresh.id,key:fresh.key,confirm:true},owner);
+  assert.equal(delivered.messageCount,1);assert.deepEqual(await h.cmd('automation.delivery.confirm',{id:fresh.id,key:fresh.key,confirm:true},owner),delivered);
+  a=(await h.state(owner)).automation;
+  assert.equal(a.deliveries.filter(d=>d.ruleId===fixture.rule.id).length,2);
+  assert.equal(a.rules.find(r=>r.id===fixture.rule.id).usedMessages,2);
+  console.log('PROBE AUTO-001 restored messages: CLI restore keeps delivery receipts and budget, refuses archived approvals even after reconnecting, then a fresh exact review delivers only the previously pending source once');
   console.log('PROBE AUTO-001 restore: native CLI export and import -> retained tasks and run history, disconnected execution, captured approval refused, fresh owner review reconnects without duplicate work');
 }

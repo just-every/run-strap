@@ -11,7 +11,7 @@ import { relationshipKinds,redactRelationship } from './privacy-related';
 import { retireD1ImportCustody, type D1Sql } from '../modules/import-kit/src/d1/index';
 
 const disposable=new Set('memberCheckin memberProfile memberNote memberMessage memberPreference memberPreferenceEvent messagePreference messagePreferenceEvent messagePreferenceLaunch memberInvitation notice waiverLaunch waiverTabletLaunch intakeResponse intakeTabletLaunch attendanceAvailability attendancePlan renewalFollowup recognition recognitionLaunch recognitionPreference recognitionPreferenceEvent recoveryTask successProposal successTask reminderTask reminderTaskEvent classReminder marketingMessage marketingSuppression marketingSyncPending smsConsentReceipt smsTestSubmission smsTestInbound smsTestStatus privacyReview absencePreview'.split(' '));
-const automationKinds=new Set(['automationTask','automationOutcome','automationEvent','automationDeliveryPreview','automationDelivery','nurtureEnrollment','nurtureTask','nurtureOffer']);
+const automationKinds=new Set(['automationTask','automationOutcome','automationEvent','automationDeliveryPreview','automationDelivery','nurtureEnrollment','nurtureTask','nurtureOffer','introPreview']);
 const financial=new Set('pack packCreditEvent packLocationChange charge payment booking approval introSale introIdentity introIdentityLink introIdentityEvent absence makeupCredit courseEnrollment courseEnrollmentPreview courseWithdrawalPreview'.split(' '));
 const auditKinds=new Set(['profileChange','staffAction','bookingAction','staffAccessEvent']);
 const scopeKinds=new Set('staffAccess memberRecordGrant waiverSigningGrant appointmentBookingGrant attendanceBookingGrant intakeSensitiveGrant retailStaffGrant'.split(' '));
