@@ -484,6 +484,11 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const sourceAgent=await h.cmd('agent.create',{label:'Archive termination preparation'}),agentHeaders={authorization:'Bearer '+sourceAgent.token}
     const draftResponse=await h.send('/api/strap/agent/command',{name:'plan.cancellation.prepare',input:{packId:draftPack.id,reasonCode:terminationReason.code,reason:'Member asked about moving',effectiveAt:'2099-11-15T00:00:00Z',requestId:'synthetic-strap-archive-agent-draft'}},'',agentHeaders)
     assert.equal(draftResponse.status,200,draftResponse.text);const agentDraft=draftResponse.value.result??draftResponse.value
+    const immediateInput={packId:draftPack.id,timing:'immediate',reasonCode:terminationReason.code,reason:'Moving today',requestId:'synthetic-strap-archive-immediate-preview'}
+    const immediateDraft=await h.cmd('plan.cancellation.prepare',immediateInput)
+    const immediatePreview=await h.cmd('plan.cancellation.prepare',{...immediateInput,requestId:'synthetic-strap-archive-immediate-final'})
+    const immediate=await h.cmd('plan.cancellation.confirm',{id:immediatePreview.id,key:immediatePreview.key,requestId:'synthetic-strap-archive-immediate-confirm'})
+    assert.equal(immediate.status,'applied');assert.equal(immediate.effectiveAt,immediatePreview.effectiveAt)
     const retiredReason=await h.cmd('plan.cancellation.reason.save',{code:terminationReason.code,label:'Moved elsewhere',active:false,revision:terminationReason.revision})
 
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
@@ -521,6 +526,17 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.deepEqual([restoredDraft.status,restoredDraft.createdRole,restoredDraft.reasonCode,restoredDraft.reasonLabel,restoredDraft.stale],['preview','agent','moved-away','Moved away',true])
     assert.equal((await h.send('/api/strap/agent/context',undefined,'',agentHeaders)).status,401,'preparation credentials never return with an archive')
     await h.cmd('plan.cancellation.confirm',{id:restoredDraft.id,key:restoredDraft.key,requestId:'synthetic-strap-archive-stale-agent'},restoredOwner,409)
+    const restoredImmediate=recoveredCancellation.cancellations.find(c=>c.id===immediate.id)
+    const {canWithdraw:immediateWithdraw,stale:immediateStale,...restoredImmediateRecord}=restoredImmediate
+    assert.equal(immediateWithdraw,false);assert.equal(immediateStale,false)
+    assert.deepEqual(restoredImmediateRecord,immediate,'applied immediate termination retains its exact reviewed instant, reason and effects')
+    const restoredImmediateDraft=recoveredCancellation.cancellations.find(c=>c.id===immediateDraft.id)
+    assert.deepEqual([restoredImmediateDraft.timing,restoredImmediateDraft.effectiveAt,restoredImmediateDraft.previewExpiresAt,restoredImmediateDraft.stale],['immediate',immediateDraft.effectiveAt,immediateDraft.previewExpiresAt,true])
+    const immediateVersion=(await h.state(restoredOwner)).version
+    await h.cmd('plan.cancellation.confirm',{id:restoredImmediateDraft.id,key:restoredImmediateDraft.key,requestId:'synthetic-strap-archive-immediate-refused'},restoredOwner,409)
+    assert.equal((await h.state(restoredOwner)).version,immediateVersion)
+    assert.equal(recoveredCancellation.statements.filter(c=>c.cancellationId===immediate.id).length,1)
+    assert.equal((await h.state(restoredOwner)).staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===immediate.id).length,1)
     const withdraw={id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-archive-withdraw-confirm'}
     await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner);await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner)
     const withdrawnState=await h.state(restoredOwner)
