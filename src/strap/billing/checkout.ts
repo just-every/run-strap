@@ -1,20 +1,13 @@
 import { balance } from '../domain/money';
 import { load, loadSystem, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from '../domain/types';
-import { connection, digest, keyDigest, type BillingBindings, type Connection, type Json } from './model';
+import { connection, digest, keyDigest, reviewedConnection as reviewed, fenceConnection as fence, type BillingBindings, type Json } from './model';
 import { hostedURL, stripe } from './provider';
 
 type Trigger = {kind:string;id:string};
 const providerId = (value: unknown, prefix: string): string => {
   insist(typeof value === 'string' && value.length <= 100 && /^[A-Za-z0-9_-]+$/.test(value),'billing_provider_identity_invalid',502); return value;
 };
-function reviewed(state: State,c: Connection) {
-  const review = list(state,'billingConnectionReview').filter(r=>r.connectionId === c.connection_id && r.approvedAt && r.approvedBy).sort((a,b)=>a.approvedAt.localeCompare(b.approvedAt)).at(-1);
-  insist(review?.ready === true && review.accountId === c.account_id,'billing_connection_review_required',409);
-}
-function fence(tx: Transaction,c: Connection) {
-  tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_payment_connections WHERE id='billing' AND connection_id=? AND origin=? AND account_id=? AND key_digest=?) THEN 1 ELSE 0 END",c.connection_id,c.origin,c.account_id,c.key_digest));
-}
 function retained(state: State,invoiceId: string) { return record(state,invoiceId,'stripeInvoice'); }
 function packDebt(state: State,pack: RecordData) {
   const charges = list(state,'charge').filter(r=>r.packId === pack.id);

@@ -1,0 +1,113 @@
+import type { Bindings } from '../auth.server';
+import { load, Transaction } from './domain/store';
+import { DomainError, humanOwner, insist, list, now, person, record, text, type Actor, type RecordData, type State } from './domain/types';
+import { cleared } from './security/gate';
+import { connection, digest, fenceConnection, reviewedConnection, type BillingBindings } from './billing/model';
+import { balanceTransaction, payoutObservation, providerIdentity, stripe, stripeList } from './billing/provider';
+
+const refreshKind='payoutRefresh',cardKind='cardBalanceObservation',payoutKind='payoutObservation';
+const failure=(error: unknown)=>error instanceof DomainError ? error.code : 'payout_provider_read_unavailable';
+const sources=(state: State,accountId: string)=>list(state,'stripeInvoice').filter(i=>i.accountId===accountId && i.status==='paid' && !i.erased && state.people.some(p=>p.id===i.personId && !p.erasedAt));
+async function authority(env: BillingBindings,who: Actor) {
+  const loaded=await load(env.DB,who);humanOwner(loaded.who);
+  insist(await cleared(env as Bindings,loaded.who),'mfa_required',403);
+  return loaded;
+}
+async function merchant(env: BillingBindings,accountId: string) {
+  const {body}=await stripe(env,'/account');
+  insist(body.object==='account' && body.id===accountId,'payout_merchant_mismatch',409);
+}
+
+/** Explicit owner review reads Stripe only. A durable reservation prevents replayed refreshes. */
+export async function refreshPayouts(env: BillingBindings,who: Actor,input: Record<string,unknown>) {
+  const initial=await authority(env,who),c=await connection(env);reviewedConnection(initial.state,c);
+  insist(input.confirm===true,'payout_refresh_confirmation_required');
+  const requestId=text(input.requestId,'requestId',100),id='payout-refresh:'+await digest({accountId:c.account_id,requestId});
+  const prior=initial.state.records.get(id);
+  if(prior) {insist(prior.kind===refreshKind,'payout_refresh_identity_conflict',409);return prior.data;}
+  // Refuse foreign credentials before reserving or retaining any observations.
+  await merchant(env,c.account_id);
+  const checked=await authority(env,who),current=await connection(env);
+  insist(current.connection_id===c.connection_id && current.account_id===c.account_id,'billing_connection_changed',409);
+  reviewedConnection(checked.state,current);
+  const tx=new Transaction(env.DB,checked.state,checked.who);
+  const invoices=sources(tx.state,c.account_id),startedAt=now();
+  const reservation={id,accountId:c.account_id,connectionId:c.connection_id,requestId,startedAt,actorId:who.id,status:'refreshing',completedAt:null};
+  fenceConnection(tx,c);tx.put(refreshKind,reservation);await tx.commit();
+  const cards: RecordData[]=[],payouts: RecordData[]=[];
+  let payoutError: string|null=null;
+  for(const invoice of invoices) {
+    const observedAt=now(),base={id:'card-observation:'+await digest({refreshId:id,invoiceId:invoice.id}),refreshId:id,accountId:c.account_id,invoiceId:invoice.id,paymentId:invoice.paymentId,personId:invoice.personId,packId:invoice.packId,providerChargeId:invoice.providerChargeId,observedAt};
+    try {
+      const payment=record(checked.state,invoice.paymentId,'payment');
+      insist(payment.stripeInvoiceId===invoice.id && payment.accountId===c.account_id && payment.providerChargeId===invoice.providerChargeId && payment.amountCents===invoice.amountCents,'payout_native_source_mismatch',409);
+      const charge=(await stripe(env,'/charges/'+encodeURIComponent(providerIdentity(invoice.providerChargeId))+'?expand[]=balance_transaction')).body;
+      insist(charge.object==='charge' && charge.id===invoice.providerChargeId && charge.livemode===false && charge.currency==='usd' && charge.paid===true && charge.captured===true && charge.amount===invoice.amountCents && charge.amount_captured===invoice.amountCents && charge.payment_intent===invoice.paymentIntentId && charge.payment_method_details?.type==='card','payout_charge_source_mismatch',502);
+      insist(charge.refunded===false && charge.amount_refunded===0 && charge.disputed===false && !charge.dispute,'payout_refund_or_dispute_unresolved',409);
+      insist(charge.balance_transaction && typeof charge.balance_transaction==='object','payout_fee_unavailable',409);
+      const value=balanceTransaction(charge.balance_transaction);
+      insist(value.sourceId===charge.id && value.type==='charge' && value.grossCents===invoice.amountCents,'payout_balance_source_mismatch',502);
+      cards.push({...base,...value,status:'observed',errorCode:null});
+    } catch(error) {cards.push({...base,status:'unresolved',errorCode:failure(error),providerTransactionId:null,grossCents:null,feeCents:null,netCents:null});}
+  }
+  try {
+    const observations=await stripeList(env,'/payouts');
+    for(const body of observations) {
+      const value=payoutObservation(body),observedAt=now();
+      let transactionIds: string[]|null=null,mappingError: string|null=null;
+      try {
+        // Stripe supports payout membership reads for automatic payouts only.
+        if(value.automatic)transactionIds=(await stripeList(env,'/balance_transactions?payout='+encodeURIComponent(value.providerPayoutId))).map(item=>balanceTransaction(item).providerTransactionId);
+        else mappingError='payout_membership_unavailable';
+      } catch(error) {mappingError=failure(error);}
+      payouts.push({id:'payout-observation:'+await digest({refreshId:id,payoutId:value.providerPayoutId}),refreshId:id,accountId:c.account_id,observedAt,...value,transactionIds,mappingError,depositStatus:'unmatched',bankDepositConfirmed:false});
+    }
+  } catch(error) {payoutError=failure(error);}
+  // Never let a disconnected, changed or erased source acquire new observations.
+  const fresh=await authority(env,who),finish=new Transaction(env.DB,fresh.state,fresh.who),latest=await connection(env);
+  insist(latest.connection_id===c.connection_id && latest.account_id===c.account_id && latest.key_digest===c.key_digest,'billing_connection_changed',409);reviewedConnection(finish.state,latest);
+  await merchant(env,c.account_id);fenceConnection(finish,c);
+  const retained=record(finish.state,id,refreshKind);
+  if(retained.status!=='refreshing')return retained;
+  for(const card of cards) {
+    person(finish.state,card.personId,false);
+    const invoice=record(finish.state,card.invoiceId,'stripeInvoice');
+    insist(!invoice.erased && invoice.status==='paid' && invoice.paymentId===card.paymentId && invoice.providerChargeId===card.providerChargeId,'payout_native_source_changed',409);
+    finish.put(cardKind,card);
+  }
+  for(const payout of payouts)finish.put(payoutKind,payout);
+  const complete={...retained,completedAt:now(),status:cards.some(c=>c.status==='unresolved') || payoutError || payouts.some(p=>p.mappingError && p.automatic) ? 'incomplete' : 'observed',payoutError,cardCount:cards.length,payoutCount:payouts.length};
+  finish.put(refreshKind,complete);await finish.commit();return complete;
+}
+
+function latestBy(rows: RecordData[],key: string) {
+  const map=new Map<string,RecordData>();
+  for(const row of rows)if(!map.has(row[key]) || map.get(row[key])!.observedAt<=row.observedAt)map.set(row[key],row);
+  return [...map.values()].sort((a,b)=>String(a[key]).localeCompare(String(b[key])));
+}
+const sum=(rows: RecordData[],key: string)=>{const value=rows.reduce((total,row)=>total+row[key],0);insist(Number.isSafeInteger(value),'payout_total_out_of_range',409);return value;};
+/** Pure retained projection. It never retries reads, collects, settles or matches a bank deposit. */
+export async function payoutReport(env: BillingBindings,who: Actor) {
+  const loaded=await authority(env,who),state=loaded.state,refreshes=list(state,refreshKind),latest=refreshes.at(-1) ?? null;
+  let connected=false;
+  try {const c=await connection(env);reviewedConnection(state,c);connected=true;} catch(error) {
+    if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured','billing_connection_review_required'].includes(error.code))throw error;
+  }
+  const observations=latestBy(list(state,cardKind).filter(r=>!r.erased && state.people.some(p=>p.id===r.personId && !p.erasedAt)),'invoiceId');
+  const cards: RecordData[]=observations.map(row=>({...row,stale:row.refreshId!==latest?.id}));
+  for(const invoice of list(state,'stripeInvoice').filter(i=>i.status==='paid' && !i.erased && state.people.some(p=>p.id===i.personId && !p.erasedAt)))if(!cards.some(c=>c.invoiceId===invoice.id))cards.push({id:invoice.id,invoiceId:invoice.id,paymentId:invoice.paymentId,accountId:invoice.accountId,providerChargeId:invoice.providerChargeId,status:'unresolved',errorCode:'payout_refresh_required',stale:true,observedAt:null,providerTransactionId:null,grossCents:null,feeCents:null,netCents:null});
+  const current=cards.filter(r=>r.status==='observed' && !r.stale),complete=!!latest && latest.status!=='refreshing' && current.length===cards.length;
+  const payouts=latestBy(list(state,payoutKind),'providerPayoutId').map(row=>{
+    const matched=current.filter(c=>row.transactionIds?.includes(c.providerTransactionId));
+    const unmapped=row.transactionIds===null ? null : row.transactionIds.filter((id: string)=>!matched.some(c=>c.providerTransactionId===id)).length;
+    const mappedNetCents=sum(matched,'netCents');
+    return {...row,stale:row.refreshId!==latest?.id,cardObservationIds:matched.map(c=>c.id),mappedNetCents,unmappedTransactionCount:unmapped,providerDifferenceCents:row.refreshId===latest?.id && unmapped===0 && !row.mappingError ? row.amountCents-mappedNetCents : null};
+  });
+  return {mode:'test',connected,latest,refreshes,cards,payouts,totals:{observedGrossCents:sum(current,'grossCents'),observedFeeCents:sum(current,'feeCents'),observedNetCents:sum(current,'netCents'),grossCents:complete?sum(current,'grossCents'):null,feeCents:complete?sum(current,'feeCents'):null,netCents:complete?sum(current,'netCents'):null,unresolvedCount:cards.length-current.length},bankDepositConfirmation:'unavailable',refundAndDisputeReconciliation:'unavailable',scope:'Retained personal one-time TEST card receipts only; payouts never establish bank receipt.'};
+}
+export function payoutCsv(report: Awaited<ReturnType<typeof payoutReport>>) {
+  const fields=['kind','id','accountId','invoiceId','paymentId','providerChargeId','providerTransactionId','providerPayoutId','observedAt','providerCreatedAt','availableAt','arrivalAt','currency','grossCents','feeCents','netCents','amountCents','status','providerStatus','depositStatus','errorCode','mappingError','stale'];
+  const cell=(v: unknown)=>'"'+String(v??'').replace(/^([=+@-])/,'\t$1').replaceAll('"','""')+'"';
+  const rows=[...report.cards.map(r=>({kind:'card',...r})),...report.payouts.map(r=>({kind:'payout',...r}))];
+  return [fields,...rows.map(row=>fields.map(field=>(row as Record<string,unknown>)[field]))].map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';
+}
