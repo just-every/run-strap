@@ -469,6 +469,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(draftResponse.status,200,draftResponse.text);const agentDraft=draftResponse.value.result??draftResponse.value
     const retiredReason=await h.cmd('plan.cancellation.reason.save',{code:terminationReason.code,label:'Moved elsewhere',active:false,revision:terminationReason.revision})
 
+    const catalogMember=await h.person('CatalogArchive');
+    const catalogData=await(await import('./catalog-cases.mjs')).catalogPurchases(h,member,catalogMember);
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
@@ -493,6 +495,11 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(h.auth.STRIPE_BILLING_TEST_KEY,billingAuth.STRIPE_BILLING_TEST_KEY,'provider key is unchanged while local payment execution authority is excluded');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0);
     const state=()=>h.state(restoredOwner)
+    await(await import('./catalog-cases.mjs')).assertCatalogRestored(h,catalogData,restoredOwner);
+    const restoredCatalogMember=await h.signIn(catalogMember.email);
+    const catalogReceipt=await h.send('/app/packs',undefined,restoredCatalogMember);
+    assert.equal(catalogReceipt.status,200);assert.ok(catalogReceipt.text.includes(catalogData.v2.id));
+    console.log('PROBE PLAN-001 native restore: public export and import -> all catalog versions, original sold terms and charges retained; retired approval refused.');
     const recoveredCancellation=(await h.state(restoredOwner)).cancellations
     assert.deepEqual(recoveredCancellation.reasonCodes.find(r=>r.code==='moved-away'),retiredReason)
     const restoredTermination=recoveredCancellation.cancellations.find(c=>c.id===termination.id)

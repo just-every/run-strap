@@ -103,6 +103,39 @@ test('approved pack charges and once-only external payment references keep balan
   assert.equal(s.payments.length, 1)
   assert.equal(s.balances.find(p => p.personId === alex.id).balanceCents, 12500)
   assert.ok(s.approvals.some(a => a.draftId === draft.id))
+  await h.confirmSetup(h.owner);
+  await h.cmd('studio.save',{location:'Catalog studio',timeZone:'America/New_York'});
+  const {catalogTerms}=await import('./catalog-cases.mjs');
+  const version=await h.cmd('catalog.publish',{...catalogTerms,revision:0});
+  const coach=await h.person('CatalogCoach','instructor'),desk=await h.person('CatalogDesk');
+  await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{'membership-sale':{enabled:true,scopes:[{memberIds:[alex.id],locationIds:['studio'],doors:['all']}]}}});
+  await h.enroll(desk.cookie);
+  const key=await h.cmd('agent.create',{label:'Catalog preparation'}),headers={authorization:`Bearer ${key.token}`};
+  const agent=(name,input)=>h.send('/api/strap/agent/command',{name,input},'',headers);
+  const prepared=await agent('pack.prepare',{personId:alex.id,catalogVersionId:version.id});
+  assert.equal(prepared.status,200);
+  const before=(await h.state()).version;
+  for (const cookie of [alex.cookie,coach.cookie,desk.cookie]) {
+    await h.cmd('catalog.publish',{...catalogTerms,revision:1},cookie,403);
+    await h.cmd('catalog.retire',{id:version.productId,revision:1},cookie,403);
+    await h.cmd('pack.prepare',{personId:alex.id,catalogVersionId:version.id},cookie,403);
+    await h.cmd('pack.approve',{id:prepared.value.id},cookie,403);
+  }
+  for (const [name,input] of [['catalog.publish',{...catalogTerms,revision:1}],['catalog.retire',{id:version.productId,revision:1}],['pack.approve',{id:prepared.value.id}]]) assert.equal((await agent(name,input)).status,403);
+  await h.cmd('pack.prepare',{personId:alex.id,catalogVersionId:version.id,amountCents:1},h.owner,400);
+  assert.equal((await h.state()).version,before,'denied writes and attempted catalog price override have no effect');
+  await h.cmd('agent.revoke',{id:key.id});
+  const revokedVersion=(await h.state()).version;
+  assert.equal((await agent('pack.prepare',{personId:alex.id,catalogVersionId:version.id})).status,401);
+  assert.equal((await h.state()).version,revokedVersion);
+  await h.cmd('pack.approve',{id:prepared.value.id});
+  const child=await h.person('CatalogChild'),home=await h.cmd('household.save',{name:'Catalog household'});
+  const personal=await h.cmd('pack.prepare',{personId:child.id,catalogVersionId:version.id});
+  await h.cmd('household.participant.add',{id:home.id,personId:child.id});
+  const householdVersion=(await h.state()).version;
+  await h.cmd('pack.approve',{id:personal.id},h.owner,409);
+  await h.cmd('pack.prepare',{personId:child.id,catalogVersionId:version.id},h.owner,409);
+  assert.equal((await h.state()).version,householdVersion,'a changed household cannot redirect a personal sale');
 }))
 
 test('waiver acknowledgements bind exact immutable versions before booking', () => run(async h => {
