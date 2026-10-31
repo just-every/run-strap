@@ -4670,7 +4670,7 @@
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
-      "sha256": "0e3cf057077840551254c3308f7a096bd05f35187da93e7e2bf640fdb605f103",
+      "sha256": "4e0e45d1d6168fcf3413f2de46112addd62c2e035d90fd13a6ebe648714222e4",
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
