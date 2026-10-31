@@ -1,3 +1,4 @@
+import { recoveryDesign, checkRecoveryDesign } from './recovery-measurement'
 import { humanOwner, instant, insist, integer, list, now, person, preparer, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { addDays, localDate } from '../zone';
@@ -386,7 +387,7 @@ export function prepareEmptyPlaces(tx: Transaction, input: Record<string,unknown
   const audience=personIds.map(personId=>({personId,reason:emptyPlaceRefusal(tx.state,personId,entry)
     ?? (list(tx.state,'emptyPlaceOffer').filter(o=>o.personId === personId && o.createdAt > since).length >= maxPer30Days ? 'frequency_cap' : null)}));
   const preview={id:crypto.randomUUID(),classId:entry.id,service:entry.service ?? entry.title,leadMinutes,maxPer30Days,incentiveCents,budgetCents,
-    text:text(input.text,'offer_text',1000),audience,status:'preview',key:crypto.randomUUID(),version:tx.state.version+1,createdAt:at,createdBy:tx.who.id};
+    text:text(input.text,'offer_text',1000),...recoveryDesign(tx.state,input,audience),status:'preview',key:crypto.randomUUID(),version:tx.state.version+1,createdAt:at,createdBy:tx.who.id};
   tx.put('emptyPlaceCampaign',preview);return preview;
 }
 export function approveEmptyPlaces(tx: Transaction, input: Record<string,unknown>) {
@@ -395,6 +396,7 @@ export function approveEmptyPlaces(tx: Transaction, input: Record<string,unknown
   insist(input.key === campaign.key,'outreach_preview_changed',409);
   if(campaign.status === 'approved') return campaign;
   insist(campaign.status === 'preview' && campaign.version === tx.state.version,'outreach_audience_changed',409);
+  checkRecoveryDesign(tx.state,campaign);
   const entry=record(tx.state,campaign.classId,'class'),at=now();
   insist(entry.status === 'published' && entry.start > at,'class_already_started',409);tx.future(entry.start);
   // This is the normal waitlist policy, under the same serial revision fence.
@@ -612,14 +614,14 @@ export function prepareWinback(tx: Transaction, input: Record<string,unknown>) {
   const services=input.eligibleServices ?? [];insist(Array.isArray(services) && services.length <= 100,'invalid_eligibleServices');
   const rewardCents=integer(input.rewardCents,'rewardCents',0,100000),budgetCents=integer(input.budgetCents,'budgetCents',0,10000000);insist(rewardCents <= budgetCents,'reward_exceeds_budget');
   const saved={id:crypto.randomUUID(),terms:finiteTerms(input,services.map(s=>text(s,'service',160))),cadenceDays,rewardCents,budgetCents,
-    offerDays:integer(input.offerDays,'offerDays',1,30),text:text(input.text,'offer_text',1000),audience:personIds.map(id=>winbackEvidence(tx.state,id,cadenceDays)),
+    offerDays:integer(input.offerDays,'offerDays',1,30),text:text(input.text,'offer_text',1000),...recoveryDesign(tx.state,input,personIds.map(id=>winbackEvidence(tx.state,id,cadenceDays))),
     status:'preview',key:crypto.randomUUID(),version:tx.state.version+1,createdAt:now(),createdBy:tx.who.id};
   tx.put('winbackCampaign',saved);return saved;
 }
 export function approveWinback(tx: Transaction, input: Record<string,unknown>) {
   humanOwner(tx.who);const campaign=record(tx.state,input.id,'winbackCampaign');
   insist(input.key === campaign.key,'winback_preview_changed',409);if(campaign.status === 'approved')return campaign;
-  insist(campaign.version === tx.state.version && campaign.status === 'preview','winback_audience_changed',409);
+  insist(campaign.version === tx.state.version && campaign.status === 'preview','winback_audience_changed',409);checkRecoveryDesign(tx.state,campaign);
   const at=now();
   for(const row of campaign.audience.filter((r:{reason:string|null})=>!r.reason)) {
     insist(!winbackEvidence(tx.state,row.personId,campaign.cadenceDays).reason,'winback_eligibility_changed',409);

@@ -162,3 +162,100 @@ export async function recoveryOutcomesBrowser(h,{campaignId,offerId,bookingId,vi
     } finally {await context.close()}
   }} finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
 }
+
+export async function recoveryChoiceBrowser(h,{decliner,offerId,withdrawn}) {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os')
+  const temporary=!process.env.STRAP_PROOF_DIR,dir=process.env.STRAP_PROOF_DIR ?? await mkdtemp(join(tmpdir(),'strap-outcome-choices-'))
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {
+    for(const width of temporary ? [1440] : [1440,390]) {
+      const context=await browser.newContext({viewport:{width,height:1000}})
+      try {
+        await context.route(h.origin+'/**',async route=>{
+          const path=new URL(route.request().url()).pathname
+          if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+          return route.continue()
+        })
+        const use=async cookie=>{await context.clearCookies();const i=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,i),value:cookie.slice(i+1),url:h.origin}])}
+        await use(decliner.cookie)
+        const page=await context.newPage()
+        await page.goto(h.origin+'/app/offers')
+        const offer=page.locator('[data-empty-offer="'+offerId+'"]')
+        if(width===1440)await offer.getByRole('button',{name:'Decline class offer',exact:true}).click()
+        assert.ok((await offer.innerText()).includes('declined'))
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+        if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-member-decline-'+width+'.png'),fullPage:true})
+        await use(withdrawn.cookie)
+        await page.goto(h.origin+'/app/profile#preferences')
+        const choice=page.getByLabel('Include me in recovery outcome measurement',{exact:true})
+        if(width===1440) {
+          await choice.selectOption('false')
+          await page.getByLabel('Consent statement for any marketing opt-in',{exact:true}).fill('Keep existing marketing permission; stop outcome measurement')
+          await page.getByRole('button',{name:'Save preference record',exact:true}).click()
+        }
+        assert.equal(await choice.inputValue(),'false')
+        await choice.scrollIntoViewIfNeeded()
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+        if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-member-measurement-'+width+'.png'),fullPage:true})
+      } finally {await context.close()}
+    }
+  } finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
+}
+
+export async function recoveryComparisonBrowser(h,{campaignId,personId,bookingId,paidCampaignId,rewardPersonId}) {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os')
+  const temporary=!process.env.STRAP_PROOF_DIR,dir=process.env.STRAP_PROOF_DIR ?? await mkdtemp(join(tmpdir(),'strap-outcome-comparison-'))
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {for(const width of temporary ? [1440] : [1440,390]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try {
+      await context.route(h.origin+'/**',async route=>{
+        const path=new URL(route.request().url()).pathname
+        if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+        return route.continue()
+      })
+      const i=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,i),value:h.owner.slice(i+1),url:h.origin}])
+      const page=await context.newPage()
+      const shot=async name=>{
+        await page.evaluate(()=>document.fonts.ready)
+        if(width===1440) {
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+          assert.deepEqual(await page.locator('main p,main a,main button,main input,main select,main td').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length&&parseFloat(getComputedStyle(n).fontSize)<13).map(n=>n.textContent)),[])
+          for(const control of await page.locator('a,button,summary').all()) {
+            if(!await control.isVisible())continue
+            const iconOnly=await control.evaluate(el=>{const copy=el.cloneNode(true);copy.querySelectorAll('[role="tooltip"]').forEach(t=>t.remove());return !!el.querySelector('svg')&&!copy.textContent.trim()})
+            if(iconOnly){const tip=control.locator('[role="tooltip"]');assert.equal(await tip.count(),1);await control.focus();assert.ok(await tip.isVisible());await control.evaluate(el=>el.blur());await control.hover();await page.waitForTimeout(350);assert.ok(await tip.isVisible());await page.mouse.move(0,0)}
+          }
+        }
+        if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-'+name+'-'+width+'.png'),fullPage:true})
+      }
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId)
+      if(width===1440) {
+        const sample=await page.locator('[data-outcome-campaign="'+campaignId+'"]').innerText()
+        assert.ok(sample.includes('intervention: 2 measured members'))
+        assert.ok(sample.includes('holdout: 2 measured members'))
+        assert.equal(await page.locator('[data-outcome-total="visits"]').innerText(),'2')
+      }
+      await shot('comparison')
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId+'&person='+personId)
+      if(width===1440) {
+        assert.equal(await page.locator('[data-outcome-booking="'+bookingId+'"]').count(),1)
+        await page.locator('[data-outcome-booking="'+bookingId+'"]').getByRole('link').click()
+        assert.equal(new URL(page.url()).pathname,'/app')
+        await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId+'&person='+personId)
+      }
+      await shot('holdout-sources')
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+paidCampaignId+'&person='+rewardPersonId)
+      if(width===1440) {
+        const detail=await page.locator('#outcome-source').innerText()
+        assert.ok(detail.includes('posted non cash credit'));assert.ok(detail.includes('empty-place-incentive:'))
+      }
+      await shot('incentive-sources')
+      await page.goto(h.origin+'/app/leads')
+      if(width===1440)assert.equal(await page.getByLabel('Outcome comparison',{exact:true}).count(),2)
+      await page.locator('[data-empty-campaign="'+campaignId+'"] summary').click()
+      await page.locator('[data-empty-campaign="'+campaignId+'"]').scrollIntoViewIfNeeded()
+      await shot('approved-cohorts')
+    } finally {await context.close()}
+  }} finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
+}

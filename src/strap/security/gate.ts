@@ -8,8 +8,8 @@ import type { Bindings } from '../../auth.server'
 import type { Actor } from '../domain'
 import { selfService, standing } from './mfa'
 
-const pages = new Set(['/app/revenue', '/app/teaching-pay', '/app/integrations', '/app/agent'])
-const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|waiver-evidence\.(?:json|html)|preferences\.json|staff-history|teaching-pay|reports\/(?:revenue|finance))$/
+const pages = new Set(['/app/revenue', '/app/recovery-outcomes', '/app/teaching-pay', '/app/integrations', '/app/agent'])
+const downloads = /\.(csv|xlsx|txt)$|^\/api\/strap\/(exit\.json|waiver-evidence\.(?:json|html)|preferences\.json|staff-history|teaching-pay|reports\/(?:revenue|finance|recovery-outcomes))$/
 export const privilegedRoute = (path: string) => pages.has(path) || downloads.test(path) || path.startsWith('/api/strap/tax') || path.startsWith('/api/strap/billing')
 export const privilegedCommand = (name: string) => /^(privacy|staff|tax|agent|integration|kiosk|finance|manager|pay|member\.record)\./.test(name) || ['billing.connect','billing.disconnect','billing.checkout.start','billing.reconcile','billing.agreement.prepare','sms.test.connect', 'sms.test.send', 'attendance.booking.grant','appointment.booking.grant', 'intake.sensitive.grant', 'intake.form.publish', 'mfa.reset', 'mail.connect', 'person.invite', 'waiver.launch','waiver.tablet.launch','waiver.signing.grant','waiver.copy.mail.review'].includes(name)
 

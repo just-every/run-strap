@@ -9,7 +9,7 @@ export type MarketingChannel = typeof channels[number];
 export function preferencesOf(state: State,personId: string): RecordData {
   return state.records.get('member-preference:'+personId)?.data ?? {id:'member-preference:'+personId,personId,revision:0,
     marketing:{email:'denied',sms:'denied',inApp:'denied'},contactChannels:{email:true,sms:false,inApp:true},preferredTimes:'',preferredClasses:'',accessibility:'',
-    attendanceSharing:true,feedback:false,timeZone:null,quietStart:'20:00',quietEnd:'10:00',updatedAt:null,updatedBy:null,source:null};
+    attendanceSharing:true,feedback:false,recoveryMeasurement:true,timeZone:null,quietStart:'20:00',quietEnd:'10:00',updatedAt:null,updatedBy:null,source:null};
 }
 export function suppressMarketing(tx: Transaction,personId: string,channel: string | null,reason: string) {
   for(const message of list(tx.state,'marketingMessage').filter(m => m.personId === personId && (!channel || m.channel === channel) && ['queued','held'].includes(m.status)))
@@ -29,7 +29,7 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
   if(staff)requireMemberRecord(tx.state,tx.who,memberId);
   else {insist(tx.who.role === 'member','member_required',403);insist(input.personId === undefined || input.personId === memberId,'own_preference_required',403);}
   const member=person(tx.state,memberId);insist(member.role === 'member','member_required');
-  if(staff)insist(input.bookingEmail === undefined && input.feedback === undefined && (tx.who.role === 'owner' || input.accessibility === undefined),'member_owned_choice_required',403);
+  if(staff)insist(input.bookingEmail === undefined && input.feedback === undefined && input.recoveryMeasurement === undefined && (tx.who.role === 'owner' || input.accessibility === undefined),'member_owned_choice_required',403);
   const requestId=text(input.requestId,'requestId',80),requestBasis=JSON.stringify(Object.keys(input).sort().map(k => [k,input[k]]));
   const prior=list(tx.state,'memberPreferenceEvent').find(e => e.actorId === tx.who.id && e.requestId === requestId);
   if(prior){insist(prior.requestBasis === requestBasis,'preference_request_changed',409);return visiblePreferences(prior.after,tx.who);}
@@ -53,7 +53,7 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
     if(input[contact] !== undefined){insist(typeof input[contact] === 'boolean','invalid_'+contact);after.contactChannels[channel]=input[contact];}
   }
   for(const key of ['preferredTimes','preferredClasses','accessibility'] as const)if(input[key] !== undefined)after[key]=optional(input[key],key,key === 'accessibility'?2000:500);
-  for(const key of ['attendanceSharing','feedback'] as const)if(input[key] !== undefined){insist(typeof input[key] === 'boolean','invalid_'+key);after[key]=input[key];}
+  for(const key of ['attendanceSharing','feedback','recoveryMeasurement'] as const)if(input[key] !== undefined){insist(typeof input[key] === 'boolean','invalid_'+key);after[key]=input[key];}
   // A blank zone records none: marketing SMS quiet hours then follow the studio's clock.
   if(input.timeZone !== undefined){const zone=input.timeZone === null || (typeof input.timeZone === 'string' && !input.timeZone.trim()) ? null : text(input.timeZone,'timeZone',100);
     if(zone)try{new Intl.DateTimeFormat('en-US',{timeZone:zone}).format();}catch{insist(false,'invalid_timeZone');}after.timeZone=zone;}
@@ -70,7 +70,7 @@ function save(tx: Transaction,input: Record<string,unknown>,staff: boolean) {
 }
 export const saveOwnPreferences=(tx: Transaction,input: Record<string,unknown>) => save(tx,input,false);
 export const saveStaffPreferences=(tx: Transaction,input: Record<string,unknown>) => save(tx,input,true);
-export const visiblePreferences=(p: RecordData,who: Actor) => who.role === 'owner' || who.role === 'member' && who.personId === p.personId ? p : {...p,accessibility:undefined,feedback:undefined};
+export const visiblePreferences=(p: RecordData,who: Actor) => who.role === 'owner' || who.role === 'member' && who.personId === p.personId ? p : {...p,accessibility:undefined,feedback:undefined,recoveryMeasurement:undefined};
 export function preferenceExport(state: State,who: Actor,personId: string) {
   if(who.role === 'member')insist(who.personId === personId,'own_preference_required',403);else requireMemberRecord(state,who,personId);
   person(state,personId,false);

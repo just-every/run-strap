@@ -9,6 +9,7 @@ const delegated = new Map<string,StaffRight>([
   ...['course.withdraw.prepare','course.withdraw.confirm'].map(name=>[name,'contract-change'] as [string,StaffRight]),
   ...['booking.desk','booking.cancel','booking.move','booking.restore','booking.spot.staff','booking.offer.accept.staff','reservation.prepare','reservation.confirm','reservation.cancel.prepare','reservation.cancel.confirm'].map(name => [name,'booking'] as [string,StaffRight]),
   ['booking.waitlist.position','override'],
+  ['lead.intervention.launch','member-record'],
   ['attendance.checkin','check-in'],
   ['plan.recurring.prepare','membership-sale'],
   ['plan.cancellation.prepare','contract-change'],['plan.cancellation.confirm','contract-change'],

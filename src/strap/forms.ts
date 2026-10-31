@@ -139,7 +139,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if(name === 'renewal.sequence.set') input.enabled=input.enabled === 'true';
   if (name.startsWith('preferences.save')) {
     input.revision=Number(input.revision ?? 0);
-    for(const key of ['marketingEmail','marketingSms','marketingInApp','contactEmail','contactSms','contactInApp','attendanceSharing','feedback','bookingEmail'])if(input[key] !== undefined)input[key]=input[key] === 'true';
+    for(const key of ['marketingEmail','marketingSms','marketingInApp','contactEmail','contactSms','contactInApp','attendanceSharing','feedback','bookingEmail','recoveryMeasurement'])if(input[key] !== undefined)input[key]=input[key] === 'true';
   }
   if (name === 'staff.access.grant') {
     const selected = (prefix: string) => Object.keys(input).filter(key => key.startsWith(prefix) && input[key] === 'true').map(key => key.slice(prefix.length));
@@ -219,6 +219,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     }
     delete input.effectiveDate; delete input.effectiveTime
   }
+  if (name === 'lead.winback.prepare' || name === 'lead.empty.prepare') {if(input.measurementDays !== undefined)input.measurementDays=Number(input.measurementDays);}
   if (name === 'lead.winback.prepare') {for(const key of ['days','cadenceDays','offerDays'])input[key]=Number(input[key]);for(const key of ['amount','reward','budget']){input[key==='amount'?'amountCents':key+'Cents']=cents(input[key],key);delete input[key];}input.eligibleServices=String(input.services ?? '').split(',').map(s=>s.trim()).filter(Boolean);delete input.services;input.personIds=Object.keys(input).filter(key=>key.startsWith('wb_')&&input[key]==='true').map(key=>key.slice(3));for(const key of Object.keys(input))if(key.startsWith('wb_'))delete input[key];}
   if (name === 'lead.winback.purchase')input.confirm=input.confirm === 'true';
   if (name === 'lead.nurture.save') {input.days=Number(input.days);input.amountCents=cents(input.amount,'membership price');delete input.amount;}

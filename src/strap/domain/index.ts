@@ -1,3 +1,4 @@
+import { declineIntervention, launchIntervention } from './recovery-measurement'
 import { previewAutomationDelivery, confirmAutomationDelivery, prepareAutomation, enableAutomation, setAutomation, previewAutomationResume, resumeAutomation, evaluateAutomation, completeAutomationTask, sweepAutomation, suppressAutomation, automationSnapshot } from './automation';
 import { deliverClientAppointment, acceptClientAppointment, authorizeClientAppointment, recordAppointmentDeposit, clientAppointmentSnapshot } from './client-appointments';
 import { prepareClientAppointmentChange, confirmClientAppointmentChange } from './client-appointment-changes';
@@ -249,6 +250,8 @@ export const handlers = {
   'lead.recovery.rule.save':defineCommand(saveRecoveryRule,['owner']),
   'lead.recovery.process':defineCommand(processRecovery,['owner']),
   'lead.recovery.complete':defineCommand(completeRecovery,['owner']),
+  'lead.intervention.launch':defineCommand(launchIntervention,['owner','front-desk','manager'],{staffRight:'member-record'}),
+  'lead.intervention.decline':defineCommand(declineIntervention,['member'],{member:{staff:'lead.intervention.launch',right:'member-record',ownStep:true}}),
   'lead.empty.prepare':defineCommand(prepareEmptyPlaces,['owner']),
   'lead.empty.approve':defineCommand(approveEmptyPlaces,['owner']),
   'lead.empty.accept':defineCommand(acceptEmptyPlace,['owner','member'],{member:{staff:'lead.empty.accept',right:'booking'},staffRight:'booking'}),
@@ -406,7 +409,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
-  const privatePreparation = name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
+  const privatePreparation = name.startsWith('lead.success.') || name.startsWith('lead.intervention.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
   // Private preparations and reviews must not execute unrelated due billing, notices or entitlements.
   if (!privatePreparation && !name.startsWith('appointment.')) {
     applyDueCancellations(tx); applyDueFreezes(tx); await deliverRenewalDisclosures(tx); if(!['plan.recurring.stop','plan.cancellation.stop','plan.cancellation.statutory'].includes(name)) await applyDueRecurringInvoices(tx); applyDuePlanChanges(tx);
