@@ -4226,7 +4226,7 @@
       "executable": false
     },
     "tests/booking-widget-browser.mjs": {
-      "sha256": "b470d356b7f62ae0f8e4425fb84d97b5541db9df4c2d3e6f37ae07205027a14e",
+      "sha256": "e0d20f5c55e151958f422765b7d5b06a34b94fe2bfc9cb6d3b10cfb372f9ea46",
       "executable": false
     },
     "tests/booking-widget-journey.mjs": {
