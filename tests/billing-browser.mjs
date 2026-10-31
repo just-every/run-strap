@@ -12,7 +12,7 @@ export async function billingBrowser(h,edge) {
     const seed=await billingSeed(h,'MonthlyMember'+width)
     const desk=await h.person('BillingBrowserDesk'+width)
     const grant=async(omit=null)=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:Object.fromEntries(['member-record','membership-sale','collection'].filter(r=>r!==omit).map(right=>[right,{enabled:true,scopes:[{memberIds:[seed.member.id],locationIds:['studio'],doors:['all']}]}]))})
-    await grant();await h.enroll(desk.cookie)
+    await grant();const factor=await h.enroll(desk.cookie)
     const context=await browser.newContext({viewport:{width,height:1000},acceptDownloads:true})
     try {
       await context.route(h.origin+'/**',async route=>{const path=new URL(route.request().url()).pathname;if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]});return route.continue()})
@@ -131,6 +131,19 @@ export async function billingBrowser(h,edge) {
       await sign(desk.cookie);await page.goto(h.origin+'/app/people?person='+seed.member.id)
       const staffRemoval=page.locator('[data-removal-request="'+requested.id+'"]')
       await staffRemoval.getByRole('checkbox').check();await capture('staff-removal-review')
+      const staffActor=(await h.state(desk.cookie)).actor.id
+      await h.db.prepare('UPDATE st_mfa_sessions SET verified_at=verified_at-86400000 WHERE operator_id=?').bind(staffActor).run()
+      const versionBeforeRemoval=(await h.state()).version
+      const heldResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/app/action'&&response.request().method()==='POST')
+      await staffRemoval.getByRole('button',{name:'Remove requested card',exact:true}).click()
+      assert.equal((await heldResponse).status(),403)
+      assert.equal((await h.state()).version,versionBeforeRemoval)
+      assert.equal(edge.calls.length,removalCalls)
+      const verify=page.getByRole('textbox',{name:'Authenticator code or recovery code',exact:true})
+      await verify.waitFor();await capture('staff-removal-factor-required')
+      await verify.fill(factor.recoveryCodes[0])
+      await page.getByRole('button',{name:'Continue',exact:true}).click()
+      await staffRemoval.getByRole('checkbox').check()
       await staffRemoval.getByRole('button',{name:'Remove requested card',exact:true}).click()
       const removalEvent=(await h.state()).staffActions.find(a=>a.command==='billing.method.remove.staff'&&a.removalRequestId===requested.id)
       if(width===1440){assert.ok(removalEvent);assert.equal(removalEvent.right,'collection');assert.equal(removalEvent.actorRole,'front-desk');assert.equal(edge.calls.length,removalCalls)}
