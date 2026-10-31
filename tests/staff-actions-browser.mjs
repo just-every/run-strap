@@ -17,10 +17,25 @@ export async function studioAuditBrowser(h,{staff,query,drawer}) {
       const context=await browser.newContext({viewport:{width,height:1000}})
       await assets(context,h);await cookieInto(context,h.owner,h.origin)
       const page=await context.newPage()
+      if(!drawer) {
+        await page.goto(h.origin+'/app/security')
+        const rights=page.locator('#staff-rights')
+        await rights.getByLabel('Staff identity',{exact:true}).selectOption(staff.id)
+        await rights.getByLabel('Staff role',{exact:true}).selectOption('front-desk')
+        await rights.getByLabel('Staff access',{exact:true}).selectOption('false')
+        await rights.getByLabel('Reason for access change',{exact:true}).fill('Browser-reviewed revocation')
+        if(width===1440) {
+          await rights.getByRole('button',{name:'Save staff rights',exact:true}).click()
+          const recorded=(await h.send('/api/strap/staff-history?'+query,undefined,h.owner)).value.rows
+          assert.equal(recorded.length,3)
+          assert.ok(recorded.some(row=>row.reason==='Browser-reviewed revocation'&&row.after.enabled===false&&row.version===4),'the real owner form retains its reason and resulting access version')
+        }
+        if(proof)await rights.screenshot({path:join(proof,`SEC-002-access-settings-${width}.png`)})
+      }
       await page.goto(h.origin+'/app/people?'+query+'#staff-actions')
       const panel=page.locator('#staff-actions')
       if(width===1440) {
-        assert.equal(await panel.locator('[data-staff-command]').count(),2)
+        assert.equal(await panel.locator('[data-staff-command]').count(),drawer?2:3)
         assert.ok(await panel.getByText(drawer?'Correct drawer count':'Staff access revoked',{exact:false}).first().isVisible())
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
         const expected=(await h.send('/api/strap/staff-history?'+query,undefined,h.owner)).value.rows
