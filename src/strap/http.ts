@@ -1,4 +1,4 @@
-import { upcomingInvoices, upcomingInvoicesCsv } from './upcoming-invoices'
+import { upcomingInvoices, upcomingInvoicesDownload } from './upcoming-invoices'
 import { studioSettings } from './domain/studio'
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
@@ -204,9 +204,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
-      if (/^\/api\/strap\/reports\/upcoming-invoices(?:\.csv)?$/.test(path)) {
+      if (/^\/api\/strap\/reports\/upcoming-invoices(?:\.(?:csv|xlsx))?$/.test(path)) {
         const {report} = await invoiceForecast(env,who,url.searchParams)
-        return path.endsWith('.csv') ? new Response(upcomingInvoicesCsv(report),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-upcoming-invoices.csv'}}) : json(report)
+        return path.endsWith('.csv') ? upcomingInvoicesDownload(report,'csv') : path.endsWith('.xlsx') ? upcomingInvoicesDownload(report,'xlsx') : json(report)
       }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {

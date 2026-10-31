@@ -3,7 +3,7 @@ import { mkdir,readFile } from 'node:fs/promises'
 import { join,extname } from 'node:path'
 import { chromium } from '@playwright/test'
 
-export async function upcomingInvoicesBrowser(h,{query,scheduled,total}) {
+export async function upcomingInvoicesBrowser(h,{query,scheduled,total,focused,focusedRows,focusedTotal}) {
   const proof=process.env.STRAP_UPCOMING_PROOF_DIR ?? process.env.STRAP_PROOF_DIR ?? process.env.STRAP_RIGHTS_PROOF_DIR
   const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   if(proof)await mkdir(proof,{recursive:true})
@@ -36,6 +36,29 @@ export async function upcomingInvoicesBrowser(h,{query,scheduled,total}) {
           assert.equal(records.find(r=>r[0]==='period-total')[columns.indexOf('forecastCents')],total)
           assert.equal(await page.locator('form[action*="name=plan.recurring"],form[action*="name=billing"]').count(),0,'forecast has no mutation controls')
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'forecast fits the viewport')
+          await page.getByLabel('First studio date',{exact:true}).fill(focused.from)
+          await page.getByLabel('Last studio date',{exact:true}).fill(focused.to)
+          await page.getByLabel('Sale location',{exact:true}).selectOption(focused.location)
+          await page.getByLabel('Accepted plan',{exact:true}).selectOption(focused.plan)
+          await page.getByLabel('Invoice status',{exact:true}).selectOption(focused.status)
+          await Promise.all([page.waitForURL(url=>url.searchParams.get('status')===focused.status),page.getByRole('button',{name:'Show forecast',exact:true}).click()])
+          assert.equal(await page.locator('[data-forecast-total]').getAttribute('data-forecast-total'),String(focusedTotal))
+          assert.equal(await page.locator('[data-upcoming-agreement]').count(),focusedRows.length)
+          for(const row of focusedRows) assert.equal(await page.locator(`[data-upcoming-agreement="${row.agreementId}"]`).count(),1)
+          for(const format of ['CSV','XLSX']) {
+            const link=page.getByRole('link',{name:'Download forecast '+format,exact:true})
+            const href=new URL(await link.getAttribute('href'),h.origin)
+            for(const [key,value] of Object.entries(focused))assert.equal(href.searchParams.get(key),value,'download preserves the visible filter')
+            const [filteredDownload]=await Promise.all([page.waitForEvent('download'),link.click()])
+            const bytes=await readFile(await filteredDownload.path())
+            const records=format==='CSV' ? parseCsv(bytes.toString()) : (await(await import('read-excel-file/node')).default(bytes)).find(s=>s.sheet==='Forecast').data
+            const [columns,...rows]=records,at=key=>columns.indexOf(key)
+            assert.equal(rows.find(r=>r[0]==='period-total')[at('forecastCents')],focusedTotal)
+            assert.deepEqual(rows.filter(r=>r[0]==='invoice').map(r=>r[at('agreementId')]).sort(),focusedRows.map(r=>r.agreementId).sort())
+          }
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'filtered forecast fits the viewport')
+        } else {
+          await page.goto(h.origin+'/app/upcoming-invoices?'+new URLSearchParams(focused))
         }
         if(proof)await page.screenshot({path:join(proof,`BILL-013-forecast-${width}.png`),fullPage:true})
       } finally {await context.close()}

@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "9d9a4008520c76aff2354a65e348667d953788823bb0c1033249a0789a5a6c6a",
+      "sha256": "e46ea11b50b0782c0134d5492e53c94a112f61a4a7c1b088140ca3e63df7900f",
       "executable": false
     },
     "DEMO.md": {
@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "6125f4c7a1e0fcada06b2613e89a8a4ec6a646eccad03a5efaf2e6d8357b2a40",
+      "sha256": "d0f2b04e5f5ad133e5d0e267d600555ebf49a3b983c143c14667465672941db1",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4130,7 +4130,7 @@
       "executable": false
     },
     "src/strap/ui/upcoming-invoices.ts": {
-      "sha256": "6ec97b513b57d3aa60ec0ce198888b07e840f28858f9f6c5ba703446395106ba",
+      "sha256": "3c134a276a0482b9299e13683d4b702048643172c04394e04351203c9d7518d1",
       "executable": false
     },
     "src/strap/ui/waitlist.ts": {
@@ -4138,7 +4138,7 @@
       "executable": false
     },
     "src/strap/upcoming-invoices.ts": {
-      "sha256": "bceda825498111ca18bc346a8006bb6f4c5bcd608f28ec699c79282eab5ad161",
+      "sha256": "2edeec4f34aaabfecab8cb58145524fbd8b89f2154667c2cde41b86a16caf2b3",
       "executable": false
     },
     "src/strap/waiver-evidence.ts": {
@@ -4166,7 +4166,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "47b2488b1af8d3b64e0c62f915e48a8dac91d62ce887e211b7bb5316eceea64a",
+      "sha256": "5d20fa2e1ab3306370a710224f0cc8fa533ec3de193c99f889910f9c1bbeb0f2",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4754,11 +4754,11 @@
       "executable": false
     },
     "tests/upcoming-invoices-browser.mjs": {
-      "sha256": "c92ad3878e144b3e3b4ef6b81668d324ad15b937671443d0aa1753dacdb041fe",
+      "sha256": "72bd1a6b6a7064436fb9e5ba670e302aaf8d76353a9d631926e9049e205fc47e",
       "executable": false
     },
     "tests/upcoming-invoices-journey.mjs": {
-      "sha256": "9db6dba14b6c29d836909c9fde25bfa6a71179e2172041f8a293069ce8de5854",
+      "sha256": "8708e67eca39d03c328571c507825065f5f6d4ecb80ccd1951aafd3c33bcd609",
       "executable": false
     },
     "tests/waitlist-browser.mjs": {
