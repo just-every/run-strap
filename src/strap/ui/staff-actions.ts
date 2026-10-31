@@ -60,7 +60,7 @@ function effect(s: any, value: any) {
   if(value.privacy)return 'Privacy request · '+h(value.status ?? (value.downloadedAt?'retained evidence downloaded':value.disposedAt?'evidence disposed':value.releasedAt?'hold released':'erasure reviewed'))+(value.obligations?' · balance decision '+h(value.obligations):'')+(value.balanceCents!==undefined?' · '+money(value.balanceCents):'')+(value.delivery?' · '+h(value.delivery):'');
   if(value.courseId)return `Course ${h(value.status)} · ${value.creditCents !== undefined ? money(value.creditCents)+' tuition credit' : value.amountCents !== undefined ? money(value.amountCents)+' accepted tuition' : 'personal payer review'} · ${h(value.policy ?? 'No payer consent performed by staff')}`
   if(value.methodId && value.status==='removed')return 'Strap use ended; masked history retained. No provider deletion or change to original debt or consent.';
-  if(value.methodId && ['authorized','superseded'].includes(value.status))return 'Masked card · '+h(value.status)+' · '+(value.methodAuthorized?'current method eligible':'no current execution eligibility');
+  if(value.methodId && ['authorized','superseded'].includes(value.status))return 'Masked card · '+h(value.status)+' · '+(value.methodAuthorized?'recorded default method':'historical method');
   if(value.documentHash && 'financialHash' in value)return value.memberCommand
     ? 'Member personal billing step opened; no signature, payment consent or provider action performed'
     : `Exact membership agreement · ${h(value.status.replaceAll('-',' '))} · payment permission ${h(value.mandateStatus ?? 'not yet accepted')} · method ${value.methodAuthorized?'authorized':'not authorized'}`;
