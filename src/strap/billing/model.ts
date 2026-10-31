@@ -1,4 +1,5 @@
 import { insist, list, person, record, type Actor, type State } from '../domain/types';
+import type { Transaction } from '../domain/store';
 import { sha256Hex } from '../security/crypto';
 
 export interface BillingBindings { DB: D1Database; AUTH_ORIGIN: string; STRIPE_BILLING_TEST_KEY?: string; STRIPE_BILLING_WEBHOOK_SECRET?: string; RER_DEMO?: string }
@@ -38,4 +39,12 @@ export function requireMandate(state: State,agreementId: unknown,who: Actor) {
   const mandate = mandateFor(state,a.id);
   insist(a.signature && mandate?.status === 'accepted','payment_mandate_required',409);
   return {agreement:a,mandate};
+}
+
+export function reviewedConnection(state: State,c: Connection) {
+  const review = list(state,'billingConnectionReview').filter(r=>r.connectionId === c.connection_id && r.approvedAt && r.approvedBy).sort((a,b)=>a.approvedAt.localeCompare(b.approvedAt)).at(-1);
+  insist(review?.ready === true && review.accountId === c.account_id,'billing_connection_review_required',409);
+}
+export function fenceConnection(tx: Transaction,c: Connection) {
+  tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_payment_connections WHERE id='billing' AND connection_id=? AND origin=? AND account_id=? AND key_digest=?) THEN 1 ELSE 0 END",c.connection_id,c.origin,c.account_id,c.key_digest));
 }

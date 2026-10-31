@@ -7,6 +7,7 @@ import { providerCommand } from './operations';
 import { launchBillingAction } from './launch';
 import type { MemberDoor } from '../domain/command-catalogue';
 import { startCheckout, reconcileCheckout } from './checkout';
+import { refreshPayouts } from '../payout-reconciliation';
 import { balance } from '../domain/money';
 export { agreementEvidence, assembleAgreementEvidence, renderAgreementCopy } from './agreements';
 export type { BillingBindings } from './model';
@@ -33,6 +34,7 @@ const handlers = {
     tx.put('billingConnectionEvent',event);return event;
   }),['owner']),
   'billing.checkout.start':defineBilling(startCheckout,['owner']),
+  'billing.payouts.refresh':defineBilling(refreshPayouts,['owner']),
   'billing.reconcile':defineBilling(reconcileCheckout,['owner']),
   'billing.agreement.prepare':defineBilling(native(prepareAgreement),['owner','manager','front-desk'],{staffRight:'membership-sale'}),
   'billing.agreement.accept':defineBilling(native(acceptAgreement),['member'],member('billing.agreement.accept','membership-sale')),

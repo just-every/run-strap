@@ -1,4 +1,5 @@
 import { publishWidget, widgetChoice, widgetOrigin } from './booking-widget-journey.mjs';
+import { reconciliationEdge,readPayouts } from './payout-reconciliation-cases.mjs';
 import { seedAutomationArchive, assertRestoredAutomation } from './automation-archive.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -436,7 +437,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
-  const payments=paymentEdge(),billingAuth=paymentAuth;
+  const payments=reconciliationEdge(),billingAuth=paymentAuth;
   const providerEdge=payments;
   try {
     for(const path of [source,restored])await checkout(path)
@@ -467,6 +468,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(paidCheckout.status,'open');payments.complete(paidCheckout.providerSessionId);
     const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true});
+    const retainedPayouts=await readPayouts(h);assert.equal(retainedPayouts.cards.length,1);assert.equal(retainedPayouts.cards[0].feeCents,175);
     const retainedPayments=await billingView(h);
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const terminationReason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0})
@@ -558,6 +561,14 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
     assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the superseded method and selected replacement as historical records');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
+    const payoutReads=payments.reads.length,restoredPayouts=await readPayouts(h,restoredOwner);
+    assert.equal(restoredPayouts.connected,false);
+    for(const key of ['cards','payouts','refreshes','latest','totals'])assert.deepEqual(restoredPayouts[key],retainedPayouts[key]);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,h.owner)).status,401,'source owner session cannot read restored observations');
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true},restoredOwner,409);
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout-new',confirm:true},restoredOwner,409);
+    assert.equal(payments.reads.length,payoutReads,'restored provider history carries no refresh authority');
+    console.log('PROBE BILL-011 restore: native archive at same origin -> exact fee and payout identities, times and cents retained; source session refused; old and new refresh requests disconnected.');
     const restoredBilling=await billingView(h,restoredOwner);
     assert.equal(restoredBilling.connected,false);
     assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)),retainedPayments.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)));
