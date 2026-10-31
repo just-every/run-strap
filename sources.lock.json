@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6f5c213fee8cbf56f07232d0a33502598e49636b9e58763034a02696246bd6cf",
+      "sha256": "9d9a4008520c76aff2354a65e348667d953788823bb0c1033249a0789a5a6c6a",
       "executable": false
     },
     "DEMO.md": {
@@ -3278,7 +3278,7 @@
       "executable": false
     },
     "src/strap/domain/contract-billing.ts": {
-      "sha256": "ab42510d8ef592c513f726198e96b9cd42b648eadd762050f2e14330d599b9e9",
+      "sha256": "46dc29a840521a22c304917936110f052e4c68c6b9d66948c3cab30cd7f5f29d",
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "db11bc4f76bac1093ccdb51206dd22dee1dfdd452595b40e5edc7920a6255b29",
+      "sha256": "6125f4c7a1e0fcada06b2613e89a8a4ec6a646eccad03a5efaf2e6d8357b2a40",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3854,7 +3854,7 @@
       "executable": false
     },
     "src/strap/ui/contract-invoices.ts": {
-      "sha256": "54279b52e3a30921ff6356063076df1838619197a1de212097717506ac18a95c",
+      "sha256": "a4f9292b811b820e217f06c0e2820fba75e76c073666f6f37952f438f9198440",
       "executable": false
     },
     "src/strap/ui/cooling-refund-value.ts": {
@@ -3914,7 +3914,7 @@
       "executable": false
     },
     "src/strap/ui/index.ts": {
-      "sha256": "e85cb2a6d3910aa43ff47966d345063fa66391cc29273aeb6c94ac6f6e291363",
+      "sha256": "69ac1c99f634902e3f426bd001df2400da39ddc335971c68d0ea144f663eda87",
       "executable": false
     },
     "src/strap/ui/intake.ts": {
@@ -4129,8 +4129,16 @@
       "sha256": "05b268dbbc84480609614a4f9036799486b1a85d21180912a3b258ec0f649296",
       "executable": false
     },
+    "src/strap/ui/upcoming-invoices.ts": {
+      "sha256": "6ec97b513b57d3aa60ec0ce198888b07e840f28858f9f6c5ba703446395106ba",
+      "executable": false
+    },
     "src/strap/ui/waitlist.ts": {
       "sha256": "89de351ad3ed48d3cafb7422183a39744ae9f7334d4dfa7eb421f08caff92b59",
+      "executable": false
+    },
+    "src/strap/upcoming-invoices.ts": {
+      "sha256": "bceda825498111ca18bc346a8006bb6f4c5bcd608f28ec699c79282eab5ad161",
       "executable": false
     },
     "src/strap/waiver-evidence.ts": {
@@ -4158,7 +4166,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "2d32396292bb0bf10055dcbad4aa9160adf67bbbf27a715883f08c6078b8d73b",
+      "sha256": "47b2488b1af8d3b64e0c62f915e48a8dac91d62ce887e211b7bb5316eceea64a",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4486,7 +4494,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "084fc3c02c971ba0d59a28a6032bcd6154318e925624c247f68c3289bcb81b31",
+      "sha256": "1f64ecd14bdb0be6efeb93029b4fe1a7e837f99e963004bc754b56b5a4826c59",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
@@ -4743,6 +4751,14 @@
     },
     "tests/twilio-test-sandbox.mjs": {
       "sha256": "af7f7ceaff5dad3a6b279e45160a3d7d8eeaeaa6976d89ad6c0fa209d1bcd69b",
+      "executable": false
+    },
+    "tests/upcoming-invoices-browser.mjs": {
+      "sha256": "c92ad3878e144b3e3b4ef6b81668d324ad15b937671443d0aa1753dacdb041fe",
+      "executable": false
+    },
+    "tests/upcoming-invoices-journey.mjs": {
+      "sha256": "9db6dba14b6c29d836909c9fde25bfa6a71179e2172041f8a293069ce8de5854",
       "executable": false
     },
     "tests/waitlist-browser.mjs": {

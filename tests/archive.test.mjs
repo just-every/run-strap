@@ -434,6 +434,9 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:5,amountCents:12000,expiresAt:dueAt})).id})
     const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-3'})
     const agreed=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    const forecastBefore=await h.send('/api/strap/reports/upcoming-invoices',undefined,h.owner)
+    assert.equal(forecastBefore.status,200,forecastBefore.text)
+    assert.deepEqual(forecastBefore.value.rows.filter(r=>r.agreementId===agreed.id).map(r=>[r.packId,r.dueAt,r.amountCents,r.status]),[[pack.id,dueAt,12000,'scheduled']])
     const {membership,methodInput,methodResult,membershipBefore,methodHistory}=await archiveMembership(h,member,agreed,providerEdge);
     const expiryPack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:2,amountCents:3000,expiresAt:new Date(Date.now()+60*86400000).toISOString()})).id});
     const expiryDisclosure=await h.cmd('plan.disclosure.schedule',{packId:expiryPack.id,leadDays:7,requestId:'synthetic-strap-expiry-archive'});
@@ -493,6 +496,21 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(h.auth.STRIPE_BILLING_TEST_KEY,billingAuth.STRIPE_BILLING_TEST_KEY,'provider key is unchanged while local payment execution authority is excluded');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0);
     const state=()=>h.state(restoredOwner)
+    const recordsBefore=(await h.db.prepare('SELECT * FROM st_records ORDER BY id').all()).results,forecastCalls=providerEdge.calls.length
+    const forecastPath='/api/strap/reports/upcoming-invoices?from='+forecastBefore.value.from
+    const restoredForecast=await h.send(forecastPath,undefined,restoredOwner)
+    assert.equal(restoredForecast.status,200,restoredForecast.text)
+    const restoredRow=restoredForecast.value.rows.find(r=>r.agreementId===agreed.id)
+    assert.deepEqual([restoredRow.packId,restoredRow.originalPackId,restoredRow.dueAt,restoredRow.amountCents,restoredRow.status,restoredRow.reason,restoredRow.forecastCents],
+      [pack.id,pack.id,dueAt,12000,'reconnection_required','fresh_member_acceptance_required',0])
+    const restoredCsv=await h.send('/api/strap/reports/upcoming-invoices.csv?from='+forecastBefore.value.from,undefined,restoredOwner)
+    assert.equal(restoredCsv.status,200,restoredCsv.text)
+    assert.ok(restoredCsv.text.includes(agreed.id));assert.ok(restoredCsv.text.includes('fresh_member_acceptance_required'))
+    assert.equal((await h.send('/app/upcoming-invoices?from='+forecastBefore.value.from,undefined,restoredOwner)).status,200)
+    assert.equal((await h.send(forecastPath,undefined,identity.owner)).status,401,'restored sessions cannot read the forecast')
+    assert.deepEqual((await h.db.prepare('SELECT * FROM st_records ORDER BY id').all()).results,recordsBefore,'restored forecast changes no records or reconnection authority')
+    assert.equal(providerEdge.calls.length,forecastCalls,'restored reads never reach a provider')
+    console.log('PROBE BILL-013 restore: native archive at the same origin -> original agreement and pack identities retained; forecast flags fresh personal acceptance, counts zero, refuses the old session and changes no records or provider state.')
     const recoveredCancellation=(await h.state(restoredOwner)).cancellations
     assert.deepEqual(recoveredCancellation.reasonCodes.find(r=>r.code==='moved-away'),retiredReason)
     const restoredTermination=recoveredCancellation.cancellations.find(c=>c.id===termination.id)

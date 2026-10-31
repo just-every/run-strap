@@ -1,3 +1,4 @@
+import { upcomingInvoicesPage } from './upcoming-invoices'
 import { coursesPage } from './courses'
 import { timeClockPage } from './time-clock'
 import { retailPage } from './retail'
@@ -35,9 +36,9 @@ const security = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 
 
 export async function renderApp(state: any, target: string, notice: { message?: string; error?: string; result?: any } = {}): Promise<Response> {
   const url = new URL(target, 'https://strap.invalid'), current = url.pathname.replace(/\/$/, '') || '/app', query = url.searchParams
-  const allowed = tabs(state).some(t => t.href === current) || (owner(state) && current === '/app/studio')
+  const allowed = tabs(state).some(t => t.href === current) || (owner(state) && ['/app/studio','/app/upcoming-invoices'].includes(current))
   const desk = state.actor.role !== 'member'
-  const title = current === '/app' ? (desk ? 'Today' : 'Classes') : current === '/app/studio' ? 'Studio' : tabs(state).find(t => t.href === current)?.label ?? 'Page unavailable'
+  const title = current === '/app' ? (desk ? 'Today' : 'Classes') : current === '/app/upcoming-invoices' ? 'Upcoming native invoices' : current === '/app/studio' ? 'Studio' : tabs(state).find(t => t.href === current)?.label ?? 'Page unavailable'
   const content = !allowed
     ? `<div class="page single"><section class="panel">${emptyState('alert', 'Page unavailable', 'Your role cannot open this page.', '<a class="btn" href="/app">Back to Today</a>')}</section></div>`
     : current === '/app' ? (desk ? today(state, query, owner(state) ? successRail(state, query) : '') : memberHome(state))
@@ -45,7 +46,7 @@ export async function renderApp(state: any, target: string, notice: { message?: 
         : current === '/app/households' ? householdsPage(state) : current === '/app/household' ? householdPage(state)
         : current === '/app/profile' ? memberProfilePage(state) : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/referrals' ? referralsPage(state) : (current === '/app/leads' || current === '/app/offers') ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
           : current === '/app/makeups' ? `<div class="page single"><div class="page-main"><div class="page-title"><h1>Absences and makeups</h1></div>${makeupsPanel(state)}</div></div>` : current === '/app/packs' ? packsPage(state, query)
-            : current === '/app/renewals' ? renewalsPage(state, query)
+            : current === '/app/upcoming-invoices' ? upcomingInvoicesPage(state) : current === '/app/renewals' ? renewalsPage(state, query)
             : current === '/app/retention' ? retentionPage(state)
             : current === '/app/import' ? importPage(state, notice)
               : current === '/app/agent' ? agentPage(state, notice)
