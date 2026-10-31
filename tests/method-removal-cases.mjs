@@ -51,12 +51,12 @@ export async function methodRemovalCases(h,edge,onRead) {
   // Removal commits while an older completion is waiting at the provider edge.
   const pending=await billingSucceeded(h,'billing.setup.start',{id:agreement.id,replaceMethodId:current.id,confirmReplacement:true,requestId:'synthetic-strap-remove-inflight'},seed.member.cookie);
   const currentRequest=await h.cmd('billing.method.removal.request',request(current.id),seed.member.cookie),currentInput=finish(currentRequest.id);
-  onRead(async()=>{const count=edge.calls.length;await h.cmd('billing.method.remove',currentInput,seed.member.cookie);assert.equal(edge.calls.length,count);});
+  let currentRemoval;onRead(async()=>{const count=edge.calls.length;currentRemoval=await h.cmd('billing.method.remove',currentInput,seed.member.cookie);assert.equal(edge.calls.length,count);});
   const result=await h.cmd('billing.setup.complete',{id:agreement.id,setupId:pending.result.id,requestId:'synthetic-strap-remove-racing'},seed.member.cookie);
   assert.equal(result.status,'uncertain');assert.equal(result.errorCode,'billing_method_removed');
   state=await view();assert.equal(state.methods.some(m=>m.available),false);assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).methodAuthorized,false);assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).methodId,null);
   assert.equal(state.setups.find(s=>s.id===pending.result.id).status,'invalidated');
-  assert.deepEqual(await h.cmd('billing.method.remove',currentInput,seed.member.cookie),(await h.cmd('billing.method.remove',currentInput,seed.member.cookie)));
+  assert.deepEqual(await h.cmd('billing.method.remove',currentInput,seed.member.cookie),currentRemoval);
   for(const input of [replacementInput,{...replacementInput,requestId:'synthetic-strap-remove-replay-new'},{id:agreement.id,setupId:pending.result.id,requestId:'synthetic-strap-remove-pending-replay'}])await refuse('billing.setup.complete',input,seed.member.cookie,409);
   assert.deepEqual((await view(h.owner)).methods.filter(m=>m.personId===seed.member.id),state.methods);assert.deepEqual((await view(seed.outsider.cookie)).methods,[]);assert.deepEqual((await view(seed.outsider.cookie)).removalRequests,[]);assert.deepEqual((await view(seed.outsider.cookie)).removals,[]);
   assert.deepEqual(state.agreements.find(a=>a.id===agreement.id).signature,originalEvidence.agreements.find(a=>a.id===agreement.id).signature);
