@@ -36,6 +36,12 @@ export async function recoveryDiagnosticsCases() {
       assert.equal(held.status, 403); assert.equal(held.headers.get('x-strap-refusal') ?? held.value.error, 'mfa_enrollment_required')
       assert.deepEqual(await diagnosticStore(h), before)
     }
+    const enrollmentForm = await h.mf.dispatchFetch(h.origin+'/app/action?name=mfa.verify&returnTo='+encodeURIComponent(page), {
+      method:'POST', headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'}, body:'',
+    })
+    assert.equal(enrollmentForm.status,403,'returnTo cannot bypass required enrollment')
+    assert.equal(enrollmentForm.headers.get('x-strap-refusal'),'mfa_enrollment_required')
+    await enrollmentForm.text()
     const enrolled = await h.enroll(h.owner)
     const empty = await diagnosticRead(h)
     assert.equal(empty.billing.connectionState, 'disconnected'); assert.equal(empty.mail.connectionState, 'disconnected')
@@ -96,6 +102,15 @@ export async function recoveryDiagnosticsCases() {
       assert.equal(r.status,403); assert.equal(r.headers.get('x-strap-refusal') ?? r.value.error,'mfa_required')
       for (const token of [agent.token,integration.token]) assert.equal((await h.send(path,undefined,'',{authorization:'Bearer '+token})).status,path===page?303:401)
     }
+    const deniedForm = await h.mf.dispatchFetch(h.origin+'/app/action?name=mfa.verify&returnTo='+encodeURIComponent(page), {
+      method:'POST', headers:{origin:h.origin,cookie:freshOwner,'content-type':'application/x-www-form-urlencoded'}, body:'',
+    })
+    const deniedText = await deniedForm.text()
+    assert.equal(deniedForm.status,403,'an empty verification cannot render diagnostics through returnTo')
+    assert.equal(deniedForm.headers.get('x-strap-refusal'),'mfa_required')
+    assert.ok(!deniedText.includes(failed.id),'an unchecked form response withholds retained billing history')
+    assert.ok(!deniedText.includes(bookings[1].id),'an unchecked form response withholds notice history')
+    console.log('PROBE SEC-001 B: unchecked owner POST empty mfa.verify with diagnostics returnTo -> HTTP '+deniedForm.status+', no billing or notice history')
     assert.deepEqual(await diagnosticStore(h),before,'refused diagnostics write nothing, including counters and outboxes')
     const secrets = [privateText, providerText, h.auth.STRIPE_BILLING_TEST_KEY, h.auth.MAIL_API_KEY, h.auth.SESSION_SECRET, enrolled.secret].filter(Boolean)
     for (const path of [api, page]) {
