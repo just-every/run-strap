@@ -1,5 +1,5 @@
-import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
-import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
+import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetWaivers } from './domain/booking-widget';
+import { renderWidget, widgetPage, widgetReview, widgetHeaders, widgetUnavailable } from './ui/booking-widget';
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { locations } from './domain/locations';
@@ -150,6 +150,17 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
   return name === 'waiver.launch' ? sendWaiverLaunch(request,env,result) : result
 }
 
+/** APP-002: the private selected-class page. Refusals of its forms render here again; a member's own documents return here after signing. */
+async function widgetReviewPage(env: Bindings, who: Actor, token: string, error = '') {
+  const loaded=await load(env.DB,who),selected=await widgetSelection(env.DB,loaded.state,token);
+  const staff=who.role!=='member';
+  if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
+  if(!staff)widgetAdult(loaded.state,who.personId!);
+  const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
+  const self=loaded.state.people.find(p=>p.id===who.personId);
+  return widgetReview(selected,token,members,staff,staff ? [] : widgetWaivers(loaded.state,who.personId!,selected.entry),self?.name ?? '',error);
+}
+
 /** SEC-004: finance users reach their report only; a second factor is asked for before a privileged door and at every door once enrolled. */
 
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
@@ -215,14 +226,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
-      if(path==='/app/widget') {
-        const loaded=await load(env.DB,who),token=url.searchParams.get('selection')??'',selected=await widgetSelection(env.DB,loaded.state,token);
-        const staff=who.role!=='member';
-        if(staff && !['owner','front-desk','manager'].includes(who.role))fail('member_required',403);
-        if(!staff)widgetAdult(loaded.state,who.personId!);
-        const members=loaded.state.people.filter(p=>p.role==='member'&&p.active&&!p.erasedAt && (loaded.who.role==='owner'||hasStaffRight(loaded.state,loaded.who,'booking',p.id,selected.entry.locationId??'studio','class')));
-        return widgetReview(selected,token,members,staff);
-      }
+      if(path==='/app/widget')return await widgetReviewPage(env,who,url.searchParams.get('selection')??'');
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
         const loaded=await load(env.DB,who)
@@ -391,6 +395,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
       if (status >= 500) return unavailablePage(back, 'uncertain')
+      if (!held && back.startsWith('/app/widget?')) return widgetReviewPage(env, who, new URLSearchParams(back.slice(back.indexOf('?'))).get('selection') ?? '', message.replace(/_/g, ' ')).catch(() => widgetUnavailable(410))
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
       let page: Response
       try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
@@ -405,6 +410,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path === '/app/widget' ? path + url.search : path) } })
     if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
     if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
+    if (path === '/app/widget') return widgetUnavailable(status)
     return json({ error: message }, status)
   }
 }

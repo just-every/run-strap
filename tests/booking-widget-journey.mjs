@@ -44,10 +44,17 @@ export async function widgetJourney(h,week) {
   const authToken=new URL(mail.text.match(/http:\/\/[^\s]+\/auth\/confirm\?token=[^\s]+/)[0]).searchParams.get('token');
   const confirmed=await h.send('/auth/confirm',{token:authToken});assert.equal(confirmed.status,303);assert.equal(confirmed.headers.get('location'),choice.location);
   const review=await h.send(choice.location,undefined,confirmed.cookie);assert.equal(review.status,200);assert.match(review.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  const signing='/app/action?name=waiver.acknowledge&returnTo='+encodeURIComponent(choice.location);
+  assert.ok(review.text.includes('Current safety review.') && review.text.includes(signing.replaceAll('&','&amp;')) && !review.text.includes('name=booking.book'),'the outstanding waiver precedes booking on the selected class');
   const booking={classId:entries[0].id,selection:choice.token,adultConfirmed:true};
   await h.cmd('booking.book',booking,member.cookie,409);assert.equal((await h.state()).bookings.length,0,'selection never bypasses current waiver');
-  await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie);
+  const sign=fields=>h.mf.dispatchFetch(h.origin+signing,{method:'POST',redirect:'manual',headers:{origin:h.origin,cookie:confirmed.cookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields).toString()});
+  const refusedSigning=await sign({id:'synthetic-strap-stale-waiver'}),refusedPage=await refusedSigning.text();
+  assert.equal(refusedSigning.status,200);assert.match(refusedPage,/role="alert"[^>]*>not latest version</);assert.ok(refusedPage.includes(signing.replaceAll('&','&amp;')),'a refused signing stays on the selected class');
+  const signed=await sign({id:waiver.id});assert.equal(signed.status,303);assert.equal(signed.headers.get('location'),choice.location,'signing returns to the selected class');
+  const ready=await h.send(choice.location,undefined,confirmed.cookie);assert.ok(ready.text.includes('name=booking.book') && !ready.text.includes(signing.replaceAll('&','&amp;')),'booking opens once the member signed');
   const expired=await widgetChoice(h,widgetOrigin,entries[1].id);await h.db.prepare("UPDATE st_widget_selections SET expires_at='2000-01-01T00:00:00.000Z' WHERE class_id=?").bind(entries[1].id).run();
+  const gone=await h.send(expired.location,undefined,member.cookie);assert.equal(gone.status,410);assert.match(gone.headers.get('content-type'),/^text\/html/);assert.match(gone.headers.get('content-security-policy'),/frame-ancestors 'none'/);
   const unchanged=await records(h);
   await h.cmd('booking.book',{classId:entries[1].id,selection:expired.token,adultConfirmed:true},member.cookie,410);
   await h.cmd('booking.book',{...booking,selection:'0'.repeat(64)},member.cookie,410);

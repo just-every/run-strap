@@ -22,9 +22,13 @@ export function currentWaivers(state: State) {
 export const latestWaiver = (state: State) => currentWaivers(state).find(w=>!w.service) ?? null;
 export const currentWaiver = (state: State, documentId: unknown) => currentWaivers(state).find(w=>w.id===documentId) ?? null;
 export const currentWaiverReceipt = (state: State, personId: string, waiver: RecordData) => list(state,'acknowledgement').some(a=>a.personId===personId && a.waiverId===waiver.id && (!waiver.requiresSignature || a.signature?.documentHash===waiver.documentHash) && (!a.validUntil || a.validUntil>now()));
-export function acknowledged(state: State, personId: string, entry?: RecordData) {
+/** The current general documents plus any policy for this class's service. */
+export function requiredWaivers(state: State, entry?: RecordData) {
   const service=waiverScope(entry?.service ?? entry?.title?.split(' · ')[0]);
-  return currentWaivers(state).filter(w=>!w.service || entry && waiverScope(w.service)===service).every(w=>currentWaiverReceipt(state,personId, w));
+  return currentWaivers(state).filter(w=>!w.service || entry && waiverScope(w.service)===service);
+}
+export function acknowledged(state: State, personId: string, entry?: RecordData) {
+  return requiredWaivers(state,entry).every(w=>currentWaiverReceipt(state,personId, w));
 }
 /** Required signing policies for a new service enrollment, including renewal. */
 export function signingMissing(state: State, personId: string, eligibleServices: string[]=[]) {

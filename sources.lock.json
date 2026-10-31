@@ -3230,11 +3230,11 @@
       "executable": false
     },
     "src/strap/domain/booking-widget.ts": {
-      "sha256": "fdede9e3571634b55f06b66b5f819310735752749faa8fc2a4387eb081fc812f",
+      "sha256": "fc681f00a36fe11c836e778671abadaf4cc76f14beab1b9a56db3632319e8246",
       "executable": false
     },
     "src/strap/domain/bookings.ts": {
-      "sha256": "b73d1b904a5cef1f883b2bb810b71ac1a101b081436e77900923da078c415a83",
+      "sha256": "e0da0912e26a5cb516d5f1a22b306c1ebd8c983ebaafc9ff822cdb16920dbc7c",
       "executable": false
     },
     "src/strap/domain/cancellation-calendar.ts": {
@@ -3610,7 +3610,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "ce069867930c22c8512edbe1aa222548e6342091487cc80b6f51bb75b6bfef6e",
+      "sha256": "166c46de4e51f8aab6ed7d4fadd7f5aed61c55fb5496ccee86291c7b4e558c51",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3842,7 +3842,7 @@
       "executable": false
     },
     "src/strap/ui/booking-widget.ts": {
-      "sha256": "b497830ddc9d6b39594979cc81e4d8e2c0f1c4f64ecbca239d40e3efc5a218c8",
+      "sha256": "c88b7bc5ba219f534e54d090be267af95652d28b2602a775401b52c5b8f46186",
       "executable": false
     },
     "src/strap/ui/checkin.ts": {
@@ -4226,11 +4226,11 @@
       "executable": false
     },
     "tests/booking-widget-browser.mjs": {
-      "sha256": "e0d20f5c55e151958f422765b7d5b06a34b94fe2bfc9cb6d3b10cfb372f9ea46",
+      "sha256": "e0fb5ff21dd530d2fb86755736894abd1708fa4727f8b19b3b6626f8defa00c0",
       "executable": false
     },
     "tests/booking-widget-journey.mjs": {
-      "sha256": "cea8d531829fa7c1ebb95a723a840a6895f857b4a9863e83e0ffa0602c49ab46",
+      "sha256": "497573dca6111407cd303d98ec6a34b341ba80326a816d6a9d6df8cc47d6fead",
       "executable": false
     },
     "tests/campaign-browser.mjs": {

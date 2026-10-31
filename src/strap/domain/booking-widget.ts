@@ -3,6 +3,7 @@ import { humanOwner, id, insist, list, now, person, record, text, type Actor, ty
 import { loadSystem, type Transaction } from './store';
 import { seatCapacity } from './spots';
 import { requireClassRight } from './staff-command-access';
+import { currentWaiverReceipt, requiredWaivers } from './bookings';
 
 const basis = (entry: RecordData) => sha256(JSON.stringify(entry));
 const tokenHash = (token: unknown) => { insist(typeof token === 'string' && /^[0-9a-f]{64}$/.test(token),'selection_unavailable',410); return sha256(token); };
@@ -84,6 +85,8 @@ export async function widgetSelection(db: D1Database, state: State, token: unkno
   insist(seatCapacity(state,selected.entry).onlineOpen>0,'class_full',409);
   return {...selected,selection};
 }
+/** The member's own outstanding documents for the selected class; signing stays the ordinary personal door. */
+export const widgetWaivers = (state: State, personId: string, entry: RecordData) => requiredWaivers(state,entry).filter(w=>!currentWaiverReceipt(state,personId,w));
 export function widgetAdult(state: State, personId: string) {
   person(state,personId);
   insist(!list(state,'household').some(h=>h.guardianIds?.length && h.participantIds?.includes(personId)) && !list(state,'contractAuthority').some(g=>g.personId===personId && g.kind==='minor-guardian' && !g.revokedAt && (!g.adultAt || g.adultAt>now())),'adult_personal_booking_required',403);
