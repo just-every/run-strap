@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict';
+import { billingView,connectPayment } from './payment-fixtures.mjs';
+import { readPayouts,reportPath,seedReconciliation } from './payout-reconciliation-cases.mjs';
+import { payoutGrantBrowser,payoutFinanceBrowser } from './payout-reconciliation-browser.mjs';
+import { softwarePasskey } from './mfa-helpers.mjs';
+import { privacyDecision,verifiedPrivacyRequest } from './privacy-journey.mjs';
+
+export async function payoutAccessInput(h,personId,requestId='synthetic-strap-access',cookie=h.owner) {
+  const b=await billingView(h,cookie),candidate=b.payoutAccess.candidates.find(c=>c.personId===personId);
+  assert.ok(candidate);
+  return {personId,requestId,confirm:true,reason:'Reviewed whole-merchant TEST statement access',version:b.payoutAccess.grants.find(g=>g.personId===personId)?.version??0,
+    financeBasis:candidate.financeBasis,accountId:b.connection.accountId,connectionId:b.connection.connectionId};
+}
+export async function financePayoutCases(h,edge) {
+  const seeds=await seedReconciliation(h,edge);
+  await h.cmd('billing.payouts.refresh',{confirm:true,requestId:'synthetic-strap-finance-refresh'});
+  const financial=await h.state(),reads=edge.reads.length,posts=edge.calls.filter(c=>c.method==='POST').length;
+  const finance=await h.person('synthetic-strap-finance-reader');
+  const rights={collection:{enabled:true,scopes:[{memberIds:[seeds[0].member.id],locationIds:['studio'],doors:['all']}]}};
+  const staffGrant={personId:finance.id,role:'finance',enabled:true,rights};
+  await h.cmd('staff.access.grant',staffGrant);
+  const doors=['/app/payouts',reportPath,'/api/strap/billing/payouts.csv'];
+  const refused=async(cookie,code)=>{
+    const version=(await h.state()).version,calls=edge.calls.length,n=edge.reads.length;
+    for(const door of doors) {const r=await h.send(door,undefined,cookie);assert.equal(r.status,403,r.text);if(code)assert.equal(r.headers.get('x-strap-refusal')??r.value.error,code);}
+    assert.equal((await h.state()).version,version);assert.equal(edge.reads.length,n);assert.equal(edge.calls.length,calls);
+  };
+  await refused(finance.cookie,'mfa_enrollment_required');
+  const input=await payoutAccessInput(h,finance.id);
+  const unverifiedOwner=await h.signIn(h.auth.OWNER_EMAIL);
+  await h.cmd('billing.payouts.access.grant',input,unverifiedOwner,403);
+  await h.cmd('billing.payouts.access.grant',{...input,accountId:'synthetic-strap-foreign'},h.owner,409);
+  await h.cmd('billing.payouts.access.grant',{...input,personId:seeds[0].member.id},h.owner,409);
+  const approval=await payoutGrantBrowser(h,finance);
+  await refused(finance.cookie,'mfa_enrollment_required');
+  const factor=await h.enroll(finance.cookie);
+  const expected=await readPayouts(h);
+  const report=await readPayouts(h,finance.cookie);
+  assert.deepEqual({...report,canRefresh:true},expected);
+  assert.deepEqual([report.totals.grossCents,report.totals.feeCents,report.totals.netCents],[10000,375,9625]);
+  await payoutFinanceBrowser(h,finance,report);
+  for(const name of ['billing.payouts.refresh','billing.payouts.access.grant','billing.payouts.access.revoke','billing.connect','billing.disconnect','billing.checkout.start'])await h.cmd(name,input,finance.cookie,403);
+  for(const door of ['/app/studio','/api/strap/billing','/app/people'])assert.equal((await h.send(door,undefined,finance.cookie)).status,403);
+  const second=await h.signIn(finance.email);await refused(second,'mfa_required');
+  await h.cmd('mfa.verify',{code:factor.recoveryCodes[0]},second);
+  assert.equal((await readPayouts(h,second)).totals.netCents,9625);
+  const replaySession=await h.signIn(finance.email);
+  await h.cmd('mfa.verify',{code:factor.recoveryCodes[0]},replaySession,403);await refused(replaySession,'mfa_required');
+  const passkey=softwarePasskey(h.origin),registration=await h.cmd('mfa.passkey.options',{purpose:'register'},finance.cookie);
+  await h.cmd('mfa.passkey.register',{challenge_id:registration.challenge_id,label:'Finance passkey',...passkey.registration(registration.publicKey.challenge)},finance.cookie);
+  const third=await h.signIn(finance.email);await refused(third,'mfa_required');
+  const challenge=await h.cmd('mfa.passkey.options',{purpose:'verify'},third),assertion={challenge_id:challenge.challenge_id,...passkey.assertion(challenge.publicKey.challenge)};
+  await h.cmd('mfa.passkey.verify',assertion,third);assert.equal((await readPayouts(h,third)).totals.netCents,9625);
+  assert.equal((await h.cmd('mfa.passkey.verify',assertion,await h.signIn(finance.email),409)).error,'passkey_challenge_expired');
+  const beforeRevoke=(await h.state()).version;
+  await h.cmd('billing.payouts.access.revoke',{personId:finance.id,requestId:'synthetic-strap-revoke',version:1,reason:'Finance assignment ended',confirm:true});
+  await refused(third,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',approval);
+  assert.equal((await h.state()).version,beforeRevoke+1,'captured approval never re-enables a revoked grant');
+  await refused(finance.cookie,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',{...approval,reason:'Changed captured approval'},h.owner,409);
+  await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,finance.id,'synthetic-strap-reapprove'));
+  await h.cmd('staff.access.grant',{...staffGrant,rights:{}});
+  await refused(third,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,finance.id,'synthetic-strap-changed-role-approval'));
+  assert.equal((await readPayouts(h,third)).totals.netCents,9625,'explicit merchant approval is independent of collection and scoped export rights');
+  await h.cmd('billing.disconnect',{confirm:true});await refused(third,'payout_read_right_required');
+  await connectPayment(h,'synthetic-strap-finance-reconnect');await refused(third,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,finance.id,'synthetic-strap-new-connection-approval'));
+  await h.cmd('staff.access.grant',{...staffGrant,enabled:false,rights:{}});await refused(third,'payout_read_right_required');
+  await h.cmd('staff.access.grant',staffGrant);await refused(third,'payout_read_right_required');
+  const legacy=await h.person('synthetic-strap-legacy-finance');await h.cmd('finance.grant',{id:legacy.id});await h.enroll(legacy.cookie);
+  await refused(legacy.cookie,'payout_read_right_required');
+  await h.cmd('billing.payouts.access.grant',await payoutAccessInput(h,legacy.id,'synthetic-strap-legacy-approval'));
+  assert.equal((await readPayouts(h,legacy.cookie)).totals.netCents,9625);
+  await h.cmd('finance.revoke',{id:legacy.id});await refused(legacy.cookie,'payout_read_right_required');
+  await h.cmd('finance.grant',{id:legacy.id});await refused(legacy.cookie,'payout_read_right_required');
+  const erase=await verifiedPrivacyRequest(h,finance,'erasure','-finance-payout');
+  const review=await h.cmd('privacy.erase.prepare',{id:erase.id,...privacyDecision});await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true});
+  assert.equal((await h.send(reportPath,undefined,third)).status,401);
+  await h.cmd('billing.payouts.access.grant',approval,h.owner,404);
+  const retained=await billingView(h),erasedGrant=retained.payoutAccess.grants.find(g=>g.personId===finance.id);
+  assert.equal(erasedGrant.enabled,false);assert.equal(erasedGrant.reason,null);assert.equal(erasedGrant.financeBasis,null);
+  assert.ok(retained.payoutAccess.history.filter(e=>e.personId===finance.id).every(e=>e.erased && !e.before && !e.after && !e.reason));
+  const after=await h.state();for(const key of ['charges','payments','packs'])assert.deepEqual(after[key],financial[key]);
+  assert.equal(edge.reads.length,reads);assert.equal(edge.calls.filter(c=>c.method==='POST').length,posts);
+  console.log('PROBE BILL-011 finance: owner approves exact whole-merchant retained reads -> enrolled finance sees gross 10000, fees 375 and net 9625 cents in page, JSON and CSV; zero provider reads or money writes.');
+  console.log('PROBE BILL-011 finance authority: enrollment, fresh sign-in, recovery replay, passkey replay, grant revocation, changed role, disconnect and reconnect -> refused until fresh current approval and factor; erased identity and captured approval cannot revive access.');
+}

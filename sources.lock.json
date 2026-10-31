@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "c901194dc6d5148fd231f2dfb20e9d54e200a20a197251e6f56080df867e58dd",
+      "sha256": "de57572e9ac892af218e256e74a8c492ffd6a6e2fa2587c56219b84a55625635",
       "executable": false
     },
     "DEMO.md": {
@@ -3126,7 +3126,7 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "590c31c5c27b4227ec4f7c157a4b8f67d84cce665fb083c38251bf6cc66fbe9c",
+      "sha256": "aa463cebd56b8cdaf251c1e2aecbd043a2047e65df879913e82f9878648a3417",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
@@ -3582,7 +3582,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "953847874c92975b62d54ce674598d4ccd73daed0559c97bbd5d53b49509cf68",
+      "sha256": "c073d8f8603738081e28cfaa65bc6cef9a629a6c94dc8c54f56f5f392128c5f1",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3606,11 +3606,11 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "781fa47e2790820a97a501a63b757bfc844301ba293a845e86cc3c29e2251136",
+      "sha256": "b9ff529a2ab7a7a01165f4c2695d71798bdfc8eace76fd50b75105a60c740a30",
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "358d60f3858a689168674699bd370f6f2e86dfbc35abcab1a76ddfea3349a373",
+      "sha256": "d00a37402107b818eeb5d116468d789e626073cef3e1c254e7edaf52165834a4",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3673,24 +3673,28 @@
       "sha256": "afebc24dba51bb44d0c225faa945bc9e6cb79b98b2a2fa01e32f28f8c2e06afb",
       "executable": false
     },
+    "src/strap/payout-access.ts": {
+      "sha256": "95dc350ea38877e38666209195392a80a66ffc4e430e551c3c4a9adb9308a1ee",
+      "executable": false
+    },
     "src/strap/payout-membership.ts": {
       "sha256": "224c3efaae131735adcdfc657c1f9b33e6c3e2d9a933b98dca74a019c5c35a31",
       "executable": false
     },
     "src/strap/payout-reconciliation.ts": {
-      "sha256": "e3d530a7e63fb642c123fa862c44801dba95c3b035f6dd49b42a9aa70415b927",
+      "sha256": "0218ba0d801a1560cc479261a5299abd96ba62baa846b14e9da43e5883a5bd33",
       "executable": false
     },
     "src/strap/privacy-access.ts": {
-      "sha256": "866164e6ccc340bb607bd99078719fda09e08b2ed3515669b442b1bebd0928e1",
+      "sha256": "139f3da3b490db14dcf4f52dd6c408c4fb493b323204fc9558fd3dfce950a3ae",
       "executable": false
     },
     "src/strap/privacy-billing.ts": {
-      "sha256": "558281b22843a47c9e1bc10181df7b4cd972eddd75935f3b2894fa1383b78d16",
+      "sha256": "263209cd1a4e6ee3baadb00322de1bf9500cfd676b507266ff15745e3e38ee70",
       "executable": false
     },
     "src/strap/privacy-erasure.ts": {
-      "sha256": "8c762036252cc7bead5623eeac57e7dc83034612f20e01764d863090705ab491",
+      "sha256": "da2c6d094e634de16b75451a1e009128075a5a8b1742c00fc3b04c38a5d43e07",
       "executable": false
     },
     "src/strap/privacy-related.ts": {
@@ -3730,7 +3734,7 @@
       "executable": false
     },
     "src/strap/security/gate.ts": {
-      "sha256": "1fb6806e8cf42fa2e4b46187f080164150cfc79f7cb08cdcd514bfa69abf5e49",
+      "sha256": "060e47d9c6db4454fc01c01b42a9b3fb582e49f70fd8d2445f17990f0eb94bcb",
       "executable": false
     },
     "src/strap/security/manager.ts": {
@@ -4002,11 +4006,11 @@
       "executable": false
     },
     "src/strap/ui/payment-connection.ts": {
-      "sha256": "b1b5b32e619621e391498cbfb685d6126183e489249a19edd78eec27240ccfc1",
+      "sha256": "b61f1a9e6183a0219cb7715ba65bd0322829d936590f036bac00582a8a6caba8",
       "executable": false
     },
     "src/strap/ui/payout-reconciliation.ts": {
-      "sha256": "18137b8ad10847d541b849b73cf6bbc6b83ca7da8b7ad90fd9b45d776fded478",
+      "sha256": "ba1b8c5a84b3ef4c202535dea4c969a49225f7f583298cea9eac5afcee0f8937",
       "executable": false
     },
     "src/strap/ui/people.ts": {
@@ -4086,7 +4090,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "60b12c2824b313260263149c02f079c39ba65a76d7fecefec7c72e78f56d7dda",
+      "sha256": "476ee5ebd6f9d08434c5b9479e5c17d7477c5ce67a4f0e803d1b7a499f6a918c",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -4118,7 +4122,7 @@
       "executable": false
     },
     "src/strap/ui/studio.ts": {
-      "sha256": "4ef4c04e1a999935827228a7eae3062d043cfac38e05506a138042b31febaf3c",
+      "sha256": "ace08b016f6d182cd116c35c17c81d1d078fa4d829ec5a1ccb0c4c87273c7175",
       "executable": false
     },
     "src/strap/ui/substitutions.ts": {
@@ -4190,7 +4194,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "59d3942a0c546e1e3cd655189e92d1a0d6e057c175502e8a7d5f4395a3ebc041",
+      "sha256": "a05c338be9dd08d794d69248ce2924a14b84bb79292e2134dfa59858602adff2",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4521,12 +4525,16 @@
       "sha256": "e184581d0b5a917af8bb5a19aa0d577aee14f777e82c7a70872931b11db68c31",
       "executable": false
     },
+    "tests/payout-finance-cases.mjs": {
+      "sha256": "ca86da5c747dd9d136159239f85794c06e57385bb4d0e1a353d7061af957d95a",
+      "executable": false
+    },
     "tests/payout-reconciliation-browser.mjs": {
-      "sha256": "5ca2494f70908c6eec90a713174b33ab96b6fa4872c79ce8bb554a73cb232157",
+      "sha256": "117b6b06fc4a7bff55bd07f3fc0707a3629e03c3870c990185c7d5c60e5d0629",
       "executable": false
     },
     "tests/payout-reconciliation-cases.mjs": {
-      "sha256": "280bb7861ef8e41bec9818d91a40605a12604f3f917c4979e21097972ce265a2",
+      "sha256": "5982dd0b757c33404cda9f1ffb8f0ff4989d6844690051c84b4f9d81dbb0fbf7",
       "executable": false
     },
     "tests/plan-changes-browser.mjs": {
@@ -4814,7 +4822,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "7b098be899c272ae409823c0d60ca5859f40afef5ea0fa7eb30ee9c871ee5dbe",
+      "sha256": "761c374ebc3f04b0321b1220d98ca79e39cd69b2255d12af9a934ccc02f6caf9",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {

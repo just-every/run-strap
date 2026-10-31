@@ -63,6 +63,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     return input;
   }
   if(name.startsWith('billing.')) {
+    if(name.startsWith('billing.payouts.access.'))input.version=Number(input.version)
     for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
     return input
   }

@@ -1,3 +1,4 @@
+import { changePayoutAccess, payoutAccessSettings } from '../payout-access';
 import { hasStaffRight } from '../domain/staff-rights';
 import { load, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, type Actor } from '../domain/types';
@@ -34,6 +35,8 @@ const handlers = {
     tx.put('billingConnectionEvent',event);return event;
   }),['owner']),
   'billing.checkout.start':defineBilling(startCheckout,['owner']),
+  'billing.payouts.access.grant':defineBilling((env,who,input)=>changePayoutAccess(env,who,input,true),['owner']),
+  'billing.payouts.access.revoke':defineBilling((env,who,input)=>changePayoutAccess(env,who,input,false),['owner']),
   'billing.payouts.refresh':defineBilling(refreshPayouts,['owner']),
   'billing.reconcile':defineBilling(reconcileCheckout,['owner']),
   'billing.agreement.prepare':defineBilling(native(prepareAgreement),['owner','manager','front-desk'],{staffRight:'membership-sale'}),
@@ -67,6 +70,7 @@ export async function billingState(env: BillingBindings,who: Actor) {
   }
   const reviews=list(loaded.state,'billingConnectionReview');
   return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id,review:reviews.filter(r=>r.connectionId===c.connection_id).at(-1)} : null,
+    payoutAccess:who.role==='owner'?await payoutAccessSettings(env,loaded.state):null,
     reviews:who.role === 'owner'?reviews:[],connectionEvents:who.role === 'owner'?list(loaded.state,'billingConnectionEvent'):[],
     invoices:list(loaded.state,'stripeInvoice').filter(visible).map(r=>({...r,balanceCents:balance(loaded.state,r.personId),access:loaded.state.records.get(r.packId)?.data.remaining ?? null})),
     events:who.role === 'owner'?list(loaded.state,'stripeEvent'):[],exceptions:who.role === 'owner'?list(loaded.state,'billingException'):[],reconciliations:who.role === 'owner'?list(loaded.state,'billingReconciliation'):[],

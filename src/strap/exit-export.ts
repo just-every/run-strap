@@ -33,6 +33,7 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.personId', to: 'st_people.id', when: 'kind=payoutAccess or kind=payoutAccessEvent', note: 'Retained whole-merchant read approval and audit only; restored connection authority never travels.' },
   { from: 'st_records.data.classId', to: 'st_records.id', kind: 'class', when: 'kind=widgetClass' },
   { from: 'st_records.data.instructorId', to: 'st_people.id', when: 'kind=widgetInstructor' },
   { from: 'st_records.data.publicationId', to: 'st_records.id', when: 'kind=widgetPublicationEvent and publicationId names a public class or biography', note: 'Publication provenance only; restored public delivery and selections require new installation authority.' },
