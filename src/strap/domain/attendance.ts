@@ -87,10 +87,10 @@ export function correctAttendance(tx: Transaction, input: Record<string,unknown>
     // Only what the studio owes the member after the reversal can be paid back.
     insist(balance(tx.state,debtorId) <= -reversedCents,'fee_not_paid_nothing_to_refund',409);
     insist(!list(tx.state,'payment').some(p => p.reference === reference),'payment_reference_used',409);
-    refund = {id:id(),personId:debtorId,amountCents:-reversedCents,reference,kind:'refund',bookingId:booking.id,createdAt:now(),recordedBy:tx.who.id};
+    refund = {id:id(),personId:debtorId,amountCents:-reversedCents,reference,kind:'refund',bookingId:booking.id,createdAt:now(),recordedBy:tx.who.id,actorRole:tx.who.role,version:tx.state.version+1};
     tx.put('payment',refund);
   }
-  const correction = {from,to:outcome,reason,by:tx.who.id,byRole:tx.who.role,at:now(),creditRestored:restore,feeReversedCents:reversedCents,refundId:refund?.id ?? null,
+  const correction = {id:id(),version:tx.state.version+1,from,to:outcome,reason,by:tx.who.id,byRole:tx.who.role,at:now(),creditRestored:restore,feeReversedCents:reversedCents,refundId:refund?.id ?? null,
     before:{attendance:booking.attendance ?? null,cancellation:booking.cancellation ?? null,refunded:booking.refunded ?? null,feeCents:booking.feeCents ?? null}};
   const current = from === 'no_show'
     ? {...booking,attendance:outcome,...(outcome === 'attended' ? {checkedInAt:entry.start,checkedInBy:tx.who.id} : {})}

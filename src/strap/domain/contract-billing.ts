@@ -150,7 +150,8 @@ export async function applyDueRecurringInvoices(tx: Transaction) {
     const chargeId = `charge:${invoiceId}`;
     tx.put('charge',{id:chargeId,personId:pack.personId,packId:next.id,invoiceId,recurringTermsId:terms.id,kind:'recurring-invoice',amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,createdAt:at});
     tx.put('recurringInvoice',{id:invoiceId,personId:pack.personId,packId:next.id,previousPackId:pack.id,recurringTermsId:terms.id,dueAt:due,termEndAt:expiresAt,
-      amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,chargeId,status:'open',collection:'studio-balance-only',createdAt:at});
+      amountCents:invoiceAmountCents,priceDisclosureId:amendment?.id ?? null,chargeId,status:'open',collection:'studio-balance-only',createdAt:at,
+      actorId:tx.who.id,actorRole:tx.who.role,version:tx.state.version+1});
     contractNotice(tx,invoiceId,pack.personId,'Renewal invoice issued',`Invoice for ${due} to ${expiresAt}: $${(invoiceAmountCents/100).toFixed(2)} added to your studio balance. No payment has been collected.`);
     if(amendment)tx.put('renewalDisclosure',{...amendment,appliedAtPrice:at,invoiceId});
     tx.put('recurringTerms',{...terms,amountCents:invoiceAmountCents,currentPriceDisclosureId:amendment?.id ?? terms.currentPriceDisclosureId ?? null,currentPackId:next.id,nextRenewalAt:expiresAt,lastInvoiceId:invoiceId});

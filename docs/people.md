@@ -61,15 +61,15 @@ After a restore, staff waiver links stay paused with member email. Review and re
 
 ## Find and download staff actions
 
-In People, **Staff action history** shows recorded staff-made member actions, retained staff-access grants and revocations, and drawer count corrections and reopens. Select a person to focus on that member, then
+In People, **Staff action history** shows recorded staff-made member actions, retained staff-access grants and revocations, drawer count corrections and reopens, attendance corrections, reasoned pack-credit adjustments, native recurring invoices and recorded external refunds. Select a person to focus on that member, then
 filter by acting staff member, action right, channel, command and from/through date. Both date bounds include the whole day in the studio's
 time zone. The newest event is first; event identity orders simultaneous events. Clear a field to include all its values.
 Open **Recorded change** for the before and after effect and the retained actor, right, channel and reason. Access changes show their exact grant version and original source identity. Drawer changes retain their original session and source identity, count or status change and recorded reason. New changes retain the acting role; older missing roles, versions, channels or resulting snapshots remain explicitly unavailable. The view never substitutes current grants or drawer balances for historical facts.
 
 **Download staff history CSV** and **Open staff history JSON** use the same filters. These are private owner downloads;
 members, instructors and preparation agents cannot use them. Reads and downloads never create or rewrite history.
-Existing unused-identity erasure keeps action provenance with personal before/after values removed. This history covers
-current staff-made actions; it is not a complete studio audit, and it makes no new retention-policy claim.
+Existing unused-identity and reviewed used-member erasure keep source identities while removing personal reasons and before and after values. Invoice and refund rows describe recorded amounts; they confer no payment authority. External receipt references stay outside these audit downloads. This history covers
+retained sources; it is not a complete studio audit, and it makes no new retention-policy claim.
 
 For an authenticated native owner, `GET /api/strap/staff-history` returns `timeZone`, effective `filters` and ordered `rows`.
 `GET /api/strap/staff-history.csv` downloads those same audit facts. Both accept `person`, `auditActor`, `auditRight`, `auditChannel`,

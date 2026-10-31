@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f3ca61e7be0c29209c3c6aed1afa396bf1888af069f1d6f645b6686bc5195d45",
+      "sha256": "491fffce9eecec1d98f6f6ac44cea09162d9adacbfe476c1029c019712f2a34c",
       "executable": false
     },
     "DEMO.md": {
@@ -402,7 +402,7 @@
       "executable": false
     },
     "docs/people.md": {
-      "sha256": "3c607fe3e20f44db91931bc6e783cff4b63dfbd422bce9452ca55d0018bde66b",
+      "sha256": "3a758af8072dbf102521aceb53d25b38631d8d8fa9c8520a3050aa4ffff78a28",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3198,7 +3198,7 @@
       "executable": false
     },
     "src/strap/domain/attendance.ts": {
-      "sha256": "0271e638ffc37005314b51cf97b5701f973009458789b3c51483cb1cfba4ed79",
+      "sha256": "3d6eb4294f86b75bc6efd430a069e6c2994466f872b2bf121a3f7105d178953a",
       "executable": false
     },
     "src/strap/domain/automation.ts": {
@@ -3278,7 +3278,7 @@
       "executable": false
     },
     "src/strap/domain/contract-billing.ts": {
-      "sha256": "db6b4596d753a6609d608490a1cbb2a9f7c7f2090932862479891ca266f143a9",
+      "sha256": "760b0e7ea8fe3b648d2481a635e0eb17396a5533e27a00526a6395cccde4b6e6",
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
@@ -3738,7 +3738,7 @@
       "executable": false
     },
     "src/strap/studio-audit.ts": {
-      "sha256": "ef2c5558cac16c7530bb0408257b192b0711509e4c489a6f61c6c8552583b4ea",
+      "sha256": "9f8585f8ef8eae0ff1c88d537ad3f0d51c65d1c90ced82c233d72829a57660a8",
       "executable": false
     },
     "src/strap/tax/calculations.ts": {
@@ -4074,7 +4074,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "13d61ace05d6a169a40f6b89f33647be5fcf9b38567fddd1e549c8a985205ae5",
+      "sha256": "5ce7c96339a26ab6004f76f315851045b7f59b3e14f664ceacbd6784642a4433",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4490,7 +4490,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "74d2aea8816a4d6073815de173be13fc2c3de9d95b58930091350f49bf11e876",
+      "sha256": "6676af5325af3c3acd787f565c650192fb43c80a2c2057c7a6eca3ac1fab71e1",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
@@ -4670,11 +4670,11 @@
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
-      "sha256": "4e0e45d1d6168fcf3413f2de46112addd62c2e035d90fd13a6ebe648714222e4",
+      "sha256": "30d0bf3d9afc75098a8b0c3d9a6d87041fa751fb7bc7d8520fdeb1e502d9d403",
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "44a03a7b21c190a3b5666d58368c93a87da12e88ef05b854d0658a08fd67ff8b",
+      "sha256": "cd71d57c4d69e41155e28dd77b217dbf549874afc12592a1b4ed7ab50412c1dd",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
@@ -4698,7 +4698,7 @@
       "executable": false
     },
     "tests/studio-audit-cases.mjs": {
-      "sha256": "4a740f5a741391cc760f219b90cf71c37ce50049f2b6a889e11b322a1298cc29",
+      "sha256": "026da09fa05e7129e1825ab44ec1a9f31d544fc0f23974619905c17e47ef1dbd",
       "executable": false
     },
     "tests/studio-browser.mjs": {

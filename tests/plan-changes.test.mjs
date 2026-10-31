@@ -223,6 +223,13 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
   for(const [p,t] of [[member,terms],[direct,directTerms]]){
     const invoices=state.recurring.invoices.filter(i=>i.recurringTermsId===t.id)
     assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000)
+    const {auditDownload}=await import('./studio-audit-cases.mjs')
+    const audit=await auditDownload(h,new URLSearchParams({person:p.id,auditCommand:'plan.recurring.invoice'}))
+    assert.equal(audit.length,1,'two scheduled sweeps retain one searchable renewal source')
+    assert.deepEqual([audit[0].sourceId,audit[0].actorId,audit[0].actorRole,audit[0].version],[invoices[0].id,'system','system',invoices[0].version])
+    assert.deepEqual([audit[0].after.amountCents,audit[0].after.collection,audit[0].after.chargeId],[12000,'studio-balance-only',invoices[0].chargeId])
+    const page=await h.send('/app/people?'+new URLSearchParams({person:p.id,auditCommand:'plan.recurring.invoice'}),undefined,h.owner)
+    assert.equal(page.status,200);assert.ok(page.text.includes('data-staff-command="plan.recurring.invoice"'))
     assert.equal(state.charges.filter(c=>c.invoiceId===invoices[0].id).length,1,'real persisted balance charge')
     assert.equal(state.balances.find(b=>b.personId===p.id).balanceCents,p.id===member.id?29000:25000)
     assert.equal(state.packs.filter(p=>p.recurringTermsId===t.id).length,1)
@@ -424,7 +431,8 @@ test('PLAN-008: scheduled annual and price disclosures retain accepted terms, de
     for(const [kind,row] of [['renewalDisclosure',{...price,dueAt:due,acceptByAt:due,deliveredAt:new Date(Date.parse(due)-31*day).toISOString(),acceptedAtPrice:new Date(Date.parse(due)-day).toISOString(),consent,key,acceptanceKey:key,acceptanceText:consent}],['recurringTerms',{...priceTerms,nextRenewalAt:due}],['pack',{...current,expiresAt:due}]])await h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run();
     await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(due)-Date.now()+30)));await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled();
     const applied=await h.state(),invoices=applied.recurring.invoices.filter(i=>i.recurringTermsId===priceTerms.id);
-    assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000);assert.equal(invoices[0].priceDisclosureId,price.id);
+    assert.equal(invoices.length,1);assert.equal(invoices[0].amountCents,12000)
+    assert.equal(invoices[0].priceDisclosureId,price.id);
     assert.equal(applied.charges.filter(c=>c.invoiceId===invoices[0].id).length,1);assert.equal(applied.packs.find(p=>p.id===invoices[0].packId).amountCents,12000);
     assert.equal(applied.recurring.terms.find(t=>t.id===priceTerms.id).amountCents,12000);
     assert.deepEqual(applied.recurring.terms.find(t=>t.id===priceTerms.id).acknowledgement,priceTerms.acknowledgement,'original agreement acceptance is retained verbatim');
