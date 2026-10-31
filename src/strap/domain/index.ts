@@ -532,15 +532,22 @@ export function deskRetailSnapshot(state: State, who: Actor) {
   const visible = (c: RecordData) => permits('sale',c.personId,c.locationId) || permits('refund',c.personId,c.locationId);
   const places = locations(state).filter(l => permits('sale',undefined,l.id) || permits('refund',undefined,l.id));
   const people = state.people.filter(p => p.active && !p.erasedAt && places.some(l => permits('sale',p.id,l.id) || permits('refund',p.id,l.id))).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}));
+  const saleLocations = places.filter(l=>permits('sale',undefined,l.id));
+  const salePeople = people.filter(p=>saleLocations.some(l=>permits('sale',p.id,l.id)));
   const grant = {...retailGrant(state,who),enabled:true,sale,refund,memberIds:people.map(p=>p.id),locationIds:places.map(l=>l.id)};
   const inventory = inventorySnapshot(state), all = giftSnapshot(state), cards = all.cards.filter(visible);
   const gifts = {cards:cards.map((c: RecordData) => ({id:c.id,personId:c.personId,locationId:c.locationId,balanceCents:c.balanceCents,
-    canAdjust:permits('refund',c.personId,c.locationId),canRefund:permits('refund',c.personId,c.locationId) && permits('refund',c.purchaserId,c.locationId)})),
+    canRedeem:permits('sale',c.personId,c.locationId),canAdjust:permits('refund',c.personId,c.locationId),canRefund:permits('refund',c.personId,c.locationId) && permits('refund',c.purchaserId,c.locationId)})),
     entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
-  const sales = inventory.sales.filter(visible);
+  const sales = inventory.sales.filter(visible).map(c=>{
+    const originalGift = c.tender === 'gift' ? state.records.get(c.giftCardId)?.data : null;
+    const canReturn = hasStaffRight(state,who,'refund',c.personId,c.locationId)
+      && (c.tender !== 'gift' || !!originalGift && hasStaffRight(state,who,'refund',originalGift.personId,originalGift.locationId));
+    return {...c,canReturn};
+  });
   const retail = {...inventory,suppliers:[],receipts:[],returns:inventory.returns.filter(r=>sales.some(s=>s.id===r.saleId)),movements:[],actions:[],sales,
     stock:inventory.stock.filter(c => places.some(l=>l.id===c.locationId))};
   const sessions = drawerSnapshot(state).sessions.filter(c=>c.status==='open' && places.some(l=>l.id===c.locationId)).map(c=>({id:c.id,register:c.register,locationId:c.locationId,status:c.status,entries:[]}));
   return {saleGrant:grant,retailPermissions:{sale,refund,merchandiseSale:hasStaffRight(state,who,'sale'),merchandiseRefund:hasStaffRight(state,who,'refund')},
-    gifts,retail,drawers:{sessions,adjustments:[]},retailLocations:places,locations:places,retailPeople:people};
+    gifts,retail,drawers:{sessions,adjustments:[]},retailLocations:places,locations:places,retailPeople:people,retailSaleLocations:saleLocations,retailSalePeople:salePeople};
 }

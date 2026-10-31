@@ -430,7 +430,33 @@ export async function staffRetailRights(h) {
   assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).expectedCents,11500);
   assert.equal(cashAfter.gifts.cards.find(c=>c.id===cashGift.id).balanceCents,1500);
   assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).entries.filter(e=>[cashGift.id,cashRefund.id].includes(e.sourceId)).length,2);
-  if(process.env.STRAP_RIGHTS_PROOF_DIR || process.env.STRAP_PROOF_DIR)await (await import('./retail-browser.mjs')).staffRetailBrowser(h,{manager,desk,buyer,sku,west});
+  // Sale and refund grants remain independent even when both rights stay enabled.
+  const splitScope=async(staff,swap=false)=>h.cmd('staff.access.grant',{personId:staff.id,role:staff.id===manager.id?'manager':'front-desk',enabled:true,rights:{
+    sale:{enabled:true,scopes:[{memberIds:[swap?other.id:buyer.id],locationIds:[swap?west.id:'studio'],doors:['all']}]},
+    refund:{enabled:true,scopes:[{memberIds:[swap?buyer.id:other.id],locationIds:[swap?'studio':west.id],doors:['all']}]},
+  }});
+  for(const staff of [manager,desk]) {
+    await splitScope(staff);
+    const suffix=staff.id===manager.id?'manager':'desk';
+    const input={personId:buyer.id,skuId:sku.id,locationId:'studio',quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-split-'+suffix,requestId:'split-sale-'+suffix};
+    const sale=await h.cmd('retail.sell',input,staff.cookie);
+    const ret={saleId:foreignSales[west.id].id,quantity:1,restock:true,reason:'Separately authorized original return',requestId:'split-return-'+suffix};
+    // Use a fresh original for each staff actor: neither denial nor replay relies on an exhausted sale.
+    ret.saleId=(await h.cmd('retail.sell',{...input,personId:other.id,locationId:west.id,reference:'synthetic-strap-split-source-'+suffix,requestId:'split-source-'+suffix})).id;
+    const returned=await h.cmd('retail.return',ret,staff.cookie);
+    await refuse('retail.return',{...ret,saleId:sale.id,requestId:'split-denied-return-'+suffix},staff.cookie);
+    await refuse('retail.sell',{...input,personId:other.id,locationId:west.id,requestId:'split-denied-sale-'+suffix},staff.cookie);
+    await splitScope(staff,true);
+    await refuse('retail.sell',input,staff.cookie);
+    await refuse('retail.return',ret,staff.cookie);
+    await splitScope(staff);
+    assert.deepEqual(await h.cmd('retail.sell',input,staff.cookie),sale);
+    assert.deepEqual(await h.cmd('retail.return',ret,staff.cookie),returned);
+    const audits=(await h.state()).staffActions;
+    for(const saved of [sale,returned])assert.equal(audits.filter(a=>a.after?.id===saved.id).length,1);
+    await grant(staff,staff.id===manager.id?'manager':'front-desk',['sale','refund'],[buyer.id],places);
+  }
+  if(process.env.STRAP_RIGHTS_PROOF_DIR || process.env.STRAP_PROOF_DIR)await (await import('./retail-browser.mjs')).staffRetailBrowser(h,{manager,desk,buyer,other,sku,west,ownerGift,foreignSales,splitScope});
   console.log('PROBE STAFF-001 retail access: manager and front desk at two locations open their scoped page and read; ungranted finance and instructor reads and writes return 403.');
   console.log('PROBE STAFF-001 sale: concurrent and replayed external, cash and gift sales retain one stock, tender and canonical staff audit effect; wrong member, location and price are refused.');
   console.log('PROBE STAFF-001 merchandise return: separate refund authority restores original external, cash or gift value once, with explicit restock or damaged treatment.');

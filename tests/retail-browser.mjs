@@ -211,7 +211,7 @@ export async function giftBrowser(h, giftCardId, desk) {
   },desk.cookie);
 }
 
-export async function staffRetailBrowser(h, {manager,desk,buyer,sku,west}) {
+export async function staffRetailBrowser(h, {manager,desk,buyer,other,sku,west,ownerGift,foreignSales,splitScope}) {
   for(const staff of [manager,desk]) {
     await screens(h,'STAFF-001-'+staff.name,async(page,width)=>{
       const details=label=>page.locator('details').filter({has:page.locator('summary').getByText(label,{exact:true})});
@@ -258,6 +258,23 @@ export async function staffRetailBrowser(h, {manager,desk,buyer,sku,west}) {
         assert.equal((await read()).gifts.cards.find(c=>c.id===card.id).balanceCents,5100);
         assert.ok((await read()).gifts.refunds.some(r=>r.giftCardId===card.id&&r.tender==='external'&&r.amountCents===1000));
         for(const label of ['Receiving and stock controls','Cash drawers','Drawer sources and manager history'])assert.equal(await page.getByRole('heading',{name:label,exact:true}).count(),0);
+        await splitScope(staff);
+        await page.reload();
+        const values=locator=>locator.locator('option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));
+        const scopedSale=details('Sell retail'),scopedIssue=details('Issue gift card'),scopedReturn=details('Return retail');
+        assert.deepEqual(await values(scopedSale.getByLabel('Member',{exact:true})),[buyer.id],'sale form excludes refund-only members');
+        assert.deepEqual(await values(scopedSale.getByLabel('Location',{exact:true})),['studio'],'sale form excludes refund-only locations');
+        assert.deepEqual(await values(scopedIssue.getByLabel('Purchaser',{exact:true})),[buyer.id]);
+        assert.deepEqual(await values(scopedIssue.getByLabel('Gift recipient',{exact:true})),[buyer.id]);
+        assert.deepEqual(await values(scopedIssue.getByLabel('Location',{exact:true})),['studio']);
+        const returnOptions=await values(scopedReturn.getByLabel('Original sale',{exact:true}));
+        assert.ok(returnOptions.includes(foreignSales[west.id].id),'refund form includes separately authorized originals');
+        assert.ok(!returnOptions.includes(saved.id),'refund form excludes sale-only originals');
+        const redeemOptions=await values(scopedSale.getByLabel('Gift card',{exact:true}));
+        assert.ok(!redeemOptions.includes(ownerGift.id),'redemption excludes refund-only gift cards');
+        await scopedReturn.locator('summary').click();
+        await scopedSale.locator('summary').click();
+        await scopedIssue.locator('summary').click();
       }
       for(const label of ['Sell retail','Issue gift card','Refund gift funding'])await details(label).evaluate(e=>e.open=true);
     },staff.cookie);
