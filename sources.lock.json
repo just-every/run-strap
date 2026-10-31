@@ -3126,7 +3126,7 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "f27ed3465944751aeaf4450cef8c0751c55e400ce186ccab21b29bb65ef2b03b",
+      "sha256": "73a190837b4ec2322afa8a9250179f997f6d3ac0ea2f1e02f9de07e86824a6a1",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
@@ -3838,7 +3838,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "5e16f45a4af8e02880a77bcac0e347cb31c249ca7e7ed6d11e49249734422f25",
+      "sha256": "a850cebf78b2e31715008a811866725baec4f565be4bc4c4ab3e7da986c69a56",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -4210,7 +4210,7 @@
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "e450bb414112604301ed38c971bde6304db0c3f3e17e80436985f19d28d2e9bb",
+      "sha256": "ccef03f50f0bdde759e08d8264087f51fff79cecc1303fa5a800e27c46a1abc1",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {

@@ -134,11 +134,16 @@ export async function billingBrowser(h,edge) {
       await staffRemoval.getByRole('button',{name:'Remove requested card',exact:true}).click()
       const removalEvent=(await h.state()).staffActions.find(a=>a.command==='billing.method.remove.staff'&&a.removalRequestId===requested.id)
       if(width===1440){assert.ok(removalEvent);assert.equal(removalEvent.right,'collection');assert.equal(removalEvent.actorRole,'front-desk');assert.equal(edge.calls.length,removalCalls)}
+      const staffReceipt=page.locator('[data-removed-method="'+replaced.methods.find(m=>m.last4==='5556').id+'"]')
+      await staffReceipt.waitFor({state:'visible'})
+      if(width===1440){assert.equal(await staffReceipt.getAttribute('role'),'status');assert.ok((await staffReceipt.innerText()).includes('5556'))}
       await capture('staff-removal-confirmed')
       await grant('collection')
       const removalVersion=(await h.state()).version
       const refused=await context.request.post(h.origin+'/api/strap/command',{headers:{origin:h.origin},data:{name:'billing.method.remove.staff',input:{id:requested.id,confirm:true,requestId:removalEvent.requestId,channel:'desk'}}})
       if(width===1440){assert.equal(refused.status(),403);assert.equal((await h.state()).version,removalVersion)}
+      await page.goto(h.origin+'/app/people?person='+seed.member.id)
+      if(width===1440)assert.equal(await staffReceipt.count(),0,'revoked collection scope hides the retained removal receipt')
       await grant()
       await sign(h.owner);await page.goto(h.origin+'/app/packs#billing')
       await section.getByText(/Strap use ended/).first().waitFor();await capture('owner-removed-history')

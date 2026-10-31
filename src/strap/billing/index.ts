@@ -87,6 +87,7 @@ export async function billingStaffHandoffs(env: BillingBindings,who: Actor) {
     const mandate=list(loaded.state,'paymentMandate').find(m=>m.agreementId===a.id);
     const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request'] : [];
     const removalRequests=permitted('collection') ? list(loaded.state,'billingMethodRemovalRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && loaded.state.records.get(r.methodId)?.data.removalRequestId===r.id).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
-    return actions.length || removalRequests.length ? [{id:a.id,personId:a.personId,actions,removalRequests}] : [];
+    const removals=permitted('collection') ? list(loaded.state,'billingMethodRemoval').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method?.status==='removed' && !method.erased ? [{id:r.id,methodId:method.id,brand:method.brand,last4:method.last4,at:r.at}] : [];}) : [];
+    return actions.length || removalRequests.length || removals.length ? [{id:a.id,personId:a.personId,actions,removalRequests,removals}] : [];
   });
 }
