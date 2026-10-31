@@ -386,12 +386,16 @@ test(
         },
         frontDesk,
       );
-      const adjusted = await h.cmd("drawer.adjust", {
+      const correction={
         sessionId: session.id,
         countedCents: 17000,
         reason: "Found five dollars beneath cash tray",
         requestId: "adjust",
-      });
+      };
+      const raced=await Promise.all([0,1].map(()=>h.send('/api/strap/command',{name:'drawer.adjust',input:correction},h.owner)));
+      assert.ok(raced.some(result=>result.status===200),'one reviewed correction commits');
+      assert.ok(raced.every(result=>[200,409].includes(result.status)),'a conflicting transaction may require a retry');
+      const adjusted = await h.cmd("drawer.adjust",correction);
       assert.equal(adjusted.before, 16500);
       assert.equal(adjusted.after, 17000);
       assert.ok(adjusted.actorId);
@@ -465,6 +469,8 @@ test(
       assert.deepEqual(await h.cmd('drawer.reopen',{sessionId:session.id,reason:'Manager recount with retained transaction history',requestId:'manager-reopen'}),reopened);
       assert.deepEqual(await auditDownload(h,auditQuery),audit);
       assert.equal((await h.state()).version,beforeReplay);
+      const changedReplay=await h.send('/api/strap/command',{name:'drawer.adjust',input:{...correction,countedCents:1}},h.owner);
+      assert.equal(changedReplay.status,409);assert.equal(changedReplay.value.error,'retail_request_changed');
       for(const cookie of [observer.cookie,frontDesk])for(const command of ['drawer.adjust','drawer.reopen'])await denied(h,command,{sessionId:session.id,countedCents:1,reason:'Unauthorized rewrite',requestId:command},cookie);
       for(const path of ['/api/strap/staff-history','/api/strap/staff-history.csv']) {
         assert.equal((await h.send(path,undefined,frontDesk)).status,403);
