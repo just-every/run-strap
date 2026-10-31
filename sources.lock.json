@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6f5c213fee8cbf56f07232d0a33502598e49636b9e58763034a02696246bd6cf",
+      "sha256": "f17f84cd8256acdaf3b7934c05d430a0517fb6d275f5a885c27c77dcccf8e53b",
       "executable": false
     },
     "DEMO.md": {
@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "b57e959b75cc23a345859cb8ff43a5444f16435934d645c44422fe9f03435562",
+      "sha256": "7d1303b423eb859dd47df9f73ac2df722455abb789716d7f92d85a48580dff35",
       "executable": false
     },
     "docs/AUTOMATION.md": {
@@ -3234,7 +3234,7 @@
       "executable": false
     },
     "src/strap/domain/cancellation-value.ts": {
-      "sha256": "88505e902c9f71fe7f3503541143a9bf18d140badc63e5a5e0d1a90a8dba5499",
+      "sha256": "59a65bdba394fa5f79c2b6f5e495be3d03196fbcb166c2d644ca9756c5f7062f",
       "executable": false
     },
     "src/strap/domain/capacity.ts": {
@@ -3282,7 +3282,7 @@
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
-      "sha256": "69acf47db140c39626a3e2c6f728560e9acf6ab32df5cdfcf853d6b777e82bcc",
+      "sha256": "d0f4a4372301f16dbe8ec83dee0b0b462bd5b03a782ec6b703892bd45af3469d",
       "executable": false
     },
     "src/strap/domain/contract-copies.ts": {
@@ -3850,7 +3850,7 @@
       "executable": false
     },
     "src/strap/ui/contract-cancellations.ts": {
-      "sha256": "3a7f9969f52b3b73c44d3079491f471b9a40899baed1181f8ecf8cf4923ce359",
+      "sha256": "bcf2ec04f41d6c2c0f3903f91f70fc3337138891a1ccc610e848db3e93acbbd8",
       "executable": false
     },
     "src/strap/ui/contract-invoices.ts": {
@@ -4214,7 +4214,7 @@
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
-      "sha256": "fa108cc75445d3dfbcf275fdc63f83064277c224a479a80fb57932cf395ff2bc",
+      "sha256": "eecf569a90f9806c57b9027368360cca23c223036e93ad7a0c2fe63ed5714e8f",
       "executable": false
     },
     "tests/capacity-browser.mjs": {
@@ -4678,7 +4678,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "1d594795be08518ae83602263d523c8bc5c73780e6c3ff212ad789d416736096",
+      "sha256": "ec6ce150bc663300e9ba88297f1bd57aa181bcb1307f4bcc342e800c3aeeca25",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {

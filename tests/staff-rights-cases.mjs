@@ -223,7 +223,67 @@ export async function staffContractRights(h) {
     await refuse('booking.book',{classId:later.id},lifecycleMember.cookie,409);
     console.log('PROBE PLAN-012 native effective date: scoped front desk confirms a reason-coded termination with future booking, runtime restarts and two scheduler sweeps -> access ends, original credit returns once, one final statement and staff-made history, no invoice or extra charge; late withdrawal and rebooking refused.');
   }
+  await immediateTerminationCases(h,s);
   console.log('PROBE PLAN-012 staff withdrawal: manager and front desk at two locations -> own scheduled termination withdrawn once with canonical audit, invoices stay stopped until personal fresh acceptance; other terminator, wrong scope, missing right and revoked replay refused without writes.');
+}
+
+async function immediateTerminationCases(h,s) {
+  const {desk,grant,refuse}=s,day=86400000,ana=await h.person('ImmediateTerminationMember');
+  // A studio-defined code with a statutory name still denotes an ordinary termination.
+  const reason=await h.cmd('plan.cancellation.reason.save',{code:'cooling-off',label:'Moved away',active:true,revision:0});
+  const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:ana.id,credits:4,amountCents:8000,expiresAt:new Date(Date.now()+30*day).toISOString()})).id});
+  const sold=(await h.state()).packs.find(p=>p.id===pack.id);
+  const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
+  const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},ana.cookie);
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify({...sold,termStartAt:new Date(Date.now()-30*day).toISOString()}),pack.id).run();
+  const payment=await h.cmd('payment.record',{personId:ana.id,amountCents:8000,reference:'synthetic-strap-immediate-receipt'});
+  const charge=(await h.state()).charges.find(c=>c.packId===pack.id);
+  await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:payment.id,chargeId:charge.id,amountCents:8000,reference:'synthetic-strap-immediate-allocation'});
+  const later=await s.publish('Immediate termination future class',48),seat=await h.cmd('booking.book',{classId:later.id,packId:pack.id},ana.cookie);
+  assert.equal(seat.packId,pack.id);
+  const input={packId:pack.id,timing:'immediate',reasonCode:reason.code,reason:'Moved away today',channel:'phone',requestId:randomUUID()};
+  await grant(desk,'front-desk',['member-record'],[ana.id],['studio']);await refuse('plan.cancellation.prepare',input,desk.cookie);
+  await grant(desk,'front-desk',['member-record','contract-change'],[ana.id],['studio']);
+  await refuse('plan.cancellation.prepare',{...input,timing:'date',requestId:randomUUID()},desk.cookie,400);
+  await refuse('plan.cancellation.prepare',{...input,effectiveAt:new Date(Date.now()+day).toISOString(),requestId:randomUUID()},desk.cookie,400);
+  let preview=await h.cmd('plan.cancellation.prepare',input,desk.cookie);
+  const original=await h.state();assert.equal(original.packs.find(p=>p.id===pack.id).expiresAt,sold.expiresAt);
+  assert.equal(original.bookings.find(b=>b.id===seat.id).status,'booked','preparation changes no access or booking');
+  assert.equal(preview.timing,'immediate');assert.equal(preview.effects.unusedPrepaid.amountCents,4000);
+  assert.deepEqual(await h.cmd('plan.cancellation.prepare',input,desk.cookie),preview,'replay keeps the reviewed instant');
+  // Clock-source fixture crosses expiry without waiting fifteen minutes or altering the application clock.
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify({...preview,previewExpiresAt:new Date(Date.now()-1000).toISOString()}),preview.id).run();
+  assert.equal((await h.state()).cancellations.cancellations.find(c=>c.id===preview.id).stale,true);
+  await refuse('plan.cancellation.confirm',{id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()},desk.cookie,409);
+  preview=await h.cmd('plan.cancellation.prepare',{...input,requestId:randomUUID()},desk.cookie);
+  await h.cmd('payment.record',{personId:ana.id,amountCents:1,reference:'synthetic-strap-immediate-changed-source'});
+  await refuse('plan.cancellation.confirm',{id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()},desk.cookie,409);
+  preview=await h.cmd('plan.cancellation.prepare',{...input,requestId:randomUUID()},desk.cookie);
+  const confirm={id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()};
+  await grant(desk,'front-desk',['member-record']);await refuse('plan.cancellation.confirm',confirm,desk.cookie);
+  await grant(desk,'front-desk',['member-record','contract-change'],[ana.id],['studio']);
+  await refuse('plan.cancellation.confirm',confirm,ana.cookie);
+  const before=await h.state(),ended=await h.cmd('plan.cancellation.confirm',confirm,desk.cookie);
+  assert.equal(ended.status,'applied');assert.equal(ended.effectiveAt,preview.effectiveAt);assert.deepEqual(ended.effects,preview.effects);
+  assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),ended);
+  await h.setAuth({});for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+  const after=await h.state(),closed=after.packs.find(p=>p.id===pack.id),booking=after.bookings.find(b=>b.id===seat.id);
+  assert.equal(closed.expiresAt,preview.effectiveAt);assert.deepEqual([booking.status,booking.refunded,booking.feeCents],['cancelled',true,0]);
+  assert.equal(after.packCreditEvents.filter(e=>e.bookingId===seat.id&&e.type==='restore').length,1);
+  assert.equal(after.cancellations.statements.filter(c=>c.cancellationId===ended.id).length,1);
+  const refund=after.cancellations.refunds.find(r=>r.cancellationId===ended.id);
+  assert.equal(refund.amountCents,preview.effects.unusedPrepaid.amountCents);
+  assert.equal(refund.coolingOptions,null,'a catalog code must not invoke statutory refund authority');
+  assert.deepEqual(refund.formula,preview.effects.unusedPrepaid.formula);
+  assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.payments,before.payments);
+  assert.equal(after.recurring.invoices.filter(i=>i.recurringTermsId===terms.id).length,0);
+  const audit=after.staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===ended.id);
+  assert.equal(audit.length,1);assert.deepEqual([audit[0].actorRole,audit[0].after.status,audit[0].after.reasonLabel],['front-desk','applied','Moved away']);
+  assert.ok((await h.state(ana.cookie)).notices.some(n=>n.subject==='Membership ended'&&n.body.includes(ended.effectiveAt)));
+  await refuse('plan.cancellation.withdraw.prepare',{id:ended.id,requestId:randomUUID()},desk.cookie,409);
+  await refuse('booking.book',{classId:later.id,packId:pack.id},ana.cookie,409);
+  await grant(desk,'front-desk',['member-record']);await refuse('plan.cancellation.confirm',confirm,desk.cookie);
+  console.log('PROBE PLAN-012 immediate: scoped front desk reviews and confirms a receipt-backed immediate termination -> exact instant and refund retained, access and booking end once with canonical audit and notices, no collection or invoice; expired, changed-source, member and revoked attempts refuse without writes.');
 }
 
 export async function staffAppointmentRoles(h) {
