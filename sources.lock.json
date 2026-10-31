@@ -314,7 +314,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4cfd8f56f5fa8489c29a5cfa591aef554384950f6aeebca62f70608f72398f1e",
+      "sha256": "b5f0838ad9dee8d20042373e21635fbd525d4f9af858a2028574874312b9ff1d",
       "executable": false
     },
     "AGENTS.md": {
@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "d9625a40dd7a300ab298a94c42897612632f7bf39152a05b36a47a9b59289d87",
+      "sha256": "de176ce40493ca6deba1b734e14da7dd6207d938cdb0862db601fd73ce828cf0",
       "executable": false
     },
     "DEMO.md": {
@@ -366,7 +366,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "060f12d2332be6112251a34e4a7bb5ed24fbb18f9c92e7d5f5bc1140def7b7e3",
+      "sha256": "1b0991d25014cf4bacd671daa6e1204aa9af3317fc7770294632410a14fa44bb",
       "executable": false
     },
     "docs/classes.md": {
@@ -3686,7 +3686,7 @@
       "executable": false
     },
     "src/strap/payout-access.ts": {
-      "sha256": "b8fd042425a5366803a5b3ebbd8c78ba928a0a2f77141338b7c04149a83d14ad",
+      "sha256": "a8dcae2aad2e4c68cb53e63e343ede0d546a2973aa8bdc7acfd3e8d36dcbb865",
       "executable": false
     },
     "src/strap/payout-membership.ts": {
