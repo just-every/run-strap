@@ -161,6 +161,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     input.eligibleLocations=picked.length ? picked : [input.locationId];
     for (const k of ['credits','validDays','revision','returnAfterDays']) input[k]=Number(input[k]);
   }
+  if (name.startsWith('catalog.purchase.') && input.confirm !== undefined) input.confirm=input.confirm==='true';
   if (name === 'catalog.retire') input.revision=Number(input.revision);
   if (name === 'pack.prepare' || name === 'pack.locations.set') {
     const picked = Object.keys(input).filter(key => key.startsWith('lc_') && input[key] === 'true').map(key => key.slice(3))

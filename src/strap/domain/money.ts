@@ -54,11 +54,16 @@ export function approvePack(tx: Transaction, input: Record<string,unknown>) {
   insist(draft.expiresAt > now(),'expiry_must_be_future');
   tx.future(draft.expiresAt);
   approveDraft(tx,draft);
-  const pack = {...(draft.catalogVersion ? {catalogVersion:structuredClone(draft.catalogVersion),purchaseExpiresAt:draft.expiresAt} : {}),purchaseAmountCents:draft.amountCents,proration:draft.proration ?? null,...(draft.proration ? {termStartAt:draft.proration.joinAt} : {}),guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,draftId:draft.id,createdAt:now()};
+  return grantReviewedPack(tx,draft);
+}
+/** Called only after the owning public command has checked exact human approval. */
+export function grantReviewedPack(tx: Transaction, draft: import('./types').RecordData) {
+  const member = person(tx.state,draft.personId);
+  const pack = {...(draft.catalogVersion ? {catalogVersion:structuredClone(draft.catalogVersion),purchaseExpiresAt:draft.expiresAt} : {}),...(draft.termStartAt ? {termStartAt:draft.termStartAt} : {}),purchaseAmountCents:draft.amountCents,proration:draft.proration ?? null,...(draft.proration ? {termStartAt:draft.proration.joinAt} : {}),guestTerms:draft.guestTerms ?? null,id:id(),personId:member.id,locationId:draft.locationId ?? 'studio',eligibleLocations:draft.eligibleLocations ?? ['studio'],eligibleServices:draft.eligibleServices ?? [],priorityBooking:draft.priorityBooking === true,...(draft.entitlement ? {entitlement:draft.entitlement} : {}),creditLedgerVersion:1,creditRevision:0,credits:draft.credits,remaining:0,amountCents:draft.amountCents,initiationFeeCents:draft.initiationFeeCents ?? 0,expiresAt:draft.expiresAt,...(draft.catalogPurchaseId ? {catalogPurchaseId:draft.catalogPurchaseId} : {draftId:draft.id}),createdAt:now()};
   tx.put('pack',pack);
   appendPackEvent(tx,pack,{type:'grant',credits:draft.credits});
   const debtor = debtorOf(tx.state,member.id), forMember = debtor === member.id ? {} : {forPersonId:member.id};
-  tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,...(draft.catalogVersion ? {catalogVersionId:draft.catalogVersion.id} : {}),amountCents:draft.amountCents,createdAt:now()});
+  tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,...(draft.catalogVersion ? {catalogVersionId:draft.catalogVersion.id} : {}),...(draft.catalogPurchaseId ? {catalogPurchaseId:draft.catalogPurchaseId} : {}),amountCents:draft.amountCents,createdAt:now()});
   if (pack.initiationFeeCents > 0) tx.put('charge',{id:id(),personId:debtor,...forMember,packId:pack.id,reason:'initiation_fee',amountCents:pack.initiationFeeCents,createdAt:now()});
   settleUnpaid(tx,record(tx.state,pack.id,'pack'));
   promoteAll(tx);

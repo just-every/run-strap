@@ -4,7 +4,7 @@ import { locations, packPlaces } from './locations';
 import { householdOf } from './households';
 import { saveIntroOffer, closeIntroOffer } from './intro-offers';
 
-export const catalogKinds = ['finite-pack','drop-in','fixed-term','intro'] as const;
+export const catalogKinds = ['finite-pack','drop-in','fixed-term','intro','monthly','annual'] as const;
 
 /** Published terms are append-only. The product only selects the version offered for a new sale. */
 export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
@@ -29,7 +29,7 @@ export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
   insist(catalogKinds.includes(kind as typeof catalogKinds[number]),'invalid_product_kind');
   const previous = prior ? record(tx.state,prior.data.versionId,'productCatalogVersion') : null;
   insist(!previous || previous.kind === kind,'catalog_product_kind_immutable',409);
-  const credits = kind === 'fixed-term' ? 0 : kind === 'drop-in' ? 1 : integer(input.credits,'credits',1,10_000);
+  const credits = ['fixed-term','monthly','annual'].includes(String(kind)) ? 0 : kind === 'drop-in' ? 1 : integer(input.credits,'credits',1,10_000);
   const validDays = integer(input.validDays,'validDays',1,kind === 'intro' ? 366 : 3660);
   const version = (prior?.data.version ?? 0)+1, at = now();
   const versionId = productId+':v'+version;
@@ -40,6 +40,7 @@ export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
     amountCents:integer(input.amountCents,'amountCents',0,100_000_000),credits,validDays,eligibleServices,...places,
     ...(intro ? {introOfferId:intro.id,eligibility:intro.eligibility,limit:intro.limit,returnAfterDays:intro.returnAfterDays} : {}),
     locationNames:places.eligibleLocations.map(id=>({id,name:available.find(l=>l.id===id)!.name})),
+    ...(['monthly','annual'].includes(String(kind)) ? {intervalMonths:kind === 'monthly' ? 1 : 12,timeZone:available.find(l=>l.id===places.locationId)!.timeZone} : {}),
     publishedAt:at,publishedBy:tx.who.id};
   tx.put('productCatalogVersion',published);
   tx.put('productCatalog',{id:productId,code,version,versionId:published.id,revision:revision+1,active:true,updatedAt:at,updatedBy:tx.who.id});
@@ -72,6 +73,7 @@ export function personalCatalogMember(state: State, member: {id:string;role:stri
 export function catalogPackInput(tx: Transaction, input: Record<string,unknown>) {
   insist(Object.keys(input).every(k=>['personId','catalogVersionId'].includes(k)),'catalog_terms_cannot_be_overridden');
   const version = currentProductVersion(tx.state,input.catalogVersionId);
+  insist(!version.intervalMonths,'catalog_recurring_requires_personal_checkout',409);
   insist(version.kind !== 'intro','catalog_intro_requires_eligibility_review',409);
   return {version:structuredClone(version),terms:{personId:input.personId,...(version.kind === 'fixed-term' ? {} : {credits:version.credits}),amountCents:version.amountCents,
     ...(version.kind === 'fixed-term' ? {kind:'unlimited',planName:version.name} : {}),eligibleServices:version.eligibleServices,locationId:version.locationId,eligibleLocations:version.eligibleLocations,

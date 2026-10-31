@@ -82,6 +82,54 @@ export async function catalogBrowser(h,data) {
       assert.ok(text.includes('No automatic renewal.'));
       await shot(page,'#receipt-'+id,'member-original-v'+original.version+'-'+original.code);
     }
+    if(data.checkout) {
+      const proof=data.checkout;
+      const buyer=await pageFor(proof.buyer.cookie);
+      await buyer.goto(h.origin+'/app/packs#catalog-checkout');
+      let picker=buyer.locator('#catalog-checkout form').filter({has:buyer.locator('select[name=catalogVersionId]')});
+      await picker.getByLabel('Catalog product',{exact:true}).selectOption(proof.annual.id);
+      await picker.getByRole('button',{name:'Review catalog purchase',exact:true}).click();
+      let pending=(await h.state()).catalogPurchases.filter(p=>p.personId===proof.buyer.id&&p.status==='preview').at(-1);
+      let review=buyer.locator(`[data-catalog-purchase="${pending.id}"]`);
+      assert.match(await review.innerText(),/every 12 calendar month/);
+      assert.match(await review.innerText(),/1490\.00/);
+      await shot(buyer,'#catalog-checkout','member-checkout');
+      await review.getByRole('checkbox').check();
+      await review.getByRole('button',{name:'Confirm catalog purchase',exact:true}).click();
+      let sold=(await h.state()).catalogPurchases.find(p=>p.id===pending.id);
+      assert.equal(sold.status,'sold');
+      await shot(buyer,'#receipt-'+sold.packId,'member-checkout-receipt');
+      const desk=await pageFor(proof.desk.cookie),back='/app/people?person='+proof.deskBuyer.id;
+      await desk.goto(h.origin+back);
+      picker=desk.locator('#catalog-checkout form').filter({has:desk.locator('select[name=catalogVersionId]')});
+      await picker.getByLabel('Catalog product',{exact:true}).selectOption(proof.finite2.id);
+      await picker.getByRole('button',{name:'Review catalog purchase',exact:true}).click();
+      pending=(await h.state()).catalogPurchases.filter(p=>p.personId===proof.deskBuyer.id&&p.status==='preview').at(-1);
+      review=desk.locator(`[data-catalog-purchase="${pending.id}"]`);
+      assert.equal(await review.getByRole('button',{name:'Confirm catalog purchase',exact:true}).count(),0,'staff cannot accept on the personal door');
+      await shot(desk,`[data-catalog-purchase="${pending.id}"]`,'staff-waiting');
+      const member=await pageFor(proof.deskBuyer.cookie);await member.goto(h.origin+'/app/packs#catalog-checkout');
+      const personal=member.locator(`[data-catalog-purchase="${pending.id}"]`);
+      await personal.getByRole('checkbox').check();await personal.getByRole('button',{name:'Confirm catalog purchase',exact:true}).click();
+      assert.equal((await h.state()).catalogPurchases.find(p=>p.id===pending.id).status,'accepted');
+      await desk.goto(h.origin+back);
+      review=desk.locator(`[data-catalog-purchase="${pending.id}"]`);
+      assert.match(await review.innerText(),/Personally accepted/);
+      await shot(desk,`[data-catalog-purchase="${pending.id}"]`,'staff-confirmation');
+      await review.getByRole('checkbox').check();await review.getByRole('button',{name:'Confirm catalog purchase',exact:true}).click();
+      sold=(await h.state()).catalogPurchases.find(p=>p.id===pending.id);assert.equal(sold.status,'sold');
+      await member.goto(h.origin+'/app/packs?purchase='+sold.id+'#receipt-'+sold.packId);
+      assert.ok((await h.state(proof.deskBuyer.cookie)).packs.some(p=>p.id===sold.packId),'staff sale pack belongs to the accepting member');
+      assert.match(await member.locator('#receipt-'+sold.packId).innerText(),/159\.00/);
+      assert.match(await member.locator('#receipt-'+sold.packId).innerText(),/8 credits/);
+      await shot(member,'#receipt-'+sold.packId,'staff-sale-member-receipt');
+      for(const {id,version,member:who} of data.breadth?.sales ?? []) {
+        const page=await pageFor(who.cookie);await page.goto(h.origin+'/app/packs#receipt-'+id);
+        assert.ok((await page.locator('#receipt-'+id).innerText()).includes(version.name));
+        await shot(page,'#receipt-'+id,'member-'+version.kind);
+      }
+      console.log('PROBE PLAN-001 personal and staff catalog forms: member annual acceptance and finite-pack desk preparation, personal acceptance, staff confirmation -> original receipts and once-only native invoice agreements; 1440 and 390 screens.');
+    }
     console.log('PROBE PLAN-001 owner catalog forms: publish, prepare, approve and change USD price -> original member receipt remains $129.00 and six credits; screens at 1440 and 390.');
   } finally {for(const context of contexts)await context.close();await browser.close();}
 }

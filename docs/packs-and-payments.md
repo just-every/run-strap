@@ -22,8 +22,34 @@ retired catalog version invalidates an unapproved draft; prepare a fresh review.
 The approved pack adds its price to that member's studio balance and grants its credits once.
 It performs no payment collection or automatic renewal. The member's **Purchase receipts**
 retain the original version, price, credits, services, locations and expiration after later
-catalog changes. This finite-pack path does not provide member checkout, household funding,
-recurring catalog products or delegated staff sales.
+catalog changes. Household funding remains outside catalog sales.
+
+The product type also supports a single drop-in (one credit), a fixed-term unlimited
+membership, a verified intro offer, or monthly and annual unlimited studio invoices.
+One-time validity uses elapsed days; a monthly or annual initial term uses calendar
+months on the published sale location's clock. A product keeps its type for its life.
+Intro purchases use the existing **Intro offers** review and verified eligibility;
+publication changes and retirement invalidate waiting intro purchases too.
+
+Members use **Buy from the catalog** in **My packs** to review the exact initial charge,
+services, locations, expiration and any renewal terms. Their personal confirmation adds
+the charge once. Monthly and annual products require explicit acceptance of continuing
+studio invoices, with the existing BILL-005 stop and price-notice rules. This records
+studio debt only; it authorizes no card or bank debit. One-time products never create
+recurring invoices. A changed or retired version requires a fresh purchase review.
+
+Staff with current scoped **membership-sale** and **member-record** rights use **Catalog
+sales** on the member record for finite packs and drop-ins. The member signs in on their
+own device to accept the exact terms. Staff then confirm the accepted sale under current
+rights; one canonical staff action records the member, actor, channel and outcome.
+Revocation refuses both pending confirmations and committed request replays. Staff
+cannot use this door to activate fixed-term, monthly or annual memberships: BILL-014's
+personal payment-method authorization and signing requirements remain required.
+
+Original purchase evidence and native invoice agreements survive backup and restore.
+Restore disconnects recurring billing and invalidates uncompleted purchase authority;
+prepare a fresh review. Full provider-backed member checkout, staff-sold memberships,
+commitment and fee catalog rules remain separate work.
 
 ## Give a member a pack
 

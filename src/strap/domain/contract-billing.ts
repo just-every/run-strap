@@ -13,7 +13,7 @@ import { acceptedSaleContext, previewSaleContext, proposalSaleContext, saleConte
 /** Native invoice agreement: consent to studio debt, never authority to debit a payment method. */
 export const recurringForPack = (state: State, packId: string) => list(state,'recurringTerms').find(r => r.status === 'active' && r.currentPackId === packId) ?? null;
 export const recurringBasis = (state: State, packId: string) => recurringForPack(state,packId);
-const packTerms = (pack: RecordData) => ({credits:pack.credits,amountCents:pack.amountCents,entitlement:pack.entitlement ?? null,eligibleServices:pack.eligibleServices ?? [],priorityBooking:pack.priorityBooking === true,guestTerms:pack.guestTerms ?? null});
+export const packTerms = (pack: RecordData) => ({credits:pack.credits,amountCents:pack.amountCents,entitlement:pack.entitlement ?? null,eligibleServices:pack.eligibleServices ?? [],priorityBooking:pack.priorityBooking === true,guestTerms:pack.guestTerms ?? null});
 const proposalBasis = (state: State, pack: RecordData) => JSON.stringify({pack,member:person(state,pack.personId,false),recurring:recurringForPack(state,pack.id),changes:list(state,'planChange').filter(c => c.packId === pack.id && c.status === 'accepted'),freezes:list(state,'freeze').filter(f => f.packId === pack.id && ['scheduled','active'].includes(f.status))});
 export function contractNotice(tx: Transaction, source: string, personId: string, subject: string, body: string, bookingIds: string[] = [], requiredEmail = false) {
   putNotice(tx,{id:`notice:${source}`,personId,subject,body},true);
@@ -24,10 +24,10 @@ const connectionSQL = "SELECT connection_id,origin FROM st_contract_connections 
 const fenceConnection = (tx: Transaction, connection: BillingConnection) => tx.sql.push(tx.statement("INSERT INTO st_assert(value) SELECT CASE WHEN EXISTS(SELECT 1 FROM st_contract_connections WHERE id='billing' AND connection_id=? AND origin=?) THEN 1 ELSE 0 END",connection.connection_id,connection.origin));
 const stopPathFor = (termsId: string) => `/app/packs#recurring-${encodeURIComponent(termsId)}`;
 const debtOnly = 'This authorizes studio-balance debt only. No card or bank payment is authorized or collected.';
-const consentText = (r: RecordData) => `Price changes require at least ${r.noticeLeadDays} elapsed days of notice and my personal acceptance before the exact effective renewal date stated in the notice. If I do not accept by then, my original price continues. Renewal and price notices always go by email, regardless of booking email preferences. I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`
+export const consentText = (r: RecordData) => `Price changes require at least ${r.noticeLeadDays} elapsed days of notice and my personal acceptance before the exact effective renewal date stated in the notice. If I do not accept by then, my original price continues. Renewal and price notices always go by email, regardless of booking email preferences. I agree to a studio invoice of $${(r.amountCents/100).toFixed(2)} every ${r.intervalMonths} calendar month(s), first due ${r.firstDueAt} (${r.timeZone}), continuing until stopped. Stop future invoices in one step: ${r.stopPath}. Stopping is effective immediately and access continues to the current term end. ${debtOnly}`
   + (r.originalInitiationFeeCents > 0 ? ` The $${(r.originalInitiationFeeCents/100).toFixed(2)} one-time initiation fee was included in the original sale. Each recurring invoice is $${(r.amountCents/100).toFixed(2)}; the initiation fee does not repeat.` : '');
 // The ct ruling supplies this policy; no consent evidence is automatically purged.
-const consentRetention = (acceptedAt: string, endedAt: string | null = null) => ({
+export const consentRetention = (acceptedAt: string, endedAt: string | null = null) => ({
   policy:'BILL-005',source:'ct ruling 22 Oct 2026',minimumYearsFromAcceptance:3,minimumYearsAfterEnd:1,
   retainUntilAtLeast:new Date(Math.max(Date.parse(nextInvoiceAt(acceptedAt,36,dayIn(acceptedAt,'UTC'),'UTC')),endedAt ? Date.parse(nextInvoiceAt(endedAt,12,dayIn(endedAt,'UTC'),'UTC')) : 0)).toISOString(),
   agreementEndPending:!endedAt,restrictedAfterErasure:true,archive:true,portableExit:true,
@@ -35,7 +35,7 @@ const consentRetention = (acceptedAt: string, endedAt: string | null = null) => 
 const zone = (state: State) => studioSettings(state)?.timeZone ?? 'UTC';
 const dayIn = (at: string, timeZone: string) => Number(localDate(at,timeZone).slice(-2));
 /** Calendar months on the agreed studio clock; short months use their last day. */
-function nextInvoiceAt(at: string, months: number, day: number, timeZone: string) {
+export function nextInvoiceAt(at: string, months: number, day: number, timeZone: string) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(new Date(at)).map(p => [p.type,Number(p.value)]));
   const month = new Date(Date.UTC(p.year,p.month-1+months,1));
   const last = new Date(Date.UTC(month.getUTCFullYear(),month.getUTCMonth()+1,0)).getUTCDate();

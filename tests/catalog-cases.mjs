@@ -127,3 +127,129 @@ export async function assertCatalogBreadthRestored(h,data,cookie) {
   await h.cmd('intro.purchase',{id:data.retiredPreview.id,key:data.retiredPreview.key,confirm:true},cookie,404);
   assert.equal((await h.state(cookie)).version,before,'restored preview does not gain different-actor authority');
 }
+
+export async function catalogCheckout(h) {
+  const buyer=await h.person('CatalogBuyer'),deskBuyer=await h.person('CatalogDeskBuyer'),outsider=await h.person('CatalogOutsider'),desk=await h.person('CatalogDesk');
+  const monthly=await h.cmd('catalog.publish',{...catalogTerms,code:'synthetic-strap-monthly',name:'Monthly mat',productKind:'monthly',revision:0,amountCents:14900});
+  const finite=await h.cmd('catalog.publish',{...catalogTerms,code:'synthetic-strap-checkout',name:'Checkout mat pack',productKind:'finite-pack',revision:0,amountCents:12900,credits:6});
+  const annual=await h.cmd('catalog.publish',{...catalogTerms,code:'synthetic-strap-annual',name:'Annual mat',productKind:'annual',revision:0,amountCents:149000});
+  const grant=rights=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:Object.fromEntries(rights.map(right=>[right,{enabled:true,scopes:[{memberIds:[deskBuyer.id],locationIds:['studio'],doors:['all']}]}]))});
+  await grant(['member-record']);await h.enroll(desk.cookie);
+  let before=await h.state();
+  await h.cmd('catalog.purchase.preview.staff',{personId:deskBuyer.id,catalogVersionId:monthly.id,requestId:'synthetic-strap-denied'},desk.cookie,403);
+  await h.cmd('pack.prepare',{personId:buyer.id,catalogVersionId:monthly.id},h.owner,409);
+  await h.cmd('catalog.purchase.preview',{personId:outsider.id,catalogVersionId:monthly.id,requestId:'synthetic-strap-other-member'},buyer.cookie,404);
+  assert.equal((await h.state()).version,before.version,'monthly purchases cannot bypass scoped rights or personal acceptance');
+  const self=await h.cmd('catalog.purchase.preview',{catalogVersionId:monthly.id,requestId:'synthetic-strap-member-purchase'},buyer.cookie);
+  assert.match(self.consent,/149\.00 USD/);assert.match(self.consent,/every 1 calendar month/);assert.match(self.consent,/No card or bank payment/);
+  before=await h.state();
+  await h.cmd('catalog.purchase.confirm',{id:self.id,key:self.key,confirm:true},h.owner,403);
+  await h.cmd('catalog.purchase.confirm',{id:self.id,key:self.key,confirm:true},outsider.cookie,404);
+  await h.cmd('catalog.purchase.confirm',{id:self.id,key:self.key+'changed',confirm:true},buyer.cookie,409);
+  assert.equal((await h.state()).version,before.version,'wrong actor or changed consent cannot create debt');
+  const results=await Promise.all([1,2].map(()=>h.send('/api/strap/command',{name:'catalog.purchase.confirm',input:{id:self.id,key:self.key,confirm:true}},buyer.cookie)));
+  assert.ok(results.some(r=>r.status===200));assert.ok(results.every(r=>r.status===200||r.status===409));
+  const selfSale=await h.cmd('catalog.purchase.confirm',{id:self.id,key:self.key,confirm:true},buyer.cookie);
+  await grant(['member-record','membership-sale']);
+  before=await h.state();
+  await h.cmd('catalog.purchase.preview.staff',{personId:outsider.id,catalogVersionId:monthly.id,requestId:'synthetic-strap-out-of-scope'},desk.cookie,403);
+  assert.equal((await h.state()).version,before.version);
+  before=await h.state();
+  await h.cmd('catalog.purchase.preview.staff',{personId:deskBuyer.id,catalogVersionId:monthly.id,requestId:'synthetic-strap-staff-membership'},desk.cookie,409);
+  assert.equal((await h.state()).version,before.version,'staff cannot bypass payment-method authorization and signing for memberships');
+  const finitePreview=await h.cmd('catalog.purchase.preview',{catalogVersionId:finite.id,requestId:'synthetic-strap-finite-self'},buyer.cookie);
+  const finiteSale=await h.cmd('catalog.purchase.confirm',{id:finitePreview.id,key:finitePreview.key,confirm:true},buyer.cookie);
+  const staffPreview=await h.cmd('catalog.purchase.preview.staff',{personId:deskBuyer.id,catalogVersionId:finite.id,requestId:'synthetic-strap-desk-preview',channel:'desk'},desk.cookie);
+  before=await h.state();
+  await h.cmd('catalog.purchase.confirm.staff',{id:staffPreview.id,key:staffPreview.key,confirm:true},desk.cookie,409);
+  assert.equal((await h.state()).version,before.version,'staff cannot activate their own proposal without member acceptance');
+  const accepted=await h.cmd('catalog.purchase.confirm',{id:staffPreview.id,key:staffPreview.key,confirm:true},deskBuyer.cookie);
+  assert.equal(accepted.status,'accepted');
+  assert.equal((await h.state()).packs.some(p=>p.catalogPurchaseId===staffPreview.id),false);
+  await grant(['member-record']);before=await h.state();
+  await h.cmd('catalog.purchase.confirm.staff',{id:staffPreview.id,key:staffPreview.key,confirm:true},desk.cookie,403);
+  assert.equal((await h.state()).version,before.version,'revocation blocks an already accepted waiting sale');
+  await grant(['member-record','membership-sale']);
+  const staffSale=await h.cmd('catalog.purchase.confirm.staff',{id:staffPreview.id,key:staffPreview.key,confirm:true,requestId:'synthetic-strap-desk-confirm'},desk.cookie);
+  await h.cmd('catalog.purchase.confirm.staff',{id:staffPreview.id,key:staffPreview.key,confirm:true,requestId:'synthetic-strap-desk-confirm'},desk.cookie);
+  const annualPreview=await h.cmd('catalog.purchase.preview',{catalogVersionId:annual.id,requestId:'synthetic-strap-annual-purchase'},outsider.cookie);
+  const annualSale=await h.cmd('catalog.purchase.confirm',{id:annualPreview.id,key:annualPreview.key,confirm:true},outsider.cookie);
+  const stale=await h.cmd('catalog.purchase.preview',{catalogVersionId:monthly.id,requestId:'synthetic-strap-stale-checkout'},outsider.cookie);
+  const changed=await h.cmd('catalog.publish',{...catalogTerms,code:monthly.code,name:'Monthly mat revised',productKind:'monthly',revision:1,amountCents:17900});
+  before=await h.state();await h.cmd('catalog.purchase.confirm',{id:stale.id,key:stale.key,confirm:true},outsider.cookie,409);
+  assert.equal((await h.state()).version,before.version);
+  const retired=await h.cmd('catalog.purchase.preview',{catalogVersionId:changed.id,requestId:'synthetic-strap-retired-checkout'},outsider.cookie);
+  await h.cmd('catalog.retire',{id:changed.productId,revision:2});before=await h.state();
+  await h.cmd('catalog.purchase.confirm',{id:retired.id,key:retired.key,confirm:true},outsider.cookie,409);
+  assert.equal((await h.state()).version,before.version);
+  const finite2=await h.cmd('catalog.publish',{...catalogTerms,code:finite.code,name:'Checkout mat pack revised',productKind:'finite-pack',revision:1,amountCents:15900,credits:8});
+  const sales=[{sale:selfSale,member:buyer,version:monthly},{sale:finiteSale,member:buyer,version:finite},{sale:staffSale,member:deskBuyer,version:finite},{sale:annualSale,member:outsider,version:annual}];
+  const state=await h.state();
+  for(const {sale,member,version} of sales) {
+    const visible=await h.state(member.cookie),pack=visible.packs.find(p=>p.id===sale.packId),terms=visible.recurring.terms.find(t=>t.catalogPurchaseId===sale.id);
+    assert.deepEqual(pack.catalogVersion,version);
+    if(version.intervalMonths) {assert.equal(pack.entitlement.kind,'unlimited');assert.equal(pack.credits,0);} else assert.deepEqual([pack.credits,pack.remaining],[6,6]);
+    assert.equal(visible.charges.filter(c=>c.packId===pack.id).length,1);assert.equal(visible.charges.find(c=>c.packId===pack.id).amountCents,version.amountCents);
+    if(version.intervalMonths) {
+    assert.equal(terms.amountCents,version.amountCents);assert.equal(terms.intervalMonths,version.intervalMonths);assert.equal(terms.firstDueAt,pack.expiresAt);
+    assert.equal(terms.status,'active');assert.equal(terms.acceptedBy,sale.acceptedBy);assert.equal(terms.collection,'studio-balance-only');
+    assert.equal(terms.acknowledgement.text,sale.consent);assert.deepEqual(terms.catalogVersion,version);
+    } else assert.equal(terms,undefined);
+    assert.equal(state.payments.some(p=>p.packId===pack.id),false,'catalog checkout never fabricates collected money');
+  }
+  const audit=state.staffActions.filter(a=>a.command==='catalog.purchase.confirm.staff'&&a.after.id===staffSale.id);
+  assert.equal(audit.length,1);assert.equal(audit[0].personId,deskBuyer.id);assert.equal(audit[0].right,'membership-sale');assert.equal(audit[0].channel,'desk');
+  await grant(['member-record']);before=await h.state();
+  await h.cmd('catalog.purchase.confirm.staff',{id:staffPreview.id,key:staffPreview.key,confirm:true,requestId:'synthetic-strap-desk-confirm'},desk.cookie,403);
+  assert.equal((await h.state()).version,before.version,'revoked rights also refuse committed replays');
+  await grant(['member-record','membership-sale']);
+  console.log('PROBE PLAN-001 monthly and annual checkout: personal exact acceptance -> one original charge and unlimited initial term plus accepted native recurring invoices; later price changes preserve sold monthly terms and both finite purchases.');
+  console.log('PROBE PLAN-001 staff sales: scoped desk proposal, member acceptance and fresh staff confirmation -> one canonical membership-sale audit; denied, wrong-member and revoked preview or replay leave state unchanged.');
+  const oneTime=[];
+  for(const kind of ['drop-in','fixed-term']) {
+    const version=(await h.state(buyer.cookie)).catalogStore.versions.find(v=>v.kind===kind);
+    const preview=await h.cmd('catalog.purchase.preview',{catalogVersionId:version.id,requestId:'synthetic-strap-self-'+kind},buyer.cookie);
+    const sale=await h.cmd('catalog.purchase.confirm',{id:preview.id,key:preview.key,confirm:true},buyer.cookie);
+    const state=await h.state(buyer.cookie),pack=state.packs.find(p=>p.id===sale.packId);
+    assert.deepEqual(pack.catalogVersion,version);assert.equal(state.charges.find(c=>c.packId===pack.id).amountCents,version.amountCents);
+    assert.equal(state.recurring.terms.some(t=>t.catalogPurchaseId===sale.id),false,'one-time product never creates a recurring agreement');
+    if(kind==='drop-in')assert.deepEqual([pack.credits,pack.remaining],[1,1]);else assert.equal(pack.entitlement.kind,'unlimited');
+    oneTime.push({sale,version});
+  }
+  const erased=await h.person('CatalogErase');
+  const erasedPreview=await h.cmd('catalog.purchase.preview',{catalogVersionId:annual.id,requestId:'synthetic-strap-erasure-preview'},erased.cookie);
+  const {verifiedPrivacyRequest,privacyDecision}=await import('./privacy-journey.mjs');
+  const request=await verifiedPrivacyRequest(h,erased,'erasure','-catalog');
+  const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision});
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true});
+  before=await h.state();
+  await h.cmd('catalog.purchase.confirm',{id:erasedPreview.id,key:erasedPreview.key,confirm:true},erased.cookie,401);
+  assert.equal((await h.state()).version,before.version,'erased personal authority cannot replay a pending catalog purchase');
+  assert.equal((await h.state(buyer.cookie)).catalogPurchases.some(p=>p.id===erasedPreview.id),false);
+  console.log('PROBE PLAN-001 one-time and erasure: personal drop-in and fixed-term checkout -> original one-time entitlements with no recurring terms; erased preview replay -> 401 and unchanged ledger.');
+  const waiting=await h.cmd('catalog.purchase.preview',{catalogVersionId:annual.id,requestId:'synthetic-strap-uncommitted-preview'},outsider.cookie);
+  const staffWaiting=await h.cmd('catalog.purchase.preview.staff',{personId:deskBuyer.id,catalogVersionId:finite2.id,requestId:'synthetic-strap-uncommitted-staff'},desk.cookie);
+  return {sales,oneTime,monthly,annual,finite,finite2,changed,desk,buyer,deskBuyer,outsider,retired,waiting,staffWaiting};
+}
+
+export async function assertCatalogCheckoutRestored(h,data,cookie) {
+  const state=await h.state(cookie);
+  for(const {sale,version} of data.sales) {
+    const pack=state.packs.find(p=>p.id===sale.packId),terms=state.recurring.terms.find(t=>t.catalogPurchaseId===sale.id);
+    assert.deepEqual(pack.catalogVersion,version);assert.equal(pack.purchaseAmountCents,version.amountCents);
+    if(version.intervalMonths) {
+      assert.deepEqual(terms.catalogVersion,version);assert.equal(terms.amountCents,version.amountCents);
+      assert.equal(terms.requiresFreshAcceptance,true,'native restore cannot reactivate original recurring authority');
+    }
+    assert.equal(state.charges.filter(c=>c.packId===pack.id).length,1);
+  }
+  for(const {sale,version} of data.oneTime) {
+    const pack=state.packs.find(p=>p.id===sale.packId);assert.deepEqual(pack.catalogVersion,version);
+    assert.equal(state.charges.find(c=>c.packId===pack.id).amountCents,version.amountCents);
+  }
+  const person=await h.signIn(data.outsider.email),before=await h.state(cookie);
+  for(const preview of [data.retired,data.waiting])await h.cmd('catalog.purchase.confirm',{id:preview.id,key:preview.key,confirm:true},person,409);
+  const member=await h.signIn(data.deskBuyer.email);
+  await h.cmd('catalog.purchase.confirm',{id:data.staffWaiting.id,key:data.staffWaiting.key,confirm:true},member,409);
+  assert.equal((await h.state(cookie)).version,before.version);
+}

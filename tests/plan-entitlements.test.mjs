@@ -587,7 +587,8 @@ test('Versioned finite-pack catalog preserves two purchases and refuses changed 
   await h.cmd('studio.save',{location:'Catalog studio',timeZone:'America/New_York'});
   const first=await h.person('CatalogFirst'),second=await h.person('CatalogSecond');
   const data=await (await import('./catalog-cases.mjs')).catalogPurchases(h,first,second);
-  await (await import('./catalog-cases.mjs')).catalogBreadth(h);
+  data.breadth=await (await import('./catalog-cases.mjs')).catalogBreadth(h);
+  data.checkout=await (await import('./catalog-cases.mjs')).catalogCheckout(h);
   console.log('PROBE PLAN-001 versioned purchases: public catalog and pack commands -> two distinct sold USD prices, credits, services and locations retained after third publication.');
   console.log('PROBE PLAN-001 stale and retired previews: pack approval and preparation -> 409, unchanged state revision and no new charge or credit.');
   await (await import('./catalog-browser.mjs')).catalogBrowser(h,data);
