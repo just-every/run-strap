@@ -129,7 +129,7 @@ function widgetIntros(state: State, personId: string, entry: RecordData, actorId
   const offers=list(state,'introOffer').filter(o=>o.active && packServiceEligible({id:o.id,eligibleServices:o.eligibleServices},entry))
     .map(o=>({id:o.id,name:o.name,credits:o.credits,days:o.days,amountCents:o.amountCents,eligibility:o.eligibility,limit:o.limit,returnAfterDays:o.returnAfterDays,eligibleServices:o.eligibleServices}));
   const previews=list(state,'introPreview').filter(p=>p.status==='preview' && p.personId===personId && p.createdBy===actorId && !p.exceptionReason && p.validUntil>now() && offers.some(o=>o.id===p.offerId))
-    .map(p=>({id:p.id,key:p.key,offerName:p.offerName,credits:p.credits,days:p.days,amountCents:p.amountCents,eligibleServices:p.eligibleServices,validUntil:p.validUntil}));
+    .map(p=>({id:p.id,key:p.key,offerId:p.offerId,offerName:p.offerName,credits:p.credits,days:p.days,amountCents:p.amountCents,eligibleServices:p.eligibleServices,validUntil:p.validUntil}));
   return {offers,previews};
 }
 /** Personal prerequisites are read from current records, never from the selection. */

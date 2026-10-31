@@ -21,11 +21,14 @@ const request=()=>hidden('requestId',crypto.randomUUID());
 /** Intro offers covering the selected class; staff previews name the member and channel. */
 function introPanel(intros: any,back: string,staffFields='') {
   if(!intros?.offers?.length)return '';
-  const offers=intros.offers.map((o: any)=>`<p><strong>${h(o.name)}</strong> · ${o.credits} visits · ${o.days} elapsed days from purchase · ${money(o.amountCents)}. ${o.eligibility==='new'?'New clients only.':`Returning clients after ${o.returnAfterDays} days away.`} One intro per ${h(o.limit)} across all offers.</p>`
-    +form('intro.preview',back,hidden('offerId',o.id)+staffFields+request(),'Review intro offer','quiet')).join('');
-  const previews=intros.previews.map((p: any)=>`<h3>${h(p.offerName)} · exact terms</h3><p>${p.credits} visits for ${p.days} elapsed days starting when confirmed. ${money(p.amountCents)} is added to the studio balance once. No automatic renewal. Eligibility is checked again when you confirm.</p>`
-    +form('intro.purchase',back,hidden('id',p.id)+hidden('key',p.key)+request()+(staffFields?channel():'')+'<label class="check"><input type="checkbox" name="confirm" value="true" required>Confirm these exact intro terms and studio-balance charge.</label>','Buy intro offer')).join('');
-  return panel('Intro offers for this class',body(`<p>The studio verifies identity and household eligibility privately before an intro sale. Buying adds visits for this class; the price is added to the studio balance, and the studio can send a secure test payment.</p>${previews}${offers}`));
+  const offers=intros.offers.map((o: any)=>{
+    const p=intros.previews.find((r: any)=>r.offerId===o.id);
+    return p ? `<h3>${h(p.offerName)} · exact terms</h3><p>${p.credits} visits for ${p.days} elapsed days starting when confirmed. ${money(p.amountCents)} is added to the studio balance once. No automatic renewal. Eligibility is checked again on confirmation.</p>`
+      +form('intro.purchase',back,hidden('id',p.id)+hidden('key',p.key)+request()+(staffFields?channel():'')+'<label class="check"><input type="checkbox" name="confirm" value="true" required>Confirm these exact intro terms and studio-balance charge.</label>','Buy intro offer')
+      : `<h3>${h(o.name)}</h3><p>${o.credits} visits · ${o.days} elapsed days from purchase · ${money(o.amountCents)}. ${o.eligibility==='new'?'New clients only.':`Returning clients after ${o.returnAfterDays} days away.`} One intro per ${h(o.limit)} across all offers.</p>`
+      +form('intro.preview',back,hidden('offerId',o.id)+staffFields+request(),'Review intro offer','quiet');
+  }).join('');
+  return panel('Intro offers for this class',body(`<p>The studio verifies identity and household eligibility privately before an intro sale. Buying adds visits for this class; the price is added to the studio balance, and the studio can send a secure test payment.</p>${offers}`));
 }
 const documentsPanel=(prerequisites: any,back: string,staff: boolean)=>(prerequisites?.documents??[]).map((w: any)=>panel(w.service?`${w.service} policy`:'Studio waiver',body(
   `<p>Version ${h(w.version)}</p><p class="letter">${h(w.text)}</p>`+(w.completed?'<p role="status">Current document completed.</p>':staff
