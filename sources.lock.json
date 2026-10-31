@@ -4226,11 +4226,11 @@
       "executable": false
     },
     "tests/booking-widget-browser.mjs": {
-      "sha256": "b72e6a2072a929936e721c0b72cf2d8bf0b33d6268b6f142bfe203d38fe0c5b7",
+      "sha256": "b470d356b7f62ae0f8e4425fb84d97b5541db9df4c2d3e6f37ae07205027a14e",
       "executable": false
     },
     "tests/booking-widget-journey.mjs": {
-      "sha256": "beaf1eefb0de644237729b9d2ed77f80d0848a670d34eb2884bc0af860306de3",
+      "sha256": "cea8d531829fa7c1ebb95a723a840a6895f857b4a9863e83e0ffa0602c49ab46",
       "executable": false
     },
     "tests/campaign-browser.mjs": {
