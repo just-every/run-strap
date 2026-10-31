@@ -245,7 +245,9 @@ test('PLAN-006/011: exact member and direct freezes, original funding, earlier r
 },{auth:{MAIL_PROVIDER:'resend',MAIL_API_KEY:'synthetic-strap-21'},outbound:async request=>{assert.equal(request.url,'https://api.resend.com/emails');sent.push(await request.json());return Response.json({id:'synthetic-strap-'+sent.length})}})})
 
 
-test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exact consent while recurring terms remind, stop and reconnect safely',()=>run(async h=>{
+test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exact consent while recurring terms remind, stop and reconnect safely',{timeout:120000},async()=>{
+  await(await import('./upcoming-invoices-journey.mjs')).upcomingInvoicesJourney()
+  await run(async h=>{
   await h.confirmSetup(h.owner);await h.cmd('studio.save',{location:'Pasadena',timeZone:'America/New_York'});
   const member=await h.person('Nora'),guest=await h.person('Ari'),payer=await h.person('Sam'),coach=await h.person('Sage','instructor');
   const sell=async(person,input={})=>{const r=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:person.id,credits:5,amountCents:10000,expiresAt:'2098-07-01T04:00:00.000Z',...input})).id});return(await h.state()).packs.find(p=>p.id===r.id)};
@@ -311,8 +313,7 @@ test('PLAN-006 / BILL-005: calendar freezes retain paid allowances, caps and exa
   assert.ok((await h.state(invoiceMember.cookie)).notices.some(n=>n.subject==='Recurring invoices moved to the new studio address'));
   await h.db.prepare("DELETE FROM st_contract_connections WHERE id='billing'").run();
   assert.equal((await h.cmd('plan.recurring.reconnect',{...reconnect,requestId:'synthetic-strap-511'},h.owner,409)).error,'fresh_member_acceptance_required');
-
-}))
+})})
 
 
 test('PLAN-007: one-step member, payer and guardian cancellation supersedes freezes, preserves exact paid-value refunds and ends once across restart', {timeout:240000},async()=>{await run(async h=>{

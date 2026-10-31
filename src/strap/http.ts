@@ -1,3 +1,5 @@
+import { upcomingInvoices, upcomingInvoicesCsv } from './upcoming-invoices'
+import { studioSettings } from './domain/studio'
 import { billingWebhook } from './billing/webhooks';
 import { billingStaffHandoffs, delegatedBillingRight } from './billing';
 import { locations } from './domain/locations';
@@ -52,7 +54,7 @@ import { managerCommand, managers } from './security/manager'
 
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/upcoming-invoices','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['plan.cancellation.prepare','lead.success.prepare','attendance.plan.prepare','recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -89,6 +91,13 @@ async function revenueState(env: Bindings, who: Actor) {
   return {...current,locations:current.locations ?? locations(loaded.state).filter(l => !loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',undefined,l.id)),recurringRevenueSources:recurringRevenueSources(loaded.state,loaded.who)}
 }
 
+async function invoiceForecast(env: Bindings, who: Actor, query: URLSearchParams) {
+  if (who.role !== 'owner' || !who.isOwner) fail('owner_required',403)
+  const loaded = await load(env.DB,who)
+  const connection = await env.DB.prepare("SELECT connection_id,origin FROM st_contract_connections WHERE id='billing'").first<{connection_id:string;origin:string}>()
+  return {loaded,report:upcomingInvoices(loaded.state,loaded.who,connection,env.AUTH_ORIGIN,query)}
+}
+
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
   if (url.pathname === '/app/revenue') {
@@ -96,6 +105,10 @@ async function appState(env: Bindings, who: Actor, target: string) {
     if (who.role !== 'owner') return current
     const loaded = await load(env.DB,who)
     return {...current,financeReport:financeReport(loaded.state,url.searchParams)}
+  }
+  if (url.pathname === '/app/upcoming-invoices') {
+    const {loaded,report} = await invoiceForecast(env,who,url.searchParams)
+    return {actor:loaded.who,studio:studioSettings(loaded.state),people:[],classes:[],bookings:[],drafts:[],upcomingInvoices:report}
   }
   if(url.pathname === '/app/people' && who.staffAccess && ['front-desk','manager'].includes(who.role))return {...await state(env,who),billingHandoffs:await billingStaffHandoffs(env,who)}
   if (who.role === 'instructor' && who.staffAccess && url.pathname !== '/app/people') return {...await snapshot(env.DB,who,env.AUTH_ORIGIN,false),mfa:await mfaView(env,who),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? ''}
@@ -156,7 +169,7 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (who.role === 'finance' && !(who.staffAccess && delegatedBillingRight(name) === 'collection' && ['/api/strap/command','/app/action'].includes(path)) && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
   if (who.staffAccess && /^\/api\/strap\/reports\/.*\.(csv|xlsx)$/.test(path)) {const current=await load(env.DB,who);if(!hasStaffRight(current.state,current.who,'exports'))fail('staff_right_required',403);}
-  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || who.staffAccess === true || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || ['appointment.client.deliver','appointment.client.deposit.record'].includes(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
+  const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || who.staffAccess === true || privilegedRoute(path) || path === '/app/upcoming-invoices' || path.startsWith('/api/strap/reports/upcoming-invoices') || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || ['appointment.client.deliver','appointment.client.deposit.record'].includes(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
 }
 
@@ -202,6 +215,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
+      if (/^\/api\/strap\/reports\/upcoming-invoices(?:\.csv)?$/.test(path)) {
+        const {report} = await invoiceForecast(env,who,url.searchParams)
+        return path.endsWith('.csv') ? new Response(upcomingInvoicesCsv(report),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=strap-upcoming-invoices.csv'}}) : json(report)
+      }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
         const loaded=await load(env.DB,who)
