@@ -6,7 +6,8 @@ import { chromium } from "@playwright/test";
 async function screens(h, name, act, cookie = h.owner) {
   const browser = await chromium.launch({
     headless: true,
-    args: ["--use-mock-keychain", "--password-store=basic"],
+    executablePath: process.env.STRAP_CHROMIUM_PATH,
+    args: ["--no-sandbox", "--use-mock-keychain", "--password-store=basic"],
   });
   await mkdir(process.env.STRAP_PROOF_DIR, { recursive: true });
   try {
