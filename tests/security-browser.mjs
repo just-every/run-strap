@@ -110,3 +110,47 @@ export async function securityBrowser(h, { finance, nextSession, member }) {
     }
   } finally { await browser.close() }
 }
+
+/** The recovery page uses real authenticated HTTP, with assets served locally. */
+export async function recoveryDiagnosticsBrowser(h, {failedId, bookingId, secrets}) {
+  const browser = await chromium.launch({headless:true, executablePath:process.env.STRAP_CHROMIUM_PATH, args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {
+    const context = await browser.newContext({viewport:{width:1440,height:1000}})
+    try {
+      await context.route(h.origin+'/**', async route => {
+        const path = new URL(route.request().url()).pathname
+        if (!path.includes('..') && types[extname(path)]) return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:types[extname(path)]})
+        return route.continue()
+      })
+      const index = h.owner.indexOf('=')
+      await context.addCookies([{name:h.owner.slice(0,index),value:h.owner.slice(index+1),url:h.origin}])
+      const page = await context.newPage()
+      await page.goto(h.origin+'/app/studio')
+      await page.getByRole('link',{name:'Open recovery diagnostics',exact:true}).click()
+      await page.getByRole('heading',{name:'Recovery diagnostics',exact:true}).waitFor()
+      const failed = page.getByRole('row').filter({hasText:failedId})
+      assert.match(await failed.innerText(),/Failed/)
+      assert.match(await failed.innerText(),/HTTP 403/)
+      assert.match(await page.getByRole('row').filter({hasText:bookingId}).innerText(),/Rate limited/)
+      assert.match(await page.locator('.recovery-diagnostics').innerText(),/provider health unknown/)
+      for (const secret of secrets) assert.ok(!(await page.content()).includes(secret))
+      assert.equal(await page.locator('.recovery-diagnostics form, .recovery-diagnostics button').count(),0,'diagnostics contain no execution controls')
+      const smallText = await page.locator('.recovery-diagnostics *').evaluateAll(elements=>elements.filter(el=>el.checkVisibility()&&el.textContent.trim()&&parseFloat(getComputedStyle(el).fontSize)<13).map(el=>el.tagName))
+      assert.deepEqual(smallText,[])
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+      const missing = await page.locator('button,a,summary,[role=button]').evaluateAll(elements=>elements.filter(el=>el.checkVisibility()&&!el.innerText.trim()&&el.querySelector('svg,img')&&!el.querySelector('[role=tooltip]')).map(el=>el.tagName))
+      assert.deepEqual(missing,[])
+      const proof = process.env.STRAP_RECOVERY_PROOF_DIR
+      if (proof) {
+        await mkdir(proof,{recursive:true})
+        await page.screenshot({path:join(proof,'SEC-001-recovery-1440.png'),fullPage:true})
+        await page.setViewportSize({width:390,height:1000})
+        await page.screenshot({path:join(proof,'SEC-001-recovery-390.png'),fullPage:true})
+        await page.setViewportSize({width:1440,height:1000})
+      }
+      await failed.getByRole('link',{name:'Review billing agreement',exact:true}).click()
+      assert.equal(new URL(page.url()).pathname,'/app/packs')
+      await page.getByRole('heading',{name:'Packs and payments',exact:true}).waitFor()
+    } finally { await context.close() }
+  } finally { await browser.close() }
+}

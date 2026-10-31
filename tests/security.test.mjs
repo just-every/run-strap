@@ -1,3 +1,4 @@
+import { recoveryDiagnosticsCases } from './recovery-diagnostics-cases.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
@@ -260,3 +261,5 @@ test('SEC-004: the security screens work in a real browser with a passkey at 144
   }
   await (await import('./security-browser.mjs')).securityBrowser(h, { finance, member, nextSession: person => h.signIn(person.email) })
 }, { hostname: 'localhost' }))
+
+test('SEC-001: owner recovery diagnostics join redacted billing and mail history without authority or side effects', {timeout:120000}, recoveryDiagnosticsCases)
