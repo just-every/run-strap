@@ -117,3 +117,48 @@ export async function prorationStageBrowser(h,{cookie,selector,name,amount}) {
     assert.ok((await preview.innerText()).includes(amount));await shot(page,'BILL-006-combined-'+name);
   });
 }
+
+// The ordinary studio journey asserts at desktop; candidate proof also records
+// the same populated report and source detail at the phone width.
+export async function recoveryOutcomesBrowser(h,{campaignId,offerId,bookingId,visits}) {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os')
+  const temporary=!process.env.STRAP_PROOF_DIR,dir=process.env.STRAP_PROOF_DIR ?? await mkdtemp(join(tmpdir(),'strap-outcomes-browser-'))
+  const browser=await chromium.launch({headless:true,...(process.env.STRAP_CHROMIUM ? {executablePath:process.env.STRAP_CHROMIUM} : {}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {for(const width of temporary ? [1440] : [1440,390]) {
+    const context=await browser.newContext({viewport:{width,height:1000}})
+    try {
+      await context.route(h.origin+'/**',async route=>{
+        const path=new URL(route.request().url()).pathname
+        if(!path.includes('..')&&/\.(css|svg|woff2|png|ico)$/.test(path))return route.fulfill({body:await readFile(join(process.cwd(),'public',path)),contentType:{'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}[extname(path)]})
+        return route.continue()
+      })
+      const i=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,i),value:h.owner.slice(i+1),url:h.origin}])
+      const page=await context.newPage()
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId+'&windowDays=30')
+      await page.getByRole('heading',{name:'Recovery outcomes',exact:true}).waitFor()
+      assert.equal(await page.locator('[data-outcome-total="visits"]').innerText(),String(visits))
+      assert.ok((await page.locator('[data-outcome-campaign="'+campaignId+'"]').innerText()).includes('incomplete'))
+      await page.getByLabel('Observation days',{exact:true}).fill('1')
+      await page.getByRole('button',{name:'Apply observation window',exact:true}).click()
+      assert.equal(new URL(page.url()).searchParams.get('windowDays'),'1')
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId+'&windowDays=30')
+      await page.locator('[data-outcome-offer="'+offerId+'"]').getByRole('link',{name:'Inspect outcome sources',exact:true}).click()
+      await page.locator('[data-outcome-booking="'+bookingId+'"]').waitFor()
+      assert.ok((await page.locator('#outcome-source').innerText()).includes('no show to attended'))
+      await page.evaluate(()=>document.fonts.ready)
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'report fits '+width)
+      const tooSmall=await page.locator('main p, main a, main button, main input, main td').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length&&parseFloat(getComputedStyle(n).fontSize)<13).map(n=>n.textContent))
+      assert.deepEqual(tooSmall,[],'report text is readable')
+      for(const control of await page.locator('a,button,summary').all()) {
+        if(!await control.isVisible())continue
+        const iconOnly=await control.evaluate(el=>{const copy=el.cloneNode(true);copy.querySelectorAll('[role="tooltip"]').forEach(t=>t.remove());return !!el.querySelector('svg')&&!copy.textContent.trim()})
+        if(iconOnly){const tip=control.locator('[role="tooltip"]');assert.equal(await tip.count(),1);await control.focus();assert.ok(await tip.isVisible());await control.evaluate(el=>el.blur());await control.hover();await page.waitForTimeout(350);assert.ok(await tip.isVisible());await page.mouse.move(0,0)}
+      }
+      if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-sources-'+width+'.png'),fullPage:true})
+      await page.locator('[data-outcome-booking="'+bookingId+'"]').getByRole('link').click()
+      assert.equal(new URL(page.url()).pathname,'/app')
+      await page.goto(h.origin+'/app/recovery-outcomes?campaign='+campaignId)
+      if(!temporary)await page.screenshot({path:join(dir,'SUCCESS-004-report-'+width+'.png'),fullPage:true})
+    } finally {await context.close()}
+  }} finally {await browser.close();if(temporary)await rm(dir,{recursive:true,force:true})}
+}

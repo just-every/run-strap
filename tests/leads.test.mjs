@@ -236,7 +236,7 @@ test('LEAD-004: completed weekly routines produce private justified recovery tas
   assert.equal((await h.state()).pipeline.recoveryTasks[0].status,'completed')
   assert.equal((await h.cmd('lead.success.confirm',success.stale,owner,409)).error,'success_no_longer_justified')
   await success.erase()
-})))
+}).then(()=>run(async h=>(await import('./recovery-outcomes-cases.mjs')).recoveryOutcomeJourney(h)))))
 
 async function successReviewCases(h,{ana,coach,frozen,unavailable,cancelled,task,eveningVisits,privateMember,privateVisits,visits,yoga,packs,jump}) {
   for(const booking of eveningVisits)await h.cmd('attendance.checkin',{id:booking.id},coach.cookie)
