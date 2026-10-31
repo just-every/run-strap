@@ -3682,7 +3682,7 @@
       "executable": false
     },
     "src/strap/recovery-diagnostics.ts": {
-      "sha256": "a78b38d5e3f935f311a4aeba267234fd9263cedb3b215732cc2e33e804a1b85b",
+      "sha256": "433f24e9a536482fa03253f35b54f4b3494629b159c8d8004b332e3abec50f52",
       "executable": false
     },
     "src/strap/report-exports.ts": {
@@ -4014,7 +4014,7 @@
       "executable": false
     },
     "src/strap/ui/recovery-diagnostics.ts": {
-      "sha256": "a431470e8bf99545d0eba6092c64d4931e7bc787224b76a495bd3525e3b56fcf",
+      "sha256": "fd9d4a075d8bacdb27345602c98ba567f975db139dd312835675470ef9747035",
       "executable": false
     },
     "src/strap/ui/renewals.ts": {
@@ -4166,7 +4166,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "6f64806d79cb6d7940f50937de6d670d2d0c8a738820337d65129e836008f00a",
+      "sha256": "f67d48e5e92731ec2e46de8e114acd76f40efb39dd6e3f848067c4a99fba510c",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/recovery-diagnostics-cases.mjs": {
-      "sha256": "fb76ec6f9f156122a8b520a308dbf458e91d52d2233ef872dcd8c276abca17ca",
+      "sha256": "7d181081ad89c0a45040532ad648661ba39fc5008f26836915e87c3dbefb72f9",
       "executable": false
     },
     "tests/renewal-disclosure-timing.mjs": {
@@ -4634,7 +4634,7 @@
       "executable": false
     },
     "tests/security-browser.mjs": {
-      "sha256": "7fdf49f937dbb720aaaffc17362c6088cd8066249801529688ddf24c257a800d",
+      "sha256": "39073a401517f489845dbfc708c0e00942d4f06c0bae739433d27b06b06910ad",
       "executable": false
     },
     "tests/security.test.mjs": {

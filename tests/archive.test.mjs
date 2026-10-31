@@ -213,6 +213,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     Object.assign(privacyFixture,{retained:copyTablet.person,retainedEvidence:copyEvidenceBefore.value,copyToken})
     const recoveryBefore=(await h.send('/api/strap/recovery-diagnostics',undefined,h.owner)).value
     assert.equal(recoveryBefore.billing.connectionState,'connected');assert.equal(recoveryBefore.mail.connectionState,'connected');assert.equal(recoveryBefore.tax.connectionState,'connected');assert.ok(recoveryBefore.taxOperations.length>0);assert.ok(recoveryBefore.operations.length>0);assert.ok(recoveryBefore.notices.length>0)
+    assert.ok(recoveryBefore.integrations.some(r=>r.state==='active'&&r.lastStatus===200),'source diagnostics show the working integration key')
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -281,6 +282,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.deepEqual(recoveryAfter.exceptions,recoveryBefore.exceptions.map(r=>({...r,connectionState:'disconnected'})))
     for(const key of ['checkouts','reconciliations','taxOperations'])assert.deepEqual(recoveryAfter[key],recoveryBefore[key].map(r=>({...r,connectionState:'disconnected'})),'native restore retains '+key+' with no execution authority')
     assert.deepEqual(recoveryAfter.notices,recoveryBefore.notices,'native recovery retains notice source identities, outcomes and timestamps')
+    assert.deepEqual(recoveryAfter.integrations,[],'integration keys and their request logs never travel; the recovery installation lists none to recreate')
+    assert.equal(recoveryAfter.sms.connectionState,'disconnected')
     assert.equal((await h.send('/app/recovery-diagnostics',undefined,restoredOwner)).status,200)
     assert.equal((await h.state(restoredOwner)).version,recoveryVersion);assert.equal(paymentEdge.calls.length,recoveryCalls);assert.equal(copyEdge.calls.length,recoveryMailCalls)
     console.log('PROBE SEC-001 recovery: public native archive export and restore -> billing and mail history retained, current authority disconnected, diagnostic reads cause no provider calls or writes')
