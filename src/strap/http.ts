@@ -398,11 +398,11 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }
     if (pages.has(path) && held && who) {
-      const target = `/app/security?returnTo=${encodeURIComponent(path+url.search)}&hold=${message}`
+      const target = `/app/security?returnTo=${encodeURIComponent(path === '/app/widget' ? path + url.search : path)}&hold=${message}`
       const page = await renderApp(await appState(env, who, target), target)
       return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
     }
-    if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path+url.search) } })
+    if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path === '/app/widget' ? path + url.search : path) } })
     if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
     if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
     return json({ error: message }, status)
