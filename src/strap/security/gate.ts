@@ -31,8 +31,8 @@ const person = (who: Actor) => ['owner', 'finance', 'manager', 'front-desk', 'me
 export async function mfaHold(env: Bindings, who: Actor, request: { path: string; name?: string; privileged: boolean }): Promise<Hold | null> {
   if (!person(who) || request.path === '/app/security' || request.path === '/api/strap/mfa' || (request.name && (selfService.includes(request.name) || request.name === 'session.signout'))) return null
   const s = await standing(env, who)
-  // BILL-004 removal authority needs a recent factor, including an exact replay.
-  const removal = request.name === 'billing.method.remove.staff' || request.name === 'billing.method.removal.request.launch'
+  // BILL-004 method changes need a recent factor, including an exact replay.
+  const removal = request.name === 'billing.method.remove.staff' || request.name === 'billing.method.removal.request.launch' || request.name === 'billing.method.default.staff' || request.name === 'billing.method.default.request.launch'
   const age = s.verifiedAt === null ? Infinity : Date.now() - s.verifiedAt
   if (s.usable.length && (s.verifiedAt === null || removal && (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000))) return { code: 'mfa_required', reason: null }
   if (!s.usable.length && s.covered && request.privileged) return { code: 'mfa_enrollment_required', reason: s.reason }

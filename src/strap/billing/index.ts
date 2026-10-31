@@ -6,6 +6,7 @@ import { connection, type BillingBindings } from './model';
 import { providerCommand } from './operations';
 import { launchBillingAction } from './launch';
 import { requestMethodRemoval, removeMethod } from './methods';
+import { defaultMethodCommand } from './default-method';
 import type { MemberDoor } from '../domain/command-catalogue';
 import { startCheckout, reconcileCheckout } from './checkout';
 import { balance } from '../domain/money';
@@ -44,6 +45,10 @@ const handlers = {
   'billing.setup.start.launch':launch('billing.setup.start','collection'),
   'billing.setup.complete':defineBilling(hosted('billing.setup.complete'),['member'],member('billing.setup.complete','collection')),
   'billing.setup.complete.launch':launch('billing.setup.complete','collection'),
+  'billing.method.default.request':defineBilling((env,who,input)=>defaultMethodCommand(env,who,input,'request'),['member'],member('billing.method.default.request','collection')),
+  'billing.method.default.request.launch':launch('billing.method.default.request','collection'),
+  'billing.method.default':defineBilling((env,who,input)=>defaultMethodCommand(env,who,input,'member'),['member'],{member:{staff:'billing.method.default.staff',right:'collection'}}),
+  'billing.method.default.staff':defineBilling((env,who,input)=>defaultMethodCommand(env,who,input,'staff'),['owner','manager','front-desk','finance'],{staffRight:'collection'}),
   'billing.method.removal.request':defineBilling(native(requestMethodRemoval),['member'],member('billing.method.removal.request','collection')),
   'billing.method.removal.request.launch':launch('billing.method.removal.request','collection'),
   'billing.method.remove':defineBilling(native((tx,input)=>removeMethod(tx,input)),['member'],{member:{staff:'billing.method.remove.staff',right:'collection'}}),
@@ -73,8 +78,9 @@ export async function billingState(env: BillingBindings,who: Actor) {
     reviews:who.role === 'owner'?reviews:[],connectionEvents:who.role === 'owner'?list(loaded.state,'billingConnectionEvent'):[],
     invoices:list(loaded.state,'stripeInvoice').filter(visible).map(r=>({...r,balanceCents:balance(loaded.state,r.personId),access:loaded.state.records.get(r.packId)?.data.remaining ?? null})),
     events:who.role === 'owner'?list(loaded.state,'stripeEvent'):[],exceptions:who.role === 'owner'?list(loaded.state,'billingException'):[],reconciliations:who.role === 'owner'?list(loaded.state,'billingReconciliation'):[],
+    defaultRequests:list(loaded.state,'billingMethodDefaultRequest').filter(visible).map(({requestBasis,...r})=>r),defaultChanges:list(loaded.state,'billingMethodDefaultChange').filter(visible).map(({requestBasis,...r})=>r),
     removalRequests:list(loaded.state,'billingMethodRemovalRequest').filter(visible).map(({requestBasis,...r})=>r),removals:list(loaded.state,'billingMethodRemoval').filter(visible).map(({requestBasis,...r})=>r),
-    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,available:!!c && m.status === 'authorized' && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
+    launches:list(loaded.state,'billingActionLaunch').filter(visible).map(({requestBasis,...l})=>l),agreements:list(loaded.state,'billingAgreement').filter(visible).map(({adultEvidenceReference,requestBasis,...a})=>a),mandates:list(loaded.state,'paymentMandate').filter(visible),setups:list(loaded.state,'billingSetup').filter(visible),methods:list(loaded.state,'storedPaymentMethod').filter(visible).map(({paymentMethodId,...m})=>({...m,selectable:!!c && ['authorized','superseded'].includes(m.status) && !m.erased && m.connectionId===c.connection_id && loaded.state.records.get(m.mandateId)?.data.status==='accepted',available:!!c && m.status === 'authorized' && m.connectionId === c.connection_id && loaded.state.records.get(m.mandateId)?.data.status === 'accepted' && loaded.state.records.get(m.mandateId)?.data.methodId === m.id})),operations:list(loaded.state,'billingOperation').filter(r=>who.role === 'owner' || r.personId === who.personId),collectionImplemented:false};
 }
 
 /** A scoped staff page reveals action handles, never agreement or payment evidence. */
@@ -85,9 +91,11 @@ export async function billingStaffHandoffs(env: BillingBindings,who: Actor) {
     if(!pack)return [];
     const permitted=(right: 'collection'|'membership-sale')=>hasStaffRight(loaded.state,loaded.who,right,a.personId,pack.locationId ?? 'studio');
     const mandate=list(loaded.state,'paymentMandate').find(m=>m.agreementId===a.id);
-    const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request'] : [];
+    const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request','billing.method.default.request'] : [];
     const removalRequests=permitted('collection') ? list(loaded.state,'billingMethodRemovalRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && loaded.state.records.get(r.methodId)?.data.removalRequestId===r.id).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
+    const defaultRequests=terms?.status==='active' && mandate?.status==='accepted' && permitted('collection') ? list(loaded.state,'billingMethodDefaultRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && r.sourceMethodId===(mandate.methodId ?? null) && r.methodEpoch===(mandate.methodEpoch ?? 0) && loaded.state.records.get(r.methodId)?.data.defaultRequestId===r.id && ['authorized','superseded'].includes(loaded.state.records.get(r.methodId)?.data.status)).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
+    const defaultChanges=permitted('collection') ? list(loaded.state,'billingMethodDefaultChange').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method && !method.erased ? [{id:r.id,methodId:r.methodId,at:r.at,brand:method.brand,last4:method.last4}] : [];}) : [];
     const removals=permitted('collection') ? list(loaded.state,'billingMethodRemoval').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method?.status==='removed' && !method.erased ? [{id:r.id,methodId:method.id,brand:method.brand,last4:method.last4,at:r.at}] : [];}) : [];
-    return actions.length || removalRequests.length || removals.length ? [{id:a.id,personId:a.personId,actions,removalRequests,removals}] : [];
+    return actions.length || removalRequests.length || removals.length || defaultRequests.length || defaultChanges.length ? [{id:a.id,personId:a.personId,actions,removalRequests,removals,defaultRequests,defaultChanges}] : [];
   });
 }

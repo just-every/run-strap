@@ -1,3 +1,4 @@
+import { defaultMethodCases } from './default-method-cases.mjs';
 import { methodRemovalCases } from './method-removal-cases.mjs';
 import { billingBrowser } from './billing-browser.mjs';
 import { test } from 'node:test';
@@ -305,6 +306,7 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     const after=await h.state();assert.deepEqual(after.packs,before.packs);assert.deepEqual(after.recurring.terms,before.recurring.terms);assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.payments,before.payments);
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'});
     await methodRemovalCases(h,edge,callback=>onRead=callback);
+    await defaultMethodCases(h,edge,callback=>onRead=callback);
     const second=await billingSeed(h,'UncertainMember');
     const pendingAgreement=await h.cmd('billing.agreement.prepare',second.prepare);
     await h.cmd('billing.agreement.accept',acceptance(pendingAgreement,second.member.name),second.member.cookie);

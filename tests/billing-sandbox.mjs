@@ -35,7 +35,7 @@ export function billingEdge() {
       sessions.set(s.id,s);return json(s);
     }
     const s=sessions.get(decodeURIComponent(url.pathname.split('/').at(-1)));assert.ok(s);
-    return json({...s,status:complete?'complete':'open',setup_intent:complete?{id:'synthetic-strap-200',object:'setup_intent',status:'succeeded',livemode:live,usage:'off_session',metadata:s.metadata,customer:null,payment_method:{id:'synthetic-strap-201',object:'payment_method',livemode:live,type:'card',card:{brand:'visa',last4,exp_month:12,exp_year:2030,fingerprint:'must-not-be-retained'},billing_details:{name:'must-not-be-retained'}}}:null});
+    return json({...s,status:complete?'complete':'open',setup_intent:complete?{id:'synthetic-strap-intent-'+s.id,object:'setup_intent',status:'succeeded',livemode:live,usage:'off_session',metadata:s.metadata,customer:null,payment_method:{id:'synthetic-strap-method-'+s.id,object:'payment_method',livemode:live,type:'card',card:{brand:'visa',last4,exp_month:12,exp_year:2030,fingerprint:'must-not-be-retained'},billing_details:{name:'must-not-be-retained'}}}:null});
   };
   return {calls,outbound,setComplete:v=>complete=v,setUncertain:v=>uncertain=v,setLive:v=>live=v,setCard:v=>last4=v};
 }

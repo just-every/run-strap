@@ -23,6 +23,12 @@ export async function privacyProvider() {
     const activeFinish={id:agreement.id,setupId:activeSetup.result.id,requestId:'synthetic-strap-private-active-complete'}
     const activeMethod=(await billingSucceeded(h,'billing.setup.complete',activeFinish,seed.member.cookie)).result
     assert.equal((await billingView(h)).methods.find(r=>r.id===activeMethod.id).available,true,'erasure begins with a currently usable card as well as removed history')
+    const replacement=await billingSucceeded(h,'billing.setup.start',{id:agreement.id,replaceMethodId:activeMethod.id,confirmReplacement:true,requestId:'synthetic-strap-private-replacement'},seed.member.cookie)
+    await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:replacement.result.id,requestId:'synthetic-strap-private-replacement-complete'},seed.member.cookie)
+    const defaultRequest=await h.cmd('billing.method.default.request',{methodId:activeMethod.id,confirm:true,requestId:'synthetic-strap-private-default-request'},seed.member.cookie)
+    const defaultInput={id:defaultRequest.id,confirm:true,requestId:'synthetic-strap-private-default',channel:'desk'}
+    await h.cmd('billing.method.default.staff',defaultInput)
+    assert.equal((await billingView(h)).methods.find(r=>r.id===activeMethod.id).available,true)
     const checkout=await h.cmd('billing.checkout.start',{packId:seed.pack.id,requestId:'synthetic-strap-private-checkout',confirm:true})
     const request=await verifiedPrivacyRequest(h,seed.member,'erasure','-provider')
     const before=(await h.state()).version
@@ -71,6 +77,10 @@ export async function privacyProvider() {
     await h.cmd('billing.method.remove',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-privacy-erased-replay'},seed.member.cookie,401)
     await h.cmd('billing.method.remove.staff',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-privacy-erased-staff',channel:'desk'},h.owner,409)
     assert.equal(snapshot.removalRequests.find(r=>r.id===removalRequest.id).status,'retired')
+    assert.equal(snapshot.defaultRequests.find(r=>r.id===defaultRequest.id).status,'retired')
+    await h.cmd('billing.method.default',defaultInput,seed.member.cookie,401)
+    await h.cmd('billing.method.default.staff',defaultInput,h.owner,409)
+    assert.equal(snapshot.methods.some(m=>m.available||m.selectable),false)
     console.log('PROBE BILL-004 erasure: verified owner erasure after native removal -> old member and staff captures refused, provider identifiers retired, no resurrected method')
     await h.cmd('billing.reconcile',{id:checkout.id,requestId:'synthetic-strap-private-late-reconcile'},h.owner,404)
     const amounts=state.payments.map(p=>[p.id,p.amountCents])

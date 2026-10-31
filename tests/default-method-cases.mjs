@@ -1,0 +1,87 @@
+import assert from 'node:assert/strict';
+import { acceptance, billingSeed, billingSucceeded } from './billing-sandbox.mjs';
+
+/** A populated personal agreement exercises default changes through native HTTP. */
+export async function defaultMethodCases(h,edge,onRead) {
+  edge.setComplete(true);
+  const seed=await billingSeed(h,'DefaultMember'),agreement=await h.cmd('billing.agreement.prepare',seed.prepare);
+  await h.cmd('billing.agreement.accept',acceptance(agreement,seed.member.name),seed.member.cookie);
+  const view=async(cookie=seed.member.cookie)=>(await h.send('/api/strap/billing',undefined,cookie)).value;
+  const save=async(suffix,previous=null)=>{
+    const setup=await billingSucceeded(h,'billing.setup.start',{id:agreement.id,requestId:'synthetic-strap-default-start-'+suffix,...(previous?{replaceMethodId:previous.id,confirmReplacement:true}:{})},seed.member.cookie);
+    const input={id:agreement.id,setupId:setup.result.id,requestId:'synthetic-strap-default-complete-'+suffix};
+    return {input,method:(await billingSucceeded(h,'billing.setup.complete',input,seed.member.cookie)).result};
+  };
+  edge.setCard('4242');const first=await save('first');edge.setCard('5556');const second=await save('second',first.method);
+  const original=await view(),before=await h.state();
+  const request=(methodId=first.method.id)=>({methodId,confirm:true,requestId:'synthetic-strap-default-request-'+crypto.randomUUID()});
+  const confirm=id=>({id,confirm:true,requestId:'synthetic-strap-default-confirm-'+crypto.randomUUID()});
+  const refuse=async(name,input,cookie,status)=>{const version=(await h.state()).version,calls=edge.calls.length;await h.cmd(name,input,cookie,status);assert.equal((await h.state()).version,version);assert.equal(edge.calls.length,calls);};
+  for(const cookie of [h.owner,seed.outsider.cookie])await refuse('billing.method.default.request',request(),cookie,403);
+  await refuse('billing.method.default.request',{...request(),confirm:false},seed.member.cookie,400);
+  await refuse('billing.method.default.request',request(second.method.id),seed.member.cookie,409);
+  const obsolete=await h.cmd('billing.method.default.request',request(),seed.member.cookie);
+  const requestInput=request(),personal=await h.cmd('billing.method.default.request',requestInput,seed.member.cookie);
+  assert.deepEqual(await h.cmd('billing.method.default.request',requestInput,seed.member.cookie),personal);
+  await refuse('billing.method.default.request',{...requestInput,methodId:second.method.id},seed.member.cookie,409);
+  await refuse('billing.method.default',confirm(obsolete.id),seed.member.cookie,409);
+  await refuse('billing.method.default',confirm(personal.id),seed.outsider.cookie,403);
+  const selected=await h.cmd('billing.method.default',confirm(personal.id),seed.member.cookie);
+  assert.equal(selected.after.methodId,first.method.id);
+  assert.deepEqual((await view()).methods.filter(m=>m.available).map(m=>m.id),[first.method.id]);
+  assert.equal((await view()).methods.find(m=>m.id===second.method.id).selectable,true);
+  await refuse('billing.setup.complete',{...second.input,requestId:'synthetic-strap-default-old-complete'},seed.member.cookie,409);
+  console.log('PROBE BILL-004 default member: choose previously authorized card through personal request and confirmation -> one selected default, unchanged debt, old completion fenced, other member refused');
+
+  const desk=await h.person('DefaultDesk'),west=await h.cmd('location.save',{name:'Default West',timeZone:'America/Los_Angeles'});
+  const grant=async(right='collection',memberIds=[seed.member.id],locationIds=['studio'])=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{[right]:{enabled:true,scopes:[{memberIds,locationIds,doors:['all']}]}}});
+  const pending=await billingSucceeded(h,'billing.setup.start',{id:agreement.id,replaceMethodId:first.method.id,confirmReplacement:true,requestId:'synthetic-strap-default-pending'},seed.member.cookie);
+  const staffRequest=await h.cmd('billing.method.default.request',request(second.method.id),seed.member.cookie),staffInput={...confirm(staffRequest.id),channel:'phone'};
+  await grant();await refuse('billing.method.default.staff',staffInput,desk.cookie,403);
+  const factor=await h.enroll(desk.cookie);
+  await grant('member-record');await refuse('billing.method.default.staff',staffInput,desk.cookie,403);
+  await grant('collection',[seed.outsider.id]);await refuse('billing.method.default.staff',staffInput,desk.cookie,403);
+  await grant('collection',[seed.member.id],[west.id]);await refuse('billing.method.default.staff',staffInput,desk.cookie,403);
+  await grant();
+  const actorId=(await h.state(desk.cookie)).actor.id;
+  const expire=()=>h.db.prepare('UPDATE st_mfa_sessions SET verified_at=verified_at-86400000 WHERE operator_id=?').bind(actorId).run();
+  await expire();await refuse('billing.method.default.staff',staffInput,desk.cookie,403);
+  await refuse('billing.method.default.request.launch',{id:agreement.id,requestId:'synthetic-strap-default-launch',channel:'desk'},desk.cookie,403);
+  await h.cmd('mfa.verify',{code:factor.recoveryCodes[0]},desk.cookie);
+  let staffResult;
+  onRead(async()=>{const calls=edge.calls.length;staffResult=await h.cmd('billing.method.default.staff',staffInput,desk.cookie);assert.equal(edge.calls.length,calls);});
+  const completion=await h.cmd('billing.setup.complete',{id:agreement.id,setupId:pending.result.id,requestId:'synthetic-strap-default-racing'},seed.member.cookie);
+  assert.equal(completion.status,'uncertain');assert.equal(completion.errorCode,'billing_method_removed');
+  assert.deepEqual(await h.cmd('billing.method.default.staff',staffInput,desk.cookie),staffResult);
+  await refuse('billing.method.default.staff',{...staffInput,channel:'desk'},desk.cookie,409);
+  const audit=(await h.state()).staffActions.filter(a=>a.command==='billing.method.default.staff'&&a.defaultRequestId===staffRequest.id);
+  assert.equal(audit.length,1);assert.equal(audit[0].requestedBy,(await h.state(seed.member.cookie)).actor.id);assert.equal(audit[0].actorId,actorId);assert.equal(audit[0].right,'collection');assert.equal(audit[0].channel,'phone');
+  assert.deepEqual(audit[0].before,{methodId:first.method.id,methodAuthorized:true,brand:'visa',last4:'4242'});assert.deepEqual(audit[0].after,{methodId:second.method.id,methodAuthorized:true,brand:'visa',last4:'5556'});
+  await expire();await refuse('billing.method.default.staff',staffInput,desk.cookie,403);await h.cmd('mfa.verify',{code:factor.recoveryCodes[1]},desk.cookie);
+  await grant('member-record');await refuse('billing.method.default.staff',staffInput,desk.cookie,403);await grant();
+  console.log('PROBE BILL-004 default staff: exact member request with current collection scope and fresh MFA -> one default change and canonical audit, concurrent older completion refused, stale factor and revoked replay write nothing');
+
+  const raceRequest=await h.cmd('billing.method.default.request',request(first.method.id),seed.member.cookie);
+  const race=await Promise.all([1,2].map(()=>h.send('/api/strap/command',{name:'billing.method.default.staff',input:{...confirm(raceRequest.id),channel:'desk'}},desk.cookie)));
+  assert.ok(race.some(r=>r.status===200));assert.ok(race.every(r=>[200,409].includes(r.status)));
+  assert.equal((await h.state()).staffActions.filter(a=>a.defaultRequestId===raceRequest.id).length,1);
+  assert.deepEqual((await view()).methods.filter(m=>m.available).map(m=>m.id),[first.method.id]);
+  const stale=await h.cmd('billing.method.default.request',request(second.method.id),seed.member.cookie);
+  const removal=await h.cmd('billing.method.removal.request',{methodId:second.method.id,confirm:true,requestId:'synthetic-strap-default-remove-request'},seed.member.cookie);
+  await h.cmd('billing.method.remove',{...confirm(removal.id)},seed.member.cookie);
+  await refuse('billing.method.default',confirm(stale.id),seed.member.cookie,409);
+  await refuse('billing.method.default.request',request(second.method.id),seed.member.cookie,409);
+  const state=await view();assert.deepEqual(state.methods.filter(m=>m.available).map(m=>m.id),[first.method.id]);
+  assert.deepEqual(state.agreements[0].signature,original.agreements[0].signature);assert.deepEqual(state.mandates[0].financialTerms,original.mandates[0].financialTerms);
+  assert.deepEqual((await view(h.owner)).methods.filter(m=>m.personId===seed.member.id),state.methods);for(const key of ['methods','defaultRequests','defaultChanges'])assert.deepEqual((await view(seed.outsider.cookie))[key],[]);
+  const after=await h.state();for(const key of ['packs','charges','payments'])assert.deepEqual(after[key],before[key]);
+  await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-default-disconnected'});
+  await refuse('billing.method.default.staff',staffInput,desk.cookie,409);
+  assert.equal((await view()).methods.some(m=>m.selectable||m.available),false);
+  await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'});
+  await h.cmd('billing.mandate.revoke',{id:agreement.id},seed.member.cookie);
+  await refuse('billing.method.default.request',request(),seed.member.cookie,409);await refuse('billing.method.default.staff',staffInput,desk.cookie,409);
+  assert.equal((await view()).methods.some(m=>m.selectable||m.available),false);
+  console.log('PROBE BILL-004 default safety: simultaneous staff confirmations, removed target, disconnected connection and revoked consent -> one selection, no resurrection, zero default-change provider writes, unchanged balances');
+  edge.setCard('4242');
+}

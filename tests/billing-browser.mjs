@@ -114,6 +114,42 @@ export async function billingBrowser(h,edge) {
       const replaced=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
       assert.deepEqual(replaced.methods.filter(m=>m.available).map(m=>m.last4),['5556'])
       assert.equal(replaced.methods.find(m=>m.last4==='4242').status,'superseded')
+      const defaultCalls=edge.calls.length
+      const firstMethod=replaced.methods.find(m=>m.last4==='4242'),secondMethod=replaced.methods.find(m=>m.last4==='5556')
+      const choose=async method=>{
+        const details=section.locator('[data-default-method="'+method.id+'"]')
+        await details.locator('summary').click();await details.getByRole('checkbox').check()
+        await details.getByRole('button',{name:'Record default request',exact:true}).click()
+      }
+      await choose(firstMethod)
+      const personalDefault=section.locator('[data-default-request]')
+      await personalDefault.getByRole('checkbox').check();await capture('member-default-review')
+      await personalDefault.getByRole('button',{name:'Set default card',exact:true}).click()
+      if(width===1440)assert.deepEqual((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.filter(m=>m.available).map(m=>m.id),[firstMethod.id])
+      await capture('member-default-selected')
+      await staffLaunch('billing.method.default.request','Open default card request','default-request')
+      await choose(secondMethod)
+      const exactDefault=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.defaultRequests.find(r=>r.methodId===secondMethod.id&&r.status==='requested')
+      await sign(desk.cookie);await page.goto(h.origin+'/app/people?person='+seed.member.id)
+      const staffDefault=page.locator('[data-default-request="'+exactDefault.id+'"]')
+      await staffDefault.getByRole('checkbox').check();await capture('staff-default-review')
+      const defaultActor=(await h.state(desk.cookie)).actor.id
+      await h.db.prepare('UPDATE st_mfa_sessions SET verified_at=verified_at-86400000 WHERE operator_id=?').bind(defaultActor).run()
+      const heldDefault=page.waitForResponse(r=>new URL(r.url()).pathname==='/app/action'&&r.request().method()==='POST')
+      await staffDefault.getByRole('button',{name:'Select requested default',exact:true}).click()
+      if(width===1440)assert.equal((await heldDefault).status(),403);else await heldDefault
+      await page.getByRole('textbox',{name:'Authenticator code or recovery code',exact:true}).fill(factor.recoveryCodes[0])
+      await page.getByRole('button',{name:'Continue',exact:true}).click()
+      await staffDefault.getByRole('checkbox').check();await staffDefault.getByRole('button',{name:'Select requested default',exact:true}).click()
+      const defaultChange=(await h.send('/api/strap/billing',undefined,h.owner)).value.defaultChanges.find(r=>r.defaultRequestId===exactDefault.id)
+      await page.locator('[data-default-change="'+defaultChange.id+'"]').waitFor();await capture('staff-default-selected')
+      if(width===1440){assert.equal(edge.calls.length,defaultCalls);assert.equal((await h.state()).staffActions.filter(a=>a.defaultRequestId===exactDefault.id).length,1)}
+      await grant('collection')
+      const defaultVersion=(await h.state()).version
+      const deniedDefault=await context.request.post(h.origin+'/api/strap/command',{headers:{origin:h.origin},data:{name:'billing.method.default.staff',input:{id:exactDefault.id,confirm:true,requestId:defaultChange.requestId,channel:'desk'}}})
+      if(width===1440){assert.equal(deniedDefault.status(),403);assert.equal((await h.state()).version,defaultVersion)}
+      await grant();await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
+      if(width===1440)assert.deepEqual((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.filter(m=>m.available).map(m=>m.id),[secondMethod.id])
       edge.setCard('4242')
       await staffLaunch('billing.method.removal.request','Open card removal request','removal-request')
       const removalCalls=edge.calls.length
@@ -141,7 +177,7 @@ export async function billingBrowser(h,edge) {
       assert.equal(edge.calls.length,removalCalls)
       const verify=page.getByRole('textbox',{name:'Authenticator code or recovery code',exact:true})
       await verify.waitFor();await capture('staff-removal-factor-required')
-      await verify.fill(factor.recoveryCodes[0])
+      await verify.fill(factor.recoveryCodes[1])
       await page.getByRole('button',{name:'Continue',exact:true}).click()
       await staffRemoval.getByRole('checkbox').check()
       await staffRemoval.getByRole('button',{name:'Remove requested card',exact:true}).click()
@@ -185,7 +221,7 @@ export async function billingBrowser(h,edge) {
       assert.equal(await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).count(),0)
       await sign(h.owner);await page.goto(h.origin+'/app/people?person='+seed.member.id+'#staff-actions')
       const audit=page.locator('#staff-actions')
-      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1,command)
+      for(const command of ['billing.agreement.prepare','billing.agreement.accept.launch','billing.setup.start.launch','billing.setup.complete.launch','billing.mandate.revoke.launch','billing.method.removal.request.launch','billing.method.remove.staff','billing.method.default.request.launch','billing.method.default.staff'])assert.equal(await audit.locator('[data-staff-command="'+command+'"]').count(),1,command)
       for(const details of await audit.locator('details').all())await details.locator('summary').click()
       await capture('staff-history')
       edge.setComplete(false);edge.setCard('4242')

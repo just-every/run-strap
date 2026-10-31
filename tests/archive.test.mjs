@@ -96,6 +96,11 @@ async function archiveMembership(h,member,terms,edge) {
     assert.equal(methodResult.result.replacesMethodId,originalMethod.id);assert.equal(methodResult.result.last4,'5556');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,1);
     assert.equal((await h.send('/api/strap/billing',undefined,member.cookie)).value.methods.find(m=>m.id===originalMethod.id).status,'superseded');
+    const defaultRequest=await h.cmd('billing.method.default.request',{methodId:originalMethod.id,confirm:true,requestId:'synthetic-strap-archive-default-request'},member.cookie);
+    const defaultChange=await h.cmd('billing.method.default.staff',{id:defaultRequest.id,confirm:true,requestId:'synthetic-strap-archive-default',channel:'desk'});
+    assert.equal(defaultChange.after.methodId,originalMethod.id);
+    const returnRequest=await h.cmd('billing.method.default.request',{methodId:methodResult.result.id,confirm:true,requestId:'synthetic-strap-archive-default-return'},member.cookie);
+    await h.cmd('billing.method.default',{id:returnRequest.id,confirm:true,requestId:'synthetic-strap-archive-default-personal'},member.cookie);
     const removalRequest=await h.cmd('billing.method.removal.request',{methodId:originalMethod.id,confirm:true,requestId:'synthetic-strap-archive-removal-request'},member.cookie);
     const removal=await h.cmd('billing.method.remove.staff',{id:removalRequest.id,confirm:true,requestId:'synthetic-strap-archive-removal',channel:'desk'});
     assert.equal(removal.providerDeletion,false);
@@ -105,7 +110,7 @@ async function archiveMembership(h,member,terms,edge) {
     assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
     assert.equal(connectedBilling.methods.find(method=>method.id===originalMethod.id).status,'removed');
     assert.deepEqual(connectedBilling.methods.filter(method=>method.available).map(method=>method.last4),['5556']);
-    return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore,methodHistory:connectedBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id))};
+    return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore,methodHistory:connectedBilling.methods.map(({available,selectable,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id))};
 }
 async function archiveCopyTablet(h,owner,waiver,suffix) {
   const person=await h.cmd('member.record.create',{name:'Archive copy '+suffix,email:'synthetic-strap-copy-'+suffix.toLowerCase()+'@studio.example',channel:'desk',requestId:'synthetic-strap-archive-copy-person-'+suffix},owner)
@@ -560,11 +565,16 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
     assert.equal(historicalBilling.methods.length,2);
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
-    assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the removed method and selected replacement as historical records');
+    assert.deepEqual(historicalBilling.methods.map(({available,selectable,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the removed method and selected replacement as historical records');
     const removedMethod=historicalBilling.methods.find(method=>method.status==='removed');assert.ok(removedMethod);
     assert.equal(historicalBilling.removalRequests.find(r=>r.methodId===removedMethod.id).status,'removed');
     const removedAudit=(await h.state(restoredOwner)).staffActions.filter(a=>a.command==='billing.method.remove.staff'&&a.after.methodId===removedMethod.id);assert.equal(removedAudit.length,1);
     assert.equal(historicalBilling.removals.filter(r=>r.methodId===removedMethod.id).length,1);
+    assert.equal(historicalBilling.methods.some(m=>m.selectable),false);
+    assert.equal(historicalBilling.defaultChanges.length,2);assert.equal(historicalBilling.defaultRequests.length,2);
+    assert.equal((await h.state(restoredOwner)).staffActions.filter(a=>a.command==='billing.method.default.staff'&&a.after.methodId===removedMethod.id).length,1);
+    const retainedDefault=historicalBilling.defaultRequests.find(r=>r.methodId===methodResult.result.id);
+    await h.cmd('billing.method.default.staff',{id:retainedDefault.id,confirm:true,requestId:'synthetic-strap-restored-default',channel:'desk'},restoredOwner,409);
     console.log('PROBE BILL-004 restore: native archive and fresh sign-in -> removed masked history, exact request and once-only audit retained; all execution authority disconnected');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
     const restoredBilling=await billingView(h,restoredOwner);
@@ -605,7 +615,8 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const oldEpoch=retainedPayments.connection.connectionId;
     await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-restored-review'},restoredOwner);
     const reviewed=await billingView(h,restoredOwner);assert.equal(reviewed.connected,true);assert.notEqual(reviewed.connection.connectionId,oldEpoch);
-    assert.equal(reviewed.methods.some(m=>m.available),false,'fresh merchant review cannot resurrect historical method authority');
+    assert.equal(reviewed.methods.some(m=>m.available||m.selectable),false,'fresh merchant review cannot resurrect historical method authority');
+    await h.cmd('billing.method.default.staff',{id:retainedDefault.id,confirm:true,requestId:'synthetic-strap-reconnected-default',channel:'desk'},restoredOwner,409);
     payments.complete(pendingCheckout.providerSessionId);
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-after-review'},restoredOwner);
     assert.equal((await billingView(h,restoredOwner)).invoices.find(i=>i.id===pendingCheckout.id).status,'paid');
