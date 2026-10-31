@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "18190d4e4a36f7a5521738c15f3859a44e63b9e4234b8eb3c4b10d1182512a34",
+      "sha256": "0681300cec1bd95ff6bf652026cd6a5276631da97f86fdeba0c601aaf0be8a4b",
       "executable": false
     },
     "DEMO.md": {
@@ -3394,7 +3394,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "2758ef5fd542248ecf9e62076ca2ff04216b992a4dde0e216b7607a4aae42576",
+      "sha256": "e69755ba97efeecdf2434cff69adf2e58dcbb03ee151d752aff3d9bc78d5342d",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3498,7 +3498,7 @@
       "executable": false
     },
     "src/strap/domain/retail-records.ts": {
-      "sha256": "ddb8fdb6e5bc214fc14a62ce971c2b0046cd86653ba398fee3c2d696ee5be177",
+      "sha256": "ee99d944a6179900555a9681db9b20fd0d7dad96dc802d106cb65a4f5c321c41",
       "executable": false
     },
     "src/strap/domain/retention-history.ts": {
@@ -3534,7 +3534,7 @@
       "executable": false
     },
     "src/strap/domain/staff-actions.ts": {
-      "sha256": "170b6ba668a0f50680dea7576418158002a596f89954c50ca5805a74224fc0e8",
+      "sha256": "fe2a67fc34b645d49584b811f7672530de0c99563d7bb494d6b4b422429cd1f9",
       "executable": false
     },
     "src/strap/domain/staff-command-access.ts": {
@@ -3622,7 +3622,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "fc56398a7590a96a1fccd49fbbc58a0438cb3a2a3d73b06ccb93c47aa2fafd71",
+      "sha256": "cf5bda6a05ed635747fd531a85288e6b0be6aa2420ae953d04a947f2c0b7295e",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4070,7 +4070,7 @@
       "executable": false
     },
     "src/strap/ui/retail.ts": {
-      "sha256": "6fad4626408b0ed769a841548a31b9f18177bd7d3d9968e7c557e0ab071b7b64",
+      "sha256": "1aadf475e0b13e062b24f071c2c485c188a175176e5dbc0c534652d6d9ce0d04",
       "executable": false
     },
     "src/strap/ui/retention.ts": {
@@ -4102,7 +4102,7 @@
       "executable": false
     },
     "src/strap/ui/shell.ts": {
-      "sha256": "60b12c2824b313260263149c02f079c39ba65a76d7fecefec7c72e78f56d7dda",
+      "sha256": "029d6e7709632fbdf2d1dce86a66f49be9943ae5e9de21e676291ff93947d586",
       "executable": false
     },
     "src/strap/ui/signing-documents.ts": {
@@ -4678,11 +4678,11 @@
       "executable": false
     },
     "tests/retail-browser.mjs": {
-      "sha256": "331df62b6b1b68244bdc6eea154cd4c36cc74c4a07f76a4d5410e3e9680e6f4c",
+      "sha256": "aebc8cc842f08a4f969d683a89b54a9bdad4ff960ca4d7e56cefe9ca80850ced",
       "executable": false
     },
     "tests/retail.test.mjs": {
-      "sha256": "c89053f14e90cc684c6db76487e667ee0d8ed9ffa0b98fce66b4513c6c3e255a",
+      "sha256": "8f9780467ccbfd686fefa9c4efa332f66f0d1081b029052fbf9a414dadfdc2ef",
       "executable": false
     },
     "tests/revenue-browser.mjs": {
@@ -4734,7 +4734,7 @@
       "executable": false
     },
     "tests/staff-actions-archive.test.mjs": {
-      "sha256": "d695d49869097102e05980c28ea668ca004078fe849839bc9ccf51feaaac7bc8",
+      "sha256": "dc31d3ad1426291d03c26de324e983bb376d34c6db515c2fddfb53827298b1f7",
       "executable": false
     },
     "tests/staff-actions-browser.mjs": {
@@ -4750,7 +4750,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "de18d76825c744910faaa76cf2820f578bde5da749e75a4f692696e55314a2ab",
+      "sha256": "db0cb08c70d9d738f488d8d1f6ae70768cae88e0e51a44ee3ff386546d867cc2",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
