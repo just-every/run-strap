@@ -180,7 +180,7 @@ export async function reconnectRecurringBilling(tx: Transaction, input: Record<s
 export function recurringSnapshot(state: State, who: Actor, connection?: BillingConnection | null, currentOrigin?: string) {
   const visible = (r: RecordData) => who.role === 'owner' || (who.role === 'member' && r.personId === who.personId);
   const terms = list(state,'recurringTerms').filter(visible).map(r => ({...r,...previewSaleContext(state,r),stopPath:r.stopPath ?? stopPathFor(r.id),
-    requiresFreshAcceptance:connection !== undefined && (!connection || connection.connection_id !== r.connectionId),
+    requiresFreshAcceptance:r.requiresFreshAcceptance === true || connection !== undefined && (!connection || connection.connection_id !== r.connectionId),
     stale:r.status === 'preview' && (!saleContextCurrent(state,r) || connection !== undefined && (!connection || connection.connection_id !== r.connectionId) || r.nextRenewalAt <= now() || currentOrigin !== undefined && r.proposalOrigin !== currentOrigin || !state.records.has(r.packId) || r.basis !== proposalBasis(state,record(state,r.packId,'pack')))}));
   return {terms,invoices:list(state,'recurringInvoice').filter(visible),reminders:list(state,'recurringReminder').filter(visible),
     connection:who.role === 'owner' && connection !== undefined ? {connectionId:connection?.connection_id ?? null,origin:connection?.origin ?? null,currentOrigin:currentOrigin ?? null,
