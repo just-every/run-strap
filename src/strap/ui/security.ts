@@ -60,7 +60,7 @@ function managersPanel(s: any, members: any[], finance: Set<string>) {
 
 export function securityPage(s: any, query: URLSearchParams, notice: any) {
   const m = s.mfa, recovery = result(notice)?.recovery_codes, hold = query.get('hold') ?? ''
-  const held = m.factors.some((f: any) => f.usable) && !m.verified
+  const held = m.factors.some((f: any) => f.usable) && (!m.verified || hold === 'mfa_required')
   const intro = held ? '' : `<p class="lede">${m.required ? 'Your role needs a second factor before reports, pay, exports, staff access and provider connections open.' : 'Add a second factor to protect your account. You will be asked for it at each new sign-in.'}${hold && holdText[hold] ? ` ${h(holdText[hold])}` : ''}</p>`
   const reason = m.reasonText ? `<div class="notice" role="alert">${h(m.reasonText)}</div>` : ''
   const sent = result(notice)?.status === 'accepted' ? '<p class="notice" role="status">Confirmation link sent. Open it in this browser, confirm, then return to Security.</p>' : ''
