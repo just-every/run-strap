@@ -309,6 +309,12 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     const pendingInput={id:pendingAgreement.id,requestId:'synthetic-strap-70'};
     const uncertain=await h.cmd('billing.setup.start',pendingInput,second.member.cookie);assert.equal(uncertain.status,'uncertain');
     const attempts=edge.calls.length;
+    const diagnosticsBefore=await h.state(),diagnostics=(await h.send('/api/strap/recovery-diagnostics',undefined,h.owner)).value;
+    const retainedDiagnostic=diagnostics.operations.find(r=>r.id===uncertain.id);
+    assert.equal(retainedDiagnostic.status,'uncertain');assert.equal(retainedDiagnostic.agreementId,pendingAgreement.id);assert.equal(retainedDiagnostic.connectionState,'current');assert.ok(retainedDiagnostic.finishedAt);
+    const diagnosticPage=await h.send('/app/recovery-diagnostics',undefined,h.owner);assert.equal(diagnosticPage.status,200);assert.ok(diagnosticPage.text.includes(uncertain.id));
+    for(const row of diagnostics.operations){assert.ok(!('providerReceipt' in row));assert.ok(!('inputHash' in row));assert.ok(!('origin' in row))}
+    const diagnosticsAfter=await h.state();for(const key of ['version','packs','charges','payments'])assert.deepEqual(diagnosticsAfter[key],diagnosticsBefore[key]);assert.equal(edge.calls.length,attempts);
     assert.deepEqual(await h.cmd('billing.setup.start',pendingInput,second.member.cookie),uncertain);
     await h.cmd('billing.setup.start',{...pendingInput,requestId:'synthetic-strap-71'},second.member.cookie,409);
     assert.equal(edge.calls.length,attempts);

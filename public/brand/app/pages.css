@@ -131,3 +131,9 @@ code { padding: 1px 5px; border-radius: 6px; background: var(--strap-wash); font
 #payments section { margin-block: 18px; }
 
 .payment-reference { overflow-wrap: anywhere; }
+
+.recovery-diagnostics .data { table-layout: fixed; }
+.recovery-diagnostics code, .recovery-diagnostics time, .recovery-diagnostics .data p { overflow-wrap: anywhere; font-size: 14px; }
+.recovery-diagnostics .data td { vertical-align: top; }
+.recovery-diagnostics .data p { margin: 6px 0; }
+.recovery-diagnostics .data td[data-label]::before { font-size: 13px; }

@@ -211,6 +211,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const copyEvidenceBefore=await h.send('/api/strap/waiver-evidence.json?id='+copyRecord.receipt_id,undefined,h.owner),copyHtmlBefore=await h.send('/api/strap/waiver-evidence.html?id='+copyRecord.receipt_id,undefined,h.owner)
     assert.equal(copyEvidenceBefore.status,200);assert.equal(copyHtmlBefore.status,200)
     Object.assign(privacyFixture,{retained:copyTablet.person,retainedEvidence:copyEvidenceBefore.value,copyToken})
+    const recoveryBefore=(await h.send('/api/strap/recovery-diagnostics',undefined,h.owner)).value
+    assert.equal(recoveryBefore.billing.connectionState,'connected');assert.equal(recoveryBefore.mail.connectionState,'connected');assert.ok(recoveryBefore.operations.length>0);assert.ok(recoveryBefore.notices.length>0)
     const download=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(download.status,200)
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
@@ -271,6 +273,15 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
     await h.enroll(restoredOwner)
+    const recoveryVersion=(await h.state(restoredOwner)).version,recoveryCalls=paymentEdge.calls.length,recoveryMailCalls=copyEdge.calls.length
+    const recoveryAfter=(await h.send('/api/strap/recovery-diagnostics',undefined,restoredOwner)).value
+    assert.equal(recoveryAfter.billing.connectionState,'disconnected');assert.equal(recoveryAfter.mail.connectionState,'disconnected')
+    assert.deepEqual(recoveryAfter.operations,recoveryBefore.operations.map(r=>({...r,connectionState:'disconnected'})))
+    assert.deepEqual(recoveryAfter.exceptions,recoveryBefore.exceptions.map(r=>({...r,connectionState:'disconnected'})))
+    assert.deepEqual(recoveryAfter.notices,recoveryBefore.notices,'native recovery retains notice source identities, outcomes and timestamps')
+    assert.equal((await h.send('/app/recovery-diagnostics',undefined,restoredOwner)).status,200)
+    assert.equal((await h.state(restoredOwner)).version,recoveryVersion);assert.equal(paymentEdge.calls.length,recoveryCalls);assert.equal(copyEdge.calls.length,recoveryMailCalls)
+    console.log('PROBE SEC-001 recovery: public native archive export and restore -> billing and mail history retained, current authority disconnected, diagnostic reads cause no provider calls or writes')
     assert.equal((await h.send(contactReceipt,undefined,restoredOwner)).value.status,'saved','the restored owner verifies the retained source receipt after fresh authentication')
     assert.deepEqual(await h.cmd('profile.save.staff',contactInput,restoredOwner),contact,'a restored staff retry keeps the original result')
     assert.equal((await integrationRead(h,integration.token)).status,401,'API-002 a restored studio refuses the old integration secret')

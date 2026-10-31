@@ -28,6 +28,7 @@ export function studioPage(s: any, notice: any = {}) {
   const zone = s.studio ? `<p class="meta">Classes are entered and shown on ${h(zoneName(s.studio.timeZone))}.</p>` : ''
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
+    + panel('Recovery diagnostics', body('<p>Review retained billing exceptions and notice outcomes alongside this installation’s current connections.</p><a class="btn-quiet" href="/app/recovery-diagnostics">Open recovery diagnostics</a>'))
     + automationSettings(s)
     + terminationReasonsPanel(s)
     + locationsPanel(s)
