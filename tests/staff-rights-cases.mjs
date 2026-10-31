@@ -263,7 +263,11 @@ async function immediateTerminationCases(h,s) {
   await grant(desk,'front-desk',['member-record']);await refuse('plan.cancellation.confirm',confirm,desk.cookie);
   await grant(desk,'front-desk',['member-record','contract-change'],[ana.id],['studio']);
   await refuse('plan.cancellation.confirm',confirm,ana.cookie);
-  const before=await h.state(),ended=await h.cmd('plan.cancellation.confirm',confirm,desk.cookie);
+  const before=await h.state();
+  const race=await Promise.all([h.send('/api/strap/command',{name:'plan.cancellation.confirm',input:confirm},desk.cookie),h.send('/api/strap/command',{name:'plan.cancellation.confirm',input:confirm},desk.cookie)]);
+  assert.ok(race.some(r=>r.status===200));assert.ok(race.every(r=>[200,409].includes(r.status)),JSON.stringify(race));
+  const winner=race.find(r=>r.status===200).value,ended=winner.result??winner;
+
   assert.equal(ended.status,'applied');assert.equal(ended.effectiveAt,preview.effectiveAt);assert.deepEqual(ended.effects,preview.effects);
   assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),ended);
   await h.setAuth({});for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});

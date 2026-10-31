@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6c8014afaaa61e820b1c24df4ff57847abd5f206beb1f8aec634df7a981a4b76",
+      "sha256": "9f03862399a3ac0406751f4a5841fff74800da15b7a5780799d61dc4a2b2a5c1",
       "executable": false
     },
     "DEMO.md": {
@@ -4158,7 +4158,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "2d32396292bb0bf10055dcbad4aa9160adf67bbbf27a715883f08c6078b8d73b",
+      "sha256": "a8527555d8386a205b306d76ddb57037f4ae75c905df6b4e5034a5edc1b00724",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4214,7 +4214,7 @@
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
-      "sha256": "eecf569a90f9806c57b9027368360cca23c223036e93ad7a0c2fe63ed5714e8f",
+      "sha256": "ab149d30141ee065a0533f7ce46645b41cdf9a25d53f5eea62b50df64de5bb09",
       "executable": false
     },
     "tests/capacity-browser.mjs": {
@@ -4678,7 +4678,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "ec6ce150bc663300e9ba88297f1bd57aa181bcb1307f4bcc342e800c3aeeca25",
+      "sha256": "de18d76825c744910faaa76cf2820f578bde5da749e75a4f692696e55314a2ab",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {

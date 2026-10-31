@@ -390,7 +390,7 @@ export async function staffTerminationsBrowser(h,s){
           // The immediate flow is asserted at the phone width; both layouts get a visual receipt.
           await page.setViewportSize({width:390,height:1000});
           const immediate=await saleAndAgreement(h,s.ben,'synthetic-strap-immediate-browser');
-          await page.goto(url);await page.getByText('Prepare an earlier termination',{exact:true}).click();
+          await page.goto(url);await page.reload();await page.getByText('Prepare an earlier termination',{exact:true}).click();
           const immediateForm=commandForm(page,'plan.cancellation.prepare');
           await immediateForm.locator('[name=packId]').selectOption(immediate.pack.id);
           await immediateForm.locator('[name=timing]').selectOption('immediate');
