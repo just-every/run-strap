@@ -144,6 +144,7 @@ test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM rer_mail_development_outbox').first()).n,mailCount+1,'explicit reconnect permits one new send, never a replay of history')
     assert.deepEqual(after.acknowledgements,originalAcknowledgements,'restored staff requests never add or rewrite the member-owned acknowledgement')
   } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
+  await (await import('./studio-audit-cases.mjs')).nativeAuditArchive({checkout,archive,exec})
 })
 
 test('MEM-001 / MEM-006 / MSG-008 / MOVE-011: native restore preserves original member links, preference sources and queued suppression data without automatic marketing execution or restored staff sessions',{timeout:240000},async()=>{

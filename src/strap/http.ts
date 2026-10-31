@@ -80,7 +80,7 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
   const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers','gifts','timeClock'].map(key => [key, key === 'teachingPay' || key === 'memberMail' || key === 'smsTest' ? null : []])) : {}
-  return { ...current, smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
+  return { ...current, studioAudit:who.role === 'owner' ? [...('studioAudit' in current ? current.studioAudit : []),...await auditEvents(env)] : [], smsTest: await smsTestState(env,who), mfa, ...(who.role === 'owner' ? { access: await access(env) } : {}), leadOwners, waiverLaunches:current.waiverLaunches.map(launch => ({...launch,status:launches.find((row: any) => row.id === launch.id)?.status ?? launch.status})), bookingActions, agentKeys: await agentKeys(env, who), integrations: await integrationKeys(env, who), kiosks: await kioskDevices(env, who), noticeDeliveries: deliveries, origin: who.role === 'owner' ? env.AUTH_ORIGIN : null, importJobs, displayName: operator?.name ?? '', ...hidden }
 }
 
 async function appState(env: Bindings, who: Actor, target: string) {
@@ -234,9 +234,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
       if (path === '/api/strap/staff-history' || path === '/api/strap/staff-history.csv') {
         if (who.role !== 'owner') fail('owner_required',403)
-        // The security audit (factor enrollment, resets, finance grants) joins the staff-made actions in the owner's history.
         const current = await state(env,who)
-        current.staffActions = [...current.staffActions,...await auditEvents(env)]
         return path.endsWith('.csv')
           ? new Response(historyCsv(current,url.searchParams),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="strap-staff-history.csv"'}})
           : json(historyExport(current,url.searchParams))

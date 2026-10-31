@@ -109,6 +109,13 @@ test('ATT-003: the owner corrects a paid no-show and a late cancel once, restori
   assert.deepEqual([cy.cancellation, cy.refunded, cy.feeCents, cy.corrections[0].before.cancellation, cy.corrections[0].before.feeCents], ['early', true, 0, 'late', 1500])
   assert.deepEqual([s.packs.find(p => p.personId === Cy.id).remaining, s.balances.find(b => b.personId === Cy.id).balanceCents], [4, 0])
   assert.equal(s.charges.filter(c => c.bookingId === late.id && c.reason === 'fee_reversal').length, 1)
+  const {auditDownload}=await import('./studio-audit-cases.mjs')
+  const corrections=await auditDownload(h,new URLSearchParams({auditCommand:'attendance.correct'}))
+  assert.equal(corrections.length,3,'paid and unpaid no-show corrections and the late-cancel correction each appear once')
+  assert.deepEqual(corrections.map(row=>[row.personId,row.after.to,row.after.feeReversedCents]).sort(),[[Ana.id,'excused',2000],[Ben.id,'attended',2000],[Cy.id,'early_cancel',1500]].sort())
+  assert.deepEqual(corrections.find(row=>row.personId===Ana.id).before,ana.corrections[0].before)
+  assert.equal(corrections.find(row=>row.personId===Ana.id).sourceId,ana.corrections[0].id)
+
   if (process.env.STRAP_PROOF_DIR) await (await import('./attendance-browser.mjs')).correctionBrowser(h, entry, seat.Dee)
 }))
 

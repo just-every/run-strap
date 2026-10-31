@@ -30,7 +30,7 @@ const stmt = (env: Bindings, sql: string, ...values: unknown[]) => env.DB.prepar
 
 /** One append-only audit row, written in the same batch as the change it records. */
 export const auditRow = (env: Bindings, who: Actor, action: string, subject: { id: string; email?: string | null }, detail: Record<string, unknown> = {}) =>
-  stmt(env, 'INSERT INTO st_security_audit(id,at,actor_id,actor_email,action,subject_id,subject_email,detail) VALUES(?,?,?,?,?,?,?,?)', crypto.randomUUID(), Date.now(), who.id, who.email, action, subject.id, subject.email ?? null, JSON.stringify(detail))
+  stmt(env, 'INSERT INTO st_security_audit(id,at,actor_id,actor_email,action,subject_id,subject_email,detail) VALUES(?,?,?,?,?,?,?,?)', crypto.randomUUID(), Date.now(), who.id, who.email, action, subject.id, subject.email ?? null, JSON.stringify({...detail,actorRole:who.role,channel:'app'}))
 const commit = (env: Bindings, statements: D1PreparedStatement[], who: Actor, action: string, subject: { id: string; email?: string | null }, detail: Record<string, unknown> = {}) =>
   env.DB.batch([...statements, auditRow(env, who, action, subject, detail)])
 
@@ -272,9 +272,9 @@ export async function factorCounts(env: Bindings) {
 
 /** The security audit as staff-history events, newest facts the owner can filter by command. */
 export async function auditEvents(env: Bindings) {
-  return (await all<any>(env, 'SELECT * FROM st_security_audit ORDER BY at DESC, id LIMIT 500')).map(row => {
+  return (await all<any>(env, 'SELECT * FROM st_security_audit ORDER BY at DESC, id')).map(row => {
     const detail = JSON.parse(row.detail)
-    return { id: row.id, at: new Date(row.at).toISOString(), personId: row.subject_id, actorId: row.actor_id, actorRole: 'owner', command: row.action, action: row.action, right: row.action.startsWith('finance.') || row.action.startsWith('manager.') || row.action === 'mfa.reset' ? 'access' : 'security', channel: 'app', reason: detail.reason ?? null, before: null, after: { actor: row.actor_email, subject: row.subject_email, ...detail } }
+    return { id: row.id, at: new Date(row.at).toISOString(), personId: row.subject_id, actorId: row.actor_id, actorRole: detail.actorRole ?? null, sourceKind:'securityAudit', sourceId:row.id, command: row.action, action: row.action, right: row.action.startsWith('finance.') || row.action.startsWith('manager.') || row.action === 'mfa.reset' ? 'access' : 'security', channel: detail.channel ?? null, reason: detail.reason ?? null, before: null, after: { actor: row.actor_email, subject: row.subject_email, ...detail } }
   })
 }
 

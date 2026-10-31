@@ -193,6 +193,17 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   assert.equal(audit.length, 1)
   assert.deepEqual([audit[0].command, audit[0].actorId, audit[0].personId, audit[0].reason, audit[0].after.actor, audit[0].after.subject, audit[0].after.factorsRemoved], ['mfa.reset', first, secondId, 'Lost phone', h.auth.OWNER_EMAIL, 'second@studio.example', 2])
   assert.match((await get(h, '/api/strap/staff-history.csv?auditCommand=mfa.reset', h.owner, 200)).text, /mfa\.reset/)
+  const {auditDownload}=await import('./studio-audit-cases.mjs')
+  assert.deepEqual(await auditDownload(h,new URLSearchParams({auditCommand:'mfa.reset'})),audit)
+  const shown=await get(h,'/app/people?auditCommand=mfa.reset',h.owner,200)
+  assert.ok(shown.text.includes('data-staff-command="mfa.reset"'),'the owner screen contains the same retained reset as the downloads')
+  assert.equal(audit[0].actorRole,'owner');assert.equal(audit[0].sourceId,audit[0].id)
+  const old=JSON.parse((await h.db.prepare('SELECT detail FROM st_security_audit WHERE id=?').bind(audit[0].id).first()).detail)
+  delete old.actorRole;delete old.channel
+  await h.db.prepare('UPDATE st_security_audit SET detail=? WHERE id=?').bind(JSON.stringify(old),audit[0].id).run()
+  const historical=await auditDownload(h,new URLSearchParams({auditCommand:'mfa.reset'}))
+  assert.deepEqual([historical[0].actorRole,historical[0].channel,historical[0].id],[null,null,audit[0].id],'missing historical roles and channels are never inferred')
+
   assert.equal((await get(h, '/api/strap/staff-history?auditCommand=mfa.enroll', h.owner, 200)).value.rows.length >= 2, true, 'enrollments are audited too')
   const ana = await h.person('Ana')
   await get(h, '/api/strap/staff-history', ana.cookie, 403)
@@ -214,6 +225,7 @@ test('SEC-004: a member opts in, and every later session is held at every door u
   const events = (await get(h, '/api/strap/staff-history', h.owner, 200)).value.rows
   const memberOperator = await operatorId(h, ana.cookie)
   assert.ok(events.some(r => r.command === 'mfa.recovery_renewed' && r.personId === memberOperator))
+  assert.equal(events.find(r=>r.command==='mfa.recovery_renewed'&&r.personId===memberOperator).actorRole,'member','member-owned security actions retain their actual role')
   for (const value of [app.secret, ...renewed.recovery_codes]) assert.ok(!JSON.stringify(events).includes(value), 'audit never includes a secret or recovery code')
   // Removing the only factor needs a checked session and ends every session of the person.
   await refused(h, 'mfa.remove', { factor: app.factor }, await h.signIn(ana.email), 403, 'mfa_required')
