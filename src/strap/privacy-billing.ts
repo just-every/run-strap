@@ -1,6 +1,6 @@
 import type { RecordData } from './domain/types';
 
-export const privacyBillingKinds=new Set('billingAgreement paymentMandate billingOperation billingSetup storedPaymentMethod billingConsentEvent billingActionLaunch stripeInvoice billingException billingReconciliation stripeEvent recurringTerms recurringInvoice recurringReminder contractPrepayment'.split(' '));
+export const privacyBillingKinds=new Set('cardBalanceObservation billingAgreement paymentMandate billingOperation billingSetup storedPaymentMethod billingConsentEvent billingActionLaunch stripeInvoice billingException billingReconciliation stripeEvent recurringTerms recurringInvoice recurringReminder contractPrepayment'.split(' '));
 const authorizationKinds=new Set(['billingSetup','storedPaymentMethod','billingActionLaunch']);
 /** Retained financial references are not reusable payment permission or hosted setup credentials. */
 export function retireBilling(kind:string,original:RecordData,redacted:RecordData,at:string,actorId:string) {
