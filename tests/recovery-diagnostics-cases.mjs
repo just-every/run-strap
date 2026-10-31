@@ -184,5 +184,5 @@ export async function recoveryDiagnosticsCases() {
     console.log('PROBE SEC-001 diagnostics: owner MFA GET with failed billing, an exception and three notice outcomes -> redacted source-linked history, explicit connection states and timestamps')
     console.log('PROBE SEC-001 authority: other roles, bearer credentials and an unchecked owner -> refused with unchanged database; repeated authorized reads -> zero dispatch and unchanged records')
     console.log('PROBE SEC-001 stale and rotated connection: old notice observation and changed credential -> stale and unknown detail; billing disconnected with history retained')
-  }, {mfa:false,auth:paymentAuth,outbound,log:new CapturedLog(LogLevel.INFO)})
+  }, {mfa:false,auth:paymentAuth,outbound,log:new CapturedLog(LogLevel.INFO),handleStructuredLogs:({message})=>logs.push(message)})
 }

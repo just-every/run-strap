@@ -139,10 +139,11 @@ test('RPT-001 / RPT-006: current sales, collections, refunds, fee reversals and 
   assert.equal(t.assessedCents,sum(state.charges))
   assert.equal(t.collectionsCents,27500); assert.equal(t.refundsCents,1500)
   assert.equal(t.netCollectionsCents,sum(state.payments)); assert.equal(t.netCollectionsCents,26000)
+  assert.equal(t.membershipCancellations,0)
   assert.equal(t.newPlans,3); assert.equal(t.bookingCancellations,2); assert.equal(t.activeMembers,3)
   assert.equal(t.outstandingCents,16500)
   assert.equal(t.memberCreditCents,1000-preview.chargeCents)
-  for (const key of ['overdueCents','membershipCancellations','returnedAchCents','processorFeesCents']) assert.equal(t[key],null)
+  for (const key of ['overdueCents','returnedAchCents','processorFeesCents']) assert.equal(t[key],null)
   assert.deepEqual(new Set(report.sources.filter(r=>['sale','fee'].includes(r.kind)).map(r=>r.id)),new Set(state.charges.map(r=>r.id)))
   assert.deepEqual(new Set(report.sources.filter(r=>['receipt','refund'].includes(r.kind)).map(r=>r.id)),new Set(state.payments.map(r=>r.id)))
   for (const row of report.sources) {
@@ -501,7 +502,135 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
 }))
 
 
-test('RPT-003: period churn reconciles unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
+// The clock fixture ages native records; every agreement, stop, withdrawal and application uses its public command.
+async function recurringRevenueJourney(h) {
+  const west = await h.cmd('location.save',{name:'Lifecycle West',timeZone:'America/Los_Angeles'})
+  const multi=await h.person('LifecycleMulti'),kept=await h.person('LifecycleKept'),withdrawn=await h.person('LifecycleWithdrawn'),legacy=await h.person('LifecycleLegacy'),scheduled=await h.person('LifecycleScheduled'),previewMember=await h.person('LifecyclePreview'),manager=await h.person('LifecycleManager'),finance=await h.person('LifecycleFinance')
+  const acceptedAt='2026-03-10T04:30:00.000Z',stoppedAt='2026-03-11T04:30:00.000Z',endedAt='2026-03-12T04:30:00.000Z'
+  const save = async (kind,row) => h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  const sell = async (member,locationId='studio',accept=true) => {
+    const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,kind:'unlimited',amountCents:10000,planName:'Lifecycle',expiresAt:'2099-12-31T00:00:00Z',locationId})).id})
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:'synthetic-strap-'+pack.id})
+    const terms=accept ? await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie) : proposal
+    if(accept)await save('recurringTerms',{...terms,acceptedAt})
+    return {pack,terms,member}
+  }
+  const first=await sell(multi),second=await sell(multi),replaced=await sell(kept,west.id),withdraw=await sell(withdrawn),unknown=await sell(legacy),future=await sell(scheduled,west.id),preview=await sell(previewMember,'studio',false)
+  const cancel = async (item,apply=false) => {
+    const proposal=await h.cmd('plan.cancellation.prepare',{packId:item.pack.id,effectiveAt:'2098-01-01T00:00:00Z',reasonCode:'moved-away',reason:'Requested end',requestId:'synthetic-strap-'+item.terms.id})
+    const result=await h.cmd('plan.cancellation.confirm',{id:proposal.id,key:proposal.key,requestId:'synthetic-strap-confirm-'+item.terms.id})
+    if(apply)await save('contractCancellation',{...result,effectiveAt:endedAt})
+    return result
+  }
+  const applied=[]
+  for(const item of [first,second,replaced])applied.push(await cancel(item,true))
+  const withdrawalSource=await cancel(withdraw)
+  const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',{id:withdrawalSource.id,requestId:'synthetic-strap-withdraw'})
+  await h.cmd('plan.cancellation.withdraw.confirm',{id:withdrawal.id,key:withdrawal.key})
+  // The old scheduled date is retained history, not an end of access after withdrawal.
+  await save('contractCancellation',{...(await h.state()).cancellations.cancellations.find(c=>c.id===withdrawalSource.id),effectiveAt:endedAt})
+  const stopInput={id:future.terms.id,requestId:'synthetic-strap-stop'}
+  const stop=await h.cmd('plan.recurring.stop',stopInput,future.member.cookie)
+  assert.equal((await h.cmd('plan.recurring.stop',stopInput,future.member.cookie)).id,stop.id,'replayed stops retain the same source identity')
+  await h.cmd('plan.cancellation.prepare',{packId:unknown.pack.id,effectiveAt:'2098-01-01T00:00:00Z',reasonCode:'moved-away',reason:'Preview only',requestId:'synthetic-strap-preview'})
+  await (await h.mf.getWorker()).scheduled();await (await h.mf.getWorker()).scheduled()
+  const replacement=await sell(kept,west.id)
+  await save('recurringTerms',{...replacement.terms,acceptedAt:'2026-03-13T04:30:00.000Z'})
+  let state=await h.state()
+  for(const item of [first,second,replaced,withdraw,future]) {
+    const terms=state.recurring.terms.find(t=>t.id===item.terms.id)
+    await save('recurringTerms',{...terms,stoppedAt,stop:{...terms.stop,at:stoppedAt,effectiveAt:stoppedAt,accessEndsAt:item===withdraw ? endedAt : terms.stop.accessEndsAt}})
+  }
+  const {locationId,...oldPack}=state.packs.find(p=>p.id===unknown.pack.id)
+  await save('pack',oldPack)
+  state=await h.state()
+  const baseQuery=new URLSearchParams({plan:'unlimited: Lifecycle',from:'2026-03-01',to:'2026-03-31'})
+  const read=async (query=baseQuery,cookie=h.owner) => {
+    const response=await h.send('/api/strap/reports/revenue?'+query,undefined,cookie)
+    assert.equal(response.status,200,response.text);return response.value
+  }
+  const report=await read(),t=report.totals,version=state.version
+  assert.deepEqual([t.recurringStarts,t.recurringStops,t.recurringEndings,t.membershipCancellations],[7,5,3,3])
+  assert.equal(t.newPlans,0,'a historical agreement acceptance is not a pack creation event')
+  assert.equal((await read(new URLSearchParams({plan:'unlimited: Lifecycle'}))).totals.newPlans,8,'eight sold packs include one whose recurring proposal was never accepted')
+  assert.equal(t.bookingCancellations,0,'agreement events are not booking actions')
+  const terms=state.recurring.terms.filter(t=>t.entitlement?.name==='Lifecycle'&&t.acceptedBy)
+  assert.deepEqual(new Set(report.sources.filter(r=>r.kind==='recurring-start').map(r=>r.sourceId)),new Set(terms.map(t=>t.id)),'independent accepted agreement identities reconcile')
+  assert.deepEqual(new Set(report.sources.filter(r=>r.kind==='recurring-stop').map(r=>r.sourceId)),new Set(terms.filter(t=>t.stoppedAt).map(t=>t.id)))
+  const cancellations=state.cancellations.cancellations.filter(c=>c.status==='applied'&&terms.some(t=>t.id===c.termsId))
+  assert.deepEqual(new Set(report.sources.filter(r=>r.kind==='membership-cancellation').map(r=>r.sourceId)),new Set(cancellations.map(c=>c.id)))
+  assert.deepEqual(report.sources.filter(r=>r.kind==='recurring-end').map(r=>r.at),[endedAt,endedAt,endedAt])
+  assert.ok(!report.sources.some(r=>r.sourceId===preview.terms.id || r.sourceId===withdrawalSource.id))
+  assert.ok(!report.sources.some(r=>r.agreementId===withdraw.terms.id&&r.kind==='recurring-end'))
+  assert.ok(!report.sources.some(r=>r.agreementId===future.terms.id&&['recurring-end','membership-cancellation'].includes(r.kind)))
+  assert.equal(new Set(report.sources.map(r=>r.id)).size,report.sources.length,'each event has one stable identity')
+  for(const metric of ['recurringStarts','recurringStops','recurringEndings','membershipCancellations'])assert.equal(report.locationTotals.reduce((n,l)=>n+l[metric],0),t[metric])
+  const scoped=(extra)=>new URLSearchParams({...Object.fromEntries(baseQuery),...extra})
+  const ny=await read(scoped({location:'studio'})),la=await read(scoped({location:west.id})),unattributed=await read(scoped({location:'Unattributed'}))
+  assert.deepEqual([ny.totals.recurringStarts,la.totals.recurringStarts,unattributed.totals.recurringStarts],[3,3,1])
+  assert.equal(unattributed.sources[0].locationId,null)
+  assert.equal(unattributed.sources[0].sourceId,unknown.terms.id)
+  const march9=await read(scoped({from:'2026-03-09',to:'2026-03-09'})),march10=await read(scoped({from:'2026-03-10',to:'2026-03-10'}))
+  assert.equal(march9.totals.recurringStarts,2,'same instant is March 9 in Los Angeles')
+  assert.equal(march10.totals.recurringStarts,4,'same instant is March 10 in New York, including the unattributed retained clock')
+  assert.equal(march10.totals.recurringStops,2,'LA stop date differs from NY; the inclusive one-day window selects its own events')
+  assert.equal((await read(scoped({plan:'missing'}))).sources.length,0)
+  const churn=(await h.send('/api/strap/reports/retention?'+new URLSearchParams({churnFrom:'2026-03-11T00:00:00.000Z',churnTo:'2026-03-14T00:00:00.000Z'}),undefined,h.owner)).value
+  assert.equal(churn.rows.find(r=>r.personId===multi.id).churnEvidence.lostMember,true)
+  assert.equal(churn.rows.find(r=>r.personId===kept.id).churnEvidence.lostMember,false,'a replacement preserves the member after an agreement ends')
+  assert.equal(churn.rows.find(r=>r.personId===withdrawn.id).churnEvidence.endedAgreementIds.length,0,'withdrawn date creates neither an agreement end nor commitment loss')
+  for(const row of report.sources) {
+    const detail=await read(scoped({sourceId:row.id}))
+    assert.deepEqual(detail.selectedSource.record,row.record)
+    assert.equal(detail.selectedSource.record.id,row.sourceId)
+    assert.equal((await h.send(row.sourceUrl,undefined,h.owner)).status,200)
+    assert.ok(!JSON.stringify(row).includes('connectionId')&&!JSON.stringify(row).includes('termsKey'),'report facts exclude authorization material')
+  }
+  await assertReportDownloads(h,'revenue',[baseQuery.toString(),scoped({location:west.id}).toString(),scoped({location:'Unattributed'}).toString(),scoped({from:'2026-03-09',to:'2026-03-09'}).toString()],[multi.cookie,''])
+  const [csvKeys,...csvValues]=parseCsv((await h.send('/api/strap/reports/revenue.csv?'+baseQuery,undefined,h.owner)).text)
+  const csvSources=csvValues.map(row=>Object.fromEntries(csvKeys.map((key,i)=>[key,row[i]])))
+  for(const metric of ['recurringStarts','recurringStops','recurringEndings','membershipCancellations'])assert.equal(csvSources.filter(row=>row.metric===metric).reduce((n,row)=>n+row.eventCount,0),t[metric],'downloaded event counts reconcile independently')
+  assert.equal((await h.state()).version,version,'report and source reads create no lifecycle or financial effects')
+  await h.cmd('manager.grant',{id:manager.id,locationIds:[west.id]});await h.enroll(manager.cookie)
+  const managed=await read(baseQuery,manager.cookie)
+  assert.deepEqual([managed.totals.recurringStarts,managed.totals.recurringStops,managed.totals.membershipCancellations],[3,2,1])
+  assert.ok(managed.sources.every(r=>r.locationId===west.id))
+  assert.equal((await read(scoped({sourceId:report.sources.find(r=>r.locationId==='studio').id}),manager.cookie)).selectedSource,null)
+  for(const format of ['csv','xlsx']) {
+    const response=await h.mf.dispatchFetch(h.origin+'/api/strap/reports/revenue.'+format+'?'+baseQuery,{headers:{cookie:manager.cookie}})
+    assert.equal(response.status,200)
+    if(format==='csv')assert.ok(!(await response.text()).includes(multi.id))
+    else await response.arrayBuffer()
+  }
+  await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:true,rights:{exports:{enabled:true,scopes:[{memberIds:[kept.id],locationIds:[west.id],doors:['all']}]}}});await h.enroll(finance.cookie)
+  const financeReport=await read(baseQuery,finance.cookie)
+  assert.equal(financeReport.totals.recurringStarts,2)
+  assert.ok(financeReport.sources.every(r=>r.personId===kept.id&&r.locationId===west.id))
+  const deniedVersion=(await h.state()).version
+  await h.cmd('manager.revoke',{id:manager.id})
+  await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:false,rights:{}})
+  const afterRevoke=(await h.state()).version
+  for(const cookie of [manager.cookie,finance.cookie,multi.cookie])for(const path of ['/app/revenue','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx'])assert.equal((await h.send(path+'?'+baseQuery,undefined,cookie)).status,403)
+  assert.equal((await h.state()).version,afterRevoke,'denied reads leave sources untouched')
+  assert.ok(deniedVersion>=version)
+  if(process.env.CI||process.env.STRAP_PROOF_DIR)await (await import('./revenue-browser.mjs')).recurringRevenueBrowser(h,{query:baseQuery,report,west,march9})
+  const erasedMember=await h.person('LifecycleErased'),erasedAgreement=await sell(erasedMember)
+  const capturedId='recurring-start:'+erasedAgreement.terms.id
+  assert.equal((await read(scoped({sourceId:capturedId}))).selectedSource.sourceId,erasedAgreement.terms.id)
+  const erasure=await h.cmd('privacy.request',{personId:erasedMember.id,type:'erasure',channel:'desk',requestId:'synthetic-strap-report-erasure'})
+  await h.cmd('privacy.verify',{id:erasure.id,method:'signed-in-member',confirm:true})
+  const review=await h.cmd('privacy.erase.prepare',{id:erasure.id,obligations:'retain',reason:'Retain native financial chronology',retainUntil:'2099-01-01T00:00:00.000Z',documents:'delete',retireAccess:true})
+  await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true})
+  await (await h.mf.getWorker()).scheduled()
+  const erased=await read(scoped({sourceId:capturedId}))
+  assert.equal(erased.selectedSource,null,'a previously captured source URL cannot restore erased recurring evidence')
+  assert.ok(!erased.sources.some(row=>row.agreementId===erasedAgreement.terms.id))
+  assert.ok(!JSON.stringify(erased).includes('LifecycleErased'))
+  assert.equal((await h.send('/api/strap/reports/revenue',undefined,erasedMember.cookie)).status,401,'erasure retires the old session')
+  console.log('PROBE RPT-001 native lifecycle: public revenue route and downloads -> starts=7 stops=5 endings=3 applied cancellations=3; location sums match; replacement and withdrawal losses refused; scoped grants and revocation enforced')
+}
+
+test('RPT-001 and RPT-003: period churn and native recurring lifecycle reconcile unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {
   await h.confirmSetup(h.owner)
   for(const [code,label] of [['moved-away','Moved away'],['price','Price']])await h.cmd('plan.cancellation.reason.save',{code,label,active:true,revision:0})
   await h.cmd('studio.save',{location:'Brooklyn studio',timeZone:'America/New_York'})
@@ -546,6 +675,7 @@ test('RPT-003: period churn reconciles unique lost members and opening recurring
   assert.equal(empty.memberChurnPercent,null);assert.equal(empty.revenueChurnPercent,null)
   assert.equal((await h.state()).version,before,'churn and source reads are read-only')
   if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionChurnBrowser(h,report,query)
+  await recurringRevenueJourney(h)
 }))
 
 

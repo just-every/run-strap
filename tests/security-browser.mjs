@@ -12,7 +12,7 @@ const types = { '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/wof
 export async function securityBrowser(h, { finance, nextSession, member }) {
   const proof = process.env.STRAP_PROOF_DIR ?? join(tmpdir(), 'strap-security-proof')
   await mkdir(proof, { recursive: true })
-  const browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.STRAP_CHROMIUM_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
   try {
     for (const width of [1440, 390]) {
       const open = async cookie => {

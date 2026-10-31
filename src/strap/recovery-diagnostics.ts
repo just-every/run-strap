@@ -18,7 +18,7 @@ const codes = ['billing_provider_refused','billing_provider_outcome_unknown','bi
   'billing_webhook_provider_mismatch','billing_webhook_source_mismatch','billing_webhook_event_unsupported',
   'billing_checkout_outcome_unknown','billing_checkout_payment_incomplete','billing_checkout_reconciliation_unavailable',
   'billing_checkout_source_mismatch','billing_native_comparison_mismatch','billing_refund_or_dispute_requires_review',
-  'billing_checkout_amount_or_mode_mismatch','billing_checkout_not_captured','billing_checkout_refunded_or_disputed',
+  'billing_checkout_amount_or_mode_mismatch','billing_payment_intent_mismatch','billing_charge_mismatch','billing_provider_invoice_mismatch',
   'billing_native_payment_mismatch','billing_native_reconciliation_failed',
   'tax_provider_refused','tax_provider_outcome_unknown','tax_provider_evidence_invalid','tax_connection_review_required',
   'tax_owner_authority_changed','tax_test_settings_not_active','tax_active_registration_required',

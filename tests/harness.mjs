@@ -17,8 +17,8 @@ export async function harness(options = {}) {
   const socket = createServer(); await new Promise(r => socket.listen(options.port ?? 0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r))
   const dir = options.root ? join(options.root, '.wrangler/state/v3') : await mkdtemp(join(tmpdir(), 'strap-test-')), origin = `http://${options.hostname ?? '127.0.0.1'}:${port}`, setup = randomBytes(32).toString('hex')
   const auth = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@studio.example', SESSION_SECRET: randomBytes(32).toString('hex'), SETUP_TOKEN: setup, MFA_KEY: randomBytes(32).toString('hex'), MAIL_PROVIDER: 'development', MAIL_FROM: 'auth@studio.example', ...options.auth, AUTH_ORIGIN: origin }
-  const runtimeOptions = () => ({ ...convertV4MiniflareOptions({ host: '127.0.0.1', port, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'], d1Databases: { DB: 'local-foundation-only' }, bindings: auth, ...(options.entry ? { outboundService: () => { throw new Error('Unexpected demo outbound request') } } : options.outbound ? { outboundService: options.outbound } : {}) }), resourcePersistencePath: dir })
-  const mf = new Miniflare({ ...runtimeOptions(), ...(options.log ? { log: options.log } : {}) })
+  const runtimeOptions = () => ({ ...convertV4MiniflareOptions({ host: '127.0.0.1', port, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'], d1Databases: { DB: 'local-foundation-only' }, bindings: auth, ...(options.entry ? { outboundService: () => { throw new Error('Unexpected demo outbound request') } } : options.outbound ? { outboundService: options.outbound } : {}) }), resourcePersistencePath: dir, ...(options.log ? { log: options.log } : {}), ...(options.handleStructuredLogs ? { handleStructuredLogs: options.handleStructuredLogs } : {}) })
+  const mf = new Miniflare(runtimeOptions())
   // Failure transports are activated after prerequisite authentication through the public doors.
   try {
     let db = await mf.getD1Database('DB')

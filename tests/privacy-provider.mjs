@@ -69,6 +69,18 @@ export async function privacyProvider() {
       const page=await h.send(path,undefined,h.owner);assert.equal(page.status,200,'ordinary billing pages remain usable after erasure')
       assert.ok(!page.text.includes(seed.member.email))
     }
+    const beforeDiagnostics=(await h.state()).version,diagnosticCalls=edge.calls.length
+    for(const path of ['/api/strap/recovery-diagnostics','/app/recovery-diagnostics']) {
+      const diagnostics=await h.send(path,undefined,h.owner)
+      assert.equal(diagnostics.status,200)
+      for(const value of [seed.member.name,seed.member.email,method.paymentMethodId,method.setupIntentId,checkout.providerSessionId])assert.ok(!diagnostics.text.includes(value),'recovery diagnostics never expose erased identity or provider credentials')
+      const refused=await h.send(path,undefined,seed.member.cookie)
+      assert.equal(refused.status,path.startsWith('/app/')?303:401,'an erased session cannot use recovery diagnostics')
+      if(path.startsWith('/app/'))assert.equal(new URL(refused.headers.get('location'),h.origin).pathname,'/signin')
+    }
+    assert.equal((await h.state()).version,beforeDiagnostics);assert.equal(edge.calls.length,diagnosticCalls)
+    assert.ok(!(await h.state()).people.some(p=>p.id===seed.member.id),'diagnostic reads and replay never resurrect the erased member')
+    console.log('PROBE SEC-001 erasure: retained paid invoice after erasure and webhook replay -> no erased identity or reusable provider values in owner diagnostics, erased session refused, unchanged records and no dispatch')
     const exit=await h.send('/api/strap/exit.json',undefined,h.owner)
     assert.equal(exit.status,200)
     for(const value of [method.paymentMethodId,method.setupIntentId,'synthetic-strap-provider-subject','synthetic-strap-provider-session'])assert.ok(!exit.text.includes(value),'full exit omits retired provider credentials')
