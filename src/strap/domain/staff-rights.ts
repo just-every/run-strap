@@ -1,6 +1,6 @@
 import { placeId } from './locations';
 import type { Transaction } from './store';
-import { humanOwner, id, insist, list, now, person, type Actor, type RecordData, type State } from './types';
+import { humanOwner, id, insist, list, now, person, text, type Actor, type RecordData, type State } from './types';
 
 export const STAFF_RIGHTS = ['booking','override','fee-waiver','check-in','sale','price','membership-sale','collection','refund','contract-change','member-record','privacy','sensitive-notes','exports','campaigns','staff-pay'] as const;
 export const STAFF_ROLES = ['manager','front-desk','finance','instructor'] as const;
@@ -64,12 +64,12 @@ export async function staffIdentity(tx: Transaction, personId: unknown, role: St
   insist(!await tx.db.prepare("SELECT 1 FROM oa_operators WHERE lower(email)=lower(?) AND role='owner'").bind(staff.email).first(),'owner_identity_cannot_be_staff',409);
   return staff;
 }
-function saveAccess(tx: Transaction, before: StaffAccess | null, value: Pick<StaffAccess,'personId'|'role'|'enabled'|'rights'> & Partial<StaffAccess>) {
+function saveAccess(tx: Transaction, before: StaffAccess | null, value: Pick<StaffAccess,'personId'|'role'|'enabled'|'rights'> & Partial<StaffAccess>, command: string, input: Record<string,unknown> = {}) {
   const saved = {...value,id:`staff-access:${value.personId}`,version:(before?.version ?? 0)+1,updatedAt:now(),updatedBy:tx.who.id} as StaffAccess;
   tx.put('staffAccess',saved);
   const staff=person(tx.state,saved.personId,false);
   tx.sql.push(tx.statement("UPDATE oa_tokens SET revoked_at=? WHERE kind='invite' AND consumed_at IS NULL AND revoked_at IS NULL AND issuer_id IN (SELECT id FROM oa_operators WHERE lower(email)=lower(?))",Date.now(),staff.email));
-  tx.put('staffAccessEvent',{id:id(),personId:saved.personId,before:before ?? null,after:saved,version:saved.version,at:saved.updatedAt,actorId:tx.who.id});
+  tx.put('staffAccessEvent',{id:id(),personId:saved.personId,before:before ?? null,after:saved,version:saved.version,at:saved.updatedAt,actorId:tx.who.id,actorRole:tx.who.role,command,reason:input.reason ? text(input.reason,'reason',500) : null});
   return saved;
 }
 export async function grantStaffAccess(tx: Transaction, input: Record<string,unknown>) {
@@ -90,7 +90,7 @@ export async function grantStaffAccess(tx: Transaction, input: Record<string,unk
     });
     rights[right] = {enabled:grant.enabled,scopes,version:(before?.rights?.[right]?.version ?? 0)+1,...(right === 'member-record' ? {canCreate:grant.canCreate === true} : {})};
   }
-  return saveAccess(tx,before,{personId:staff.id,role,enabled:input.enabled,rights,...(before?.legacyGrants ? {legacyGrants:before.legacyGrants} : {})});
+  return saveAccess(tx,before,{personId:staff.id,role,enabled:input.enabled,rights,...(before?.legacyGrants ? {legacyGrants:before.legacyGrants} : {})},'staff.access.grant',input);
 }
 
 const legacyKinds = {'member-record':'memberRecordGrant',appointment:'appointmentBookingGrant','attendance-plan':'attendanceBookingGrant',retail:'retailStaffGrant'} as const;
@@ -138,7 +138,7 @@ export function updateLegacyStaffAccess(tx: Transaction, door: LegacyStaffDoor, 
   const old = legacyStaffGrant(tx.state,{personId:input.personId},door);
   const metadata = {...input,version:(old?.version ?? 0)+1};
   const saved = saveAccess(tx,before,{personId:input.personId,role,enabled:Object.values(rights).some(right => right?.enabled),rights,
-    legacyGrants:{...before?.legacyGrants,[door]:metadata}});
+    legacyGrants:{...before?.legacyGrants,[door]:metadata}},({'member-record':'member.record.grant',appointment:'appointment.booking.grant','attendance-plan':'attendance.booking.grant',retail:'retail.staff.grant'})[door],input);
   return legacyStaffGrant(tx.state,{personId:saved.personId},door)!;
 }
 /** A newly created record joins only the creator's existing member-record scopes. */
@@ -146,5 +146,5 @@ export function extendStaffMemberScope(tx: Transaction, memberId: string) {
   const before = staffAccess(tx.state,tx.who); insist(before,'staff_right_required',403);
   const grant = before.rights['member-record']; insist(grant?.enabled && grant.canCreate,'member_record_create_right_required',403);
   const rights = {...before.rights,'member-record':{...grant,version:(grant.version ?? 0)+1,scopes:grant.scopes.map(scope => ({...scope,memberIds:[...new Set([...scope.memberIds,memberId])].sort()}))}};
-  return saveAccess(tx,before,{...before,rights});
+  return saveAccess(tx,before,{...before,rights},'member.record.create');
 }

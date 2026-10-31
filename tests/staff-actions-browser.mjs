@@ -5,6 +5,40 @@ import { chromium } from '@playwright/test'
 
 const cookieInto=async(context,cookie,origin)=>{const i=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,i),value:cookie.slice(i+1),url:origin}])}
 const open=async(page,label)=>{const summary=page.locator('summary').filter({hasText:new RegExp(`^${label}$`)}).first();await summary.click();return summary.locator('..')}
+
+// The existing scheduling Verify invokes this populated audit screen at desktop.
+// A proof run also captures the same changed screen on a phone.
+export async function studioAuditBrowser(h,{staff,query,drawer}) {
+  const proof=process.env.STRAP_PROOF_DIR
+  if(proof)await mkdir(proof,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {
+    for(const width of proof ? [1440,390] : [1440]) {
+      const context=await browser.newContext({viewport:{width,height:1000}})
+      await assets(context,h);await cookieInto(context,h.owner,h.origin)
+      const page=await context.newPage()
+      await page.goto(h.origin+'/app/people?'+query+'#staff-actions')
+      const panel=page.locator('#staff-actions')
+      if(width===1440) {
+        assert.equal(await panel.locator('[data-staff-command]').count(),2)
+        assert.ok(await panel.getByText(drawer?'Correct drawer count':'Staff access revoked',{exact:false}).first().isVisible())
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+        const expected=(await h.send('/api/strap/staff-history?'+query,undefined,h.owner)).value.rows
+        await panel.locator('details.more summary').last().click()
+        assert.match(await panel.innerText(),drawer?/\$165\.00/:/front-desk/)
+        if(drawer)assert.match(await panel.innerText(),/\$170\.00/)
+        const download=page.waitForEvent('download');await panel.getByRole('link',{name:'Download staff history CSV',exact:true}).click()
+        const stream=await(await download).createReadStream(),parts=[];for await(const part of stream)parts.push(part)
+        const {parseCsv}=await import('./report-downloads.mjs'),[columns,...data]=parseCsv(Buffer.concat(parts).toString())
+        assert.deepEqual(data.map(row=>row[columns.indexOf('id')]),expected.map(row=>row.id))
+        const jsonHref=await panel.getByRole('link',{name:'Open staff history JSON',exact:true}).getAttribute('href')
+        assert.deepEqual((await h.send(jsonHref,undefined,h.owner)).value.rows,expected)
+      }
+      if(proof)await panel.screenshot({path:join(proof,`SEC-002-${drawer?'drawer':'access'}-history-${width}.png`)})
+      await context.close()
+    }
+  } finally {await browser.close()}
+}
 async function assets(context,h) {
   await context.route(h.origin+'/**',async route=>{
     const path=new URL(route.request().url()).pathname
@@ -20,7 +54,7 @@ async function linkCookie(h,email) {
 }
 export async function staffActionsBrowser(h,{ana,ben,publish,historyMember}) {
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     let offset=4
     for(const width of [1440,390]) {
@@ -115,7 +149,7 @@ export async function staffActionsBrowser(h,{ana,ben,publish,historyMember}) {
 
 // STAFF-006 / MOVE-011: restored mail stays visibly paused on the real profile.
 export async function pausedWaiverBrowser(h,personId,cookie) {
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     for(const width of [1440,390]) {
       const context=await browser.newContext({viewport:{width,height:1000}});await assets(context,h);await cookieInto(context,cookie,h.origin)

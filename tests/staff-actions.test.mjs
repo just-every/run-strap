@@ -29,6 +29,12 @@ async function prepare(h) {
 // The catalogue is the real dispatch registry. Every member-tagged command
 // must have a working staff pair, not just a matching string in a second list.
 test('STAFF-006 / SEC-002: every current member command has a real staff door, identical member outcome and one canonical named-right audit entry; unauthorized users and agents cannot act for members',async()=>{
+  await run(async audit=>{
+    await audit.confirmSetup(audit.owner)
+    await audit.cmd('studio.save',{location:'Nashville',timeZone:'America/Chicago'})
+    const proof=await(await import('./studio-audit-cases.mjs')).studioAuditCases(audit)
+    await(await import('./staff-actions-browser.mjs')).studioAuditBrowser(audit,proof)
+  })
   const billing=billingEdge()
   await run(async h=>{
     const {coach,ana,ben,publish}=await prepare(h)

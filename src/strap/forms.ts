@@ -144,7 +144,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'staff.access.grant') {
     const selected = (prefix: string) => Object.keys(input).filter(key => key.startsWith(prefix) && input[key] === 'true').map(key => key.slice(prefix.length));
     const scope = {memberIds:selected('member_'),locationIds:selected('location_'),doors:['all']};
-    return {personId:input.personId,role:input.role,enabled:input.enabled === 'true',rights:Object.fromEntries(selected('right_').map(right => [right,{enabled:true,scopes:[scope],...(right === 'member-record' ? {canCreate:input.canCreate === 'true'} : {})}]))};
+    return {personId:input.personId,role:input.role,enabled:input.enabled === 'true',reason:input.reason,rights:Object.fromEntries(selected('right_').map(right => [right,{enabled:true,scopes:[scope],...(right === 'member-record' ? {canCreate:input.canCreate === 'true'} : {})}]))};
   }
   if (name === 'member.record.grant') { input.enabled = input.enabled === 'true'; input.canCreate = input.canCreate === 'true'; input.memberIds = Object.keys(input).filter(k => k.startsWith('member_') && input[k] === 'true').map(k => k.slice(7));for(const key of Object.keys(input)) if(key.startsWith('member_')) delete input[key]; }
   if (name === 'member.note.add') input.alert = input.alert === 'true';

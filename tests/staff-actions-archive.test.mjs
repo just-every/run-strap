@@ -31,6 +31,8 @@ test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 
     h=await harness({root:source});await setup(h,h.owner)
     const member=await h.person('Maya'),waiver=await h.cmd('waiver.publish',{text:'Only Maya can acknowledge this current studio waiver.'})
     await h.cmd('waiver.launch',{personId:member.id,waiverId:waiver.id,requestId:'source-link',channel:'phone'})
+    const {seedStudioAuditArchive,restoredStudioAudit}=await import('./studio-audit-cases.mjs')
+    const studioAuditSeed=await seedStudioAuditArchive(h)
     assert.equal((await h.state()).memberMail.origin,h.origin,'the first explicit member link records its source installation')
     const portable=(await h.send('/api/strap/exit.json',undefined,h.owner)).value
     assert.ok(!('st_waiver_launch_dispatches'in portable.tables))
@@ -93,6 +95,7 @@ test('SEC-002 / MSG-002 / ATT-002 / SCHED-004 / LEAD-002 / LEAD-006 / STAFF-002 
     assert.equal((await h.send('/api/strap/state',undefined,identity.owner)).status,401)
     const owner=await h.signIn(h.auth.OWNER_EMAIL);await setup(h,owner);await h.enroll(owner)
     const memberCookie=await h.signIn(member.email)
+    await restoredStudioAudit(h,studioAuditSeed,owner,memberCookie)
     assert.equal((await h.send('/app',undefined,memberCookie)).status,200,'ordinary member-owned native sign-in still works')
     await h.cmd('recognition.process',{},owner)
     assert.deepEqual(await h.cmd('lead.create',inquiry,owner),lead,'LEAD-002 restore preserves request identity and never duplicates inquiry')
