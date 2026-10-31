@@ -60,6 +60,9 @@ export async function widgetJourney(h,week) {
   const full=await widgetChoice(h,widgetOrigin,entries[2].id);await h.cmd('waiver.acknowledge',{id:waiver.id},other.cookie);await h.cmd('booking.book',{classId:entries[2].id},other.cookie);
   const fullBefore=await records(h);await h.cmd('booking.book',{classId:entries[2].id,selection:full.token,adultConfirmed:true},member.cookie,409);assert.deepEqual(await records(h),fullBefore,'full class adds no waitlist');
   const changed=await widgetChoice(h,widgetOrigin,entries[3].id);await h.cmd('widget.class.publish',{classId:entries[3].id,description:'Changed public class details.',approved:true});await h.cmd('booking.book',{classId:entries[3].id,selection:changed.token,adultConfirmed:true},member.cookie,409);
+  const closed=await widgetChoice(h,widgetOrigin,entries[3].id);
+  const closePreview=await h.cmd('closure.prepare',{scope:'class',classId:entries[3].id,reason:'Studio cancelled this occurrence'});await h.cmd('closure.confirm',{id:closePreview.id,impact:closePreview.impact.key});
+  const closedBefore=await records(h);await h.cmd('booking.book',{classId:entries[3].id,selection:closed.token,adultConfirmed:true},member.cookie,409);assert.deepEqual(await records(h),closedBefore,'changed source refuses captured selection');
   const grant=enabled=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{booking:{enabled,scopes:[{memberIds:[member.id],locationIds:['studio'],doors:['all']}]}}});
   await grant(true);await h.enroll(desk.cookie);
   const staffChoice=await widgetChoice(h,widgetOrigin,entries[1].id),staffInput={classId:entries[1].id,selection:staffChoice.token,personId:member.id,pay:'auto',channel:'desk',requestId:'synthetic-strap-widget-staff'};
@@ -68,6 +71,17 @@ export async function widgetJourney(h,week) {
   const actions=(await h.state()).staffActions.filter(a=>a.command==='booking.desk'&&a.after.id===staffBooking.id);assert.equal(actions.length,1);assert.equal(actions[0].right,'booking');assert.equal(actions[0].personId,member.id);assert.equal(actions[0].actorRole,'front-desk');assert.ok(!JSON.stringify(actions).includes(staffChoice.token),'portable audit holds no handoff credential');
   const revoked=await widgetChoice(h,widgetOrigin,entries[4].id);await grant(false);const revokedBefore=await records(h);
   await h.cmd('booking.desk',{...staffInput,classId:entries[4].id,selection:revoked.token,requestId:'synthetic-strap-widget-revoked'},desk.cookie,403);await h.cmd('booking.desk',staffInput,desk.cookie,403);assert.deepEqual(await records(h),revokedBefore);
+  const revokedMember=await widgetChoice(h,widgetOrigin,entries[4].id);
+  await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:false});
+  const inactiveBefore=await records(h);await h.cmd('booking.book',{classId:entries[4].id,selection:revokedMember.token,adultConfirmed:true},member.cookie,403);assert.deepEqual(await records(h),inactiveBefore,'revoked member cannot redeem a capture');
+  await h.cmd('person.save',{id:member.id,name:member.name,email:member.email,role:'member',active:true});
+  const family=await h.cmd('household.save',{name:'Widget dependent control'});await h.cmd('household.guardian.link',{id:family.id,guardianId:other.id,evidenceReference:'synthetic-strap-widget-guardian'});await h.cmd('household.participant.add',{id:family.id,personId:member.id});
+  const dependentBefore=await records(h);await h.cmd('booking.book',{classId:entries[4].id,selection:revokedMember.token,adultConfirmed:true},member.cookie,403);assert.deepEqual(await records(h),dependentBefore,'adult affirmation does not override a known dependent');
+  await h.cmd('household.participant.remove',{id:family.id,participantId:member.id});
+  const concurrent=await widgetChoice(h,widgetOrigin,entries[4].id),concurrentBefore=await h.state();
+  const raced=await Promise.all([member.cookie,other.cookie].map(cookie=>h.send('/api/strap/command',{name:'booking.book',input:{classId:entries[4].id,selection:concurrent.token,adultConfirmed:true}},cookie)));
+  assert.equal(raced.filter(r=>r.status===200).length,1);assert.ok(raced.filter(r=>r.status!==200).every(r=>[409,410].includes(r.status)));const concurrentAfter=await h.state();assert.equal(concurrentAfter.bookings.length,concurrentBefore.bookings.length+1);assert.equal(concurrentAfter.packs.reduce((n,p)=>n+p.remaining,0),concurrentBefore.packs.reduce((n,p)=>n+p.remaining,0)-1);
+  await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'),'deactivated instructor has no public bio');await h.cmd('person.save',{id:coach.id,name:coach.name,email:coach.email,role:'instructor',active:true});
   await h.cmd('widget.instructor.publish',{instructorId:coach.id,publicName:'Studio teacher',bio:'An approved public biography about movement teaching.',approved:false});assert.ok(!(await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).text.includes('An approved public biography'));
   await h.cmd('widget.settings.save',{enabled:false,origins:[widgetOrigin],confirm:true});assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404);
   return {member,coach};
