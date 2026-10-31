@@ -177,3 +177,37 @@ export async function pausedWaiverBrowser(h,personId,cookie) {
     }
   } finally {await browser.close()}
 }
+
+export async function nativeAuditBrowser(h,{member,rows,query}) {
+  const proof=process.env.STRAP_PROOF_DIR
+  if(proof)await mkdir(proof,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  try {
+    for(const width of proof?[1440,390]:[1440]) {
+      const context=await browser.newContext({viewport:{width,height:1000}})
+      await assets(context,h);await cookieInto(context,h.owner,h.origin)
+      const page=await context.newPage()
+      await page.goto(h.origin+'/app/people?'+query+'#staff-actions')
+      const panel=page.locator('#staff-actions')
+      if(width===1440) {
+        assert.equal(await panel.locator('[data-staff-command]').count(),rows.length)
+        for(const command of rows.map(row=>row.command))assert.equal(await panel.locator('[data-staff-command="'+command+'"]').count(),1)
+        await panel.getByLabel('Action command',{exact:true}).selectOption('attendance.correct')
+        await panel.getByRole('button',{name:'Filter staff actions',exact:true}).click()
+        assert.equal(await panel.locator('[data-staff-command]').count(),1)
+        await panel.locator('summary').click()
+        assert.match(await panel.innerText(),/Synthetic private correction/)
+        assert.match(await panel.innerText(),/1500/)
+        const expected=(await h.send('/api/strap/staff-history?'+new URLSearchParams({person:member.id,auditCommand:'attendance.correct'}),undefined,h.owner)).value.rows
+        const pending=page.waitForEvent('download')
+        await panel.getByRole('link',{name:'Download staff history CSV',exact:true}).click()
+        const stream=await(await pending).createReadStream(),parts=[];for await(const part of stream)parts.push(part)
+        const {parseCsv}=await import('./report-downloads.mjs'),[columns,...data]=parseCsv(Buffer.concat(parts).toString())
+        assert.deepEqual(data.map(values=>values[columns.indexOf('id')]),expected.map(row=>row.id))
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
+      }
+      if(proof)await panel.screenshot({path:join(proof,`SEC-002-native-audit-${width}.png`)})
+      await context.close()
+    }
+  } finally {await browser.close()}
+}

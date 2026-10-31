@@ -104,3 +104,122 @@ export async function restoredStudioAudit(h,seed,owner,memberCookie) {
   const replayed=(await h.send('/api/strap/staff-history?auditRight=drawer',undefined,owner)).value.rows
   assert.deepEqual(replayed.filter(row=>row.sessionId===seed.drawer.id),seed.rows.filter(row=>row.sessionId===seed.drawer.id))
 }
+
+// The owner opens real retained money and attendance sources, then erases the
+// used identity through the existing reviewed privacy door.
+export async function nativeAuditSources(h,{erase=false}={}) {
+  const member=await h.person('SyntheticAuditMember'),coach=await h.person('SyntheticAuditCoach','instructor')
+  for(const waiver of (await h.state()).waivers.filter(w=>!w.service||w.service==='Synthetic audit class'))
+    await h.cmd('waiver.acknowledge',{id:waiver.id,...(waiver.requiresSignature?{documentHash:waiver.documentHash,signerName:member.name,confirm:true}:{})},member.cookie)
+  const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:3,amountCents:0,expiresAt:'2099-12-31T00:00:00Z'})).id})
+  await h.cmd('bookingRule.save',{service:'Synthetic audit class',cancelCutoffHours:12,lateCancelReturnsCredit:false,lateCancelFeeCents:1500})
+  const start=new Date(Math.ceil((Date.now()+3600000)/60000)*60000),week=new Date(start)
+  week.setUTCDate(week.getUTCDate()-(week.getUTCDay()+6)%7)
+  const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week:week.toISOString().slice(0,10),classes:[{title:'Synthetic audit class',service:'Synthetic audit class',room:'Synthetic audit room',start:start.toISOString(),end:new Date(+start+3600000).toISOString(),capacity:3,instructorId:coach.id}]})).id})).classes[0]
+  const booked=await h.cmd('booking.book',{classId:entry.id},member.cookie)
+  const terms=(await h.state(member.cookie)).bookings.find(row=>row.id===booked.id).cancelEffect.key
+  await h.cmd('booking.cancel',{id:booked.id,terms},member.cookie)
+  await h.cmd('payment.record',{personId:member.id,amountCents:1500,reference:'synthetic-strap-audit-fee'})
+  const correction={id:booked.id,outcome:'early_cancel',reason:'Synthetic private correction',refundReference:'synthetic-strap-audit-refund'}
+  const baseline=await h.state()
+  for(const cookie of [member.cookie,coach.cookie])await h.cmd('attendance.correct',correction,cookie,403)
+  assert.equal((await h.state()).version,baseline.version,'unsafe attendance correction changes neither money nor audit')
+  const corrected=await h.cmd('attendance.correct',correction)
+  await h.cmd('attendance.correct',correction,h.owner,409)
+  const current=(await h.state()).packs.find(row=>row.id===pack.id)
+  const adjustment={id:pack.id,revision:current.creditRevision,creditsDelta:1,reason:'Synthetic private entitlement reason',requestId:'synthetic-strap-audit-credit'}
+  const adjusted=await h.cmd('pack.adjust',adjustment)
+  await h.cmd('pack.adjust',adjustment)
+  const query=new URLSearchParams({person:member.id})
+  const all=await auditDownload(h,query)
+  const rows=all.filter(row=>['attendanceCorrection','packCreditEvent','payment'].includes(row.sourceKind))
+  assert.equal(rows.length,3,'one correction, one adjustment and one external refund source')
+  assert.equal(new Set(rows.map(row=>row.sourceId)).size,3)
+  const change=rows.find(row=>row.command==='attendance.correct')
+  assert.equal(change.id,corrected.corrections[0].id)
+  assert.deepEqual([change.before.cancellation,change.after.to,change.after.feeReversedCents,change.after.creditRestored],['late','early_cancel',1500,true])
+  assert.equal(change.reason,correction.reason);assert.equal(change.version,corrected.corrections[0].version)
+  const credit=rows.find(row=>row.command==='pack.adjust')
+  assert.deepEqual([credit.sourceId,credit.before.remaining,credit.after.remaining,credit.version],[adjusted.id,3,4,adjusted.revision])
+  const refund=rows.find(row=>row.command==='payment.refund.recorded')
+  assert.deepEqual([refund.sourceId,refund.after.amountCents,refund.after.collection],[change.after.refundId,-1500,'external-record-only'])
+  assert.ok(!JSON.stringify(rows).includes(correction.refundReference),'private settlement references stay outside audit exports')
+  const actor=(await h.state()).actor
+  for(const row of rows)assert.deepEqual([row.actorId,row.actorRole],[actor.id,'owner'])
+  for(const command of rows.map(row=>row.command)) {
+    const selected=await auditDownload(h,new URLSearchParams({person:member.id,auditCommand:command}))
+    assert.equal(selected.length,1);assert.equal(selected[0].command,command)
+    const page=await h.send('/app/people?'+new URLSearchParams({person:member.id,auditCommand:command}),undefined,h.owner)
+    assert.equal(page.status,200);assert.ok(page.text.includes('data-staff-command="'+command+'"'))
+  }
+  const state=await h.state()
+  assert.equal(state.balances.find(row=>row.personId===member.id).balanceCents,0)
+  assert.equal(state.packs.find(row=>row.id===pack.id).remaining,4)
+  const source=JSON.parse((await h.db.prepare('SELECT data FROM st_records WHERE id=?').bind(booked.id).first()).data)
+  const historical=structuredClone(source)
+  delete historical.corrections[0].id;delete historical.corrections[0].version;delete historical.corrections[0].byRole
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(historical),booked.id).run()
+  const legacyQuery=new URLSearchParams({person:member.id,auditCommand:'attendance.correct'})
+  const legacy=await auditDownload(h,legacyQuery)
+  assert.deepEqual([legacy[0].id,legacy[0].actorRole,legacy[0].version],[booked.id+':correction:0',null,null])
+  assert.deepEqual(await auditDownload(h,legacyQuery),legacy,'legacy corrections have stable source identities without inventing provenance')
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify(source),booked.id).run()
+  const seed={member,rows,query,correction,adjustment}
+  if(erase)await eraseNativeAudit(h,seed)
+  return seed
+}
+
+export async function eraseNativeAudit(h,{member,rows,query,correction,adjustment}) {
+    const {verifiedPrivacyRequest,privacyDecision}=await import('./privacy-journey.mjs')
+    const access=await verifiedPrivacyRequest(h,member,'access','-audit')
+    const copy=await h.cmd('privacy.export',{id:access.id})
+    assert.ok(copy.records.some(row=>row.kind==='payment'&&row.data.id===rows.find(event=>event.command==='payment.refund.recorded').sourceId))
+    const request=await verifiedPrivacyRequest(h,member,'erasure','-audit')
+    const review=await h.cmd('privacy.erase.prepare',{id:request.id,...privacyDecision})
+    await h.cmd('privacy.erase.confirm',{id:review.id,confirm:true})
+    const redacted=(await auditDownload(h,query)).filter(row=>rows.some(original=>original.id===row.id))
+    assert.equal(redacted.length,3,'redaction preserves the original source identities')
+    for(const row of redacted)assert.deepEqual([row.erased,row.reason,row.before,row.after],[true,null,null,null])
+    for(const value of [member.email,member.name,correction.reason,adjustment.reason,correction.refundReference])assert.ok(!JSON.stringify(await auditDownload(h,query)).includes(value))
+    const erasedVersion=(await h.state()).version
+    await h.cmd('attendance.correct',correction,h.owner,409)
+    await h.state(member.cookie,401)
+    assert.equal((await h.state()).version,erasedVersion,'captured correction and retired sign-in cannot restore data')
+}
+
+export async function nativeAuditArchive({checkout,archive,exec}) {
+  const {mkdtemp,rm,mkdir,copyFile,chmod}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join,resolve}=await import('node:path')
+  const {harness}=await import('./harness.mjs')
+  const temp=await mkdtemp(join(tmpdir(),'strap-native-audit-')),source=join(temp,'source'),restored=join(temp,'restored'),fenced=join(temp,'fenced'),old=join(temp,'old.rer'),journal=join(temp,'current.rer')
+  let h
+  try {
+    await checkout(source);await checkout(restored);await checkout(fenced)
+    await exec(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','foundation','--local'],{cwd:source,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6})
+    h=await harness({root:source});await h.confirmSetup(h.owner)
+    await h.cmd('studio.save',{location:'Synthetic audit studio',timeZone:'America/Chicago'})
+    const seed=await nativeAuditSources(h),auth=h.auth,sourceOwner=h.owner
+    await h.close();h=null
+    await archive(source,['export','--output',old]);await archive(restored,['import','--input',old,'--yes'])
+    h=await harness({root:restored,auth,owner:sourceOwner})
+    await h.state(sourceOwner,401)
+    const owner=await h.signIn(auth.OWNER_EMAIL);await h.confirmSetup(owner);await h.enroll(owner)
+    const rows=await auditDownload(h,seed.query,owner)
+    assert.deepEqual(rows,seed.rows,'native restore preserves the original correction, credit-adjustment and refund identities and recorded facts')
+    const current={...h,owner,cmd:(name,input,cookie=owner,status=200)=>h.cmd(name,input,cookie,status),state:(cookie=owner,status=200)=>h.state(cookie,status)}
+    seed.member.cookie=await h.signIn(seed.member.email)
+    await eraseNativeAudit(current,seed)
+    await h.close();h=null
+    await archive(restored,['export','--output',journal])
+    await mkdir(join(fenced,'.recovery'),{mode:0o700})
+    await copyFile(journal,join(fenced,'.recovery/current.rer'));await chmod(join(fenced,'.recovery/current.rer'),0o600)
+    await assert.rejects(exec(process.execPath,[resolve('node_modules/@runeditrun/rer/global/rer.mjs'),'import','--input',old,'--journal','.recovery/current.rer','--yes','--no-queue'],{cwd:fenced,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:2e6}),error=>error.code===4&&/erasure_epoch/.test(error.stderr+error.stdout),'a later redaction checkpoint refuses the entire older capture')
+    await archive(fenced,['import','--input',journal,'--yes'])
+    h=await harness({root:fenced,auth,owner:sourceOwner})
+    const finalOwner=await h.signIn(auth.OWNER_EMAIL);await h.confirmSetup(finalOwner);await h.enroll(finalOwner)
+    const redacted=(await auditDownload(h,seed.query,finalOwner)).filter(row=>seed.rows.some(original=>original.id===row.id))
+    assert.equal(redacted.length,3,'the later journal fences an older capture without losing audit identities')
+    for(const row of redacted)assert.deepEqual([row.erased,row.reason,row.before,row.after],[true,null,null,null])
+    const portable=JSON.stringify((await h.send('/api/strap/exit.json',undefined,finalOwner)).value)
+    for(const value of [seed.member.email,seed.member.name,seed.correction.reason,seed.adjustment.reason,seed.correction.refundReference])assert.ok(!portable.includes(value),'an older capture cannot resurrect erased personal audit facts')
+  } finally {if(h)await h.close();await rm(temp,{recursive:true,force:true})}
+}

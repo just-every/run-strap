@@ -123,7 +123,8 @@ export function recognitionSnapshot(state: State, who: Actor) {
   const owner = who.role === 'owner' && who.isOwner;
   if (!owner && (who.role !== 'member' || !who.personId || !memberActive(state,who.personId))) return empty;
   const rules = list(state,'milestone').sort((a,b) => a.threshold-b.threshold);
-  const members = state.people.filter(p => p.role === 'member' && !p.erasedAt && (owner || p.id === who.personId));
+  // Native restore can change storage order; project people by durable identity.
+  const members = state.people.filter(p => p.role === 'member' && !p.erasedAt && (owner || p.id === who.personId)).sort((a,b) => a.id.localeCompare(b.id));
   const preferences = members.map(member => {
     const current = preference(state,member.id);
     return {id:preferenceId(member.id),personId:member.id,optedIn:false,version:0,...current,

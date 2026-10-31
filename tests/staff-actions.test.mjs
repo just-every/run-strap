@@ -34,6 +34,9 @@ test('STAFF-006 / SEC-002: every current member command has a real staff door, i
     await audit.cmd('studio.save',{location:'Nashville',timeZone:'America/Chicago'})
     const proof=await(await import('./studio-audit-cases.mjs')).studioAuditCases(audit)
     await(await import('./staff-actions-browser.mjs')).studioAuditBrowser(audit,proof)
+    const native=await(await import('./studio-audit-cases.mjs')).nativeAuditSources(audit,{erase:false})
+    await(await import('./staff-actions-browser.mjs')).nativeAuditBrowser(audit,native)
+    await(await import('./studio-audit-cases.mjs')).eraseNativeAudit(audit,native)
   })
   const billing=billingEdge()
   await run(async h=>{
