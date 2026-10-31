@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/recovery-diagnostics-cases.mjs": {
-      "sha256": "7d181081ad89c0a45040532ad648661ba39fc5008f26836915e87c3dbefb72f9",
+      "sha256": "2c9bdf6620bcda19d046fdf42e9183a68274a8ab41242b4c1a795814a1985cf7",
       "executable": false
     },
     "tests/renewal-disclosure-timing.mjs": {
