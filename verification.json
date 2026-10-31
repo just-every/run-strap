@@ -42,11 +42,19 @@
       ]
     },
     {
-      "name": "domain-studio",
+      "name": "domain-studio-1",
       "browser": true,
       "hosted": false,
       "commands": [
-        "STRAP_RIGHTS_PROOF_DIR=./logs/proof/staff pnpm run test:strap:studio",
+        "STRAP_RIGHTS_PROOF_DIR=./logs/proof/staff node --test --test-concurrency=1 tests/households.test.mjs tests/integrations.test.mjs tests/leads.test.mjs tests/locations.test.mjs tests/pack-credits.test.mjs tests/plan-changes.test.mjs"
+      ]
+    },
+    {
+      "name": "domain-studio-2",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "STRAP_RIGHTS_PROOF_DIR=./logs/proof/staff node --test --test-concurrency=1 tests/plan-entitlements.test.mjs tests/profiles.test.mjs tests/recognition.test.mjs tests/retail.test.mjs tests/security.test.mjs tests/staff-time.test.mjs tests/strap.test.mjs tests/teaching-pay.test.mjs",
         "node --test tests/demo.test.mjs"
       ]
     },
