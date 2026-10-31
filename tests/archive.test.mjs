@@ -564,6 +564,9 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const payoutReads=payments.reads.length,restoredPayouts=await readPayouts(h,restoredOwner);
     assert.equal(restoredPayouts.connected,false);
     for(const key of ['cards','payouts','refreshes','latest','totals'])assert.deepEqual(restoredPayouts[key],retainedPayouts[key]);
+    assert.deepEqual(restoredPayouts.payouts[0].statementTotals,{grossCents:3000,feeCents:175,netCents:2825});
+    assert.equal(restoredPayouts.payouts[0].transactions.length,1);
+    assert.ok(restoredPayouts.payouts[0].transactions.every(t=>t.providerTransactionId&&t.sourceId&&t.providerCreatedAt&&t.availableAt));
     assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,h.owner)).status,401,'source owner session cannot read restored observations');
     await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true},restoredOwner,409);
     await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout-new',confirm:true},restoredOwner,409);
