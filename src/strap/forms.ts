@@ -159,7 +159,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     const picked=Object.keys(input).filter(k=>k.startsWith('lc_')&&input[k]==='true').map(k=>k.slice(3));
     for (const k of Object.keys(input)) if (k.startsWith('lc_')) delete input[k];
     input.eligibleLocations=picked.length ? picked : [input.locationId];
-    for (const k of ['credits','validDays','revision']) input[k]=Number(input[k]);
+    for (const k of ['credits','validDays','revision','returnAfterDays']) input[k]=Number(input[k]);
   }
   if (name === 'catalog.retire') input.revision=Number(input.revision);
   if (name === 'pack.prepare' || name === 'pack.locations.set') {

@@ -2,6 +2,9 @@ import { humanOwner, insist, integer, list, now, record, text, type State, type 
 import type { Transaction } from './store';
 import { locations, packPlaces } from './locations';
 import { householdOf } from './households';
+import { saveIntroOffer, closeIntroOffer } from './intro-offers';
+
+export const catalogKinds = ['finite-pack','drop-in','fixed-term','intro'] as const;
 
 /** Published terms are append-only. The product only selects the version offered for a new sale. */
 export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
@@ -22,10 +25,20 @@ export function publishProduct(tx: Transaction, input: Record<string,unknown>) {
   insist(Array.isArray(services) && services.length <= 100,'invalid_eligibleServices');
   const labels = services.map(s=>text(s,'eligibleServices',160).replace(/\s+/g,' '));
   const eligibleServices = [...new Map(labels.map(s=>[s.toLowerCase(),s])).values()];
+  const kind = input.productKind ?? 'finite-pack';
+  insist(catalogKinds.includes(kind as typeof catalogKinds[number]),'invalid_product_kind');
+  const previous = prior ? record(tx.state,prior.data.versionId,'productCatalogVersion') : null;
+  insist(!previous || previous.kind === kind,'catalog_product_kind_immutable',409);
+  const credits = kind === 'fixed-term' ? 0 : kind === 'drop-in' ? 1 : integer(input.credits,'credits',1,10_000);
+  const validDays = integer(input.validDays,'validDays',1,kind === 'intro' ? 366 : 3660);
   const version = (prior?.data.version ?? 0)+1, at = now();
-  const published = {id:productId+':v'+version,productId,code,version,name:text(input.name,'name',80),kind:'finite-pack',currency:'USD',
-    amountCents:integer(input.amountCents,'amountCents',0,100_000_000),credits:integer(input.credits,'credits',1,10_000),
-    validDays:integer(input.validDays,'validDays',1,3660),eligibleServices,...places,
+  const versionId = productId+':v'+version;
+  const intro = kind === 'intro' ? saveIntroOffer(tx,{...input,days:validDays,credits,eligibleServices}) : null;
+  if (intro) tx.put('introOffer',{...intro,catalogVersionId:versionId,...places});
+  if (previous?.introOfferId) closeIntroOffer(tx,{id:previous.introOfferId});
+  const published = {id:versionId,productId,code,version,name:text(input.name,'name',80),kind,currency:'USD',
+    amountCents:integer(input.amountCents,'amountCents',0,100_000_000),credits,validDays,eligibleServices,...places,
+    ...(intro ? {introOfferId:intro.id,eligibility:intro.eligibility,limit:intro.limit,returnAfterDays:intro.returnAfterDays} : {}),
     locationNames:places.eligibleLocations.map(id=>({id,name:available.find(l=>l.id===id)!.name})),
     publishedAt:at,publishedBy:tx.who.id};
   tx.put('productCatalogVersion',published);
@@ -38,6 +51,8 @@ export function retireProduct(tx: Transaction, input: Record<string,unknown>) {
   const product = record(tx.state,input.id,'productCatalog');
   insist(integer(input.revision,'revision',1,Number.MAX_SAFE_INTEGER) === product.revision,'catalog_changed',409);
   insist(product.active,'catalog_retired',409);
+  const version = record(tx.state,product.versionId,'productCatalogVersion');
+  if (version.introOfferId) closeIntroOffer(tx,{id:version.introOfferId});
   const retired = {...product,active:false,revision:product.revision+1,updatedAt:now(),updatedBy:tx.who.id};
   tx.put('productCatalog',retired); return retired;
 }
@@ -57,8 +72,9 @@ export function personalCatalogMember(state: State, member: {id:string;role:stri
 export function catalogPackInput(tx: Transaction, input: Record<string,unknown>) {
   insist(Object.keys(input).every(k=>['personId','catalogVersionId'].includes(k)),'catalog_terms_cannot_be_overridden');
   const version = currentProductVersion(tx.state,input.catalogVersionId);
-  return {version:structuredClone(version),terms:{personId:input.personId,credits:version.credits,amountCents:version.amountCents,
-    eligibleServices:version.eligibleServices,locationId:version.locationId,eligibleLocations:version.eligibleLocations,
+  insist(version.kind !== 'intro','catalog_intro_requires_eligibility_review',409);
+  return {version:structuredClone(version),terms:{personId:input.personId,...(version.kind === 'fixed-term' ? {} : {credits:version.credits}),amountCents:version.amountCents,
+    ...(version.kind === 'fixed-term' ? {kind:'unlimited',planName:version.name} : {}),eligibleServices:version.eligibleServices,locationId:version.locationId,eligibleLocations:version.eligibleLocations,
     expiresAt:new Date(Date.now()+version.validDays*86_400_000).toISOString()}};
 }
 

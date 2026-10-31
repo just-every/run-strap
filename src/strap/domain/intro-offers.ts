@@ -1,3 +1,4 @@
+import { currentProductVersion, personalCatalogMember } from './product-catalog';
 import { humanOwner, id, insist, integer, list, now, person, record, text, type Actor, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { appendPackEvent } from './pack-credits';
@@ -95,6 +96,7 @@ const visibleSale = (r: RecordData) => {
 export async function previewIntro(tx: Transaction, input: Record<string,unknown>) {
   const p = subject(tx,input), offer = record(tx.state,input.offerId,'introOffer');
   insist(offer.active,'intro_offer_closed',409);
+  if (offer.catalogVersionId) { currentProductVersion(tx.state,offer.catalogVersionId); personalCatalogMember(tx.state,p); }
   const requestId = text(input.requestId,'requestId',100);
   const exceptionReason = input.exceptionReason ? text(input.exceptionReason,'exceptionReason',500) : null;
   insist(!exceptionReason || tx.who.role === 'owner','owner_required',403);
@@ -107,6 +109,7 @@ export async function previewIntro(tx: Transaction, input: Record<string,unknown
   insist(!failure || exceptionReason,failure ?? 'intro_ineligible',409);
   insist(!exceptionReason || failure,'intro_exception_not_needed');
   const preview = {id:id(),personId:p.id,offerId:offer.id,offerName:offer.name,days:offer.days,credits:offer.credits,amountCents:offer.amountCents,
+    ...(offer.catalogVersionId ? {catalogVersion:structuredClone(currentProductVersion(tx.state,offer.catalogVersionId))} : {}),
     eligibleServices:offer.eligibleServices,limit:offer.limit,exceptionReason,eligibilityFailure:failure,
     basis:await basis(tx.state,p.id,offer),status:'preview',createdAt:at,createdBy:tx.who.id,createdByRole:tx.who.role,requestId,
     validUntil:new Date(Date.parse(at)+15*60_000).toISOString(),collection:'studio-balance-only',renewsAutomatically:false};
@@ -123,6 +126,7 @@ export async function purchaseIntro(tx: Transaction, input: Record<string,unknow
   const prior = list(tx.state,'introSale').find(r => r.previewId === preview.id);
   if (prior) return tx.who.role === 'owner' ? prior : visibleSale(prior);
   const p = member(tx.state,preview.personId), offer = record(tx.state,preview.offerId,'introOffer'), at = now();
+  if (offer.catalogVersionId) { currentProductVersion(tx.state,offer.catalogVersionId); personalCatalogMember(tx.state,p); }
   insist(offer.active && preview.validUntil > at,'intro_preview_expired',409); tx.future(preview.validUntil);
   insist(preview.basis === await basis(tx.state,p.id,offer),'intro_eligibility_changed',409);
   const failure = refusal(tx.state,p.id,offer,at);
@@ -135,9 +139,10 @@ export async function purchaseIntro(tx: Transaction, input: Record<string,unknow
     amountCents:offer.amountCents,limit:offer.limit,eligibleServices:offer.eligibleServices,startsAt:at,expiresAt:pack.expiresAt,
     exceptionReason:preview.exceptionReason,eligibilityFailure:failure,exceptionApprovedBy:preview.exceptionReason ? tx.who.id : null,
     purchasedBy:tx.who.id,channel:tx.who.role === 'owner' ? staffChannel(input) : 'member-self-service',createdAt:at};
+  if (offer.catalogVersionId) Object.assign(pack,{catalogVersion:structuredClone(currentProductVersion(tx.state,offer.catalogVersionId)),purchaseExpiresAt:pack.expiresAt,purchaseAmountCents:pack.amountCents,locationId:offer.locationId,eligibleLocations:offer.eligibleLocations});
   tx.put('pack',pack); appendPackEvent(tx,pack,{type:'grant',credits:pack.credits});
   tx.put('introSale',sale); tx.put('introPreview',{...preview,status:'purchased',saleId:sale.id});
-  tx.put('charge',{id:id(),personId:p.id,packId:pack.id,introSaleId:sale.id,amountCents:offer.amountCents,kind:'intro',createdAt:at});
+  tx.put('charge',{id:id(),personId:p.id,packId:pack.id,introSaleId:sale.id,...(offer.catalogVersionId ? {catalogVersionId:offer.catalogVersionId,locationId:offer.locationId} : {}),amountCents:offer.amountCents,kind:'intro',createdAt:at});
   contractNotice(tx,`intro-sale:${sale.id}`,p.id,'Intro offer purchased',`${offer.name}: ${offer.credits} visits, $${(offer.amountCents/100).toFixed(2)} added to your studio balance, valid from ${at} until ${pack.expiresAt} (exclusive). No payment is collected. The intro ends without renewal unless you separately accept exact recurring invoice terms.`);
   settleUnpaid(tx,record(tx.state,pack.id,'pack')); promoteAll(tx);
   return tx.who.role === 'owner' ? sale : visibleSale(sale);

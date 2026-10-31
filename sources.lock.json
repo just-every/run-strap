@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "830e02d3ca293bcc028160ee833abadf89c04018983c2570a5d09d09f2d80070",
+      "sha256": "aa16d654f28bb86678e743855bc0a9873dd34b680ad4f266c1dab154abff526a",
       "executable": false
     },
     "DEMO.md": {
@@ -3382,7 +3382,7 @@
       "executable": false
     },
     "src/strap/domain/intro-offers.ts": {
-      "sha256": "540bb6023ef07d7c0541c0faa4a1ad991c2c705c72a3277012f92ca353ad6772",
+      "sha256": "a705e2a920fa203ded89d8e4f3350d20b5417ae4cf32e5edd2bcd13cc26d75d2",
       "executable": false
     },
     "src/strap/domain/inventory.ts": {
@@ -3446,7 +3446,7 @@
       "executable": false
     },
     "src/strap/domain/product-catalog.ts": {
-      "sha256": "be09bab2cf56825aeeb8f5a50f74d76a20e62e0e6a4c491aa87ec37c410b11d0",
+      "sha256": "aea7fe514bfd311223df9f3abb6be4d6cf8bf338c517d82461fed8e7ee299a27",
       "executable": false
     },
     "src/strap/domain/profiles.ts": {
@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/forms.ts": {
-      "sha256": "bbfcdf954506664d3355c0a5c5c15186499163e5d4f071bcc35076743d05bc44",
+      "sha256": "4e8f755d7f837b1da3f0a1335234a4549ccef8b8f51acd2d60b7b57658e9d172",
       "executable": false
     },
     "src/strap/http.ts": {
@@ -3998,7 +3998,7 @@
       "executable": false
     },
     "src/strap/ui/product-catalog.ts": {
-      "sha256": "f1edac7ac1764e0d5c9c4ceb1c73794ee0097c06bfff2a3ba98876eced961854",
+      "sha256": "8d445c6e2298ed5bfd7ee44f5d1035fa2b8aeaf58bea6fff49cb0bc26a14b53b",
       "executable": false
     },
     "src/strap/ui/profile.ts": {
@@ -4166,7 +4166,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "bd2e4bd360bd4f52eb025f0829924645239dd01304d962411d0b0a20589ff49a",
+      "sha256": "e57ddb45fe9fc1678ebe8fcba0970e68df0560a4cc61328f94e05a27cf98db62",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4238,7 +4238,7 @@
       "executable": false
     },
     "tests/catalog-cases.mjs": {
-      "sha256": "5b3978f449defff197129b43f49f1bb51dcf2dc18826c20ce50bbaab4d46168f",
+      "sha256": "8de753c550cfe8281e2fd61ae51830fe1652de35f499bf48708d758f34b51a14",
       "executable": false
     },
     "tests/checkin-browser.mjs": {
@@ -4510,7 +4510,7 @@
       "executable": false
     },
     "tests/plan-entitlements.test.mjs": {
-      "sha256": "84d277e82faea3e29066697c2ffd38dd59cd814020ababbd49d23bc9af8aa092",
+      "sha256": "8f34f6e286fe97960b150d84e90f9a5a5999a164731380baeb87335dbc562020",
       "executable": false
     },
     "tests/preferences-browser.mjs": {

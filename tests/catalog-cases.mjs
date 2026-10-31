@@ -48,7 +48,7 @@ export async function catalogPurchases(h,first,second) {
 
 export async function assertCatalogRestored(h,data,cookie) {
   const state=await h.state(cookie);
-  assert.deepEqual(state.productCatalog.versions,[data.v1,data.v2,data.v3]);
+  assert.deepEqual(state.productCatalog.versions.filter(v=>v.code===data.v1.code),[data.v1,data.v2,data.v3]);
   assert.equal(state.productCatalog.products.find(p=>p.id===data.v1.productId).active,false);
   for (const [id,version] of [[data.sale.id,data.v1],[data.secondSale.id,data.v2]]) {
     const pack=state.packs.find(p=>p.id===id);
@@ -60,4 +60,70 @@ export async function assertCatalogRestored(h,data,cookie) {
   const before=state.version;
   await h.cmd('pack.approve',{id:data.retiredPreview.id},cookie,409);
   assert.equal((await h.state(cookie)).version,before);
+}
+
+/** Catalog kinds share original evidence; intro sales keep the existing eligibility fence. */
+export async function catalogBreadth(h) {
+  const fixedMember=await h.person('CatalogFixed'),dropMember=await h.person('CatalogDrop'),introMember=await h.person('CatalogIntro'),waitingMember=await h.person('CatalogIntroWaiting');
+  const publish=(code,productKind,extra={})=>h.cmd('catalog.publish',{...catalogTerms,code,productKind,revision:0,...extra});
+  const fixed=await publish('synthetic-strap-fixed','fixed-term',{name:'Fixed unlimited',amountCents:34500,validDays:60});
+  const drop=await publish('synthetic-strap-drop','drop-in',{name:'Mat drop-in',amountCents:2500,validDays:30});
+  const intro=await publish('synthetic-strap-intro','intro',{name:'First mat week',amountCents:3900,validDays:7,credits:3,eligibility:'new',limit:'person'});
+  const sales=[];
+  for(const [member,version] of [[fixedMember,fixed],[dropMember,drop]]) {
+    const draft=await h.cmd('pack.prepare',{personId:member.id,catalogVersionId:version.id});
+    const sale=await h.cmd('pack.approve',{id:draft.id});sales.push({id:sale.id,version,member});
+    const pack=(await h.state(member.cookie)).packs.find(p=>p.id===sale.id);
+    assert.deepEqual(pack.catalogVersion,version);
+    assert.equal(pack.amountCents,version.amountCents);
+    if(version.kind==='fixed-term') {assert.equal(pack.entitlement.kind,'unlimited');assert.equal(pack.credits,0);}
+    else assert.deepEqual([pack.credits,pack.remaining],[1,1]);
+  }
+  const before=await h.state();
+  await h.cmd('pack.prepare',{personId:introMember.id,catalogVersionId:intro.id},h.owner,409);
+  await h.cmd('intro.preview',{offerId:intro.introOfferId,requestId:'synthetic-strap-unverified'},introMember.cookie,409);
+  assert.equal((await h.state()).version,before.version,'catalog intros cannot bypass verification by using the ordinary pack door');
+  for(const member of [introMember,waitingMember])await h.cmd('intro.identity.verify',{personId:member.id,householdChecked:true,reason:'Personal eligibility verified'});
+  const preview=await h.cmd('intro.preview',{offerId:intro.introOfferId,requestId:'synthetic-strap-intro-first'},introMember.cookie);
+  const waiting=await h.cmd('intro.preview',{offerId:intro.introOfferId,requestId:'synthetic-strap-intro-waiting'},waitingMember.cookie);
+  assert.deepEqual(preview.catalogVersion,intro);
+  const introSale=await h.cmd('intro.purchase',{id:preview.id,key:preview.key,confirm:true},introMember.cookie);
+  sales.push({id:introSale.packId,version:intro,member:introMember});
+  const repeat=await h.cmd('intro.purchase',{id:preview.id,key:preview.key,confirm:true},introMember.cookie);
+  assert.equal(repeat.id,introSale.id,'accepted intro replay never creates a second charge');
+  const intro2=await h.cmd('catalog.publish',{...catalogTerms,code:intro.code,revision:1,productKind:'intro',name:'First mat week revised',amountCents:4900,validDays:7,credits:4,eligibility:'new',limit:'person'});
+  let state=await h.state();
+  await h.cmd('intro.purchase',{id:waiting.id,key:waiting.key,confirm:true},waitingMember.cookie,409);
+  await h.cmd('intro.preview',{offerId:intro2.introOfferId,requestId:'synthetic-strap-second-intro'},introMember.cookie,409);
+  assert.equal((await h.state()).version,state.version,'changed catalog previews and cross-version duplicate intros leave money and credits unchanged');
+  const retiredPreview=await h.cmd('intro.preview',{offerId:intro2.introOfferId,requestId:'synthetic-strap-intro-retired'},waitingMember.cookie);
+  await h.cmd('catalog.retire',{id:intro2.productId,revision:2});state=await h.state();
+  await h.cmd('intro.purchase',{id:retiredPreview.id,key:retiredPreview.key,confirm:true},waitingMember.cookie,409);
+  await h.cmd('catalog.publish',{...catalogTerms,code:fixed.code,revision:1,productKind:'drop-in'},h.owner,409);
+  assert.equal((await h.state()).version,state.version,'retirement refuses a waiting sale and stable product kinds cannot change');
+  for(const {id,version,member} of sales) {
+    const state=await h.state(member.cookie),pack=state.packs.find(p=>p.id===id);
+    assert.deepEqual(pack.catalogVersion,version);
+    assert.equal(state.charges.filter(c=>c.packId===id).length,1);
+    assert.equal(state.charges.find(c=>c.packId===id).amountCents,version.amountCents);
+    assert.equal(state.charges.find(c=>c.packId===id).catalogVersionId,version.id);
+    const page=await h.send('/app/packs',undefined,member.cookie);
+    assert.equal(page.status,200);assert.ok(page.text.includes(version.name));
+  }
+  console.log('PROBE PLAN-001 catalog breadth: published fixed-term, drop-in and intro products -> unlimited fixed term, one drop-in credit and verified three-credit intro sold at original USD terms.');
+  console.log('PROBE PLAN-001 intro safety: unverified identity, changed or retired preview and duplicate new-version intro -> refused without charge or credit writes; accepted replay retains one sale.');
+  return {sales,versions:[fixed,drop,intro,intro2],retiredPreview};
+}
+
+export async function assertCatalogBreadthRestored(h,data,cookie) {
+  const state=await h.state(cookie);
+  for(const version of data.versions)assert.deepEqual(state.productCatalog.versions.find(v=>v.id===version.id),version);
+  for(const {id,version} of data.sales) {
+    const pack=state.packs.find(p=>p.id===id);
+    assert.deepEqual(pack.catalogVersion,version);assert.equal(pack.purchaseAmountCents,version.amountCents);
+    assert.equal(state.charges.find(c=>c.packId===id).catalogVersionId,version.id);
+  }
+  const before=state.version;
+  await h.cmd('intro.purchase',{id:data.retiredPreview.id,key:data.retiredPreview.key,confirm:true},cookie,404);
+  assert.equal((await h.state(cookie)).version,before,'restored preview does not gain different-actor authority');
 }

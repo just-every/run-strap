@@ -464,6 +464,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
 
     const catalogMember=await h.person('CatalogArchive');
     const catalogData=await(await import('./catalog-cases.mjs')).catalogPurchases(h,member,catalogMember);
+    const catalogBreadth=await(await import('./catalog-cases.mjs')).catalogBreadth(h);
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
@@ -489,6 +490,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0);
     const state=()=>h.state(restoredOwner)
     await(await import('./catalog-cases.mjs')).assertCatalogRestored(h,catalogData,restoredOwner);
+    await(await import('./catalog-cases.mjs')).assertCatalogBreadthRestored(h,catalogBreadth,restoredOwner);
     const restoredCatalogMember=await h.signIn(catalogMember.email);
     const catalogReceipt=await h.send('/app/packs',undefined,restoredCatalogMember);
     assert.equal(catalogReceipt.status,200);assert.ok(catalogReceipt.text.includes(catalogData.v2.id));
