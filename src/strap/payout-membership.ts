@@ -9,6 +9,11 @@ export function sumCents(rows: Record<string,any>[], key: string) {
     return value;
   },0);
 }
+function differenceCents(amount: number,net: number) {
+  const difference=amount-net;
+  insist(Number.isSafeInteger(difference),'payout_total_out_of_range',409);
+  return difference;
+}
 
 /** Retain a complete provider statement, never a partially read payout batch. */
 export async function payoutMembership(env: BillingBindings,payout: ReturnType<typeof import('./billing/provider').payoutObservation>) {
@@ -34,9 +39,9 @@ export function membershipReport(payout: RecordData,cards: RecordData[],current:
   const unmapped=transactions===null?null:transactions.length-matched.length;
   const mappedNetCents=sumCents(matched,'netCents');
   return {
-    statementTotals,statementDifferenceCents:statementTotals?payout.amountCents-statementTotals.netCents:null,
+    statementTotals,statementDifferenceCents:statementTotals?differenceCents(payout.amountCents,statementTotals.netCents):null,
     cardObservationIds:matched.map(card=>card.id),mappedNetCents,unmappedTransactionCount:unmapped,
     nativeCoverageStatus:complete && unmapped===0?'complete':'unresolved',
-    providerDifferenceCents:complete && unmapped===0?payout.amountCents-mappedNetCents:null,
+    providerDifferenceCents:complete && unmapped===0?differenceCents(payout.amountCents,mappedNetCents):null,
   };
 }

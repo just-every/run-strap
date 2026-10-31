@@ -40,6 +40,7 @@ const relationships = [
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=cardBalanceObservation' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=cardBalanceObservation' },
   { from: 'st_records.data.providerTransactionId and providerPayoutId', to: 'Stripe TEST resources under accountId', when: 'kind=cardBalanceObservation or kind=payoutObservation', note: 'Observed references only; no bank deposit confirmation or execution authority.' },
+  { from: 'st_records.data.transactions[].providerTransactionId and sourceId', to: 'Stripe TEST resources under accountId', when: 'kind=payoutObservation', note: 'Complete provider statement observations, including signed cents and provider times; native receipt coverage and bank confirmation remain separate.' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },
