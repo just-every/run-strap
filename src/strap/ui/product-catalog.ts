@@ -3,7 +3,7 @@ import { money } from './format';
 
 export function catalogTerms(version: any) {
   if (!version) return '';
-  return `<dl class="facts" data-catalog-version="${h(version.id)}"><dt>Catalog purchase</dt><dd>${h(version.name)} · version ${h(version.version)} · ${h(version.code)}</dd><dt>Original price</dt><dd>${money(version.amountCents)} USD · ${h(version.credits)} credits</dd><dt>Original services</dt><dd>${h(version.eligibleServices.join(', ') || 'All services')}</dd><dt>Original locations</dt><dd>${h(version.locationNames.map((l: any)=>l.name).join(', '))}</dd><dt>Validity</dt><dd>${h(version.validDays)} elapsed days from preparation; exact expiry shown below. No automatic renewal.</dd></dl>`;
+  return `<dl class="facts" data-catalog-version="${h(version.id)}"><dt>Catalog purchase</dt><dd>${h(version.name)} · version ${h(version.version)} · ${h(version.code)}</dd><dt>Original price</dt><dd>${money(version.amountCents)} USD · ${h(version.credits)} credits</dd><dt>Original services</dt><dd>${h(version.eligibleServices.join(', ') || 'All services')}</dd><dt>Original locations</dt><dd>${h(version.locationNames.map((l: any)=>l.name).join(', '))}</dd><dt>Validity</dt><dd>${h(version.validDays)} elapsed days from preparation. No automatic renewal.</dd></dl>`;
 }
 
 function fields(s: any, version: any = {}) {
