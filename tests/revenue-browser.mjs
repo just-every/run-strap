@@ -31,7 +31,7 @@ export async function revenueBrowser(h,{report,date}) {
         await page.getByLabel('Through date',{exact:true}).fill(date)
         await page.getByLabel('Plan',{exact:true}).selectOption('unlimited: Monthly mat')
         await page.getByLabel('Location',{exact:true}).selectOption('Brooklyn studio')
-        await page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()
+        await Promise.all([page.waitForURL(u=>u.searchParams.get('from')==='2026-03-09'&&u.searchParams.get('location')===west.name),page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()])
         await page.getByRole('heading',{name:'Revenue and collections',exact:true}).waitFor()
         assert.equal(await page.locator('[data-source-id]').count(),report.sources.filter(r=>r.plan==='unlimited: Monthly mat').length)
         assert.equal((await downloadPair(page,'revenue-filtered',width)).length,report.sources.filter(r=>r.plan==='unlimited: Monthly mat').length)
@@ -81,14 +81,30 @@ export async function recurringRevenueBrowser(h,{query,report,west,march9}) {
       await page.getByLabel('From date',{exact:true}).fill('2026-03-09')
       await page.getByLabel('Through date',{exact:true}).fill('2026-03-09')
       await page.getByLabel('Location',{exact:true}).selectOption(west.name)
-      await page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()
+      await Promise.all([page.waitForURL(u=>u.searchParams.get('from')==='2026-03-09'&&u.searchParams.get('location')===west.name),page.getByRole('button',{name:'Apply revenue filters',exact:true}).click()])
       await page.getByRole('heading',{name:'Revenue and collections',exact:true}).waitFor()
       assert.deepEqual(await page.locator('[data-recurring-totals] td[data-label=Count]').allTextContents(),['2','0','0','0'])
       assert.equal(await page.locator('[data-source-id]').count(),2)
+      for (const row of march9.sources.filter(r=>r.kind==='recurring-start'&&r.locationId===west.id)) {
+        const rendered=await page.locator(`[data-source-id="${row.id}"] td[data-label=Recorded]`).innerText()
+        assert.match(rendered,/Mar 9.*9:30 pm PDT/,'the visible timestamp uses the same source clock as its date filter')
+      }
       const previous=process.env.STRAP_PROOF_DIR
       process.env.STRAP_PROOF_DIR=proof
       try { assert.equal((await downloadPair(page,'recurring-filtered',1440)).length,march9.totals.recurringStarts) }
       finally { if(previous===undefined)delete process.env.STRAP_PROOF_DIR;else process.env.STRAP_PROOF_DIR=previous }
+      for (const [kind,metric,label] of [['recurring-start','recurringStarts','Inspect recurring agreement starts'],['recurring-stop','recurringStops','Inspect future invoice stops'],['recurring-end','recurringEndings','Inspect agreement access endings'],['membership-cancellation','membershipCancellations','Inspect applied membership cancellations']]) {
+        await page.goto(url)
+        await Promise.all([page.waitForURL(u=>u.searchParams.get('event')===kind),page.getByRole('link',{name:label,exact:true}).click()])
+        assert.equal(new URL(page.url()).searchParams.get('event'),kind)
+        assert.equal(await page.getByLabel('Event',{exact:true}).inputValue(),kind)
+        assert.equal(await page.locator('[data-source-id]').count(),report.totals[metric])
+        assert.deepEqual(await page.locator('[data-source-id]').evaluateAll(rows=>rows.map(row=>row.dataset.sourceId)),report.sources.filter(r=>r.kind===kind).map(r=>r.id))
+      }
+      await save('recurring-event-drill',1440)
+      await page.setViewportSize({width:390,height:1000})
+      await save('recurring-event-drill',390)
+      await page.setViewportSize({width:1440,height:1000})
       const source=report.sources.find(r=>r.kind==='membership-cancellation')
       await page.goto(url)
       await page.locator(`[data-source-id="${source.id}"]`).getByRole('link',{name:'Inspect record',exact:true}).click()
@@ -98,6 +114,7 @@ export async function recurringRevenueBrowser(h,{query,report,west,march9}) {
       await save('recurring-source',1440)
       await page.setViewportSize({width:390,height:1000})
       await save('recurring-source',390)
+      console.log('PROBE RPT-001 browser: 1440 revenue count links and March 9 LA source clock -> exact event rows and March 9 9:30 pm PDT; changed dashboard, event drill-through and source record captured at 1440 and 390')
     } finally { await context.close() }
   } finally { await browser.close() }
 }

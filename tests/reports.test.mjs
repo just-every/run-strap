@@ -575,6 +575,24 @@ async function recurringRevenueJourney(h) {
   assert.equal(march10.totals.recurringStarts,4,'same instant is March 10 in New York, including the unattributed retained clock')
   assert.equal(march10.totals.recurringStops,2,'LA stop date differs from NY; the inclusive one-day window selects its own events')
   assert.equal((await read(scoped({plan:'missing'}))).sources.length,0)
+  const eventMetrics=[['recurring-start','recurringStarts'],['recurring-stop','recurringStops'],['recurring-end','recurringEndings'],['membership-cancellation','membershipCancellations']]
+  for(const [kind,metric] of eventMetrics) {
+    const selected=await read(scoped({event:kind}))
+    assert.equal(selected.event,kind)
+    assert.equal(selected.sources.length,t[metric])
+    assert.deepEqual(selected.sources.map(r=>r.id),report.sources.filter(r=>r.kind===kind).map(r=>r.id),'a total drills to exactly its independently reconciled source identities')
+    assert.equal(selected.totals[metric],t[metric])
+    assert.ok(selected.sources.every(r=>r.kind===kind&&r.metric===metric&&r.eventCount===1))
+    assert.equal(selected.totals.assessedCents,0,'an event drill-through invents no sales or collections')
+    const source=selected.sources[0]
+    assert.deepEqual((await read(scoped({event:kind,sourceId:source.id}))).selectedSource.record,source.record)
+    assert.equal((await read(scoped({event:kind,sourceId:report.sources.find(r=>r.kind!==kind).id}))).selectedSource,null)
+  }
+  for(const path of ['/app/revenue','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx']) {
+    const invalid=await h.send(path+'?'+scoped({event:'not-a-retained-event'}),undefined,h.owner)
+    assert.equal(invalid.status,400)
+    assert.ok(invalid.text.includes('invalid_revenue_event'))
+  }
   const churn=(await h.send('/api/strap/reports/retention?'+new URLSearchParams({churnFrom:'2026-03-11T00:00:00.000Z',churnTo:'2026-03-14T00:00:00.000Z'}),undefined,h.owner)).value
   assert.equal(churn.rows.find(r=>r.personId===multi.id).churnEvidence.lostMember,true)
   assert.equal(churn.rows.find(r=>r.personId===kept.id).churnEvidence.lostMember,false,'a replacement preserves the member after an agreement ends')
@@ -586,7 +604,7 @@ async function recurringRevenueJourney(h) {
     assert.equal((await h.send(row.sourceUrl,undefined,h.owner)).status,200)
     assert.ok(!JSON.stringify(row).includes('connectionId')&&!JSON.stringify(row).includes('termsKey'),'report facts exclude authorization material')
   }
-  await assertReportDownloads(h,'revenue',[baseQuery.toString(),scoped({location:west.id}).toString(),scoped({location:'Unattributed'}).toString(),scoped({from:'2026-03-09',to:'2026-03-09'}).toString()],[multi.cookie,''])
+  await assertReportDownloads(h,'revenue',[baseQuery.toString(),scoped({location:west.id}).toString(),scoped({location:'Unattributed'}).toString(),scoped({from:'2026-03-09',to:'2026-03-09'}).toString(),...eventMetrics.map(([event])=>scoped({event}).toString())],[multi.cookie,''])
   const [csvKeys,...csvValues]=parseCsv((await h.send('/api/strap/reports/revenue.csv?'+baseQuery,undefined,h.owner)).text)
   const csvSources=csvValues.map(row=>Object.fromEntries(csvKeys.map((key,i)=>[key,row[i]])))
   for(const metric of ['recurringStarts','recurringStops','recurringEndings','membershipCancellations'])assert.equal(csvSources.filter(row=>row.metric===metric).reduce((n,row)=>n+row.eventCount,0),t[metric],'downloaded event counts reconcile independently')
@@ -596,21 +614,37 @@ async function recurringRevenueJourney(h) {
   assert.deepEqual([managed.totals.recurringStarts,managed.totals.recurringStops,managed.totals.membershipCancellations],[3,2,1])
   assert.ok(managed.sources.every(r=>r.locationId===west.id))
   assert.equal((await read(scoped({sourceId:report.sources.find(r=>r.locationId==='studio').id}),manager.cookie)).selectedSource,null)
-  for(const format of ['csv','xlsx']) {
-    const response=await h.mf.dispatchFetch(h.origin+'/api/strap/reports/revenue.'+format+'?'+baseQuery,{headers:{cookie:manager.cookie}})
-    assert.equal(response.status,200)
-    if(format==='csv')assert.ok(!(await response.text()).includes(multi.id))
-    else await response.arrayBuffer()
+  const assertScopedDownloads=async(cookie,expected) => {
+    const {default:readXlsx}=await import('read-excel-file/node')
+    for(const [event,metric] of eventMetrics) {
+      const query=scoped({event}),selected=expected.sources.filter(r=>r.kind===event)
+      const csv=await h.send('/api/strap/reports/revenue.csv?'+query,undefined,cookie)
+      assert.equal(csv.status,200)
+      const [keys,...values]=parseCsv(csv.text)
+      const rows=values.map(row=>Object.fromEntries(keys.map((key,i)=>[key,row[i]])))
+      assert.deepEqual(rows.map(r=>r.id),selected.map(r=>r.id),'scoped CSV retains exactly the permitted event sources')
+      assert.ok(!csv.text.includes(multi.id),'another member remains hidden in the downloaded records')
+      const response=await h.mf.dispatchFetch(h.origin+'/api/strap/reports/revenue.xlsx?'+query,{headers:{cookie}})
+      assert.equal(response.status,200)
+      const sheets=await readXlsx(Buffer.from(await response.arrayBuffer()))
+      assert.deepEqual(sheets.find(s=>s.sheet==='Sources').data,[keys,...values],'scoped XLSX cells equal the permitted CSV values')
+      assert.equal(Object.fromEntries(sheets.find(s=>s.sheet==='Totals').data.slice(1))[metric],selected.length)
+      const foreign=report.sources.find(r=>r.personId===multi.id)
+      assert.equal((await read(scoped({event,sourceId:foreign.id}),cookie)).selectedSource,null)
+    }
   }
+  await assertScopedDownloads(manager.cookie,managed)
   await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:true,rights:{exports:{enabled:true,scopes:[{memberIds:[kept.id],locationIds:[west.id],doors:['all']}]}}});await h.enroll(finance.cookie)
   const financeReport=await read(baseQuery,finance.cookie)
   assert.equal(financeReport.totals.recurringStarts,2)
   assert.ok(financeReport.sources.every(r=>r.personId===kept.id&&r.locationId===west.id))
+  await assertScopedDownloads(finance.cookie,financeReport)
   const deniedVersion=(await h.state()).version
   await h.cmd('manager.revoke',{id:manager.id})
   await h.cmd('staff.access.grant',{personId:finance.id,role:'finance',enabled:false,rights:{}})
   const afterRevoke=(await h.state()).version
   for(const cookie of [manager.cookie,finance.cookie,multi.cookie])for(const path of ['/app/revenue','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx'])assert.equal((await h.send(path+'?'+baseQuery,undefined,cookie)).status,403)
+  for(const cookie of [manager.cookie,finance.cookie,multi.cookie])for(const [event] of eventMetrics)for(const path of ['/app/revenue','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx'])assert.equal((await h.send(path+'?'+scoped({event}),undefined,cookie)).status,403)
   assert.equal((await h.state()).version,afterRevoke,'denied reads leave sources untouched')
   assert.ok(deniedVersion>=version)
   if(process.env.CI||process.env.STRAP_PROOF_DIR)await (await import('./revenue-browser.mjs')).recurringRevenueBrowser(h,{query:baseQuery,report,west,march9})
@@ -625,9 +659,15 @@ async function recurringRevenueJourney(h) {
   const erased=await read(scoped({sourceId:capturedId}))
   assert.equal(erased.selectedSource,null,'a previously captured source URL cannot restore erased recurring evidence')
   assert.ok(!erased.sources.some(row=>row.agreementId===erasedAgreement.terms.id))
+  assert.equal((await read(scoped({event:'recurring-start',sourceId:capturedId}))).selectedSource,null,'captured event drill-through cannot revive erased evidence')
   assert.ok(!JSON.stringify(erased).includes('LifecycleErased'))
   assert.equal((await h.send('/api/strap/reports/revenue',undefined,erasedMember.cookie)).status,401,'erasure retires the old session')
-  console.log('PROBE RPT-001 native lifecycle: public revenue route and downloads -> starts=7 stops=5 endings=3 applied cancellations=3; location sums match; replacement and withdrawal losses refused; scoped grants and revocation enforced')
+  console.log('PROBE RPT-001 counts: revenue JSON, screen and parsed CSV and XLSX -> starts=7 stops=5 access endings=3 applied cancellations=3; each event drill-through equals independent source identities')
+  console.log('PROBE RPT-001 filters: March one-day bounds, accepted plan and two source locations -> March 9 LA starts=2; March 10 NY plus retained clock starts=4; source location sums match')
+  console.log('PROBE RPT-001 distinctions: eight sold packs and multiple accepted agreements -> historical new packs=0 booking cancellations=0; three agreement endings leave one unique lost member in the separate churn cohort')
+  console.log('PROBE RPT-001 exclusions: preview, withdrawn termination and replacement agreement -> no fabricated applied cancellations or withdrawn access endings; retained and replacement access do not become lost members')
+  console.log('PROBE RPT-001 attribution: agreement with missing historical sale location -> one Unattributed start; no studio attribution invented')
+  console.log('PROBE RPT-001 authority: scoped manager and member-specific finance reads of JSON, event links, CSV and XLSX -> only permitted sources; revoked grants denied; erased captured source URLs remain unavailable; no financial writes')
 }
 
 test('RPT-001 and RPT-003: period churn and native recurring lifecycle reconcile unique lost members and opening recurring commitments across multiple plans, retained access and replacement agreements', () => run(async h => {

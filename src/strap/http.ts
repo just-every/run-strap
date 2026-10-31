@@ -317,7 +317,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
           });
           notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
         }
-        return renderApp(await appState(env, who, path + url.search), path + url.search, notice);
+        return await renderApp(await appState(env, who, path + url.search), path + url.search, notice);
       }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })

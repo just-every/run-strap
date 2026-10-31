@@ -10,6 +10,12 @@ type Row = RecordData
 export const reportPlan = (pack: Row) => `${pack.entitlement?.kind ?? 'credits'}: ${pack.entitlement?.name ?? 'Unnamed'}`
 const feeReasons = new Set(['late_cancel_fee','no_show_fee','late_move_fee','fee_reversal'])
 const sum = (rows: Row[]) => rows.reduce((total,row) => total + row.amountCents,0)
+export const recurringRevenueEvents = [
+  ['recurring-start','Recurring agreement starts','recurringStarts'],
+  ['recurring-stop','Future invoice stops','recurringStops'],
+  ['recurring-end','Agreement access endings','recurringEndings'],
+  ['membership-cancellation','Applied membership cancellations','membershipCancellations']
+] as const
 /** Reporting facts only: no consent tokens, private proposal basis or provider connection travels. */
 export function recurringRevenueSources(state: State, who: Actor): Row[] {
   const sources: Row[] = [], places = locations(state)
@@ -23,7 +29,7 @@ export function recurringRevenueSources(state: State, who: Actor): Row[] {
     const timeZone = places.find(l => l.id === locationId)?.timeZone ?? terms.timeZone ?? 'UTC'
     const facts = (row: Row, keys: string[]) => Object.fromEntries(keys.map(key => [key,row[key] ?? null]))
     const agreement = facts(terms,['id','personId','packId','acceptedAt','acceptedBy','stoppedAt','stoppedBy','status','intervalMonths','amountCents','entitlement','accessEndedAt'])
-    const metrics: Record<string,string> = {'recurring-start':'recurringStarts','recurring-stop':'recurringStops','recurring-end':'recurringEndings','membership-cancellation':'membershipCancellations'}
+    const metrics: Record<string,string> = Object.fromEntries(recurringRevenueEvents.map(([kind,,metric]) => [kind,metric]))
     const append = (kind: string, at: string | null, sourceId: string, record: Record<string,any>) => {
       if (at) sources.push({id:kind+':'+sourceId,sourceId,kind,metric:metrics[kind],eventCount:1,at,locationId,timeZone,personId:terms.personId,packId:terms.packId,agreementId:terms.id,
         cancellationId:cancellation?.id ?? null,plan:reportPlan(terms),amountCents:null,record})
@@ -39,7 +45,7 @@ export function recurringRevenueSources(state: State, who: Actor): Row[] {
 
 export const revenueDefinitions = [
   'Native recurring starts count personally accepted agreement identities at acceptedAt, not pack creation, renewal packs or previews. Invoice stops count accepted agreements at stoppedAt, even when access continues. Agreement endings count the effective access-end instant, not the stop request. Applied membership cancellations count applied native cancellation identities at effectiveAt, never previews, scheduled or withdrawn cancellations. These are agreement events, not unique lost members; retained or replacement agreements may preserve membership. Unique member churn remains the separate retention report.',
-  'Recurring event location comes only from the agreement or its original retained sale pack. Missing historical locations stay Unattributed and never inherit the current studio label. Inclusive date filters use that recorded location’s time zone, or the agreement’s retained time zone when unattributed. Plan filters use the accepted agreement’s entitlement. Source IDs distinguish start, stop, ending and applied cancellation even when they refer to the same agreement. Each recurring CSV source carries its metric and an eventCount of one; summing those counts reproduces the selected totals. Reporting facts omit consent tokens and provider connection details.',
+  'Recurring event location comes only from the agreement or its original retained sale pack. Missing historical locations stay Unattributed and never inherit the current studio label. Inclusive date filters use that recorded location’s time zone, or the agreement’s retained time zone when unattributed. Plan filters use the accepted agreement’s entitlement. Source IDs distinguish start, stop, ending and applied cancellation even when they refer to the same agreement. Each recurring CSV source carries its metric and an eventCount of one; summing those counts reproduces the selected totals. Reporting facts omit consent tokens and provider connection details. Selecting a recurring event narrows the event totals and sources together; balances and active members remain current snapshots.',
   'Gift card funding is a liability charge and an actual cash or external receipt. Gift redemption is a noncash payment against the retail sale; restoring a redemption returns value to that card, never a cash refund. Both retain distinct source kinds and do not inflate cash collections or gross sales.',
   'Amounts are exact USD cents. Event dates use the studio time zone with inclusive date bounds. Gross sales sum positive non-fee charges; sales credits are negative non-fee charges; net sales is their signed sum. Fees are signed attendance and late-move assessments including reversals, not processor costs. Total assessed is net sales plus fees.',
   'Collections are positive external receipts; refunds are the magnitude of negative external payments; net collections is their signed sum. A charge credit is not a cash refund. No processor collection, ACH return or provider verification is claimed. Unallocated receipts stay Unallocated when filtering by plan; they are never apportioned across packs.',
@@ -60,6 +66,9 @@ export function revenueReport(s: any, query: URLSearchParams) {
     insist(!value || (/^\d{4}-\d\d-\d\d$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value),'invalid_report_date')
   }
   insist(!query.get('from') || !query.get('to') || query.get('from')! <= query.get('to')!,'invalid_report_range')
+  const eventKind = query.get('event') || null
+  insist(eventKind === null || recurringRevenueEvents.some(([kind]) => kind === eventKind),'invalid_revenue_event')
+  const matchesEvent = (kind: string) => eventKind === null || kind === eventKind
   const byId = (rows: Row[], id: string) => rows.find(row => row.id === id)
   const packFor = (row: Row): Row | undefined => {
     const charge = row.chargeId ? byId(s.charges,row.chargeId) : row.reversesChargeId ? byId(s.charges,row.reversesChargeId) : row
@@ -75,7 +84,7 @@ export function revenueReport(s: any, query: URLSearchParams) {
   const sources: Row[] = []
   const append = (row: Row,kind: string,at: string,amountCents: number | null,pack?: Row) => {
     const locationId = kind === 'new-plan' ? row.locationId ?? 'studio' : place(row), zone = zoneOfLocation(places,locationId,timeZone)
-    if (matchesLocation(row) && matchesPlan(pack) && inPeriod(at,zone)) sources.push({id:row.id,kind,at,date:localDate(at,zone),locationId,timeZone:zone,personId:row.personId,packId:pack?.id ?? null,plan:pack ? reportPlan(pack) : 'Unallocated',amountCents,
+    if (matchesEvent(kind) && matchesLocation(row) && matchesPlan(pack) && inPeriod(at,zone)) sources.push({id:row.id,kind,at,date:localDate(at,zone),locationId,timeZone:zone,personId:row.personId,packId:pack?.id ?? null,plan:pack ? reportPlan(pack) : 'Unallocated',amountCents,
       record:row,sourceUrl:`/app/revenue?sourceId=${encodeURIComponent(row.id)}#source-record`,memberUrl:`/app/people?person=${encodeURIComponent(row.personId)}#person`})
   }
   for (const row of s.charges) append(row,row.reason==='gift_card_issue' ? 'gift-liability' : feeReasons.has(row.reason) ? 'fee' : 'sale',row.createdAt,row.amountCents,packFor(row))
@@ -83,7 +92,7 @@ export function revenueReport(s: any, query: URLSearchParams) {
   for (const row of s.packs) append(row,'new-plan',row.createdAt,null,row)
   for (const row of s.bookingActions.filter((row: Row) => row.action === 'cancel')) append(row,'booking-cancellation',row.at,null,packFor(row))
   for (const event of s.recurringRevenueSources ?? []) {
-    if (!unknown && (unattributed ? event.locationId === null : !chosen || event.locationId === chosen.id) && (!query.get('plan') || event.plan === query.get('plan')) && inPeriod(event.at,event.timeZone)) {
+    if (matchesEvent(event.kind) && !unknown && (unattributed ? event.locationId === null : !chosen || event.locationId === chosen.id) && (!query.get('plan') || event.plan === query.get('plan')) && inPeriod(event.at,event.timeZone)) {
       sources.push({...event,date:localDate(event.at,event.timeZone),sourceUrl:`/app/revenue?${new URLSearchParams({...Object.fromEntries(query),sourceId:event.id})}#source-record`,memberUrl:`/app/people?person=${encodeURIComponent(event.personId)}#person`})
     }
   }
@@ -101,5 +110,5 @@ export function revenueReport(s: any, query: URLSearchParams) {
     const mine = sources.filter(row => row.locationId === l.id), kinds = (kind: string) => mine.filter(row => row.kind === kind)
     return {locationId:l.id,name:l.name,timeZone:l.timeZone,netSalesCents:sum(kinds('sale')),feesCents:sum(kinds('fee')),collectionsCents:sum(kinds('receipt')),refundsCents:0-sum(kinds('refund')),newPlans:kinds('new-plan').length,recurringStarts:kinds('recurring-start').length,recurringStops:kinds('recurring-stop').length,recurringEndings:kinds('recurring-end').length,membershipCancellations:kinds('membership-cancellation').length}
   })
-  return {generatedAt,timeZone,location,locationId:chosen?.id ?? null,locations:places.map(l => ({id:l.id,name:l.name})),locationTotals,plans:[...new Set([...s.packs.map(reportPlan),...(s.recurringRevenueSources ?? []).map((row: Row) => row.plan)])].sort(),totals,activeMemberIds,balanceRows,sources,selectedSource:query.get('sourceId') ? sources.find(row => row.id === query.get('sourceId')) ?? null : null,definitions:revenueDefinitions}
+  return {generatedAt,timeZone,event:eventKind,location,locationId:chosen?.id ?? null,locations:places.map(l => ({id:l.id,name:l.name})),locationTotals,plans:[...new Set([...s.packs.map(reportPlan),...(s.recurringRevenueSources ?? []).map((row: Row) => row.plan)])].sort(),totals,activeMemberIds,balanceRows,sources,selectedSource:query.get('sourceId') ? sources.find(row => row.id === query.get('sourceId')) ?? null : null,definitions:revenueDefinitions}
 }
