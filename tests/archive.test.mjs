@@ -1,3 +1,4 @@
+import { publishWidget, widgetChoice, widgetOrigin } from './booking-widget-journey.mjs';
 import { seedAutomationArchive, assertRestoredAutomation } from './automation-archive.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -138,6 +139,8 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     await h.cmd('studio.save',{location:'New York studio',timeZone:'America/New_York'})
     const week='2099-11-02', timetable=await h.cmd('classes.prepare',{week,classes:[{title:'Restored Pilates',start:week+'T10:00:00Z',end:week+'T11:00:00Z',capacity:12,instructorId:coach.id}]})
     await h.cmd('classes.publish',{id:timetable.id})
+    const widgetProof=await publishWidget(h,(await h.state()).classes[0],coach);
+    const archivedSelection=await widgetChoice(h);
     await h.cmd('waiver.publish',{text:'Earlier studio waiver.'})
     const waiver=await h.cmd('waiver.publish',{text:'Studio waiver, "current"\nKeep your own limits.'})
     await h.cmd('waiver.acknowledge',{id:waiver.id},member.cookie)
@@ -216,6 +219,9 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.equal(download.headers.get('content-disposition'),'attachment; filename="strap-exit.json"')
     assert.equal(download.headers.get('cache-control'),'no-store')
     const portable=download.value
+    assert.ok(!('st_widget_connections' in portable.tables) && !('st_widget_selections' in portable.tables));
+    assert.ok(!download.text.includes(archivedSelection.token),'portable exit carries no selection authority');
+    assert.deepEqual(portable.tables.st_records.filter(r=>r.kind==='widgetClass').map(r=>JSON.parse(r.data)),[widgetProof.publication]);
     assert.ok(!('st_tax_connections' in portable.tables));assert.ok(!download.text.includes(billingAuth.STRIPE_TAX_TEST_KEY),'portable exit excludes the configured tax provider credential');
     assertPortableTax(portable,taxProof);
     reconstructExit(portable,[csv,privacyFixture.csv],taxProof,privacyFixture.sharedCourse)
@@ -255,6 +261,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     assert.ok(!archived.filter(row=>row.kind==='part').flatMap(row=>row.items).some(row=>row.kind==='row'&&row.table==='st_tax_connections'),'native archive payload excludes the tax connection table');
     assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name.startsWith('st_mfa_')),'native archive inventory excludes all factor, passkey, recovery and challenge tables')
     assert.ok(!archived.filter(r=>r.kind==='part').flatMap(r=>r.items).some(r=>r.kind==='row' && r.table.startsWith('st_mfa_')),'native archive payload excludes all factor tables')
+    for(const table of ['st_widget_connections','st_widget_selections'])assert.ok(!archived.find(r=>r.kind==='manifest').tables.some(t=>t.name===table),'native archive omits widget authority');
     await command(restored,['import','--input',old,'--yes','--no-queue'])
     await command(restored,['export','--output',again,'--no-queue'])
     const rows=text=>text.split('\n').filter(Boolean).map(JSON.parse).filter(r=>r.kind==='part')
@@ -271,6 +278,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredOwner=await h.signIn(h.auth.OWNER_EMAIL)
     assert.equal((await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.error,'mfa_enrollment_required','SEC-004 second factors never restore: the owner enrolls again before any export')
     await h.enroll(restoredOwner)
+    assert.equal((await h.send('/booking/widget?embeddingOrigin='+encodeURIComponent(widgetOrigin))).status,404,'restored publication remains disconnected');
+    for(const table of ['st_widget_connections','st_widget_selections'])assert.equal((await h.db.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n,0);
+    const restoredPublications=(await h.send('/api/strap/exit.json',undefined,restoredOwner)).value.tables.st_records.filter(r=>r.kind==='widgetPublicationEvent').map(r=>JSON.parse(r.data));
+    assert.ok(restoredPublications.some(r=>r.publicationId===widgetProof.publication.id && r.publishedBy===widgetProof.publication.publishedBy && r.publishedAt===widgetProof.publication.publishedAt),'publication provenance survives native restore');
     assert.equal((await h.send(contactReceipt,undefined,restoredOwner)).value.status,'saved','the restored owner verifies the retained source receipt after fresh authentication')
     assert.deepEqual(await h.cmd('profile.save.staff',contactInput,restoredOwner),contact,'a restored staff retry keeps the original result')
     assert.equal((await integrationRead(h,integration.token)).status,401,'API-002 a restored studio refuses the old integration secret')
@@ -279,6 +290,10 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
     const restoredDownload=await h.send('/api/strap/exit.json',undefined,restoredOwner)
     assert.equal(restoredDownload.status,200)
     assert.deepEqual(restoredDownload.value.tables,portable.tables)
+    await h.cmd('widget.settings.save',{enabled:true,origins:[widgetOrigin],confirm:true},restoredOwner);
+    const widgetRestoredMember=await h.signIn(member.email);
+    await h.cmd('booking.book',{classId:timetable.classes[0].id,selection:archivedSelection.token,adultConfirmed:true},widgetRestoredMember,410);
+    await h.cmd('widget.settings.save',{enabled:false,origins:[widgetOrigin],confirm:true},restoredOwner);
     assertPortableTax(restoredDownload.value,taxProof);
     await assertRestoredTax(h,restoredOwner,taxProof,taxProvider);
     assertWaiverDocuments(restoredDownload.value,[signedBefore.value,guardianBefore.value,copyEvidenceBefore.value]);
