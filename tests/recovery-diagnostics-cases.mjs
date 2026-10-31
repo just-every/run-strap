@@ -58,7 +58,10 @@ export async function recoveryDiagnosticsCases() {
     // The public booking door reserves and sends through the real member-mail adapter.
     await h.setAuth({MAIL_PROVIDER: 'sendgrid', MAIL_API_KEY: 'synthetic-strap-916'})
     await h.cmd('mail.connect', {})
-    const start = new Date(Date.now() + 14 * 86400000), monday = new Date(start)
+    const start = new Date(Date.now() + 14 * 86400000)
+    // Midday in the studio keeps the local class date aligned with its UTC week.
+    start.setUTCHours(16,0,0,0)
+    const monday = new Date(start)
     monday.setUTCDate(start.getUTCDate() - (start.getUTCDay() + 6) % 7)
     const draft = await h.cmd('classes.prepare', {week: monday.toISOString().slice(0,10), classes: [0,1,2].map(i => ({title: 'Recovery class ' + i, service: 'Fitness', room: 'Room ' + i, start: new Date(+start + i * 7200000).toISOString(), end: new Date(+start + i * 7200000 + 3600000).toISOString(), capacity: 4, instructorId: instructor.id}))})
     const classes = (await h.cmd('classes.publish', {id: draft.id})).classes
