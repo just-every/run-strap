@@ -115,32 +115,56 @@ export function remindRecurringTerms(tx: Transaction, terms: RecordData, at = no
     contractNotice(tx,reminderId,terms.personId,'Recurring invoice agreement reminder',body);
   }
 }
+export type InvoiceEligibility = {
+  status: 'scheduled' | 'blocked' | 'review' | 'reconnection_required' | 'canceled';
+  reason: string | null; dueAt: string; termEndAt: string; amountCents: number; priceDisclosureId: string | null;
+};
+/** The scheduler and forecast share source checks. Reading this projection never issues debt or notices. */
+export function recurringInvoiceEligibility(state: State, terms: RecordData, connection: BillingConnection | null, origin: string, at = now()): InvoiceEligibility {
+  const due = terms.nextRenewalAt, expiresAt = nextInvoiceAt(due,terms.intervalMonths,terms.billingDay,terms.timeZone);
+  const result = (status: InvoiceEligibility['status'], reason: string | null = null, amountCents = terms.amountCents, priceDisclosureId: string | null = null): InvoiceEligibility =>
+    ({status,reason,dueAt:due,termEndAt:expiresAt,amountCents,priceDisclosureId});
+  if (['stopped','cancellation_scheduled'].includes(terms.status)) return result('canceled','agreement_stopped');
+  if (!connection || connection.connection_id !== terms.connectionId || connection.origin !== origin || terms.billingOrigin !== origin)
+    return result('reconnection_required',!connection || connection.connection_id !== terms.connectionId ? 'fresh_member_acceptance_required' : 'billing_origin_changed');
+  if (terms.status !== 'active') return result(terms.status === 'needs_reconnection' ? 'reconnection_required' : 'review',terms.failure ?? 'agreement_not_active');
+  if (list(state,'freeze').some(f => f.packId === terms.currentPackId && ['scheduled','active'].includes(f.status) && f.startAt <= due && (!f.endAt || f.endAt > due)))
+    return result('blocked','freeze_covers_invoice_date');
+  insist(expiresAt > due,'invalid_billing_cycle',409);
+  if (expiresAt <= at) return result('review','billing_period_already_ended');
+  const source = state.records.get(terms.currentPackId), pack = source?.kind === 'pack' ? source.data : null;
+  const member = state.people.find(p => p.id === terms.personId);
+  if (!member?.active || member.erasedAt || !pack || pack.expiresAt !== due || JSON.stringify(packTerms(pack)) !== JSON.stringify({credits:terms.credits,amountCents:terms.amountCents,entitlement:terms.entitlement,eligibleServices:terms.eligibleServices,priorityBooking:terms.priorityBooking,guestTerms:terms.guestTerms}))
+    return result('review','source_terms_changed');
+  if (signingMissing(state,terms.personId,terms.eligibleServices ?? []).length) return result('review','waiver_signature_required');
+  if (intakeMissing(state,terms.personId,terms.eligibleServices ?? []).length) return result('review','intake_completion_required');
+  const amendment = list(state,'renewalDisclosure').find(d => d.termsId === terms.id && d.acceptedAtPrice && !d.appliedAtPrice && d.status === 'delivered');
+  if (amendment && (amendment.packId !== pack.id || amendment.dueAt !== due || amendment.currentAmountCents !== terms.amountCents || amendment.acceptedTermsKey !== terms.key || amendment.acceptanceKey !== amendment.key || !Number.isInteger(amendment.requiredNoticeDays) || amendment.requiredNoticeDays !== terms.noticeLeadDays || !amendment.deliveredAt || Date.parse(amendment.deliveredAt)+amendment.requiredNoticeDays*86400000 > Date.parse(due) || amendment.acceptByAt !== due || amendment.acceptedAtPrice >= amendment.acceptByAt || (terms.currentPriceDisclosureId ?? null) !== amendment.priorPriceDisclosureId))
+    return result('review','accepted_price_source_changed');
+  if (state.records.has(`invoice:${terms.id}:${due}`)) return result('review','recurring_invoice_already_exists');
+  return result('scheduled',null,amendment?.proposedAmountCents ?? terms.amountCents,amendment?.id ?? null);
+}
 /** One sweep issues only the current due period; elapsed periods require review. */
 export async function applyDueRecurringInvoices(tx: Transaction) {
   const at = now(), connection = await tx.db.prepare(connectionSQL).first<BillingConnection>();
   for (const terms of list(tx.state,'recurringTerms').filter(r => ['active','needs_review'].includes(r.status))) {
-    // Native archives exclude the live connection epoch, even at the same origin.
-    if (!connection || connection.connection_id !== terms.connectionId || connection.origin !== tx.notices.origin || terms.billingOrigin !== tx.notices.origin) {
-      if (terms.status === 'active') tx.put('recurringTerms',{...terms,status:'needs_reconnection',failure:!connection || connection.connection_id !== terms.connectionId ? 'fresh_member_acceptance_required' : 'billing_origin_changed'}); continue;
+    const eligibility = recurringInvoiceEligibility(tx.state,terms,connection,tx.notices.origin ?? '',at);
+    if (eligibility.status === 'reconnection_required') {
+      if (terms.status === 'active') tx.put('recurringTerms',{...terms,status:'needs_reconnection',failure:eligibility.reason});
+      continue;
     }
-    fenceConnection(tx,connection);
+    fenceConnection(tx,connection!);
     remindRecurringTerms(tx,terms,at);
-    if (terms.status !== 'active' || terms.nextRenewalAt > at) continue;
-    if (list(tx.state,'freeze').some(f => f.packId === terms.currentPackId && ['scheduled','active'].includes(f.status) && f.startAt <= terms.nextRenewalAt && (!f.endAt || f.endAt > terms.nextRenewalAt))) continue;
-    const due = terms.nextRenewalAt, expiresAt = nextInvoiceAt(due,terms.intervalMonths,terms.billingDay,terms.timeZone);
-    insist(expiresAt > due,'invalid_billing_cycle',409);
-    if (expiresAt <= at) {
-      tx.put('recurringTerms',{...terms,status:'needs_review',failure:'billing_period_already_ended',failedAt:at,reviewDueAt:due,reviewTermEndAt:expiresAt}); continue;
+    if (terms.status !== 'active' || terms.nextRenewalAt > at || eligibility.status === 'blocked') continue;
+    if (eligibility.status === 'review') {
+      if (eligibility.reason === 'recurring_invoice_already_exists') insist(false,'recurring_invoice_already_exists',409);
+      tx.put('recurringTerms',{...terms,status:'needs_review',failure:eligibility.reason,failedAt:at,
+        ...(eligibility.reason === 'billing_period_already_ended' ? {reviewDueAt:eligibility.dueAt,reviewTermEndAt:eligibility.termEndAt} : {})});
+      continue;
     }
-    const pack = record(tx.state,terms.currentPackId,'pack'), member = tx.state.people.find(p => p.id === terms.personId);
-    if (!member?.active || member.erasedAt || pack.expiresAt !== due || JSON.stringify(packTerms(pack)) !== JSON.stringify({credits:terms.credits,amountCents:terms.amountCents,entitlement:terms.entitlement,eligibleServices:terms.eligibleServices,priorityBooking:terms.priorityBooking,guestTerms:terms.guestTerms})) {
-      tx.put('recurringTerms',{...terms,status:'needs_review',failure:'source_terms_changed',failedAt:at}); continue;
-    }
-    if(signingMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'waiver_signature_required',failedAt:at});continue;}
-    if(intakeMissing(tx.state,terms.personId,terms.eligibleServices ?? []).length) {tx.put('recurringTerms',{...terms,status:'needs_review',failure:'intake_completion_required',failedAt:at});continue;}
-    const amendment=list(tx.state,'renewalDisclosure').find(d=>d.termsId===terms.id&&d.acceptedAtPrice&&!d.appliedAtPrice&&d.status==='delivered');
-    if(amendment&&(amendment.packId!==pack.id||amendment.dueAt!==due||amendment.currentAmountCents!==terms.amountCents||amendment.acceptedTermsKey!==terms.key||amendment.acceptanceKey!==amendment.key||!Number.isInteger(amendment.requiredNoticeDays)||amendment.requiredNoticeDays!==terms.noticeLeadDays||!amendment.deliveredAt||Date.parse(amendment.deliveredAt)+amendment.requiredNoticeDays*86400000>Date.parse(due)||amendment.acceptByAt!==due||amendment.acceptedAtPrice>=amendment.acceptByAt||(terms.currentPriceDisclosureId ?? null)!==amendment.priorPriceDisclosureId)){tx.put('recurringTerms',{...terms,status:'needs_review',failure:'accepted_price_source_changed',failedAt:at});continue;}
-    const invoiceAmountCents=amendment?.proposedAmountCents ?? terms.amountCents;
+    const due = eligibility.dueAt, expiresAt = eligibility.termEndAt, invoiceAmountCents = eligibility.amountCents;
+    const pack = record(tx.state,terms.currentPackId,'pack');
+    const amendment = eligibility.priceDisclosureId ? record(tx.state,eligibility.priceDisclosureId,'renewalDisclosure') : null;
     const invoiceId = `invoice:${terms.id}:${due}`;
     insist(!tx.state.records.has(invoiceId),'recurring_invoice_already_exists',409);
     tx.reached(due); tx.future(expiresAt);
