@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { Log, LogLevel } from 'miniflare'
 import { run } from './harness.mjs'
+import { totp } from './mfa-helpers.mjs'
 import { billingSeed, acceptance } from './billing-sandbox.mjs'
 import { paymentAuth, paymentEdge, signedEvent } from './payment-fixtures.mjs'
 import { recoveryDiagnosticsBrowser } from './security-browser.mjs'
@@ -14,8 +16,14 @@ export async function diagnosticRead(h, cookie = h.owner) {
 }
 export async function diagnosticStore(h) {
   const tables = (await h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results
-  return (await h.db.batch(tables.map(r => h.db.prepare(`SELECT * FROM ${r.name} ORDER BY rowid`)))).map(r => r.results)
+  const rows = await h.db.batch(tables.map(r => h.db.prepare(`SELECT * FROM ${r.name} ORDER BY rowid`)))
+  return Object.fromEntries(tables.map((r, i) => [r.name, rows[i].results]))
 }
+/** The security page's own verify form, posted with any returnTo page. */
+const verifyForm = (h, back, code, cookie) => h.mf.dispatchFetch(h.origin+'/app/action?name=mfa.verify&returnTo='+encodeURIComponent(back), {
+  method:'POST', redirect:'manual', headers:{origin:h.origin,cookie,'content-type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({code}).toString(),
+})
+const heading = html => html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1]
 
 export async function recoveryDiagnosticsCases() {
   const edge = paymentEdge(), logs = [], privateText = 'synthetic-strap-910-private-notes', providerText = 'synthetic-strap-911-provider-text'
@@ -36,9 +44,7 @@ export async function recoveryDiagnosticsCases() {
       assert.equal(held.status, 403); assert.equal(held.headers.get('x-strap-refusal') ?? held.value.error, 'mfa_enrollment_required')
       assert.deepEqual(await diagnosticStore(h), before)
     }
-    const enrollmentForm = await h.mf.dispatchFetch(h.origin+'/app/action?name=mfa.verify&returnTo='+encodeURIComponent(page), {
-      method:'POST', headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'}, body:'',
-    })
+    const enrollmentForm = await verifyForm(h, page, '', h.owner)
     assert.equal(enrollmentForm.status,403,'returnTo cannot bypass required enrollment')
     assert.equal(enrollmentForm.headers.get('x-strap-refusal'),'mfa_enrollment_required')
     await enrollmentForm.text()
@@ -102,16 +108,29 @@ export async function recoveryDiagnosticsCases() {
       assert.equal(r.status,403); assert.equal(r.headers.get('x-strap-refusal') ?? r.value.error,'mfa_required')
       for (const token of [agent.token,integration.token]) assert.equal((await h.send(path,undefined,'',{authorization:'Bearer '+token})).status,path===page?303:401)
     }
-    const deniedForm = await h.mf.dispatchFetch(h.origin+'/app/action?name=mfa.verify&returnTo='+encodeURIComponent(page), {
-      method:'POST', headers:{origin:h.origin,cookie:freshOwner,'content-type':'application/x-www-form-urlencoded'}, body:'',
-    })
-    const deniedText = await deniedForm.text()
-    assert.equal(deniedForm.status,403,'an empty verification cannot render diagnostics through returnTo')
-    assert.equal(deniedForm.headers.get('x-strap-refusal'),'mfa_required')
-    assert.ok(!deniedText.includes(failed.id),'an unchecked form response withholds retained billing history')
-    assert.ok(!deniedText.includes(bookings[1].id),'an unchecked form response withholds notice history')
-    console.log('PROBE SEC-001 B: unchecked owner POST empty mfa.verify with diagnostics returnTo -> HTTP '+deniedForm.status+', no billing or notice history')
-    assert.deepEqual(await diagnosticStore(h),before,'refused diagnostics write nothing, including counters and outboxes')
+    // SEC-004 (ct 31 Oct): a form's returnTo page renders only once that page's own guard passes. The walk covers
+    // every page of the route table in src/strap/http.ts, so a page added there is walked too.
+    const routes = [...(await readFile('src/strap/http.ts','utf8')).match(/const pages = new Set\(\[([^\]]+)\]\)/)[1].matchAll(/'([^']+)'/g)].map(m => m[1])
+    const gated = []
+    for (const route of routes) {
+      const r = await h.send(route, undefined, freshOwner)
+      if (r.status === 403 && r.headers.get('x-strap-refusal') === 'mfa_required') gated.push(route)
+    }
+    assert.ok(gated.includes(page) && gated.includes('/app/revenue'))
+    assert.deepEqual(routes.filter(route => !gated.includes(route)), ['/app/security'], 'every page but the factor prompt holds an unchecked owner')
+    const seeded = [failed.id, bookings[1].id, seed.member.name, seed.member.email, instructor.name, 'Recovery class 0']
+    const heldForm = async (route, code) => {
+      const r = await verifyForm(h, route, code, freshOwner), text = await r.text()
+      assert.equal(r.status, 403, `${route}: ${code ? 'a wrong' : 'an empty'} code cannot render the page`)
+      assert.equal(r.headers.get('x-strap-refusal'), 'mfa_required', route)
+      assert.match(text, /name=mfa\.verify&amp;returnTo=/, route + ' shows the factor prompt')
+      for (const value of seeded) assert.ok(!text.includes(value), `${route} withholds ${value}`)
+      const direct = await h.send(route, undefined, freshOwner)
+      assert.equal(direct.status, 403, route); assert.equal(direct.headers.get('x-strap-refusal'), 'mfa_required', route)
+    }
+    for (const route of gated) await heldForm(route, '')
+    console.log('PROBE SEC-004 returnTo empty: unchecked owner POST empty mfa.verify for each of '+gated.length+' gated route-table pages -> HTTP 403 mfa_required factor prompt, no page data, direct GET still 403')
+    assert.deepEqual(await diagnosticStore(h),before,'refused diagnostics and returnTo pages write nothing, including counters and outboxes')
     const secrets = [privateText, providerText, h.auth.STRIPE_BILLING_TEST_KEY, h.auth.MAIL_API_KEY, h.auth.SESSION_SECRET, enrolled.secret].filter(Boolean)
     for (const path of [api, page]) {
       const r = await h.send(path,undefined,h.owner); assert.equal(r.status,200)
@@ -121,6 +140,31 @@ export async function recoveryDiagnosticsCases() {
     await recoveryDiagnosticsBrowser(h, {failedId:failed.id, bookingId:bookings[1].id, secrets})
     assert.deepEqual(await diagnosticStore(h),before,'repeated JSON and rendered reads preserve every table')
     assert.equal(edge.calls.length,calls); assert.equal(mailCalls,3,'reads never dispatch or retry')
+    // Wrong codes reach the same render point. Each writes only the designed refusal; a recovery-code step-up on the
+    // checked owner session clears the five-refusal pause between batches, so every cell runs the real code check.
+    let wrong = 0
+    while ([-2,-1,0,1,2].some(k => totp(enrolled.secret,k) === String(wrong).padStart(6,'0'))) wrong++
+    const codes = [...enrolled.recoveryCodes]
+    for (let i = 0; i < gated.length; i += 4) {
+      if (i) await h.cmd('mfa.verify', {code: codes.shift()}, h.owner)
+      const batch = gated.slice(i, i + 4), store = await diagnosticStore(h), dispatched = edge.calls.length + mailCalls
+      for (const route of batch) await heldForm(route, String(wrong).padStart(6,'0'))
+      const after = await diagnosticStore(h), refusals = after.st_security_audit.splice(store.st_security_audit.length)
+      assert.deepEqual(after, store, 'a wrong code changes no studio record')
+      assert.deepEqual(refusals.map(r => r.action), batch.map(() => 'mfa.refused'), 'each wrong code records only its refusal')
+      assert.equal(edge.calls.length + mailCalls, dispatched, 'a wrong code dispatches nothing')
+    }
+    console.log('PROBE SEC-004 returnTo wrong: unchecked owner POST wrong mfa.verify for each of '+gated.length+' gated route-table pages -> HTTP 403 mfa_required factor prompt, only an mfa.refused audit row, zero dispatch')
+    // The same owner presents a factor and lands; then every gated page renders through that point as its direct GET does.
+    const landed = await verifyForm(h, '/app/revenue', codes.shift(), freshOwner)
+    assert.equal(landed.status, 303); assert.equal(landed.headers.get('location'), '/app/revenue')
+    assert.match((await h.send('/app/revenue', undefined, freshOwner)).text, new RegExp(seed.member.name), 'the checked owner reads the revenue ledger')
+    for (const route of gated) {
+      const direct = await h.send(route, undefined, freshOwner), r = await verifyForm(h, route, '', freshOwner), text = await r.text()
+      assert.equal(r.status, direct.status, route); assert.equal(r.headers.get('x-strap-refusal'), null, route)
+      assert.equal(heading(text), heading(direct.text), route)
+    }
+    console.log('PROBE SEC-004 returnTo verified: owner presents a recovery code with returnTo revenue -> 303 to the page with its ledger; each gated page then renders through the returnTo point with the status and heading of its direct GET')
     await h.cmd('agent.revoke',{id:agent.id})
     await h.cmd('integration.revoke',{id:(await h.state()).integrations.find(r=>r.label==='Recovery reader').id})
     const revokedBefore=await diagnosticStore(h)

@@ -92,10 +92,7 @@ async function revenueState(env: Bindings, who: Actor) {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
-  if (url.pathname === '/app/recovery-diagnostics') {
-    await guard(env, who, url.pathname)
-    return {...await state(env,who),recoveryDiagnostics:await recoveryDiagnostics(env,who)}
-  }
+  if (url.pathname === '/app/recovery-diagnostics') return {...await state(env,who),recoveryDiagnostics:await recoveryDiagnostics(env,who)}
   if (url.pathname === '/app/revenue') {
     const current = await revenueState(env,who)
     if (who.role !== 'owner') return current
@@ -164,6 +161,29 @@ async function guard(env: Bindings, who: Actor, path: string, name = '', input: 
   if (who.staffAccess && /^\/api\/strap\/reports\/.*\.(csv|xlsx)$/.test(path)) {const current=await load(env.DB,who);if(!hasStaffRight(current.state,current.who,'exports'))fail('staff_right_required',403);}
   const hold = await mfaHold(env, who, { path, name, privileged: who.role === 'front-desk' || who.staffAccess === true || privilegedRoute(path) || path==='/app/retail' || path==='/app/time-clock' || path.startsWith('/api/strap/time-clock') || name.startsWith('clock.') || path.startsWith('/api/strap/retail') || /^(retail|drawer)\./.test(name) || (privilegedCommand(name) || ['appointment.client.deliver','appointment.client.deposit.record'].includes(name) || (name.startsWith('billing.') && name.endsWith('.launch')) || name.startsWith('plan.cancellation.refund.') || name.startsWith('contract.authority.') || name.startsWith('contract.copy.') || name==='contract.jurisdiction.save' || name==='contract.service-value.record') || await staffRightsCommand(env, name, input) })
   if (hold) fail(hold.code, 403)
+}
+
+const holdCode = /^mfa_(required|enrollment_required)$/
+type Notice = Parameters<typeof renderApp>[2]
+
+/** SEC-004: the factor prompt shown in place of a held page; presenting a factor returns to that page. */
+async function heldPage(env: Bindings, who: Actor, target: string, code: string, notice: Notice = {}) {
+  const security = `/app/security?returnTo=${encodeURIComponent(target)}&hold=${code}`
+  const page = await renderApp(await appState(env, who, security), security, notice)
+  return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': code } })
+}
+
+/** The one place a form's returnTo page renders, after a result or an error alike: only once that page's own guard
+ * passes. A held person gets the factor prompt and anyone else it refuses the denied page, never the page or its data. */
+async function returnPage(env: Bindings, who: Actor, back: string, notice: Notice) {
+  try { await guard(env, who, new URL(back, env.AUTH_ORIGIN).pathname) }
+  catch (refusal) {
+    const status = Number((refusal as any)?.status), code = (refusal as Error).message
+    if (status === 403 && holdCode.test(code)) return heldPage(env, who, back, code, notice)
+    if (status === 403) return unavailablePage('/app', 'denied')
+    throw refusal
+  }
+  return renderApp(await appState(env, who, back), back, notice)
 }
 
 async function inputBody(request: Request): Promise<Record<string, unknown>> {
@@ -358,7 +378,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const personalBillingLaunch=name.startsWith('billing.')&&name.endsWith('.launch')
         const freezeLaunch=['freeze.accept.launch','freeze.end.accept.launch'].includes(name)
         if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
-        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
+        return returnPage(env, who, back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
@@ -371,28 +391,19 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     }
     return json({ error: 'Not found' }, 404)
   } catch (error) {
-    if (path === '/app/action' && who && new URL(back, env.AUTH_ORIGIN).pathname === '/app/recovery-diagnostics') {
-      // A form error must not bypass the destination's owner and factor checks.
-      try { await guard(env, who, '/app/recovery-diagnostics') }
-      catch (refusal) { error = refusal }
-    }
     const status = Number((error as any)?.status) || 500
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
-    const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
+    const held = status === 403 && holdCode.test(message)
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
       if (status >= 500) return unavailablePage(back, 'uncertain')
-      const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
+      const notice = { error: message.replace(/_/g, ' ') }
       let page: Response
-      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      try { page = held ? await heldPage(env, who, back, message, notice) : await returnPage(env, who, back, notice) }
       catch { return unavailablePage(back, 'uncertain') }
-      return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
+      return message === 'step_up_required' && !page.headers.has('x-strap-refusal') ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }
-    if (pages.has(path) && held && who) {
-      const target = `/app/security?returnTo=${encodeURIComponent(path)}&hold=${message}`
-      const page = await renderApp(await appState(env, who, target), target)
-      return new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } })
-    }
+    if (pages.has(path) && held && who) return heldPage(env, who, path, message)
     if (pages.has(path) && status === 401) return new Response(null, { status: 303, headers: { ...headers, location: '/signin?returnTo=' + encodeURIComponent(path) } })
     if (pages.has(path) && status === 403 && request.headers.get('accept')?.toLowerCase().includes('text/html')) return unavailablePage('/app', 'denied')
     if (pages.has(path) && status >= 500) return unavailablePage(path + url.search)
