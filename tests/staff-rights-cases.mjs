@@ -302,10 +302,11 @@ export async function staffRetailRights(h) {
   const west=await h.cmd('location.save',{name:'Retail West',timeZone:'America/Los_Angeles'});
   const supplier=await h.cmd('retail.supplier.add',{name:'Retail rights supplier',reference:'synthetic-strap-201',requestId:'rights-supplier'});
   const sku=await h.cmd('retail.sku.add',{supplierId:supplier.id,sku:'RIGHTS',barcode:'synthetic-strap-202',name:'Rights shirt',variant:'Medium',priceCents:2000,lowStock:1,requestId:'rights-sku'});
-  const places=['studio',west.id],sessions={};
+  const places=['studio',west.id],sessions={},foreignSales={};
   for(const locationId of places) {
-    await h.cmd('retail.receive',{skuId:sku.id,locationId,quantity:20,reference:'synthetic-strap-stock-'+locationId,requestId:'rights-stock-'+locationId});
+    await h.cmd('retail.receive',{skuId:sku.id,locationId,quantity:21,reference:'synthetic-strap-stock-'+locationId,requestId:'rights-stock-'+locationId});
     sessions[locationId]=await h.cmd('drawer.open',{locationId,register:'Rights drawer',floatCents:10000,requestId:'rights-drawer-'+locationId});
+    foreignSales[locationId]=await h.cmd('retail.sell',{personId:other.id,skuId:sku.id,locationId,quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-foreign-sale-'+locationId,requestId:'rights-foreign-sale-'+locationId});
   }
   const grant=async(p,role,names,memberIds=[buyer.id],locationIds=['studio'])=>h.cmd('staff.access.grant',{personId:p.id,role,enabled:true,rights:Object.fromEntries(names.map(right=>[right,{enabled:true,scopes:[{memberIds,locationIds,doors:['all']}]}]))});
   const refuse=async(name,input,cookie,status=403)=>{
@@ -320,7 +321,6 @@ export async function staffRetailRights(h) {
   const ownerGift=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:other.id,locationId:west.id,amountCents:7000,tender:'external',reference:'synthetic-strap-203',requestId:'rights-hidden-gift'});
   const distantGift=await h.cmd('retail.gift.issue',{personId:buyer.id,recipientId:buyer.id,locationId:west.id,amountCents:5000,tender:'external',reference:'synthetic-strap-205',requestId:'rights-distant-gift'});
   const foreignPurchaser=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:buyer.id,amountCents:3000,tender:'external',reference:'synthetic-strap-204',requestId:'rights-foreign-purchaser'});
-  const sales=[];
   for(const [staff,role] of [[manager,'manager'],[desk,'front-desk']]) {
     for(const locationId of places) {
       const suffix=role+'-'+locationId,otherLocation=places.find(l=>l!==locationId);
@@ -342,7 +342,7 @@ export async function staffRetailRights(h) {
       const requests=await Promise.all([h.send('/api/strap/command',{name:'retail.sell',input},staff.cookie),h.send('/api/strap/command',{name:'retail.sell',input},staff.cookie)]);
       assert.ok(requests.some(r=>r.status===200));
       assert.ok(requests.every(r=>r.status===200 || r.status===409));
-      const sale=await h.cmd('retail.sell',input,staff.cookie);sales.push(sale);
+      const sale=await h.cmd('retail.sell',input,staff.cookie);
       assert.deepEqual(await h.cmd('retail.sell',input,staff.cookie),sale);
       await refuse('retail.sell',{...input,quantity:2},staff.cookie,409);
       const returnInput={saleId:sale.id,quantity:1,restock:true,reason:'Unused merchandise',requestId:'rights-return-'+suffix,channel:'phone'};
@@ -353,8 +353,8 @@ export async function staffRetailRights(h) {
       const card=await h.cmd('retail.gift.issue',issue,staff.cookie);
       assert.deepEqual(await h.cmd('retail.gift.issue',issue,staff.cookie),card);
       const redeem={...input,tender:'gift',giftCardId:card.id,reference:'synthetic-strap-redeem-'+suffix,requestId:'rights-redeem-'+suffix};
-      await refuse('retail.sell',{...redeem,giftCardId:ownerGift.id},staff.cookie);
       await refuse('retail.sell',{...redeem,giftCardId:locationId==='studio'?distantGift.id:foreignPurchaser.id},staff.cookie);
+      await refuse('retail.sell',{...redeem,giftCardId:ownerGift.id},staff.cookie);
       const redeemed=await h.cmd('retail.sell',redeem,staff.cookie);
       assert.deepEqual(await h.cmd('retail.sell',redeem,staff.cookie),redeemed);
       const adjust={giftCardId:card.id,amountCents:100,reason:'Approved correction',requestId:'rights-adjust-'+suffix,channel:'phone'};
@@ -378,8 +378,8 @@ export async function staffRetailRights(h) {
       assert.deepEqual([refunded.personId,refunded.locationId,refunded.tender,refunded.amountCents],[buyer.id,locationId,'external',1000],'refund resolves the saved original, never body overrides');
       const actualRefund={...refund,tender:'cash',personId:other.id,locationId:otherLocation};
       assert.deepEqual(await h.cmd('retail.gift.refund',actualRefund,staff.cookie),refunded);
-      if(locationId==='studio')await refuse('retail.gift.refund',{...refund,giftCardId:foreignPurchaser.id,requestId:'foreign-funding-'+role},staff.cookie);
-      for(const [name,body] of [['retail.return',{...returnInput,saleId:sales.find(s=>s.locationId!==locationId)?.id ?? 'missing'}],['retail.gift.adjust',{...adjust,giftCardId:ownerGift.id}],['retail.gift.refund',{...refund,giftCardId:ownerGift.id}]])await refuse(name,{...body,personId:buyer.id,locationId},staff.cookie);
+      if(locationId==='studio')await refuse('retail.gift.refund',{...refund,giftCardId:foreignPurchaser.id,reference:'synthetic-strap-foreign-funding-'+role,requestId:'foreign-funding-'+role},staff.cookie);
+      for(const [name,body] of [['retail.return',{...returnInput,saleId:foreignSales[otherLocation].id}],['retail.gift.adjust',{...adjust,giftCardId:ownerGift.id}],['retail.gift.refund',{...refund,giftCardId:ownerGift.id}]])await refuse(name,{...body,personId:buyer.id,locationId,reference:'synthetic-strap-wrong-source-'+name+'-'+suffix,requestId:'wrong-source-'+name+'-'+suffix},staff.cookie);
       const r=await read(),state=await h.state();
       assert.equal(r.gifts.cards.find(c=>c.id===card.id).balanceCents,5100);
       assert.equal(r.sales.filter(s=>s.reference===input.reference).length,1,'concurrent submission retains one sale');
