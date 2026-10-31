@@ -102,3 +102,12 @@ grants must remain active and match on every staff request, including replay.
 Front desk requires second-factor enrollment and sees only scoped attendance
 options. Grants, revisions, preferences and source-linked offers remain portable;
 no permission to send a future message or collect money is created.
+
+
+## Reviewed termination drafts
+
+`plan.cancellation.prepare` accepts an accepted native invoice agreement's `packId`, an ISO `effectiveAt` within its current paid term, an active studio `reasonCode`, a `reason` comment and a unique `requestId`. The preparation context exposes the eligible agreement identities and active reason catalog. The result retains the code, label, exact native effects and agent provenance. Preparation changes no invoice authority, charge, booking, notice or other due lifecycle work.
+
+The owner reviews the draft under **Packs and payments** and confirms through `plan.cancellation.confirm` using its `id`, exact `key`, a fresh `requestId` and request `channel`. Scoped contract-change staff may also confirm after reviewing the same effects. A changed source, changed reason label or retired reason requires a fresh preview. A retried preparation retains its original snapshot. Agent credentials cannot confirm, stop or withdraw a termination, change the catalog or replace a human session. Revocation immediately closes the preparation and context doors.
+
+Withdrawing a scheduled termination remains the terminator's own action under current authority. It restores access only; invoices remain stopped until the member personally accepts a fresh exact agreement. These drafts do not add provider schedules, collection or sale-accepted commitment fees.

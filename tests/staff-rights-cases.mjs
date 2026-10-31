@@ -158,8 +158,43 @@ export async function staffContractRights(h) {
     const actions=(await h.state()).staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.requestId===confirm.requestId);
     assert.equal(actions.length,1);assert.equal(actions[0].right,'contract-change');assert.equal(actions[0].actorRole,role);assert.equal(actions[0].personId,s.ben.id);
     await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.confirm',confirm,actor.cookie);
+    const prepareWithdrawal={id:committed.id,channel:'phone',reason:'Member changed their departure plan',requestId:randomUUID()};
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    for(const [names,memberIds,locations] of [[['contract-change'],[s.ben.id],[locationId]],[['member-record','contract-change'],[ana.id],[locationId]],[['member-record','contract-change'],[s.ben.id],[locationId==='studio'?s.west.id:'studio']]]) {
+      await grant(actor,role,names,memberIds,locations);await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    }
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const other=actor===desk?s.manager:desk,otherRole=actor===desk?'manager':'front-desk';
+    await grant(other,otherRole,['member-record','contract-change'],[s.ben.id],[locationId]);
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,other.cookie);
+    await refuse('plan.cancellation.withdraw.prepare',prepareWithdrawal,h.owner);
+    const withdrawal=await h.cmd('plan.cancellation.withdraw.prepare',prepareWithdrawal,actor.cookie);
+    assert.equal(withdrawal.requiresFreshAcceptance,true);
+    const withdraw={id:withdrawal.id,key:withdrawal.key,channel:'phone',requestId:randomUUID()};
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const withdrawn=await h.cmd('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);assert.equal(withdrawn.status,'confirmed');
+    assert.deepEqual(await h.cmd('plan.cancellation.withdraw.confirm',withdraw,actor.cookie),withdrawn);
+    let current=await h.state();
+    assert.equal(current.cancellations.cancellations.find(c=>c.id===committed.id).status,'withdrawn');
+    assert.equal(current.recurring.terms.find(t=>t.id===accepted.id).status,'stopped');
+    assert.equal(current.recurring.terms.find(t=>t.id===accepted.id).requiresFreshAcceptance,true);
+    assert.equal(current.recurring.invoices.filter(i=>i.recurringTermsId===accepted.id).length,0);
+    for(const [command,requestId] of [['plan.cancellation.withdraw.prepare',prepareWithdrawal.requestId],['plan.cancellation.withdraw.confirm',withdraw.requestId]]) {
+      const events=current.staffActions.filter(a=>a.command===command&&a.requestId===requestId);
+      assert.equal(events.length,1);assert.deepEqual([events[0].actorRole,events[0].personId,events[0].right,events[0].channel],[role,s.ben.id,'contract-change','phone']);
+      assert.ok(events[0].before&&events[0].after);
+    }
+    await grant(actor,role,['member-record'],[s.ben.id],[locationId]);await refuse('plan.cancellation.withdraw.confirm',withdraw,actor.cookie);
+    await grant(actor,role,['member-record','contract-change'],[s.ben.id],[locationId]);
+    const renewal=await h.cmd('plan.recurring.prepare',{packId:accepted.currentPackId,intervalMonths:1,requestId:randomUUID()});
+    await refuse('plan.recurring.accept',{id:renewal.id,key:renewal.key},actor.cookie);
+    const resumed=await h.cmd('plan.recurring.accept',{id:renewal.id,key:renewal.key},s.ben.cookie);assert.equal(resumed.status,'active');
+    await h.cmd('plan.recurring.accept',{id:renewal.id,key:renewal.key},s.ben.cookie);
+    current=await h.state();assert.equal(current.recurring.invoices.filter(i=>i.recurringTermsId===resumed.id).length,0);
   }
 
+  console.log('PROBE PLAN-012 staff withdrawal: manager and front desk at two locations -> own scheduled termination withdrawn once with canonical audit, invoices stay stopped until personal fresh acceptance; other terminator, wrong scope, missing right and revoked replay refused without writes.');
 }
 
 export async function staffAppointmentRoles(h) {

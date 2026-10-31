@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "9e4125c0071f6300f1f2ebfc7a193595a53c6b3121699280a13d5e6e464df099",
+      "sha256": "22601a2d78a44cf0104034f8137865d6ff393edb84df987bd1c8979758b5c6d3",
       "executable": false
     },
     "DEMO.md": {
@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "be2beeab2473ef66d639729d77fb1e16dcd3fc3a2920fdf9fa57e681ec74fb9d",
+      "sha256": "b57e959b75cc23a345859cb8ff43a5444f16435934d645c44422fe9f03435562",
       "executable": false
     },
     "docs/AUTOMATION.md": {
@@ -3278,11 +3278,11 @@
       "executable": false
     },
     "src/strap/domain/contract-billing.ts": {
-      "sha256": "db6b4596d753a6609d608490a1cbb2a9f7c7f2090932862479891ca266f143a9",
+      "sha256": "ab42510d8ef592c513f726198e96b9cd42b648eadd762050f2e14330d599b9e9",
       "executable": false
     },
     "src/strap/domain/contract-cancellations.ts": {
-      "sha256": "bd313c80ced59e3951729276aacb5315cd2e40da822e03574d51e8139e24c189",
+      "sha256": "5b37b255f39e8073a20a0a1d9b61d21c4482753579b19309bfef337f364eff5c",
       "executable": false
     },
     "src/strap/domain/contract-copies.ts": {
@@ -3374,7 +3374,7 @@
       "executable": false
     },
     "src/strap/domain/index.ts": {
-      "sha256": "55f7be82392d987525820c174ca8d1bcbf95ad665341ce3f61a12a3b979022fe",
+      "sha256": "03b9cb4aa715d7b496b1902a1d832514c6f81114f9fa2b17efd2cd589a28b6f1",
       "executable": false
     },
     "src/strap/domain/intake.ts": {
@@ -3514,7 +3514,7 @@
       "executable": false
     },
     "src/strap/domain/staff-command-access.ts": {
-      "sha256": "225d81a7ec1f332937fa213b844f3060988097cd2b38df13cb37e6752805fda0",
+      "sha256": "6841a5ab5c2579a62d90fa80374c6815fe36a8cf5063ffd5f631d72aaa4ad5a5",
       "executable": false
     },
     "src/strap/domain/staff-rights.ts": {
@@ -3522,7 +3522,7 @@
       "executable": false
     },
     "src/strap/domain/staff-snapshot.ts": {
-      "sha256": "5b036513a39b66c5a16180ede830f0b40143157227c938ebb35e38a5b5ddd288",
+      "sha256": "018d1f3bdefc5a90cc4d605f6f295f74956ff76500c1ccd45a9713185576bb70",
       "executable": false
     },
     "src/strap/domain/store.ts": {
@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "846e343964758f1181b201ccfdea733a6750d65025699f5180ece1b3b235fe97",
+      "sha256": "db11bc4f76bac1093ccdb51206dd22dee1dfdd452595b40e5edc7920a6255b29",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3850,7 +3850,7 @@
       "executable": false
     },
     "src/strap/ui/contract-cancellations.ts": {
-      "sha256": "f532364ca353281c4388a74b9d740952627afa1d44152bf97beb96d4774fde79",
+      "sha256": "da57187a01bb0d371ab55e636c61bd9fe80772405c46bd4a60ca41097dc20e01",
       "executable": false
     },
     "src/strap/ui/contract-invoices.ts": {
@@ -4214,7 +4214,7 @@
       "executable": false
     },
     "tests/cancellations-browser.mjs": {
-      "sha256": "bc34f951b70450e8c906d2757d527ace34339af0ceeb796f6c8778ac03411d16",
+      "sha256": "22d8516595f37ebc886df28b1d02188051d438f09a3b155876dd30f7823dbf73",
       "executable": false
     },
     "tests/capacity-browser.mjs": {
@@ -4486,7 +4486,7 @@
       "executable": false
     },
     "tests/plan-changes.test.mjs": {
-      "sha256": "74d2aea8816a4d6073815de173be13fc2c3de9d95b58930091350f49bf11e876",
+      "sha256": "084fc3c02c971ba0d59a28a6032bcd6154318e925624c247f68c3289bcb81b31",
       "executable": false
     },
     "tests/plan-entitlements-browser.mjs": {
@@ -4678,7 +4678,7 @@
       "executable": false
     },
     "tests/staff-rights-cases.mjs": {
-      "sha256": "dc8f5f9619f0a4962228e91e645fe0598efffcd702d685d5eeb477f80c698e0e",
+      "sha256": "368e8170af10bd201a78ec20a354283a31c43df90538a90f5e03c53292672097",
       "executable": false
     },
     "tests/staff-time-browser.mjs": {
@@ -4734,7 +4734,7 @@
       "executable": false
     },
     "tests/termination-reasons-cases.mjs": {
-      "sha256": "cb2dd148a938af3e5b4e7461093d2588c6f3263db20fc315bf24ae38f4e09ae9",
+      "sha256": "84b14aaca81b06b1c0d400968052310b7e002d6cebb6cfb151ab2bad2d607cce",
       "executable": false
     },
     "tests/tuition-browser.mjs": {

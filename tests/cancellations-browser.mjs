@@ -367,7 +367,50 @@ export async function staffTerminationsBrowser(h,s){
         const audit=state.staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===preview.id)
         assert.equal(audit.length,1);assert.equal(audit[0].actorRole,'front-desk');assert.equal(audit[0].after.reasonLabel,'Moved away')
         await page.locator(`[data-contract-cancellation="${preview.id}"]`).scrollIntoViewIfNeeded();await shot('confirmed')
+        if(width===390){
+          const current=page.locator(`[data-contract-cancellation="${preview.id}"]`);
+          await current.getByRole('button',{name:'Preview withdrawal of my cancellation',exact:true}).click();
+          const withdrawal=(await h.state()).cancellations.withdrawals.find(w=>w.cancellationId===preview.id&&w.status==='preview');assert.ok(withdrawal);
+          const withdrawalCard=page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`);
+          assert.match(await withdrawalCard.innerText(),/Invoice authority stays stopped/);
+          for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await withdrawalCard.scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-staff-withdrawal-preview-${proofWidth}.png`)});}
+          await page.setViewportSize({width:390,height:1000});
+          await s.grant(s.desk,'front-desk',['member-record'],[s.ben.id],['studio']);
+          const version=(await h.state()).version;
+          await withdrawalCard.getByRole('button',{name:'Confirm withdrawal; keep invoices stopped',exact:true}).click();
+          assert.equal((await h.state()).version,version);assert.equal(await commandForm(page,'plan.cancellation.withdraw.confirm').count(),0);
+          await s.grant(s.desk,'front-desk',['member-record','contract-change'],[s.ben.id],['studio']);
+          await page.goto(url);await page.reload();
+          await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).getByRole('button',{name:'Confirm withdrawal; keep invoices stopped',exact:true}).click();
+          const after=await h.state();assert.equal(after.cancellations.cancellations.find(c=>c.id===preview.id).status,'withdrawn');
+          assert.equal(after.recurring.terms.find(t=>t.currentPackId===pack.id).status,'stopped');
+          assert.equal(after.staffActions.filter(a=>a.command==='plan.cancellation.withdraw.confirm'&&a.after.id===withdrawal.id).length,1);
+          assert.match(await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).innerText(),/confirmed/);
+          for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-staff-withdrawn-${proofWidth}.png`)});}
+        }
       }finally{await context.close()}
     }
   }finally{await browser.close()}
+}
+
+
+export async function terminationDraftBrowser(h,{member,draft}){
+  const proof=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR;await mkdir(proof,{recursive:true});
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']});
+  try{
+    const context=await browser.newContext({viewport:{width:390,height:1000}});
+    try{
+      await context.route(h.origin+'/**',async route=>{
+        const asset=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'};
+        if(!asset.includes('..')&&types[extname(asset)])return route.fulfill({body:await readFile(join(process.cwd(),'public',asset)),contentType:types[extname(asset)]});
+        return route.continue();
+      });
+      const eq=h.owner.indexOf('=');await context.addCookies([{name:h.owner.slice(0,eq),value:h.owner.slice(eq+1),url:h.origin}]);
+      const page=await context.newPage();await page.goto(h.origin+'/app/packs?person='+member.id+'#cancellations');
+      const card=page.locator(`[data-contract-cancellation="${draft.id}"]`);
+      assert.match(await card.innerText(),/Agent-prepared draft/);assert.match(await card.innerText(),/Relocation \(agent-move\)/);
+      assert.equal(await card.getByRole('button',{name:'Confirm this exact early termination',exact:true}).count(),1);
+      for(const width of [390,1440]){await page.setViewportSize({width,height:1000});await card.scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-agent-draft-${width}.png`)});}
+    }finally{await context.close();}
+  }finally{await browser.close();}
 }
