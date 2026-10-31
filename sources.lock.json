@@ -4094,7 +4094,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "9b57c9427ac4d496dcd34dbce70fd9521f3614069424c3c15cd7116ddb1706a9",
+      "sha256": "386f61c817b46e02d64b58e4bf2a96eb2f310c5ddb4f2bb58983cb4a2d3fb75b",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4562,7 +4562,7 @@
       "executable": false
     },
     "tests/privacy-provider.mjs": {
-      "sha256": "32fafef97bc68d8806e673b8baf57196f2b562d1071822312a7c30139705a2d1",
+      "sha256": "c5ef7702beb57c5a2eacc9204495630b9846ad1ae93c0e04a06719275093de34",
       "executable": false
     },
     "tests/privacy-shared.mjs": {
@@ -4706,7 +4706,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "8e914d50be232203bd78138e1d15df6f4227efa329f31b9c215e34138b24d674",
+      "sha256": "afe981966b530f713d94ffe167c1ea83aa53f4f53c3ce6598d98230adb8a3e22",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
