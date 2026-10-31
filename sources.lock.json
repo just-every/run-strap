@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6f5c213fee8cbf56f07232d0a33502598e49636b9e58763034a02696246bd6cf",
+      "sha256": "6e86620eb00c37e22e1d2424046e8be17f868b38ee87224ff375c9120c7f0699",
       "executable": false
     },
     "DEMO.md": {
@@ -3598,7 +3598,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "db11bc4f76bac1093ccdb51206dd22dee1dfdd452595b40e5edc7920a6255b29",
+      "sha256": "501bbd9ec1089777f52c467bd7ac481043150b056cac43533a080ba232eedfdc",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3682,11 +3682,11 @@
       "executable": false
     },
     "src/strap/report-exports.ts": {
-      "sha256": "312bbfa0e8f4f5622b729e3ba42032635e671d34656de0d899dfd00c5a617c6e",
+      "sha256": "75159327cd0d6f5aac99ca37981f981a57f74d0638d030ea5ef5668163680b4e",
       "executable": false
     },
     "src/strap/retention-churn.ts": {
-      "sha256": "e321a7e9c6da0310fe28c5aefcc42597db49e1389b7ee9234d86a77566e01a0a",
+      "sha256": "17488a8fdbbbf9e8a15ebb79092226ee2b1343d51927bc58ba8566a4808bb134",
       "executable": false
     },
     "src/strap/retention-report.ts": {
@@ -3694,7 +3694,7 @@
       "executable": false
     },
     "src/strap/revenue-report.ts": {
-      "sha256": "4055dd525ddcce0ffc49c768e573f222ce6d9cbcf295ed2fb474636552179ead",
+      "sha256": "8eafb073a3e33497f995782fee0a4b8ef4a3020c0d8b84e12ce70900ddd02074",
       "executable": false
     },
     "src/strap/security/auth-gate.ts": {
@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/strap/ui/revenue.ts": {
-      "sha256": "b573447b1827400839e7792e0812d02c6425a9a73313237efe38db30392e533c",
+      "sha256": "a9777b1e2fccda22f756e8582ed6b1e87e42902d415da9343a2cd6896fbafb1f",
       "executable": false
     },
     "src/strap/ui/roster.ts": {
@@ -4590,7 +4590,7 @@
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "02b252e5d9357715b9e1cded391821780f02f65ac9f8f6499400dd24caf076b5",
+      "sha256": "26e8c6ec060bd35843ca379f8f325ad3d75c36a57af42a6847d257f3428a0262",
       "executable": false
     },
     "tests/reservations-browser.mjs": {
@@ -4614,7 +4614,7 @@
       "executable": false
     },
     "tests/revenue-browser.mjs": {
-      "sha256": "42ba5c8753f7599ec2ce9cb8028024e3ca157f58e89fc031104d443120e9f043",
+      "sha256": "e15334799a2d5ef24449578a0b6373fe100fc59989ae66908a3ec330ce9d6bbd",
       "executable": false
     },
     "tests/security-browser.mjs": {
