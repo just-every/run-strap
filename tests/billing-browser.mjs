@@ -202,6 +202,7 @@ export async function billingBrowser(h,edge) {
       if(width===1440){assert.ok(removalEvent);assert.equal(removalEvent.right,'collection');assert.equal(removalEvent.actorRole,'front-desk');assert.equal(edge.calls.length,removalCalls)}
       const staffReceipt=page.locator('[data-removed-method="'+replaced.methods.find(m=>m.last4==='5556').id+'"]')
       await staffReceipt.waitFor({state:'visible'})
+      await page.locator('#billing-handoff [data-method-readiness="missing-default"]').waitFor()
       if(width===1440){assert.equal(await staffReceipt.getAttribute('role'),'status');assert.ok((await staffReceipt.innerText()).includes('5556'))}
       await capture('staff-removal-confirmed')
       await grant('collection')
@@ -212,24 +213,30 @@ export async function billingBrowser(h,edge) {
       if(width===1440)assert.equal(await staffReceipt.count(),0,'revoked collection scope hides the retained removal receipt')
       await grant()
       await sign(h.owner);await page.goto(h.origin+'/app/packs#billing')
+      await section.locator('[data-method-readiness="missing-default"]').waitFor()
       await section.getByText(/Strap use ended/).first().waitFor();await capture('owner-removed-history')
       await sign(seed.outsider.cookie);await page.goto(h.origin+'/app/packs#billing')
       if(width===1440)assert.equal(await section.count(),0,'another member cannot read removed-card history')
       await sign(seed.member.cookie);await page.goto(h.origin+'/app/packs#billing')
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).waitFor();await capture('member-removed-history')
+      if(width===1440)assert.equal(await section.locator('[data-method-readiness="missing-default"]').count(),1)
       if(width===1440){const removed=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;assert.equal(removed.methods.filter(m=>m.agreementId===agreement.id).every(m=>m.status==='removed'&&!m.available),true);assert.equal(removed.purchaseConsents.find(r=>r.methodId===secondMethod.id).available,false);assert.equal(removed.purchaseConsents.find(r=>r.methodId===secondMethod.id).status,'withdrawn');assert.equal(edge.calls.length,removalCalls)}
       // Preserve the existing revocation proof on a currently usable method.
       edge.setCard('4444')
       await section.getByRole('button',{name:'Authorize a test card with Stripe',exact:true}).click()
       await page.getByRole('link',{name:'Continue to Stripe test card setup',exact:true}).waitFor()
       await page.goto(h.origin+'/app/packs#billing')
+      if(width===1440)assert.equal(await section.locator('[data-method-readiness="missing-default"]').count(),1)
       await section.getByRole('button',{name:'Check Stripe authorization',exact:true}).click()
       await section.getByText(/visa ending 4444/).waitFor()
+      await section.locator('[data-method-readiness="test-default-saved"]').waitFor();await capture('member-new-default')
+      if(width===1440)assert.equal(await section.locator('[data-method-readiness="missing-default"]').count(),0)
       const freshMethod=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.find(m=>m.agreementId===agreement.id&&m.available)
       assert.ok(freshMethod,'revocation starts with an available newly authorized card')
       await staffLaunch('billing.mandate.revoke','Open payment revocation','revocation')
       await section.getByRole('button',{name:'Revoke future payment permission',exact:true}).click()
       await section.getByText(/Future payment permission revoked/).waitFor();await capture('revoked')
+      if(width===1440){assert.equal(await section.locator('[data-method-readiness="payment-permission-revoked"]').count(),1);assert.equal(await section.locator('[data-method-readiness="missing-default"]').count(),0)}
       const state=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value
       assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).status,'revoked')
       assert.equal(state.methods.find(m=>m.agreementId===agreement.id).available,false)

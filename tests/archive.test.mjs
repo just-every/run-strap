@@ -111,6 +111,7 @@ async function archiveMembership(h,member,terms,edge) {
     assert.equal(connectedBilling.methods.find(method=>method.id===methodResult.result.id).available,true);
     assert.equal(connectedBilling.methods.find(method=>method.id===originalMethod.id).status,'removed');
     assert.deepEqual(connectedBilling.methods.filter(method=>method.available).map(method=>method.last4),['5556']);
+    assert.equal(connectedBilling.methodReadiness.find(r=>r.agreementId===membership.id).status,'test-default-saved');
     return {membership,methodInput,methodResult,membershipBefore,membershipHtmlBefore,methodHistory:connectedBilling.methods.map(({available,selectable,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id))};
 }
 async function archiveCopyTablet(h,owner,waiver,suffix) {
@@ -566,6 +567,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const historicalBilling=(await h.send('/api/strap/billing',undefined,restoredMember)).value;
     assert.equal(historicalBilling.methods.length,2);
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
+    assert.equal(historicalBilling.methodReadiness.find(r=>r.agreementId===membership.id).status,'connection-review-required','restored history never reports an executable default');
     assert.deepEqual(historicalBilling.methods.map(({available,selectable,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the removed method and selected replacement as historical records');
     const removedMethod=historicalBilling.methods.find(method=>method.status==='removed');assert.ok(removedMethod);
     assert.equal(historicalBilling.removalRequests.find(r=>r.methodId===removedMethod.id).status,'removed');
@@ -620,6 +622,7 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(reviewed.purchaseConsents.some(r=>r.available),false);
     await h.cmd('billing.purchase-consent.set',{methodId:methodResult.result.id,enabled:true,contexts:['phone'],revision:1,confirm:true,requestId:'synthetic-strap-restored-purchase'},restoredMember,409);
     assert.equal(reviewed.methods.some(m=>m.available||m.selectable),false,'fresh merchant review cannot resurrect historical method authority');
+    assert.notEqual(reviewed.methodReadiness.find(r=>r.agreementId===membership.id).status,'test-default-saved');
     await h.cmd('billing.method.default.staff',{id:retainedDefault.id,confirm:true,requestId:'synthetic-strap-reconnected-default',channel:'desk'},restoredOwner,409);
     payments.complete(pendingCheckout.providerSessionId);
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-after-review'},restoredOwner);

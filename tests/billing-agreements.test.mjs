@@ -289,6 +289,7 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     const before=await h.state();
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-998'});
     assert.equal((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methods.some(m=>m.available),false);
+    assert.equal((await h.send('/api/strap/billing',undefined,seed.member.cookie)).value.methodReadiness.find(r=>r.agreementId===agreement.id).status,'connection-review-required');
     const count=edge.calls.length;
     await h.cmd('billing.setup.complete',{...complete,requestId:'synthetic-strap-23'},seed.member.cookie,409);assert.equal(edge.calls.length,count);
     await h.setAuth({STRIPE_BILLING_TEST_KEY:'synthetic-strap-999'});
@@ -297,6 +298,7 @@ test('Stripe-hosted method setup uses durable once-only reservations, exact memb
     const revoked=(await h.send('/api/strap/billing',undefined,seed.member.cookie)).value;
     assert.equal(revoked.methods.some(m=>m.available),false);assert.deepEqual(revoked.agreements[0].signature,historical.agreements[0].signature);
     assert.deepEqual(revoked.mandates[0].financialTerms,historical.mandates[0].financialTerms);assert.equal(revoked.mandates[0].status,'revoked');
+    assert.equal(revoked.methodReadiness.find(r=>r.agreementId===agreement.id).status,'payment-permission-revoked','revocation never asks the member to restore a default under old consent');
     const revokedVersion=(await h.state()).version,revokedCalls=edge.calls.length;
     for(const [name,input] of [['billing.setup.start',{...start,requestId:'synthetic-strap-87'}],['billing.setup.start',start],['billing.setup.complete',{...complete,requestId:'synthetic-strap-88'}],['billing.setup.complete',{...complete,requestId:'synthetic-strap-22'}]]){
       const refused=await h.send('/api/strap/command',{name,input},seed.member.cookie);

@@ -13,6 +13,8 @@ export async function methodRemovalCases(h,edge,onRead) {
   edge.setCard('5556');
   const replacementInput={id:agreement.id,setupId:replacement.result.id,requestId:'synthetic-strap-remove-replaced'};
   const current=(await billingSucceeded(h,'billing.setup.complete',replacementInput,seed.member.cookie)).result;
+  const readiness=b=>b.methodReadiness.find(r=>r.agreementId===agreement.id)?.status;
+  assert.equal(readiness(await view()),'test-default-saved');
   const before=await h.state(),originalEvidence=await view();
   const request=methodId=>({methodId,confirm:true,requestId:'synthetic-strap-request-'+crypto.randomUUID()});
   const finish=id=>({id,confirm:true,requestId:'synthetic-strap-remove-'+crypto.randomUUID()});
@@ -57,6 +59,7 @@ export async function methodRemovalCases(h,edge,onRead) {
   await h.cmd('mfa.verify',{code:factor.recoveryCodes[1]},desk.cookie);
   await grant('member-record');await refuse('billing.method.remove.staff',staffInput,desk.cookie,403);
   let state=await view();assert.deepEqual(state.methods.filter(m=>m.available).map(m=>m.id),[current.id]);assert.equal(state.methods.find(m=>m.id===original.id).status,'removed');
+  assert.equal(readiness(state),'test-default-saved','removing a historical card preserves the selected default');
   for(const requestId of [completion.requestId,'synthetic-strap-removed-old-completion'])await refuse('billing.setup.complete',{...completion,requestId},seed.member.cookie,409);
   console.log('PROBE BILL-004 historical removal: member request and scoped staff command -> masked history retained, current default unchanged, one staff audit, zero provider calls; stale requests and revoked replays refused');
   // Removal commits while an older completion is waiting at the provider edge.
@@ -66,6 +69,12 @@ export async function methodRemovalCases(h,edge,onRead) {
   const result=await h.cmd('billing.setup.complete',{id:agreement.id,setupId:pending.result.id,requestId:'synthetic-strap-remove-racing'},seed.member.cookie);
   assert.equal(result.status,'uncertain');assert.equal(result.errorCode,'billing_method_removed');
   state=await view();assert.equal(state.methods.some(m=>m.available),false);assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).methodAuthorized,false);assert.equal(state.mandates.find(m=>m.agreementId===agreement.id).methodId,null);
+  assert.equal(readiness(state),'missing-default');
+  const readVersion=(await h.state()).version,readCalls=edge.calls.length;
+  assert.deepEqual((await view(h.owner)).methodReadiness.find(r=>r.agreementId===agreement.id),state.methodReadiness.find(r=>r.agreementId===agreement.id));
+  assert.deepEqual((await view(seed.outsider.cookie)).methodReadiness,[]);
+  await h.send('/app/packs',undefined,seed.member.cookie);await h.send('/app/packs',undefined,h.owner);
+  assert.equal((await h.state()).version,readVersion);assert.equal(edge.calls.length,readCalls,'readiness reads never contact the provider');
   assert.equal(state.setups.find(s=>s.id===pending.result.id).status,'invalidated');
   assert.deepEqual(await h.cmd('billing.method.remove',currentInput,seed.member.cookie),currentRemoval);
   for(const input of [replacementInput,{...replacementInput,requestId:'synthetic-strap-remove-replay-new'},{id:agreement.id,setupId:pending.result.id,requestId:'synthetic-strap-remove-pending-replay'}])await refuse('billing.setup.complete',input,seed.member.cookie,409);
@@ -76,12 +85,22 @@ export async function methodRemovalCases(h,edge,onRead) {
   console.log('PROBE BILL-004 current removal: member confirmation during pending completion -> eligibility cleared, older completion and replay refused, original debt and consent unchanged');
   // A genuinely new personal authorization remains possible after removal.
   const fresh=await billingSucceeded(h,'billing.setup.start',{id:agreement.id,requestId:'synthetic-strap-remove-fresh'},seed.member.cookie);
+  assert.equal(readiness(await view()),'missing-default','a pending replacement does not clear the warning');
   edge.setCard('4444');const saved=(await billingSucceeded(h,'billing.setup.complete',{id:agreement.id,setupId:fresh.result.id,requestId:'synthetic-strap-remove-fresh-complete'},seed.member.cookie)).result;
   assert.deepEqual((await view()).methods.filter(m=>m.available).map(m=>m.id),[saved.id]);
+  assert.equal(readiness(await view()),'test-default-saved','only confirmed personal authorization clears the warning');
   const finalRequest=await h.cmd('billing.method.removal.request',request(saved.id),seed.member.cookie);await grant();
   const concurrent=await Promise.all([1,2].map(n=>h.send('/api/strap/command',{name:'billing.method.remove.staff',input:{...finish(finalRequest.id),channel:'desk'}},desk.cookie)));
   assert.ok(concurrent.some(r=>r.status===200));assert.ok(concurrent.every(r=>[200,409].includes(r.status)));
   assert.equal((await h.state()).staffActions.filter(a=>a.command==='billing.method.remove.staff'&&a.after.methodId===saved.id).length,1);
   assert.equal((await view()).methods.some(m=>m.available),false);edge.setCard('4242');
+  assert.equal(readiness(await view()),'missing-default');
+  await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:Object.fromEntries(['collection','member-record'].map(right=>[right,{enabled:true,scopes:[{memberIds:[seed.member.id],locationIds:['studio'],doors:['all']}]}]))});
+  const staffPage=await h.send('/app/people?person='+seed.member.id,undefined,desk.cookie);
+  assert.equal(staffPage.status,200);assert.ok(staffPage.text.includes('data-method-readiness="missing-default"'));
+  await grant('member-record');
+  const revokedPage=await h.send('/app/people?person='+seed.member.id,undefined,desk.cookie);
+  assert.equal(revokedPage.text.includes('data-method-readiness="missing-default"'),false,'revoked collection scope hides the warning');
+  console.log('PROBE BILL-004 missing method: current removal and pure billing reads -> member, owner and scoped staff see missing default; pending setup keeps warning, confirmed new default clears it, other members and revoked staff see none; zero read writes');
   console.log('PROBE BILL-004 concurrency: two staff confirmations of one personal request -> one removal and canonical audit; a fresh personal setup is required to restore eligibility');
 }

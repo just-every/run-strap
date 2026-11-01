@@ -2,7 +2,7 @@ import { hasStaffRight } from '../domain/staff-rights';
 import { load, Transaction } from '../domain/store';
 import { DomainError, humanOwner, insist, list, now, type Actor } from '../domain/types';
 import { acceptAgreement, prepareAgreement, revokeMandate } from './agreements';
-import { connection, currentAgreement, type BillingBindings } from './model';
+import { connection, methodReadinessFor, methodUsable, type BillingBindings, type Connection } from './model';
 import { providerCommand } from './operations';
 import { launchBillingAction } from './launch';
 import { requestMethodRemoval, removeMethod } from './methods';
@@ -66,23 +66,22 @@ export async function billingCommand(env: BillingBindings,who: Actor,name: strin
   insist(handler,'unknown_command',404);
   return handler.run(env,who,input);
 }
+async function reviewedConnection(env: BillingBindings) {
+  try {return await connection(env);}
+  catch(error) {
+    if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured'].includes(error.code))throw error;
+    return null;
+  }
+}
 export async function billingState(env: BillingBindings,who: Actor) {
   const loaded=await load(env.DB,who);
   insist(who.role === 'owner' && who.isOwner || who.role === 'member','billing_access_required',403);
   const visible=(r: Record<string,any>)=>who.role === 'owner' || r.personId === who.personId;
-  let c=null;
-  try { c=await connection(env); } catch(error) {
-    // Only known disconnected states are product outcomes. A broken database,
-    // invalid live credential or unexpected validator failure must remain visible.
-    if(!(error instanceof DomainError) || !['billing_reconnection_required','stripe_billing_test_not_configured'].includes(error.code))throw error;
-  }
-  const usable=(m: any)=>{
-    if(!c || !m || m.erased || !['authorized','superseded'].includes(m.status) || m.connectionId!==c.connection_id || m.accountId!==c.account_id || loaded.state.records.get(m.mandateId)?.data.status!=='accepted')return false;
-    try {return !!currentAgreement(loaded.state,m.agreementId).signature;}
-    catch(error) {if(error instanceof DomainError)return false;throw error;}
-  };
+  const c=await reviewedConnection(env),usable=(m: any)=>methodUsable(loaded.state,m,c);
   const reviews=list(loaded.state,'billingConnectionReview');
+  const methodReadiness=list(loaded.state,'billingAgreement').filter(a=>visible(a) && !a.erased).map(a=>({agreementId:a.id,personId:a.personId,status:methodReadinessFor(loaded.state,a,c)}));
   return {mode:'test',configured:!!env.STRIPE_BILLING_TEST_KEY && env.RER_DEMO !== '1',connected:!!c,connection:who.role === 'owner' && c ? {accountId:c.account_id,connectionId:c.connection_id,review:reviews.filter(r=>r.connectionId===c.connection_id).at(-1)} : null,
+    methodReadiness,
     reviews:who.role === 'owner'?reviews:[],connectionEvents:who.role === 'owner'?list(loaded.state,'billingConnectionEvent'):[],
     invoices:list(loaded.state,'stripeInvoice').filter(visible).map(r=>({...r,balanceCents:balance(loaded.state,r.personId),access:loaded.state.records.get(r.packId)?.data.remaining ?? null})),
     events:who.role === 'owner'?list(loaded.state,'stripeEvent'):[],exceptions:who.role === 'owner'?list(loaded.state,'billingException'):[],reconciliations:who.role === 'owner'?list(loaded.state,'billingReconciliation'):[],
@@ -95,9 +94,11 @@ export async function billingState(env: BillingBindings,who: Actor) {
 /** A scoped staff page reveals action handles, never agreement or payment evidence. */
 export async function billingStaffHandoffs(env: BillingBindings,who: Actor) {
   const loaded=await load(env.DB,who);
-  return list(loaded.state,'billingAgreement').flatMap(a=>{
+  const handoffs=[];
+  let c: Connection|null|undefined;
+  for(const a of list(loaded.state,'billingAgreement')) {
     const terms=loaded.state.records.get(a.termsId)?.data,pack=terms && loaded.state.records.get(terms.currentPackId)?.data;
-    if(!pack)return [];
+    if(!pack)continue;
     const permitted=(right: 'collection'|'membership-sale')=>hasStaffRight(loaded.state,loaded.who,right,a.personId,pack.locationId ?? 'studio');
     const mandate=list(loaded.state,'paymentMandate').find(m=>m.agreementId===a.id);
     const actions=terms?.status !== 'active' ? (permitted('collection') ? ['billing.method.removal.request'] : []) : !a.signature && permitted('membership-sale') ? ['billing.agreement.accept'] : mandate?.status==='accepted' && permitted('collection') ? ['billing.setup.start','billing.setup.complete','billing.mandate.revoke','billing.method.removal.request','billing.method.default.request','billing.purchase-consent.set'] : [];
@@ -106,6 +107,14 @@ export async function billingStaffHandoffs(env: BillingBindings,who: Actor) {
     const defaultRequests=terms?.status==='active' && mandate?.status==='accepted' && permitted('collection') ? list(loaded.state,'billingMethodDefaultRequest').filter(r=>r.agreementId===a.id && r.status==='requested' && r.sourceMethodId===(mandate.methodId ?? null) && r.methodEpoch===(mandate.methodEpoch ?? 0) && loaded.state.records.get(r.methodId)?.data.defaultRequestId===r.id && ['authorized','superseded'].includes(loaded.state.records.get(r.methodId)?.data.status)).map(r=>({id:r.id,methodId:r.methodId,brand:r.brand,last4:r.last4,requestedAt:r.requestedAt})) : [];
     const defaultChanges=permitted('collection') ? list(loaded.state,'billingMethodDefaultChange').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method && !method.erased ? [{id:r.id,methodId:r.methodId,at:r.at,brand:method.brand,last4:method.last4}] : [];}) : [];
     const removals=permitted('collection') ? list(loaded.state,'billingMethodRemoval').filter(r=>r.agreementId===a.id && r.actorId===loaded.who.id).flatMap(r=>{const method=loaded.state.records.get(r.methodId)?.data;return method?.status==='removed' && !method.erased ? [{id:r.id,methodId:method.id,brand:method.brand,last4:method.last4,at:r.at}] : [];}) : [];
-    return actions.length || removalRequests.length || removals.length || defaultRequests.length || defaultChanges.length ? [{id:a.id,personId:a.personId,actions,removalRequests,removals,defaultRequests,defaultChanges}] : [];
-  });
+    if(actions.length || removalRequests.length || removals.length || defaultRequests.length || defaultChanges.length) {
+      let methodReadiness=null;
+      if(permitted('collection') && !a.erased) {
+        if(c===undefined)c=await reviewedConnection(env);
+        methodReadiness=methodReadinessFor(loaded.state,a,c);
+      }
+      handoffs.push({id:a.id,personId:a.personId,actions,removalRequests,removals,defaultRequests,defaultChanges,methodReadiness});
+    }
+  }
+  return handoffs;
 }

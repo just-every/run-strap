@@ -1,4 +1,4 @@
-import { insist, list, person, record, type Actor, type State } from '../domain/types';
+import { DomainError, insist, list, person, record, type Actor, type State, type RecordData } from '../domain/types';
 import { sha256Hex } from '../security/crypto';
 
 export interface BillingBindings { DB: D1Database; AUTH_ORIGIN: string; STRIPE_BILLING_TEST_KEY?: string; STRIPE_BILLING_WEBHOOK_SECRET?: string; RER_DEMO?: string }
@@ -38,4 +38,23 @@ export function requireMandate(state: State,agreementId: unknown,who: Actor) {
   const mandate = mandateFor(state,a.id);
   insist(a.signature && mandate?.status === 'accepted','payment_mandate_required',409);
   return {agreement:a,mandate};
+}
+
+export function methodUsable(state: State,method: RecordData|null|undefined,c: Connection|null) {
+  if(!c || !method || method.erased || !['authorized','superseded'].includes(method.status) || method.connectionId!==c.connection_id || method.accountId!==c.account_id || state.records.get(method.mandateId)?.data.status!=='accepted')return false;
+  try {return !!currentAgreement(state,method.agreementId).signature;}
+  catch(error) {if(error instanceof DomainError)return false;throw error;}
+}
+
+/** Readiness describes retained personal evidence, never authority to collect. */
+export function methodReadinessFor(state: State,agreement: RecordData,c: Connection|null) {
+  const mandate=mandateFor(state,agreement.id);
+  const method=mandate?.methodId ? state.records.get(mandate.methodId)?.data : null;
+  if(mandate?.status==='revoked')return 'payment-permission-revoked';
+  if(!agreement.signature || mandate?.status!=='accepted')return 'personal-authorization-required';
+  try {currentAgreement(state,agreement.id);}
+  catch(error) {if(error instanceof DomainError)return 'agreement-review-required';throw error;}
+  if(!mandate.methodAuthorized || !method || method.status!=='authorized' || method.erased)return 'missing-default';
+  if(!c)return 'connection-review-required';
+  return methodUsable(state,method,c) ? 'test-default-saved' : 'method-authorization-required';
 }
