@@ -474,8 +474,10 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
   await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Relocated elsewhere',active:false,revision:1})
   const terms=(await h.state()).recurring.terms.find(t=>t.personId===members[2].id)
   const pack=(await h.state()).packs.find(p=>p.id===packs[2].id)
-  await edit('recurringTerms',{...terms,nextRenewalAt:at(-1)})
-  await edit('pack',{...pack,expiresAt:at(-1)})
+  const dueAt=at(-1),billingDay=Number(new Intl.DateTimeFormat('en-US',{timeZone:terms.timeZone,day:'numeric'}).format(new Date(dueAt)))
+  // Age the agreed calendar anchor with its due date, retaining a full current monthly period.
+  await edit('recurringTerms',{...terms,nextRenewalAt:dueAt,billingDay})
+  await edit('pack',{...pack,expiresAt:dueAt})
   await(await h.mf.getWorker()).scheduled();await(await h.mf.getWorker()).scheduled()
   const state=await h.state(),invoice=state.recurring.invoices.find(i=>i.recurringTermsId===terms.id)
   assert.ok(invoice,'real recurring invoice links a successor')
