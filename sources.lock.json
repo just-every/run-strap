@@ -4302,7 +4302,7 @@
       "executable": false
     },
     "tests/consent-queue-cases.mjs": {
-      "sha256": "df6d54ae8f306f6de65dd875905fd785941c9ecdb12de5fcc68747d0f35271f7",
+      "sha256": "3fdebb6eb49a76f120238ef1b247aab6f8304290c70f2c52b80533e603321c6e",
       "executable": false
     },
     "tests/contract-authority-cases.mjs": {
@@ -4405,6 +4405,10 @@
       "sha256": "fd3ac6e7c34b8e5c8a1f3de4022a2d3450e5af379b61a156783127220710de74",
       "executable": false
     },
+    "tests/fixed-clock.mjs": {
+      "sha256": "4d6ff393bd8594bf92c390afa67962fee7eea670ad715a481adeba3a3bc385e4",
+      "executable": false
+    },
     "tests/fixtures/members.csv": {
       "sha256": "ebd51c09bd49fc90281d989b80c3d44ed5f4b4e13e3924260e47b257145c296f",
       "executable": false
@@ -4490,7 +4494,7 @@
       "executable": false
     },
     "tests/notices.test.mjs": {
-      "sha256": "68d327236e0792ec5deec6d1263f22fc19171dfd07fbb78ccb6c34809a714162",
+      "sha256": "f5160710856602cd1f9ddb980b24b56c05342436cbbb24dd8c5bdd62e6eb4529",
       "executable": false
     },
     "tests/pack-credits.test.mjs": {
@@ -4618,7 +4622,7 @@
       "executable": false
     },
     "tests/reports.test.mjs": {
-      "sha256": "aa5b3f65a312259703d76abea720b91d0f31ffb9e67a9b8f645a54b5936b53c9",
+      "sha256": "94d208b6fd5b7099033c8da4408d0cfb0804eb73ad7fee64956639ce382004c1",
       "executable": false
     },
     "tests/reservations-browser.mjs": {

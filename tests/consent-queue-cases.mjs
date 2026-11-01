@@ -52,10 +52,10 @@ export async function consentQueueCases(h) {
   assert.ok(exportRecord.history.some(e=>e.source==='twilio-signed-webhook'&&e.sourceReference==='synthetic-strap-stop'))
   assert.ok((await h.send('/api/strap/exit.json',undefined,h.owner)).text.includes('pending_external_sync'),'external synchronization is explicitly pending, never reported complete')
   // The native queue rechecks permission and pause, and holds marketing SMS (only) in quiet hours, without an external transport.
-  // Real clocks, no faked application time: zones are picked by their current local hour, at least an hour from
-  // a quiet-hour boundary, so this public-door case works at every UTC hour.
-  const zones=['America/New_York','America/Los_Angeles','Pacific/Honolulu','Pacific/Guam','Europe/London','Asia/Singapore'],hour=timeZone=>Number(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',hour:'2-digit'}).format(new Date()))
-  const nightZone=zones.find(z=>hour(z)>=21||hour(z)<9),dayZone=zones.find(z=>hour(z)>=11&&hour(z)<19);assert.ok(nightZone&&dayZone)
+  // This case owns 2026-10-15T16:00Z: Guam is 02:00 and New York is noon.
+  // Both stay well inside their intended windows, independent of host DST.
+  const nightZone='Pacific/Guam',dayZone='America/New_York',hour=timeZone=>Number(new Intl.DateTimeFormat('en-US',{timeZone,hourCycle:'h23',hour:'2-digit'}).format(new Date()))
+  assert.ok((hour(nightZone)>=21||hour(nightZone)<9)&&(hour(dayZone)>=11&&hour(dayZone)<19))
   const message=async id=>(await h.state()).marketingMessages.find(m=>m.id===id)
   // With no member zone recorded, the studio's clock applies the 20:00-10:00 floor to the text.
   await h.cmd('studio.save',{location:'Austin',timeZone:nightZone});await h.cmd('renewal.queue.review',{})

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
+import { fixedClock } from './fixed-clock.mjs'
 import { parseCsv, assertReportDownloads, assertCancellationDownload, assertNativeDownloads } from './report-downloads.mjs'
 
 const hour = 3_600_000
@@ -447,7 +448,9 @@ test('RPT-003: tenure and attendance frequency count only corrected attended vis
   assert.equal((await h.state()).version,version,'tenure and frequency reads have no domain side effects')
 }))
 
-test('RPT-003: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',()=>run(async h=>{
+// Keep the aged due date and the freeze-adjusted billing day in a live next
+// calendar month, independently of the caller's date and New York's DST change.
+test('RPT-003: native termination reasons, started freezes, resumptions and allocated successor receipts reconcile once through owner report and CSV',t=>fixedClock(t,import.meta.url,'2026-10-15T16:00:00Z',()=>run(async h=>{
   await h.confirmSetup(h.owner)
   for(const [code,label] of [['moved-away','Moved away'],['price','Price']])await h.cmd('plan.cancellation.reason.save',{code,label,active:true,revision:0})
   const members=[await h.person('MovedMember'),await h.person('PriceMember'),await h.person('RenewedMember')]
@@ -499,7 +502,7 @@ test('RPT-003: native termination reasons, started freezes, resumptions and allo
   assert.equal((await h.send(path,undefined,members[0].cookie)).status,403)
   assert.equal((await h.state()).version,version,'report and evidence reads remain read-only')
   if(process.env.STRAP_PROOF_DIR)await(await import('./reports-browser.mjs')).retentionLifecycleBrowser(h,report)
-}))
+})))
 
 
 // The clock fixture ages native records; every agreement, stop, withdrawal and application uses its public command.

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
+import { fixedClock } from './fixed-clock.mjs'
 import { smsTestCases } from './sms-test-cases.mjs'
 
 const weekOf = at => {const d=new Date(at);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)).toISOString().slice(0,10)}
@@ -191,6 +192,6 @@ test('MSG-002: the confirmation/reminder opt-out leaves waitlist-offer preferenc
  }})
 })
 
-test('MEM-006 / MSG-008 / RPT-007: signed STOP suppresses queued and future SMS, verbal re-entry waits for member reply, and native renewal queue honors permission, quiet hours, pause and replay',()=>run(async h=>{
+test('MEM-006 / MSG-008 / RPT-007: signed STOP suppresses queued and future SMS, verbal re-entry waits for member reply, and native renewal queue honors permission, quiet hours, pause and replay',t=>fixedClock(t,import.meta.url,'2026-10-15T16:00:00Z',()=>run(async h=>{
   await(await import('./consent-queue-cases.mjs')).consentQueueCases(h)
-}))
+})))
