@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {mkdir,readFile} from 'node:fs/promises'
 import {join,extname} from 'node:path'
 import {chromium} from '@playwright/test'
-import {cancellationFixCases} from './cooling-refund-cases.mjs'
+import {cancellationFixCases,cancellationWriteState} from './cooling-refund-cases.mjs'
 
 const formFor=(page,name)=>page.locator(`form[action*="name=${name}"]`)
 const presence='I confirm I am physically present at this studio while accepting this agreement.'
@@ -136,7 +136,7 @@ async function refundPreviewAndSubmit(c,name,a,date,time,expected,deduction,form
 export async function coolingRefundsBrowser(h,cases,{fixOnly=false}={}){
   await mkdir(process.env.STRAP_PROOF_DIR,{recursive:true})
   // A fresh temporary browser profile uses the runner's real HOME.
-  const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   let sequence=2400
   try{for(const width of [1440,390]){
     const contexts=[]
@@ -172,4 +172,86 @@ export async function coolingRefundsBrowser(h,cases,{fixOnly=false}={}){
       }
     }finally{for(const context of contexts)await context.close()}
   }}finally{await browser.close()}
+}
+
+
+/** The ordinary Verify journey exercises the populated stale and fresh screens at one width. */
+export async function statutoryPreviewBrowser(h,fixtures,{width=1440,proofDir=process.env.STRAP_PROOF_DIR??process.env.STRAP_RIGHTS_PROOF_DIR}={}){
+  if(proofDir)await mkdir(proofDir,{recursive:true})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.STRAP_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  const contexts=[]
+  let sequence=9000
+  try{
+    const pageFor=async cookie=>{
+      const context=await browser.newContext({viewport:{width,height:1000}});contexts.push(context)
+      await context.route(h.origin+'/**',async route=>{
+        const asset=new URL(route.request().url()).pathname,types={'.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'}
+        if(!asset.includes('..')&&types[extname(asset)])return route.fulfill({body:await readFile(join(process.cwd(),'public',asset)),contentType:types[extname(asset)]})
+        return route.continue()
+      })
+      const eq=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,eq),value:cookie.slice(eq+1),url:h.origin}])
+      const page=await context.newPage();page.setDefaultTimeout(15000);return page
+    }
+    const shot=async(page,label)=>{
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'cancellation screens fit the viewport')
+      if(proofDir)await page.screenshot({path:join(proofDir,`PLAN-007-stale-${label}-${width}.png`)})
+    }
+    for(const a of fixtures.cases){
+      const page=await pageFor(a.cookie)
+      await page.goto(h.origin+'/app/packs#cancellations')
+      const old=page.locator(`[data-statutory-refund-preview="${a.preview.id}"]`)
+      await old.scrollIntoViewIfNeeded();await shot(page,a.change+'-old-preview')
+      const before=cancellationWriteState(await h.state())
+      await old.getByRole('button',{name:'Submit this documented cancellation',exact:true}).click()
+      assert.deepEqual(cancellationWriteState(await h.state()),before,'submitting the visible stale preview writes nothing')
+      assert.match(await page.locator('body').innerText(),/statutory preview changed/)
+      await shot(page,a.change+'-refused')
+      await page.getByText('Document a statutory cancellation',{exact:true}).click()
+      const form=formFor(page,'plan.cancellation.statutory').filter({has:page.locator('select[name=packId]')})
+      await form.locator('[name=packId]').selectOption(a.pack.id)
+      await form.locator('[name=reasonCode]').selectOption('cooling-off')
+      await form.locator('[name=documentedDate]').fill('2026-01-08')
+      await form.locator('[name=documentedTime]').fill('00:00:00')
+      await form.locator('[name=evidenceReference]').fill(`synthetic-strap-${sequence++}`)
+      const priorIds=new Set((await h.state(a.cookie)).cancellations.statutoryPreviews.map(p=>p.id))
+      await form.getByRole('button',{name:'Preview refund first (optional)',exact:true}).click()
+      const fresh=(await h.state(a.cookie)).cancellations.statutoryPreviews.find(p=>p.packId===a.pack.id&&!priorIds.has(p.id))
+      assert.ok(fresh);assert.equal(fresh.value.amountCents,a.expected)
+      assert.equal(fresh.value.formula.deductionCents,a.change==='receipt'?0:4000)
+      const article=page.locator(`[data-statutory-refund-preview="${fresh.id}"]`)
+      assert.ok((await article.innerText()).includes('$'+(a.expected/100).toFixed(2)))
+      await article.scrollIntoViewIfNeeded();await shot(page,a.change+'-fresh-preview')
+      await article.getByRole('button',{name:'Submit this documented cancellation',exact:true}).click()
+      let state=await h.state(),ended=state.cancellations.cancellations.find(c=>c.packId===a.pack.id)
+      assert.equal(ended.status,'applied')
+      assert.deepEqual(ended.effects.unusedPrepaid,fresh.value,'the fresh valuation is preserved in the confirmation')
+      const refund=state.cancellations.refunds.find(r=>r.cancellationId===ended.id),statement=state.cancellations.statements.find(r=>r.cancellationId===ended.id)
+      assert.equal(refund.amountCents,a.expected);assert.equal(refund.settledCents,0)
+      assert.equal(statement.refundDueCents,a.expected);assert.equal(statement.refundId,refund.id);assert.equal(statement.additionalChargeCents,0)
+      assert.equal(state.cancellations.settlements.filter(r=>r.refundId===refund.id).length,0)
+      const confirmation=page.locator(`[data-contract-cancellation="${ended.id}"]`)
+      assert.ok((await confirmation.innerText()).includes('$'+(a.expected/100).toFixed(2)))
+      await confirmation.scrollIntoViewIfNeeded();await shot(page,a.change+'-confirmed')
+      assert.match(await page.locator(`[data-cancellation-statement="${statement.id}"]`).innerText(),/Final statement/)
+      const input=Object.fromEntries(JSON.parse(ended.requestBasis))
+      const {version:beforeVersion,...replayBefore}=cancellationWriteState(await h.state())
+      const {canWithdraw,stale,...recorded}=ended
+      assert.deepEqual(await h.cmd('plan.cancellation.statutory',input,a.cookie),recorded)
+      const {version:afterVersion,...replayAfter}=cancellationWriteState(await h.state())
+      assert.deepEqual(replayAfter,replayBefore,'confirmation replay retains exactly one money and entitlement effect')
+      assert.equal(state.cancellations.refunds.filter(r=>r.cancellationId===ended.id).length,1)
+      assert.equal(state.cancellations.statements.filter(r=>r.cancellationId===ended.id).length,1)
+      if(a.cookie===h.owner)assert.equal(state.staffActions.filter(r=>r.command==='plan.cancellation.statutory'&&r.after?.id===ended.id).length,1)
+      for(const cookie of [h.owner,a.member.cookie]){
+        const view=(await h.state(cookie)).cancellations
+        assert.equal(view.refunds.find(r=>r.id===refund.id).amountCents,a.expected)
+        assert.equal(view.statements.find(r=>r.id===statement.id).refundDueCents,a.expected)
+      }
+    }
+    for(const [label,who] of [['other-member',fixtures.outsider],['revoked-staff',fixtures.desk]]){
+      const page=await pageFor(who.cookie);await page.goto(h.origin+'/app/packs#cancellations')
+      assert.equal(await page.locator('[data-statutory-refund-preview],[data-contract-cancellation],[data-cancellation-refund],[data-cancellation-statement]').count(),0,'unrelated and revoked viewers see no cancellation evidence')
+      await shot(page,label+'-private')
+    }
+  }finally{for(const context of contexts)await context.close();await browser.close()}
 }

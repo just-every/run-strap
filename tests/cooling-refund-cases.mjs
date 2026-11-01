@@ -222,3 +222,74 @@ export async function cancellationFixCases(h,{scenario='all',previewOnly=false,f
   }
   return fixtures
 }
+
+
+export const cancellationWriteState=state=>Object.fromEntries(['version','cancellations','recurring','packs','packCreditEvents','bookings','charges','payments','balances','staffActions','notices'].map(key=>[key,state[key]]))
+
+/** Optional previews are source-bound; every refusal is observed through HTTP before writes. */
+export async function statutoryPreviewCases(h){
+  let sequence=8000
+  const key=()=>`synthetic-strap-${sequence++}`
+  const start='2026-01-05T07:00:00.000Z',documentedAt='2026-01-08T07:00:00.000Z'
+  const save=(kind,row)=>h.db.prepare('UPDATE st_records SET data=? WHERE kind=? AND id=?').bind(JSON.stringify(row),kind,row.id).run()
+  await h.cmd('studio.save',{location:'Atlanta',timeZone:'America/Phoenix',address:{line1:'100 Main Street',city:'Atlanta',region:'GA',postalCode:'30301',country:'US'},businessHours:[1,2,3,4,5,6].map(day=>({day,opens:'09:00',closes:'17:00'}))})
+  const outsider=await h.person(key()),desk=await h.person(key()),instructor=await h.person(key(),'instructor')
+  const scopedMembers=[]
+  const grant=enabled=>h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled,rights:Object.fromEntries(['member-record','contract-change'].map(right=>[right,{enabled:true,scopes:[{memberIds:scopedMembers,locationIds:['studio'],doors:['all']}]}]))})
+  await grant(true);await h.enroll(desk.cookie)
+  const cases=[]
+  for(const change of ['receipt','service','policy']){
+    await h.cmd('plan.cancellation.policy.save',{coolingOffDays:5,coolingDeductions:change==='service'?{GA:true}:{}})
+    const member=await h.person(key())
+    scopedMembers.push(member.id);await grant(true)
+    const approved=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:member.id,credits:10,amountCents:5900,initiationFeeCents:19900,expiresAt:'2099-01-05T07:00:00.000Z'})).id})
+    let state=await h.state(),pack=state.packs.find(p=>p.id===approved.id)
+    const charges=state.charges.filter(c=>c.packId===pack.id)
+    const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:key()})
+    const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},member.cookie)
+    const receipt=await h.cmd('payment.record',{personId:member.id,amountCents:25800,reference:key()})
+    const allocate=async()=>{for(const charge of charges)await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:receipt.id,chargeId:charge.id,amountCents:charge.amountCents,reference:key()})}
+    if(change!=='receipt')await allocate()
+    let valuation
+    if(change!=='receipt'){
+      const at=new Date(Date.now()+2*86400000)
+      const local=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Phoenix',year:'numeric',month:'2-digit',day:'2-digit'}).format(at)
+      const date=new Date(local+'T12:00:00Z'),week=new Date(+date-((date.getUTCDay()+6)%7)*86400000).toISOString().slice(0,10)
+      const entry=(await h.cmd('classes.publish',{id:(await h.cmd('classes.prepare',{week,classes:[{title:'Mat practice',room:key(),start:at.toISOString(),end:new Date(+at+3600000).toISOString(),capacity:2,instructorId:instructor.id}]})).id})).classes[0]
+      const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie)
+      const attended=await h.cmd('attendance.checkin',{id:booking.id})
+      await save('class',{...entry,start:'2026-01-06T08:00:00.000Z',end:'2026-01-06T09:00:00.000Z',localDate:'2026-01-06'})
+      await save('booking',{...attended,checkedInAt:'2026-01-06T08:00:00.000Z'})
+      valuation={bookingId:booking.id,amountCents:4000,evidenceReference:key()}
+      if(change==='policy')await h.cmd('contract.service-value.record',valuation)
+      pack=(await h.state()).packs.find(p=>p.id===pack.id)
+    }
+    await save('pack',{...pack,createdAt:start,termStartAt:start,expiresAt:'2026-02-04T07:00:00.000Z'})
+    await save('recurringTerms',{...terms,acceptedAt:start})
+    await h.cmd('contract.jurisdiction.save',{personId:member.id,region:'GA',evidenceReference:key()})
+    const contract=(await h.state()).cancellations.contracts.find(t=>t.id===terms.id)
+    await h.cmd('contract.copy.delivery.record',{termsId:terms.id,digest:contract.copy.digest,deliveredAt:start,evidenceReference:key(),requestId:key()})
+    const cookie=change==='policy'?h.owner:member.cookie
+    const facts={packId:pack.id,reasonCode:'cooling-off',documentedAt,evidenceReference:key()}
+    const preview=await h.cmd('plan.cancellation.statutory',{...facts,previewOnly:true,requestId:key()},cookie)
+    assert.equal(preview.value.amountCents,change==='receipt'?null:25800)
+    if(change==='receipt')await allocate()
+    if(change==='service')await h.cmd('contract.service-value.record',valuation)
+    if(change==='policy')await h.cmd('plan.cancellation.policy.save',{coolingOffDays:5,coolingDeductions:{GA:true}})
+    const confirmation={...facts,previewId:preview.id,requestId:key(),...(cookie===h.owner?{channel:'phone'}:{})}
+    const before=cancellationWriteState(await h.state())
+    assert.equal((await h.cmd('plan.cancellation.statutory',confirmation,cookie,409)).error,'statutory_preview_changed',change+' change invalidates the reviewed refund')
+    assert.deepEqual(cancellationWriteState(await h.state()),before,'stale confirmation changes no cancellation, refund, statement, invoice, balance, entitlement or audit')
+    await h.cmd('plan.cancellation.statutory',confirmation,outsider.cookie,404)
+    await h.cmd('plan.cancellation.statutory',confirmation,desk.cookie,403)
+    assert.deepEqual(cancellationWriteState(await h.state()),before,'other members and unapproved staff cannot use a saved preview')
+    const other=(await h.state(outsider.cookie)).cancellations
+    for(const field of ['contracts','statutoryPreviews','cancellations','refunds','statements'])assert.ok(!other[field].some(r=>r.personId===member.id))
+    cases.push({change,member,pack,terms,cookie,facts,preview,confirmation,expected:change==='receipt'?25800:21800})
+  }
+  await grant(false)
+  const before=cancellationWriteState(await h.state())
+  await h.cmd('plan.cancellation.statutory',cases[0].confirmation,desk.cookie,404)
+  assert.deepEqual(cancellationWriteState(await h.state()),before,'revoked staff cannot fall back to personal cancellation authority')
+  return {cases,outsider,desk}
+}
