@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "915d838fb3768908e38d1af7d47aa52432797411cc4e1ae0e1d6be03850a34b6",
+      "sha256": "b764febcc7a690a9c832fd302b03bd94b97fe2be480a3245d4ac1478203825dc",
       "executable": false
     },
     "DEMO.md": {
@@ -3126,11 +3126,15 @@
       "executable": false
     },
     "src/strap/billing/index.ts": {
-      "sha256": "aa51dcd55134a6c555a3e4e3f98a0fbe1fc848c58db1cc82e61f499dbea778b7",
+      "sha256": "73a190837b4ec2322afa8a9250179f997f6d3ac0ea2f1e02f9de07e86824a6a1",
       "executable": false
     },
     "src/strap/billing/launch.ts": {
-      "sha256": "d98b45be87ae782f33149621b96307121738e0e36254dca54e9d748a3dac8bf4",
+      "sha256": "3e6e285774d7ee926ffd591bb0c121bf26ad3ef2748b3195c0c4c3faebfaa3d6",
+      "executable": false
+    },
+    "src/strap/billing/methods.ts": {
+      "sha256": "27b2771d0249712890d3e658d2bd499b4dffa0c8541871fe7a6c7c26daf804d3",
       "executable": false
     },
     "src/strap/billing/model.ts": {
@@ -3138,7 +3142,7 @@
       "executable": false
     },
     "src/strap/billing/operations.ts": {
-      "sha256": "9c733bfb3d5e0a9801830bde6baab8268e9faef415d1590dc361c0d358561182",
+      "sha256": "7bdf6b46e16506bb497b88bc049aaf7d0927e701b1e4653907216bbf09f43ce9",
       "executable": false
     },
     "src/strap/billing/provider.ts": {
@@ -3582,7 +3586,7 @@
       "executable": false
     },
     "src/strap/exit-export.ts": {
-      "sha256": "e62cfa3be562f776473c846659eafa45dfe5148f655e3ecf0438d1cb535acd29",
+      "sha256": "a50f34d820824d462a6637aef193e8dfe7ec7d08f6126ba1c8369744b124a278",
       "executable": false
     },
     "src/strap/finance-finite-refunds.ts": {
@@ -3610,7 +3614,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "ce069867930c22c8512edbe1aa222548e6342091487cc80b6f51bb75b6bfef6e",
+      "sha256": "259a1d89ca305ebb4c8bd2cf8737cd72b830c37fc646159457547201a88aa861",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3678,7 +3682,7 @@
       "executable": false
     },
     "src/strap/privacy-billing.ts": {
-      "sha256": "d433582f98ddbc1451053cc5aa95543cb04f1078fb9ec3b9ba8453b4eae4d4ac",
+      "sha256": "e57f4a0f9ffdd879bc0c332733bd215f71b9ec245dc26ab872b53802a4702022",
       "executable": false
     },
     "src/strap/privacy-erasure.ts": {
@@ -3834,7 +3838,7 @@
       "executable": false
     },
     "src/strap/ui/billing.ts": {
-      "sha256": "2b56a9c78f7d7158e7eb9786f9f021acafe015cf021e23562009724d27fd7865",
+      "sha256": "a850cebf78b2e31715008a811866725baec4f565be4bc4c4ab3e7da986c69a56",
       "executable": false
     },
     "src/strap/ui/booking-actions.ts": {
@@ -4090,7 +4094,7 @@
       "executable": false
     },
     "src/strap/ui/staff-actions.ts": {
-      "sha256": "13d61ace05d6a169a40f6b89f33647be5fcf9b38567fddd1e549c8a985205ae5",
+      "sha256": "386f61c817b46e02d64b58e4bf2a96eb2f310c5ddb4f2bb58983cb4a2d3fb75b",
       "executable": false
     },
     "src/strap/ui/staff-desk.ts": {
@@ -4178,7 +4182,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "fd5bd5336447ec7375d7eda074164c5551c14726c85d6095f8b54511f7638a59",
+      "sha256": "2d2db8676253dafe0ae4428f44e867ac19ab182b266e9bc17dea91ea30b38e29",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4202,11 +4206,11 @@
       "executable": false
     },
     "tests/billing-agreements.test.mjs": {
-      "sha256": "f4e07309e2bd8179b2fe6c21e96fb5d75d07cf7b9a8d375516464bdd0e15f57a",
+      "sha256": "5ab1031bb921ef50eea0105a8293df859a71fe2d1d6cea8eea31d08b35945ef0",
       "executable": false
     },
     "tests/billing-browser.mjs": {
-      "sha256": "9d4719e33b4ff57490ae078394f86acec3398d3dd76a2e859a66a59d8e85d679",
+      "sha256": "ccef03f50f0bdde759e08d8264087f51fff79cecc1303fa5a800e27c46a1abc1",
       "executable": false
     },
     "tests/billing-sandbox.mjs": {
@@ -4481,6 +4485,10 @@
       "sha256": "5b41e530fffcd9463fefcc6ab85a6434fdf16db3db2eaa5b61bf0b9f0bd3d1d6",
       "executable": false
     },
+    "tests/method-removal-cases.mjs": {
+      "sha256": "affb677bc59169c0306bcd70106b8fd5d172b9ee50fd132bba2691db8a337c45",
+      "executable": false
+    },
     "tests/mfa-helpers.mjs": {
       "sha256": "c2d4509e1d8af915d23e1d08fd172f0020e4515f168847d2878be8bbad9a1aa2",
       "executable": false
@@ -4554,7 +4562,7 @@
       "executable": false
     },
     "tests/privacy-provider.mjs": {
-      "sha256": "404d5a1706cdf2b9a79a28f4cc857bf917efbb27e49a3cf07666490fdfbcec36",
+      "sha256": "c5ef7702beb57c5a2eacc9204495630b9846ad1ae93c0e04a06719275093de34",
       "executable": false
     },
     "tests/privacy-shared.mjs": {
@@ -4698,7 +4706,7 @@
       "executable": false
     },
     "tests/staff-actions.test.mjs": {
-      "sha256": "c9ac91c7e02c6549466d0c19dc7770aa6f014e4d14e2eb02046e6c5b2bca2962",
+      "sha256": "afe981966b530f713d94ffe167c1ea83aa53f4f53c3ce6598d98230adb8a3e22",
       "executable": false
     },
     "tests/staff-rights-browser.mjs": {
