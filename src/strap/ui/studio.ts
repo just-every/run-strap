@@ -1,4 +1,5 @@
 import { widgetSettingsPanel } from './booking-widget';
+import { productCatalogPanel } from './product-catalog';
 import { automationSettings } from './automation';
 import { terminationReasonsPanel } from './termination-reasons';
 import { successSettingsPanel } from './leads';
@@ -30,6 +31,7 @@ export function studioPage(s: any, notice: any = {}) {
   return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Studio</h1></div>`
     + panel('Studio settings', body(`${zone}${form('studio.save', '/app/studio', fields(s) + studioProfileFields(s.studio ?? {}), 'Save studio')}`), { icon: 'pin' })
     + widgetSettingsPanel(s)
+    + productCatalogPanel(s)
     + automationSettings(s)
     + terminationReasonsPanel(s)
     + locationsPanel(s)
