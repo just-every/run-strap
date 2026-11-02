@@ -17,6 +17,25 @@ function familyCopy(data:RecordData,memberId:string) {
     termStartAt:data.termStartAt,termEndAt:data.termEndAt,policy:data.policy,acceptedAt:data.acceptedAt,createdAt:data.createdAt,
     role:data.personId===memberId?'payer':'participant'});
 }
+/** Select original payer relationships, including history whose payer lives on its enrollment. */
+function relatesAsPayer(state:State,kind:string,data:RecordData,memberId:string) {
+  if(data.personId && data.payerId===memberId)return true;
+  if(kind==='courseWithdrawalPreview')return state.records.get(data.enrollmentId)?.data.payerId===memberId;
+  return kind==='cancellationRefund' && data.payers?.some((row:RecordData)=>row.payerId===memberId);
+}
+function payerCopy(kind:string,data:RecordData,memberId:string) {
+  if(kind==='courseEnrollmentPreview') {
+    const {payerBasis,...copy}=data;return copy;
+  }
+  // Attendance belongs to the participant; paying for a seat conveys no profile access.
+  if(kind==='courseEnrollment')return {...data,attendance:[]};
+  if(kind==='cancellationRefund') {
+    const payers=data.payers.filter((row:RecordData)=>row.payerId===memberId);
+    return {id:data.id,personId:data.personId,packId:data.packId,cancellationId:data.cancellationId,
+      effectiveAt:data.effectiveAt,settleBy:data.settleBy,status:data.status,createdAt:data.createdAt,payers};
+  }
+  return data;
+}
 export function accessBundle(state:State,memberId:string) {
   const member=person(state,memberId,false), records:Array<{kind:string;data:RecordData}>=[];
   const acknowledgements=list(state,'acknowledgement').filter(a=>a.personId===memberId || a.signature?.signerPersonId===memberId || a.signedBy===memberId);
@@ -30,8 +49,10 @@ export function accessBundle(state:State,memberId:string) {
       if(data.sourceId===memberId || data.targetId===memberId)records.push({kind,data:{id:data.id,personId:memberId,at:data.at,authorityTransferred:false,role:data.sourceId===memberId?'source':'retained'}});
       continue;
     }
-    if(data.personId!==memberId && !(kind==='acknowledgement'&&acknowledgements.includes(data)))continue;
-    const visible=kind==='payment'&&data.collection==='stripe-test-checkout'?{...data,reference:'Recorded payment '+data.id}:data;
+    const payer=data.personId!==memberId && relatesAsPayer(state,kind,data,memberId);
+    if(data.personId!==memberId && !payer && !(kind==='acknowledgement'&&acknowledgements.includes(data)))continue;
+    const related=payer?payerCopy(kind,data,memberId):data;
+    const visible=kind==='payment'&&data.collection==='stripe-test-checkout'?{...related,reference:'Recorded payment '+data.id}:related;
     records.push({kind,data:clean(audits.has(kind)?Object.fromEntries(Object.entries(data).filter(([key])=>auditFields.has(key))):visible)});
   }
   return {format:'strap-member-access',version:1,generatedAt:now(),person:{id:member.id,...profileOf(state,member)},records,

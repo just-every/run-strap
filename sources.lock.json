@@ -330,7 +330,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b96d357d4777c742396ba2da85803a14f2c1ac008f281538eda9ab446bd7fd87",
+      "sha256": "18190d4e4a36f7a5521738c15f3859a44e63b9e4234b8eb3c4b10d1182512a34",
       "executable": false
     },
     "DEMO.md": {
@@ -3678,7 +3678,7 @@
       "executable": false
     },
     "src/strap/privacy-access.ts": {
-      "sha256": "866164e6ccc340bb607bd99078719fda09e08b2ed3515669b442b1bebd0928e1",
+      "sha256": "a6dc3f25efd87c70333fbcc97ad2167aac923771dac064fb4382581021d087a9",
       "executable": false
     },
     "src/strap/privacy-billing.ts": {
@@ -4562,7 +4562,7 @@
       "executable": false
     },
     "tests/privacy-courses.mjs": {
-      "sha256": "8c05acccb5443e27de5ce81fc9c42a3aedcd2a546bb82003e0c49d088824e285",
+      "sha256": "87710a66fd475b590d3c2e89adffb5098df2439e9d05467ed9029673a84b3b61",
       "executable": false
     },
     "tests/privacy-journey.mjs": {
