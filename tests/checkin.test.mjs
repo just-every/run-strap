@@ -1,3 +1,4 @@
+import { formResult } from './form-result.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
@@ -58,7 +59,11 @@ test('LEAD-006 / ATT-001: members check in from their account, a paired kiosk by
   const key = await h.cmd('agent.create', { label: 'Planner' })
   assert.equal((await h.send('/api/strap/agent/command', { name: 'kiosk.pair', input: { label: 'x' } }, '', { authorization: `Bearer ${key.token}` })).status, 403)
   assert.equal((await h.send('/api/strap/command', { name: 'kiosk.pair', input: { label: 'x' } }, coach.cookie)).status, 403)
-  assert.equal((await form(h, 'kiosk.pair', '/app/studio', { label: 'Lobby tablet' })).status, 200)
+  const lobby = await form(h, 'kiosk.pair', '/app/studio', { label: 'Lobby tablet' })
+  assert.equal(lobby.status, 303)
+  const lobbyResult = await formResult(h, lobby)
+  assert.equal(lobbyResult.status, 200)
+  assert.match(await lobbyResult.text(), /\/kiosk\/pair\?token=/)
   const pairing = (await h.cmd('kiosk.pair', { label: 'Front tablet' }))
   const pairPath = new URL(pairing.pairUrl).pathname + new URL(pairing.pairUrl).search
   assert.match((await h.send(pairPath)).text, /Pair this device/)
