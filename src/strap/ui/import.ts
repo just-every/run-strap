@@ -1,5 +1,6 @@
 // Import members: a Mindbody CSV previewed as the member rows it would add, an
 // approved import, and each import's journal, undo and roll back.
+import { importJournal } from './import-journal'
 import { body, cell, emptyLine, form, h, hidden, panel, result, rows, statusPill, table, textarea } from './shared'
 
 const reasons: Record<string, string> = { erased_identity: 'This person’s data was erased; they cannot be imported again', existing_member_requires_review: 'Already in Strap: review before importing', existing_access_requires_review: 'Already has sign-in access: review before importing' }
@@ -15,14 +16,6 @@ function preview(notice: any) {
   return panel('Review the import', `<div class="panel-body"><p>${data.members.length} member rows from ${h(data.format)}. Imported people start inactive; activate each in People before inviting them.</p>${notes}</div>${members}${body(apply)}`, { icon: 'upload', id: 'review' })
 }
 
-function journal(notice: any) {
-  const data = result(notice)
-  if (!data?.job) return ''
-  const job = data.job, originals = Array.isArray(data.originals) ? data.originals : []
-  const facts = `<dl class="facts"><dt>State</dt><dd>${h(stateText[job.state] ?? job.state)}</dd><dt>Rows</dt><dd>${h(job.checkpoint)} of ${h(job.total)} applied</dd>${originals.length ? `<dt>Original file</dt><dd>${originals.map((o: any) => `${h(o.name ?? o.artifact ?? 'members.csv')}${o.size ? ` (${Number(o.size).toLocaleString('en-US')} bytes)` : ''}`).join(', ')}, kept for undo</dd>` : ''}${Array.isArray(data.batches) ? `<dt>Steps</dt><dd>${data.batches.length} recorded</dd>` : ''}${data.undo?.entries ? `<dt>Undo report</dt><dd>${data.undo.entries.length} rows checked</dd>` : ''}</dl>`
-  return panel('Import journal', body(facts), { icon: 'report' })
-}
-
 export function importPage(s: any, notice: any) {
   const jobs = rows(s, 'importJobs')
   const jobRows = jobs.map((j, i) => {
@@ -32,7 +25,7 @@ export function importPage(s: any, notice: any) {
     const rollback = ['queued', 'applying', 'failed'].includes(j.state) ? `<details class="more"><summary>Roll back this import</summary><div class="panel-body">${form('import.rollback', '/app/import', hidden('jobId', j.id) + '<label class="check"><input type="checkbox" required>I reviewed the journal and approve rolling back this unfinished import.</label>', 'Roll back import', 'quiet')}</div></details>` : ''
     return `<article class="record"><span class="approval-mark"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg></span><div><h3>Import ${jobs.length - i}</h3><p>${h(j.checkpoint)} of ${h(j.total)} member rows${j.error ? ` · ${h(String(j.error).replace(/_/g, ' '))}` : ''}</p></div>${statusPill(stateText[j.state] ?? j.state)}<div class="record-body"><div class="actions">${controls}</div>${undo}${rollback}</div></article>`
   }).join('')
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Import</h1><p>From a Mindbody member CSV</p></div>${preview(notice)}${journal(notice)}`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Import</h1><p>From a Mindbody member CSV</p></div>${preview(notice)}${importJournal(notice)}`
     + panel('Preview a CSV', body(`<p>Use these exact column headers: <code>MemberId,FirstName,LastName,Email</code>. Paste 1 to 1,000 member rows (up to 1 MB). Quoted fields are fine.</p>${form('import.preview', '/app/import', textarea('csv', 'Mindbody member CSV', '', 'required spellcheck="false" class="mono"'), 'Preview members')}`), { icon: 'upload' })
     + panel('Take your studio records with you', body('<p>Download the portable CSV/JSON bundle with stable IDs, credit and payment histories, waiver acknowledgments and retained import originals. It includes no sign-in sessions, keys or delivery connections. Waiver acknowledgments are receipts, not signed waivers.</p><p><a class="btn" href="/api/strap/exit.json" download>Download exit bundle</a></p><p class="meta">For native backup and recovery, use <code>rer export</code> and <code>rer import</code>. Review and reconnect providers separately before enabling studio billing or delivery.</p>'), { icon: 'report' })
     + `</div><aside class="rail">${panel('Imports', jobRows ? `<div class="records">${jobRows}</div>` : emptyLine('No imports yet. Preview your member CSV to begin.'), { icon: 'report' })}</aside></div>`

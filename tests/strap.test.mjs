@@ -171,6 +171,37 @@ test('agent prepares exact work, native owner approves, agent cannot approve or 
   assert.equal((await agent('reminder.prepare', { personId: alex.id })).status, 401)
 }))
 
+test('owner discards a stale balance reminder and approves its current replacement', () => run(async h => {
+  const member = await h.person('JordanWhitfield')
+  await h.confirmSetup(h.owner)
+  await pack(h, member.id, 10, 10500)
+  const stale = await h.cmd('reminder.prepare', { personId: member.id })
+  await h.cmd('payment.record', { personId: member.id, amountCents: 5000, reference: 'SQ-4471-2318' })
+  await h.cmd('reminder.approve', { id: stale.id }, h.owner, 409)
+  await h.cmd('reminder.discard', { id: stale.id }, member.cookie, 403)
+  const key = await h.cmd('agent.create', { label: 'Reminder preparation' })
+  assert.equal((await h.send('/api/strap/agent/command', { name: 'reminder.discard', input: { id: stale.id } }, '', { authorization: `Bearer ${key.token}` })).status, 403)
+  const discarded = await h.mf.dispatchFetch(h.origin + '/app/action?name=reminder.discard&returnTo=%2Fapp%2Fpacks', {
+    method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id: stale.id }), redirect: 'manual',
+  })
+  assert.equal(discarded.status, 303)
+  const saved = (await h.state()).drafts.find(d => d.id === stale.id)
+  assert.equal(saved.status, 'discarded')
+  assert.equal(saved.body, stale.body)
+  assert.ok(saved.discardedBy && saved.discardedAt)
+  const packsPage = await h.send('/app/packs', undefined, h.owner)
+  const todayPage = await h.send('/app', undefined, h.owner)
+  assert.ok(!packsPage.text.includes(`id="draft-${stale.id}"`))
+  assert.ok(!todayPage.text.includes(`#draft-${stale.id}`))
+  await h.cmd('reminder.discard', { id: stale.id }, h.owner, 409)
+  const replacement = await h.cmd('reminder.prepare', { personId: member.id })
+  assert.equal(replacement.balanceCents, 5500)
+  await h.cmd('reminder.approve', { id: replacement.id })
+  await h.cmd('reminder.discard', { id: replacement.id }, h.owner, 409)
+  assert.equal((await h.state()).balances.find(b => b.personId === member.id).balanceCents, 5500)
+}))
+
 test('Mindbody documented-shape CSV previews, journals originals, applies exact review and preserves edits on undo', () => run(async h => {
   const csv = await readFile('tests/fixtures/members.csv', 'utf8')
   const preview = await h.cmd('import.preview', { csv })
@@ -183,10 +214,29 @@ test('Mindbody documented-shape CSV previews, journals originals, applies exact 
   const people = (await h.state()).people
   assert.ok(people.length > 1); assert.ok(people.every(p => !p.active))
   const journal = await h.cmd('import.journal', { jobId: job.id }); assert.ok(journal.originals.length)
+  await h.confirmSetup(h.owner)
+  const viewJournal = async cookie => h.mf.dispatchFetch(h.origin + '/app/action?name=import.journal&returnTo=%2Fapp%2Fimport', {
+    method: 'POST', headers: { origin: h.origin, cookie, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ jobId: job.id }), redirect: 'manual',
+  })
+  const source = await (await viewJournal(h.owner)).text()
+  const original = source.match(/<textarea[^>]*name="originalCsv0"[^>]*>([\s\S]*?)<\/textarea>/)
+  assert.ok(original)
+  assert.equal(original[1].replace(/&quot;/g, '"'), csv)
+  assert.match(original[0], /readonly/)
+  const reader = await h.person('JournalReader')
+  assert.equal((await viewJournal(reader.cookie)).status, 403)
   await h.cmd('person.save', { id: people[0].id, name: 'Edited by owner', email: people[0].email, role: 'member', active: false })
   await h.cmd('import.undo', { jobId: job.id })
   const after = (await h.state()).people
-  assert.equal(after.length, 1); assert.equal(after[0].name, 'Edited by owner')
+  const importedAfter = after.filter(p => p.id !== reader.id)
+  assert.equal(importedAfter.length, 1); assert.equal(importedAfter[0].name, 'Edited by owner')
+  const reversed = await h.cmd('import.journal', { jobId: job.id })
+  assert.equal(reversed.undo.dispositions.filter(d => d.disposition === 'retained').length, 1)
+  assert.equal(reversed.undo.dispositions.filter(d => d.disposition === 'reversed').length, people.length - 1)
+  const report = await (await viewJournal(h.owner)).text()
+  assert.ok(report.includes('Edited by owner') || report.includes(people[0].id))
+  assert.ok(report.includes('originalCsv0'))
 }))
 
 test('unused identity erasure clears PII and blocks recreation or CSV reimport', () => run(async h => {

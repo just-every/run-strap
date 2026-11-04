@@ -125,3 +125,14 @@ export function approveReminder(tx: Transaction, input: Record<string,unknown>) 
   approveDraft(tx,draft);
   return {id:draft.id,status:'approved',text:`To: ${draft.recipient}\nSubject: ${draft.subject}\n\n${draft.body}\n`};
 }
+
+/** Retire an unapproved reminder without changing its frozen message or balance. */
+export function discardReminder(tx: Transaction, input: Record<string,unknown>) {
+  humanOwner(tx.who);
+  const draft = record(tx.state,input.id,'draft');
+  insist(draft.type === 'reminder','wrong_draft_type');
+  insist(draft.status === 'draft','already_decided',409);
+  const discarded = {...draft,status:'discarded',discardedBy:tx.who.id,discardedAt:now()};
+  tx.put('draft',discarded);
+  return discarded;
+}

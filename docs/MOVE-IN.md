@@ -22,6 +22,8 @@ The limit is 1–1000 member records and 1,000,000 UTF-8 bytes, including the he
 
 Sign in as the owner, open Import, paste the file and preview it. Check the member names, counts, diagnostics and conflicts before applying. Apply requires the fingerprint from that exact preview. Any source-byte change, including whitespace or a line ending, requires another preview. Preview changes no member records.
 
+On a laptop, scroll the sidebar to reach **Import**, **Agent access**, **Integrations**, **Security**, **Sign-in settings** and **Sign out**. On a phone, open **Menu** and scroll its navigation list.
+
 Each apply or resume request processes at most ten records. Continue with Resume until the job is completed. Resume reads the retained plan and original CSV; it does not replace the source with a new file. The job belongs to the human owner identity that created it, and every transaction rechecks that this owner is still active.
 
 Imports create inactive members only. They grant no access, send no invitation, add no credit and charge or bill nothing. Review and activate members through People, then invite them separately when appropriate. Records for erased identities cannot be imported again.
@@ -29,6 +31,8 @@ Imports create inactive members only. They grant no access, send no invitation, 
 ## Journal, undo and rollback
 
 The private journal retains the original CSV, reviewed plan, batches, checkpoints and reversal dispositions. It contains personal data and must stay within the owner interface. Use Undo for a completed job and Rollback for an unfinished job, then Resume while a reversal is in progress.
+
+Choose **View journal** beside an import. **Original CSV** shows the retained UTF-8 source as readable, selectable text; select and copy it to save your own CSV. This read-only view does not alter the source. After undo or rollback, open **View journal** again to read the row-by-row **Undo report**, including which records were reversed and which were preserved because of later edits or related work.
 
 Undo removes untouched imported members. It preserves native edits, activation, invitations, active access and dependent work such as bookings, attendance, credits and billing. Unknown record kinds containing the member ID are conservatively treated as dependent work. The journal explains retained members; an undone job can still have retained members. Undo and rollback retain the original CSV and audit journal and are not personal-data erasure.
 

@@ -49,7 +49,8 @@ export function draftRecords(s: any, path: string, types: string[]) {
     const kind = kinds[d.type]
     const conflicts = d.type === 'classes' ? draftConflicts(s, d) : []
     const approve = owner(s) && !conflicts.length && !d.stale ? `<div class="actions">${form(d.recommendation ? 'recommendation.approve' : kind.command, path, hidden('id', d.id) + recommendationControls(d), d.recommendation ? 'Approve this exact recommendation' : kind.approve)}</div>` : ''
-    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill(conflicts.length || d.stale ? 'Blocked' : 'Needs approval')}<div class="record-body">${recommendationEvidence(s, d)}${contents(s, d)}${conflictDetails(s, conflicts)}${approve}</div></article>`
+    const discard = owner(s) && d.type === 'reminder' ? `<p class="meta">If this reminder is no longer needed or its balance changed, discard it and prepare a new reminder for the current balance.</p>${form('reminder.discard', path, hidden('id', d.id), 'Discard reminder', 'quiet')}` : ''
+    return `<article class="record" id="draft-${h(d.id)}"><span class="approval-mark">${icon(kind.glyph)}</span><div><h3>${h(kind.title)}</h3><p>${h(draftLine(s, d))}</p><p class="meta">${preparedBy(s, d)}</p></div>${statusPill(conflicts.length || d.stale ? 'Blocked' : 'Needs approval')}<div class="record-body">${recommendationEvidence(s, d)}${contents(s, d)}${conflictDetails(s, conflicts)}${approve}${discard}</div></article>`
   }).join('')
   return { waiting: items.length, html: list ? `<div class="records">${list}</div>` : emptyLine('Nothing is waiting. A prepared draft shows its exact contents here before anyone approves it.') }
 }
