@@ -442,7 +442,7 @@ test('Private appointment changes reserve one configured Base email and keep una
     const cancel=await h.cmd('appointment.cancel.prepare',{reservationId:saved.id,classId:saved.occurrences[5].id,scope:'future',reason:'Travel'});
     await confirm(cancel);await confirm(cancel);assert.equal(sent.length,3);
     assert.equal((await h.state(ana.cookie)).notices.length,3);
-    assert.ok(sent.every(m=>m.to[0]===ana.email && m.text.includes('Private Mat') && m.text.includes('America/New_York')));
+    assert.ok(sent.every(m=>m.to[0]===ana.email && m.text.includes('Private Mat') && m.text.toLowerCase().includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'longGeneric'}).formatToParts(new Date(source.startDate+'T12:00:00Z')).find(p=>p.type==='timeZoneName').value.toLowerCase())));
     let deliveries=(await h.db.prepare('SELECT * FROM st_notice_deliveries WHERE person_id=?').bind(ana.id).all()).results;
     assert.equal(deliveries.length,3);assert.ok(deliveries.every(d=>d.status==='accepted'));
     await h.cmd('reminder.rule.save',{service:'',enabled:true,leadMinutes:60,revision:0,requestId:'synthetic-strap-class-reminders-only'});

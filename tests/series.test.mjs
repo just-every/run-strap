@@ -86,9 +86,9 @@ test('SCHED-001: local-hour repeating timetable, exact occurrence/future changes
     // New resource exception after preparation is rechecked and its record named.
     const block = await h.cmd('scheduling.unavailable.save',{resourceKind:'equipment',resourceId:' SHARED  speaker ',start:ready.classes[0].start,end:ready.classes[0].end,reason:'Private maintenance detail'})
     const conflict = await refused(h,'series.change.approve',{id:ready.id,impact:ready.impact.key},h.owner,409,/Scheduling conflict/)
-    assert.match(conflict.value.error,new RegExp(block.id))
+    assert.ok(conflict.value.error.toLowerCase().includes(block.resourceName.toLowerCase()));assert.ok(!conflict.value.error.includes(block.id))
     const agentConflict = await agent('series.change.prepare',future)
-    assert.equal(agentConflict.status,409); assert.match(agentConflict.value.error,new RegExp(block.id)); assert.doesNotMatch(agentConflict.text,/Private maintenance detail/)
+    assert.equal(agentConflict.status,409); assert.ok(agentConflict.value.error.toLowerCase().includes(block.resourceName.toLowerCase()));assert.ok(!agentConflict.value.error.includes(block.id)); assert.doesNotMatch(agentConflict.text,/Private maintenance detail/)
     await h.cmd('scheduling.unavailable.remove',{id:block.id})
     const refreshed = await h.cmd('series.change.prepare',future)
     assert.deepEqual(refreshed.impact.classes.map(c=>c.classId),[c2.id,c3.id])

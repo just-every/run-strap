@@ -1,3 +1,4 @@
+import { quantity } from '../readable'
 // Facts the screens read from the studio's records: who is in a class, which
 // credit a member can use, what they owe, and who needs a follow-up. Each is
 // derived from stored records only, by the same rules the domain applies.
@@ -50,7 +51,7 @@ export const planReason = (s: any, personId: string, c: any) => {
 /** What a pack has left now, in words. */
 export const packLeft = (p: any) => countsCredits(p) ? `${p.remaining} of ${p.credits} left`
   : p.entitlement.kind === 'unlimited' ? 'Unlimited visits' : `${p.summary?.plan?.left ?? 0} visit${p.summary?.plan?.left === 1 ? '' : 's'} left this ${p.entitlement.period}`
-export const creditsLeft = (p: any) => countsCredits(p) ? `${p.remaining} credits left` : packLeft(p)
+export const creditsLeft = (p: any) => countsCredits(p) ? `${quantity(p.remaining, 'credit')} left` : packLeft(p)
 export const shortLeft = (p: any) => countsCredits(p) ? `${p.remaining} left` : packLeft(p)
 export const balance = (s: any, personId: string) => rows(s, 'balances').find(b => b.personId === personId)?.balanceCents ?? 0
 export const waiverSigned = (s: any, personId: string) => !s.waiver || rows(s, 'acknowledgements').some(a => a.personId === personId && a.waiverId === s.waiver.id && (!a.validUntil || a.validUntil > new Date().toISOString()) && (!s.waiver.requiresSignature || a.signature?.documentHash === s.waiver.documentHash))

@@ -25,7 +25,7 @@ import { memberProfilePage } from './profile'
 import { packsPage } from './packs'
 import { householdPage, householdsPage } from './households'
 import { peoplePage } from './people'
-import { emptyState, h, owner } from './shared'
+import { emptyState, h, owner, rows } from './shared'
 import { shell, tabs, topBar } from './shell'
 import { studioPage } from './studio'
 import { successRail } from './success'
@@ -35,6 +35,7 @@ const security = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 
 
 export async function renderApp(state: any, target: string, notice: { message?: string; error?: string; result?: any } = {}): Promise<Response> {
   const url = new URL(target, 'https://strap.invalid'), current = url.pathname.replace(/\/$/, '') || '/app', query = url.searchParams
+  if (!notice.message && state.actor.role === 'member' && rows(state,'bookings').some(b => b.id === query.get('bookingResult') && b.personId === state.actor.personId && b.status === 'waitlisted')) notice = {...notice,message:'This class is full. You are on the waitlist; no credit was used.'}
   const allowed = tabs(state).some(t => t.href === current) || (owner(state) && current === '/app/studio')
   const desk = state.actor.role !== 'member'
   const title = current === '/app' ? (desk ? 'Today' : 'Classes') : current === '/app/studio' ? 'Studio' : tabs(state).find(t => t.href === current)?.label ?? 'Page unavailable'

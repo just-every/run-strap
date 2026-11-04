@@ -1,3 +1,5 @@
+import { errorText } from './ui/errors'
+import { localDate } from './zone'
 import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
 import { billingWebhook } from './billing/webhooks';
@@ -52,6 +54,8 @@ import { auditEvents, factorCounts, mfaCommand, mfaView } from './security/mfa'
 import { financeCommand, financeUsers } from './security/finance'
 import { managerCommand, managers } from './security/manager'
 
+const downloadName = (name: string) => name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'member'
+
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
 const pages = new Set(['/app/widget','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
@@ -79,7 +83,8 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
   const current = await snapshot(env.DB, who, env.AUTH_ORIGIN), deliveries = await noticeDeliveries(env, who.role)
-  const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
+  const actorNames = who.role === 'owner' ? (await env.DB.prepare('SELECT id,display_name AS name FROM oa_operators').all()).results as {id:string;name:string}[] : []
+  const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return {...action,actorName:actorNames.find(a => a.id === action.actorId)?.name ?? (action.actorRole === 'system' ? 'Studio automation' : 'Former studio user'),...(mail ? {notice:{...action.notice,mailStatus:mail.status}} : {})} })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
   const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers','gifts','timeClock'].map(key => [key, key === 'teachingPay' || key === 'memberMail' || key === 'smsTest' ? null : []])) : {}
@@ -348,7 +353,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const current = await snapshot(env.DB, who, env.AUTH_ORIGIN)
         const draft = current.drafts.find((d: any) => d.id === reminderFile[1] && d.type === 'reminder' && d.status === 'approved')
         if (!draft) fail('Approved reminder not found', 404)
-        return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="strap-reminder-${reminderFile[1]}.txt"` } })
+        return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="balance-reminder-${downloadName(current.people.find((p: any) => p.id === draft!.personId)?.name ?? 'member')}-${localDate(draft!.createdAt,current.studio?.timeZone ?? 'UTC')}.txt"` } })
       }
     } else {
       if (path === '/app/action') {
@@ -365,6 +370,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
         if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
+        if (name === 'booking.book' && (result as any).status === 'waitlisted') {
+          const target = new URL(back,env.AUTH_ORIGIN); target.searchParams.set('bookingResult',(result as any).id)
+          return new Response(null,{status:303,headers:{...headers,location:target.pathname+target.search+target.hash}})
+        }
         if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
@@ -372,7 +381,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const personalBillingLaunch=name.startsWith('billing.')&&name.endsWith('.launch')
         const freezeLaunch=['freeze.accept.launch','freeze.end.accept.launch'].includes(name)
         if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
-        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
+        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch || name === 'import.journal' || name === 'import.preview' ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
@@ -393,7 +402,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       if (status >= 500) return unavailablePage(back, 'uncertain')
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
       let page: Response
-      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      try { page = await renderApp(await appState(env, who, target), target, { error: errorText(message) }) }
       catch { return unavailablePage(back, 'uncertain') }
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }

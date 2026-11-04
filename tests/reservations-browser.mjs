@@ -177,7 +177,7 @@ export async function appointmentsBrowser(h,{coach,start}) {
       await review.getByRole('button',{name:'Confirm appointment cancellation',exact:true}).click();await shot(page,'five-sessions-released',savedPanel)
       const state=await h.state(),pack=state.packs.find(p=>p.personId===member.id);assert.deepEqual([pack.summary.remaining,pack.summary.reserved,pack.summary.consumed],[5,5,0])
       await owner.goto(h.origin+'/app/people?classId='+saved.occurrences[5].id+'#cancellations')
-      await owner.locator('#cancellations').getByText('1 cancellations · 0 late',{exact:false}).waitFor()
+      await owner.locator('#cancellations').getByText('1 cancellation · 0 late',{exact:false}).waitFor()
       await owner.locator('#cancellations').getByText('Away from week six',{exact:true}).waitFor()
       await shot(owner,'private-cancellation-history',owner.locator('#cancellations'))
 

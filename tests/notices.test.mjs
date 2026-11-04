@@ -34,9 +34,11 @@ test('MSG-002: native member and desk booking, reschedule, cancellation, restore
     assert.equal(sent.length,1)
     const checkLetter=(letter,entry,instructor='Maya')=>{
       assert.match(letter.text,/Welcome to Brooklyn Studio\./);assert.match(letter.text,/Questions\? Please call your studio\./)
-      assert.ok(letter.text.includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(entry.start))))
-      assert.match(letter.text,/America\/New_York/);assert.match(letter.text,/Brooklyn Studio/);assert.ok(letter.text.includes('Instructor: '+instructor))
-      assert.match(letter.text,/12 hours before start; late cancellation uses the credit, \$15\.00 fee/)
+      assert.ok(letter.text.includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',month:'short',day:'numeric'}).format(new Date(entry.start))))
+      const startClock = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'}).format(new Date(entry.start)).replace(/ [AP]M$/,'')
+      assert.ok(letter.text.includes(startClock))
+      assert.ok(letter.text.toLowerCase().includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'longGeneric'}).formatToParts(new Date(entry.start)).find(p=>p.type==='timeZoneName').value.toLowerCase()));assert.match(letter.text,/Brooklyn Studio/);assert.ok(letter.text.includes('Instructor: '+instructor))
+      assert.match(letter.text,/12 hours before class/);assert.match(letter.text,/use the credit and add a \$15\.00 fee/)
       assert.ok(letter.text.includes(h.origin+'/app'));assert.deepEqual(letter.to,[ana.email])
     }
     checkLetter(sent[0],first)

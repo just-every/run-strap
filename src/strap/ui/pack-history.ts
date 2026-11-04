@@ -1,14 +1,12 @@
+import { goodThroughText } from '../readable'
 import { packLeft, packName } from './facts'
 import { planTerms } from '../domain/entitlements'
 import { when, zoneOf } from './format'
 import { body, cell, emptyLine, field, form, h, hidden, person, rows, table } from './shared'
 
-/** Display the stored instant exactly, including seconds, offset and studio zone. */
+/** The chosen last usable day, while retaining the exact cutoff for machines. */
 export function packExpiration(s: any, value: string) {
-  const timeZone = zoneOf(s) ?? 'UTC', at = new Date(value)
-  const label = new Intl.DateTimeFormat('en-US', {timeZone,year:'numeric',month:'short',day:'numeric',
-    hour:'numeric',minute:'2-digit',second:'2-digit',...(at.getUTCMilliseconds() ? {fractionalSecondDigits:3 as const} : {}),timeZoneName:'longOffset'}).format(at)
-  return `<time datetime="${h(value)}">${h(label)} (${h(timeZone)})</time>`
+  return `<time datetime="${h(value)}">${h(goodThroughText(value, zoneOf(s) ?? 'UTC'))}</time>`
 }
 
 /** A plan's ledger event as a visit, never a credit count (PLAN-002). */
@@ -47,6 +45,6 @@ export function packHistory(s: any, packs: any[], mine: boolean) {
       return `<tr>${cell('Recorded',when(s,event.createdAt))}${cell('Event',h(label))}${cell(p.summary.plan ? 'Visit' : 'Available change',change)}${cell('Booking / reason',booking+reason+expiryChange || '—')}${cell('Actor',h(event.actorRole.charAt(0).toUpperCase() + event.actorRole.slice(1)))}</tr>`
     }).join(''))}</div>` : emptyLine('No credit events have been recorded since this legacy opening balance.')
     const plan = p.summary.plan, explain = plan ? `<p>${h(planTerms(p.entitlement))}. A booked seat holds one visit in the period its class starts (studio clock: weeks from Monday, months from the 1st). A freeze extension carries only the unused final paid allowance; it grants no new weekly or monthly allowance. Check-in or a no-show marks it attended; a late cancel that keeps the visit still counts; an early cancel returns it.</p>${plan.periods.length ? `<div class="table-wrap">${table(['Period','Visits','Rolled in','Booked','Attended','Late cancel','Absence','Returned','Rolls over','Expired'],plan.periods.map((x: any) => `<tr>${cell('Period',`${h(x.start)}<small>ends ${when(s,x.endsAt)}</small>`)}${cell('Visits',`${x.used} of ${x.allowance}`)}${cell('Rolled in',String(x.carriedIn))}${cell('Booked',String(x.reserved))}${cell('Attended',String(x.attended))}${cell('Late cancel',String(x.lateCancelled))}${cell('Absence',String(x.absent ?? 0))}${cell('Returned',String(x.returned))}${cell('Rolls over',x.ended ? String(x.carriedOut) : `${x.carriedOut} so far`)}${cell('Expired',x.ended ? String(x.expired) : '—')}</tr>`).join(''))}</div>` : ''}` : '<p>A booked seat reserves one credit. Check-in consumes it; cancellation returns it. Restored is the total returned over this history.</p>'
-    return `<details class="more" id="pack-${h(p.id)}"><summary>${h(mine ? packName(p) : `${person(s,p.personId)} · ${packName(p)}`)} · ${plan ? 'Visit' : 'Credit'} history</summary>${body(`<p>${packCreditCounts(p)}</p><p>Eligible services: ${h(p.eligibleServices?.join(', ') || 'All classes')}. Expires ${packExpiration(s,p.expiresAt)}.</p>${explain}${opening}`)}${history}${mine ? '' : adjustment(s,p)}</details>`
+    return `<details class="more" id="pack-${h(p.id)}"><summary>${h(mine ? packName(p) : `${person(s,p.personId)} · ${packName(p)}`)} · ${plan ? 'Visit' : 'Credit'} history</summary>${body(`<p>${packCreditCounts(p)}</p><p>Eligible services: ${h(p.eligibleServices?.join(', ') || 'All classes')}. ${packExpiration(s,p.expiresAt)}.</p>${explain}${opening}`)}${history}${mine ? '' : adjustment(s,p)}</details>`
   }).join('')
 }
