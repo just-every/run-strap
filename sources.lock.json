@@ -3018,15 +3018,15 @@
       "executable": false
     },
     "src/site/landing/autopay.ts": {
-      "sha256": "69199382dd3a6d66c4d1643320f5b9c1cb1fb84c09578543bcd62bf89d3af60d",
+      "sha256": "1f2ead1cc2efed98857d1b03fb3c78e1d1c66feb659fb66dfc8a742207c09206",
       "executable": false
     },
     "src/site/landing/back.ts": {
-      "sha256": "cb67a7b9cd2d9404f57020dedab8a00148adc452700933e35906019b42633071",
+      "sha256": "396ec46ed421fdd7fb2409671938c0316f3d316de33fdc75784226427ec0a451",
       "executable": false
     },
     "src/site/landing/classes.ts": {
-      "sha256": "d67c8ae14a9763bcfe5b9dc373eed7bc57ff258356a4b1cb71049cf0028b7262",
+      "sha256": "54ffaf3fac49ad803e155734bb9c1fc145013c53718b2645883711c44a01af8a",
       "executable": false
     },
     "src/site/landing/closing.ts": {
@@ -3034,15 +3034,15 @@
       "executable": false
     },
     "src/site/landing/desk.ts": {
-      "sha256": "448e85cdcfa8bc8069219736fd0ab486822de93a737390fa360c9bf0ecc0fa2a",
+      "sha256": "91c8c96ac8971178a243ceeb2e665b1cc30ca0fddc034d2872ef8fd1659b1685",
       "executable": false
     },
     "src/site/landing/hero.ts": {
-      "sha256": "936b3191bb1321434b12ac484e56e7fadf8d9aba2072c57895901006426d8b78",
+      "sha256": "c71180e46a07a0fa1df343fce15bdb8de13ea32aa9690c1953f85e965fbfde7a",
       "executable": false
     },
     "src/site/landing/index.ts": {
-      "sha256": "b70ff2e9d4ac102962300c98674ba4f90eedac5d7e9503f7529d51894b92a056",
+      "sha256": "f9bf65a3fb5fb351c1111a6f492a65a9286546f777f2aa1077598a0b97688cba",
       "executable": false
     },
     "src/site/landing/interlude.ts": {
@@ -3050,11 +3050,11 @@
       "executable": false
     },
     "src/site/landing/intro.ts": {
-      "sha256": "856d79162c6710fe52172667de3eca7673c8187e9aa1488bba6a01e09337e98c",
+      "sha256": "5cd25a12ed846e202b552fae77e60ee9c09954e1d8b04a8405c29e330fb5c87f",
       "executable": false
     },
     "src/site/landing/moving.ts": {
-      "sha256": "8172830e42cabb9793e237ba67c5475fef8249a50af4e991a78d85a26a227ed7",
+      "sha256": "ba1fc3b1c9041f0bd11576c5e137da5e97cce73f536d7047732c6e21fc333565",
       "executable": false
     },
     "src/site/landing/parts.ts": {
@@ -3062,11 +3062,11 @@
       "executable": false
     },
     "src/site/landing/staff.ts": {
-      "sha256": "f4c7e5124890487dc4aecf6e6f7bd39de2a2ab0e1fc85b28db3bee8c0ab5234b",
+      "sha256": "9db69062dbc8d78f1a23eac1341926babc3943997776134146b165acb7a1ecd2",
       "executable": false
     },
     "src/site/landing/success.ts": {
-      "sha256": "c7f995f5a1a280ba915a9e7ee7857b9a2d3e887e5bb084bc2652326b553392f5",
+      "sha256": "1ec75dd4584dde7f6095fa2c292d0c191a0992d606301a0994c631a074240656",
       "executable": false
     },
     "src/site/pages.ts": {

@@ -20,6 +20,6 @@ import { staff } from './staff'
 import { success } from './success'
 
 export const landingTitle = 'Strap · Full classes. Members who stay.'
-export const landingDescription = 'Strap sells and auto-renews memberships, fills classes through your branded app, recovers failed payments, and spots members drifting away and books them back in. 100% free and open source.'
+export const landingDescription = 'Strap sells memberships and packs, renews them by invoice, fills classes with member booking and waitlists, and spots members drifting away and offers them a class back. 100% free and open source.'
 export const landingPreload = html`<link rel="preload" as="image" type="image/avif" imagesrcset="/site/hero-phone-640.avif 640w, /site/hero-phone-820.avif 820w" imagesizes="100vw" media="(max-width: 760px)"><link rel="preload" as="image" type="image/avif" imagesrcset="/site/hero-768.avif 768w, /site/hero-1152.avif 1152w, /site/hero-1536.avif 1536w" imagesizes="100vw" media="(min-width: 761px)">`
 export const landing = keepTogether(html`${siteHeader()}<main id="main">${hero}${success}${intro}${interlude}${classes}${staff}${desk}${autopay}${back}${moving}${closing}</main>${siteFooter()}`)
