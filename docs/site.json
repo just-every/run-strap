@@ -10,7 +10,7 @@
     {
       "title": "Run your studio",
       "pages": [
-        { "slug": "classes", "file": "classes.md", "title": "Classes and the waitlist", "summary": "Prepare and publish the week, let members book, fill cancellations from the waitlist and check people in." },
+        { "slug": "classes", "file": "classes.md", "title": "Classes and the waitlist", "summary": "Publish class weeks and repeating timetables, let members book, fill cancellations from the waitlist and check people in." },
         { "slug": "courses", "file": "COURSES.md", "title": "Courses and tuition", "summary": "Publish a course, review tuition with its payer, record received installments and preview a withdrawal." },
         { "slug": "packs-and-payments", "file": "packs-and-payments.md", "title": "Packs, credits and payments", "summary": "Give members class credits, record the payments you receive and see what every member owes." },
         { "slug": "people", "file": "people.md", "title": "People and access", "summary": "Add members and instructors, invite them to sign in, and end someone's access at once." },
@@ -29,6 +29,7 @@
     }
   ],
   "githubOnly": [
+    { "file": "MOVE-IN-INTEGRATION.md", "reason": "Member move-in adapter, transport authority and storage contract for maintainers" },
     { "file": "CLAIMS.md", "reason": "Generated contract status and evidence for maintainers" },
     { "file": "BILLING-AGREEMENTS.md", "reason": "Personal additional membership agreements, test hosted card setup and disconnected restored payment authority" },
     { "file": "TAX.md", "reason": "Stripe Tax test operations, immutable original prices, provider evidence and guarded reconnection for maintainers" },
