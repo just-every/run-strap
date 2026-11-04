@@ -262,7 +262,8 @@ export async function mfaView(env: Bindings, who: Actor) {
   const s = await standing(env, who)
   const recovery = await one<{ n: number }>(env, 'SELECT COUNT(*) AS n FROM st_mfa_recovery WHERE operator_id=? AND used_at IS NULL', who.id)
   const factors = [...s.usable.map(f => ({ ...f, usable: true })), ...s.unreadable.map(f => ({ ...f, usable: false }))].map(f => ({ id: f.id, kind: f.kind, label: f.label, createdAt: f.created_at, usable: f.usable }))
-  return { required: s.covered, verified: s.verifiedAt !== null, verifiedAt: s.verifiedAt, method: s.method, reason: s.reason, reasonText: s.reason ? KEY_REASONS[s.reason] : null, totpAvailable: !!env.MFA_KEY, factors, recoveryCodesLeft: recovery!.n }
+  const localIdentityConfirmed = env.AUTH_LOCAL === 'true' && !!who.sessionId && !!await one(env, "SELECT 1 FROM oa_sessions WHERE id=? AND operator_id=? AND kind='dev'", who.sessionId, who.id)
+  return { localIdentityConfirmed, required: s.covered, verified: s.verifiedAt !== null, verifiedAt: s.verifiedAt, method: s.method, reason: s.reason, reasonText: s.reason ? KEY_REASONS[s.reason] : null, totpAvailable: !!env.MFA_KEY, factors, recoveryCodesLeft: recovery!.n }
 }
 
 /** Every person's factor count, for the owner's access screen and reset forms. */

@@ -1,3 +1,4 @@
+import { actionResult, actionResultRedirect } from './action-result'
 import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders } from './ui/booking-widget';
 import { billingWebhook } from './billing/webhooks';
@@ -212,6 +213,12 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (url.origin !== env.AUTH_ORIGIN || (request.headers.has('host') && request.headers.get('host') !== url.host)) fail('Wrong application origin', 403)
     if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
+    // Ending a native session must still work after studio access has ended.
+    if (request.method === 'POST' && path === '/app/action' && url.searchParams.get('name') === 'session.signout') {
+      await inputBody(request)
+      const response = await operatorAuth(env).signOut(request)
+      return new Response(null, { status: 303, headers: { ...headers, 'set-cookie': response.cookie, location: '/signin' } })
+    }
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
@@ -328,7 +335,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         return json(profileSaveStatus(loaded.state, loaded.who, Object.fromEntries(url.searchParams)));
       }
       if (pages.has(path)) {
-        let notice = {};
+        const flash = await actionResult(request, env, who)
+        let notice = flash.notice;
         if (['/app/profile','/app/people'].includes(path) && url.searchParams.has('profileSave')) {
           const loaded = await load(env.DB, who);
           const receipt = profileSaveStatus(loaded.state, loaded.who, {
@@ -338,7 +346,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
           });
           notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
         }
-        return renderApp(await appState(env, who, path + url.search), path + url.search, notice);
+        const page = await renderApp(await appState(env, who, path + url.search), path + url.search, notice);
+        if (flash.clear) page.headers.append('set-cookie', flash.clear)
+        return page;
       }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
@@ -356,23 +366,22 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         await guard(env, who, path, name)
         const current = await state(env, who)
         const input = formInput(name, await inputBody(request), current.studio?.timeZone, current.locations)
-        if (name === 'session.signout') {
-          const response = await operatorAuth(env).signOut(request)
-          const next = new Headers({ ...headers, 'set-cookie': response.cookie, location: '/signin' })
-          return new Response(null, { status: 303, headers: next })
-        }
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
         if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
+        if (['agent.create','integration.create','integration.rotate','kiosk.pair'].includes(name)) return actionResultRedirect(env, who, back, { result })
+        if (name === 'person.invite') return actionResultRedirect(env, who, back, { message: (result as { message: string }).message })
+        if (name === 'payment.record') return actionResultRedirect(env, who, back, { message: `Payment ${(result as { reference: string }).reference} recorded.` })
+        if (name === 'person.erase') return actionResultRedirect(env, who, back, { message: 'Personal data erased.' })
         if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
-        // private result document (source review, journal, one-time key or pairing link).
+        // private result document (source review or journal). Credentials redirect above.
         const personalBillingLaunch=name.startsWith('billing.')&&name.endsWith('.launch')
         const freezeLaunch=['freeze.accept.launch','freeze.end.accept.launch'].includes(name)
-        if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
-        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
+        if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch || ['import.preview','import.journal'].includes(name) ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
@@ -388,12 +397,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const status = Number((error as any)?.status) || 500
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
+    if (path === '/app/action' && status === 403 && message === 'Cross-site request refused' && request.headers.get('accept')?.includes('text/html')) return unavailablePage('/app', 'cross-site')
+    if ((pages.has(path) || path === '/app/action') && status === 403 && message === 'active_person_required' && request.headers.get('accept')?.includes('text/html')) return unavailablePage('/app', 'ended')
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
       if (status >= 500) return unavailablePage(back, 'uncertain')
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
       let page: Response
-      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      try { page = await renderApp(await appState(env, who, target), target, { error: held ? message === 'mfa_enrollment_required' ? 'Add a second factor in Security before changing staff access or creating credentials.' : 'Confirm your second factor to continue.' : message.replace(/_/g, ' ') }) }
       catch { return unavailablePage(back, 'uncertain') }
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }

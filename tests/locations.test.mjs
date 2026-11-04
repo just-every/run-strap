@@ -1,3 +1,4 @@
+import { formResult } from './form-result.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
@@ -156,8 +157,9 @@ test('STUDIO-001/002: a New York studio and a Los Angeles location keep their ow
 // The integration door is server to server: a Bearer secret and a schema version; secrets are issued only on the Integrations page.
 async function inApp(h, fields) {
   const response = await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString() })
-  const text = await response.text()
-  return { status: response.status, text, token: text.match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1] ?? null }
+  const page = await formResult(h, response)
+  const text = await page.text()
+  return { status: page.status, text, token: text.match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1] ?? null }
 }
 const api = async (h, token, path) => {
   const response = await h.mf.dispatchFetch(h.origin + path, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })

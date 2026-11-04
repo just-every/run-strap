@@ -4,12 +4,11 @@
 import worker from './server'
 import { withDevIdentity } from './modules/operator-auth/dev/index.mjs'
 import { authConfig, runtimeBindings, type Bindings } from './auth.server'
-import { devPersonas } from './dev-personas'
 import { withDevAi } from './modules/ai/dev/index.mjs'
 import { fontLinks } from './base/font-head'
 
 const development = withDevAi<Bindings, typeof worker>(worker, { bindings: runtimeBindings })
-const dev = withDevIdentity<Bindings, typeof worker>(development, { bindings: runtimeBindings, config: authConfig, personas: devPersonas })
+const dev = withDevIdentity<Bindings, typeof worker>(development, { bindings: runtimeBindings, config: authConfig })
 
 // The dev layer answers its one-click sign-in, its hand-off page and its sign-in refusal itself, linking only the
 // theme; they get the rest of Strap's tokens and rules (/fonts/fonts.css) after their own style, once, as the

@@ -1,3 +1,4 @@
+import { formResult } from './form-result.mjs'
 import assert from 'node:assert/strict'
 import {readFile,writeFile,rename} from 'node:fs/promises'
 import {run} from './harness.mjs'
@@ -33,8 +34,8 @@ await run(async h=>{
   const booking=await h.cmd('booking.book',{classId:entry.id},member.cookie),other=await h.cmd('booking.book',{classId:entry.id},peer.cookie)
   const create=async label=>{
     const response=await h.mf.dispatchFetch(h.origin+'/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({label,'sc_roster:read':'true','sc_attendance:read':'true',location:'studio'}),redirect:'manual'})
-    assert.equal(response.status,200)
-    const token=(await response.text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
+    assert.equal(response.status,303)
+    const token=(await (await formResult(h,response)).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
     return {...(await h.state()).integrations.find(r=>r.label===label),token}
   }
   const current=await create('Synthetic current integration'),legacy=await create('Synthetic legacy integration')

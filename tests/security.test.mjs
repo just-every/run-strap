@@ -155,7 +155,7 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   ]) await unchanged(async () => {
     const form = await h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=%2Fapp%2Fpeople`, { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(input).toString() })
     assert.equal(form.status, 403); assert.equal(form.headers.get('x-strap-refusal'), 'mfa_enrollment_required')
-    assert.match(await form.text(), /mfa enrollment required/)
+    assert.match(await form.text(), /action="\/app\/action\?name=mfa\.totp\.start/)
   }, name + ' form')
   assert.equal((await h.state()).people.find(p => p.id === member.id).role, 'member')
   // First enrollment needs Base's fresh email proof; neither starting method writes before that proof.

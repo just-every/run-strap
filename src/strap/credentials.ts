@@ -44,8 +44,14 @@ export async function credentialCommand(request: Request, env: Bindings, who: Ac
   if (name === 'person.invite') {
     const person = await env.DB.prepare('SELECT * FROM st_people WHERE id=? AND active=1 AND erased_at IS NULL').bind(String(input.id ?? '')).first<any>()
     if (!person) fail('Activate the member or instructor before inviting them', 409)
-    await operatorAuth(env).invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo: '/app' })
-    return { invited: true }
+    const auth = operatorAuth(env)
+    const existing = await env.DB.prepare('SELECT role,status FROM oa_operators WHERE email=? COLLATE NOCASE').bind(person.email).first<{ role: string; status: string }>()
+    // Accepted identities travel in archives; sessions and sign-in links do not.
+    // Offer ordinary sign-in again rather than attempting a conflicting invitation.
+    if (existing?.status === 'active' && existing.role === 'member') {
+      if (env.AUTH_LOCAL !== 'true') await auth.requestMagicLink(request, { email: person.email, returnTo: '/app' })
+    } else await auth.invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo: '/app' })
+    return { invited: true, message: env.AUTH_LOCAL === 'true' ? `${person.name} can now sign in. Open /signin in their local browser and choose their name.` : `A sign-in link was sent to ${person.name}.` }
   }
   fail('Unknown access command', 404)
 }
