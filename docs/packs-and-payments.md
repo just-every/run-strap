@@ -75,7 +75,7 @@ own balance under **My packs**.
 For a member who owes money, **Prepare a balance reminder** (or **Prepare a reminder** in **Member success** on Today) writes a draft with the recipient, the outstanding balance
 and the exact message. Approve it, then use **Download** in **Approval history** to get the text and send it from your own
 email. Strap does not send reminders itself. If the member's balance changes before you approve, Strap asks you to
-prepare the reminder again.
+discard the old draft with **Discard reminder**, then prepare the reminder again for the current balance. Discarding removes it from **Prepared packs and reminders** and **Pending approvals** while retaining its exact original contents and who discarded it. Only the native owner can discard an unapproved reminder; approved reminders stay in approval history.
 
 ## Revenue and collections
 

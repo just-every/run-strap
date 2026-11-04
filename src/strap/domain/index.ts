@@ -75,7 +75,7 @@ import { closureImpact, dismissNotice } from './closures';
 import { confirmBooking, connectMemberMail, memberMail, type NoticeContext } from './notices';
 import { acceptOffer, promoteAll, saveWaitlistPolicy, waitlistPolicy } from './waitlist';
 import { checkinAlerts, staffCode, inWindow, kioskCheckin, kioskLookup, memberCheckin, ownCode, rotateCode, scanCheckin, selfCheckin } from './checkin';
-import { adjustPack, approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
+import { adjustPack, approvePack, approveReminder, balance, discardReminder, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
 import { profileOf as profileOfForDesk, memberProfile, profileSnapshot, saveMemberProfile, saveOwnProfile } from './profiles';
 import { saveStudio, studioSettings } from './studio';
@@ -334,6 +334,7 @@ export const handlers = {
   'payment.record':defineCommand(recordPayment,['owner']),
   'reminder.prepare':defineCommand(prepareReminder,['owner','agent']),
   'reminder.approve':defineCommand(approveReminder,['owner']),
+  'reminder.discard':defineCommand(discardReminder,['owner']),
   'booking.change.prepare':defineCommand(prepareBookingChange,['owner','agent']),
   'booking.change.approve':defineCommand(approveBookingChange,['owner']),
   'booking.move':defineCommand(moveBooking,['owner','member','instructor'],{member:{staff:'booking.move',right:'booking'},staffRight:'booking'}),
