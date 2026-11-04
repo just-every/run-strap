@@ -4278,7 +4278,7 @@
       "executable": false
     },
     "tests/checkin.test.mjs": {
-      "sha256": "64cfe819a6d6e09e7b78e41d118784357591bc371daf1f8c05e43b0bc714323f",
+      "sha256": "df39eb004a92b90b92ce4250c8da6769ecd8680d4dd46249b6492b54d3a425dd",
       "executable": false
     },
     "tests/class-reminders-archive.test.mjs": {
