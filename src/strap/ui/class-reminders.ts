@@ -1,3 +1,4 @@
+import { durationText } from '../readable'
 import { body, cell, field, form, h, hidden, panel, person, rows, select, table } from './shared';
 import { when } from './format';
 
@@ -12,7 +13,7 @@ export function classRemindersPanel(s: any) {
   if (s.actor.role !== 'owner') return '';
   const current = rows(s,'classReminderRules').map(rule => '<tr>'
     + cell('Service',h(rule.service || 'Studio default'))
-    + cell('Timing',`${h(rule.leadMinutes)} minutes before class · ${rule.enabled ? 'Enabled' : 'Disabled'} · revision ${h(rule.revision)}`)
+    + cell('Timing',`${h(durationText(rule.leadMinutes))} before class · ${rule.enabled ? 'Enabled' : 'Disabled'}`)
     + cell('Edit',`<details><summary>Edit reminder rule</summary>${form('reminder.rule.save','/app/studio',ruleFields(rule),'Save reminder rule','quiet')}</details>`)
     + '</tr>').join('');
   return panel('Class reminders',body('<p>Email reminders use the current class time and member message choice. In-app reminders remain available when a member stops these emails. SMS and push reminders are not available.</p><p>A service rule overrides the studio default, including when disabled. A reminder is reserved once for each booked class and start time; a rule edit does not send it again. If a reminder runs late, it can still send until the class starts. Provider acceptance does not confirm delivery.</p>')

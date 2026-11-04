@@ -6,9 +6,9 @@ import { clock, dayOf, dayShort, when } from './format'
 import { body, emptyLine, field, form, h, hidden, owner, panel, person, rows, select, textarea } from './shared'
 
 export const delivery = (d: any) => d ? ({
-  accepted: `Email accepted by ${d.provider}; delivery not confirmed`,
-  rejected: `Email refused by ${d.provider}${d.code ? ` (${d.code.replace(/_/g, ' ')})` : ''}`,
-  rate_limited: `Email refused by ${d.provider} (rate limited); not retried`,
+  accepted: `Email accepted${d.provider ? ' by '+d.provider : ''}; delivery not confirmed`,
+  rejected: `Email refused${d.provider ? ' by '+d.provider : ''}${d.code ? ` (${d.code.replace(/_/g, ' ')})` : ''}`,
+  rate_limited: `Email refused${d.provider ? ' by '+d.provider : ''} (rate limited); not retried`,
   uncertain: 'Email outcome unknown; not retried',
   sending: 'Email outcome unknown (interrupted); not retried',
   queued: 'Email reserved but not sent (interrupted)',

@@ -66,6 +66,7 @@ a.location:hover .edit { background: var(--strap-wash); color: var(--strap-plum-
 .lede { max-width: 72ch; margin: 0 0 6px; color: var(--strap-quiet); }
 
 .notice { margin: 0 0 4px; padding: 12px 16px; border: 1px solid var(--strap-line); border-color: var(--strap-sea-strong); border-radius: var(--strap-radius-notice); background: var(--rer-surface); }
+[data-app-notice] { margin-top: 14px; overflow-wrap: anywhere; }
 .notice.error { border-color: var(--strap-red); background: var(--strap-red-tint); color: #A51F30; font-weight: 600; }
 
 /* Below 1280px the agent's panel moves under the page. */

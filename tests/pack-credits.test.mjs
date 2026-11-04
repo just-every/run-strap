@@ -114,7 +114,8 @@ test('PLAN-003: public forms preserve service review and inclusive local dates, 
   assert.equal(draft.expiresAt, '2100-01-01T05:00:00.000Z')
   const review = await h.send('/app/packs', undefined, h.owner)
   assert.match(review.text, /Eligible services/)
-  assert.match(review.text, /America\/New_York/)
+  assert.ok(review.text.includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(Date.parse(draft.expiresAt)-1))))
+  assert.ok(review.text.includes('datetime="'+draft.expiresAt+'"'))
   assert.equal((await form('pack.approve', { id: draft.id })).status, 303)
   const p = (await h.state()).packs[0]
   const coach = await h.person('Priya', 'instructor'), monday = week()
@@ -132,6 +133,7 @@ test('PLAN-003: public forms preserve service review and inclusive local dates, 
   assert.equal(state.bookings.find(b => b.id === booking.id).status, 'booked')
   assert.equal(state.packCreditEvents.filter(e => e.type === 'adjust').length, 1)
   const page = await h.send('/app/packs', undefined, alex.cookie)
-  assert.match(page.text, /12:34:56 PM GMT-05:00/)
+  assert.ok(page.text.includes(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date(state.packs[0].expiresAt)).replace(' PM',' pm')))
+  assert.ok(page.text.includes('datetime="'+state.packs[0].expiresAt+'"'))
   assert.match(page.text, /Approved early close/)
 }))

@@ -60,7 +60,17 @@ test('published week, atomic credit booking, FIFO waitlist promotion and attenda
   await pack(h, alex.id); await pack(h, sam.id)
   const session = await timetable(h, coach.id)
   const booked = await h.cmd('booking.book', { classId: session.id }, alex.cookie)
-  const waiting = await h.cmd('booking.book', { classId: session.id }, sam.cookie)
+  const joined = await h.mf.dispatchFetch(h.origin + '/app/action?name=booking.book&returnTo=%2Fapp', {method:'POST',headers:{origin:h.origin,cookie:sam.cookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({classId:session.id}),redirect:'manual'})
+  assert.equal(joined.status,303)
+  const waiting = (await h.state(sam.cookie)).bookings.find(b => b.classId === session.id)
+  const target = new URL(joined.headers.get('location'),h.origin)
+  assert.equal(target.searchParams.get('bookingResult'),waiting.id)
+  const resultPage = await h.send(target.pathname+target.search,undefined,sam.cookie)
+  assert.match(resultPage.text, /data-app-notice[^>]*role="status"/)
+  assert.ok(resultPage.text.includes(waiting.id))
+  const otherPage = await h.send(target.pathname+target.search,undefined,alex.cookie)
+  assert.doesNotMatch(otherPage.text, /data-app-notice[^>]*role="status"/)
+  assert.equal((await h.state()).bookings.filter(b => b.id === waiting.id).length,1)
   let s = await h.state()
   assert.equal(s.bookings.find(b => b.id === waiting.id).status, 'waitlisted')
   assert.equal(s.packs.find(p => p.personId === alex.id).remaining, 4)
@@ -235,7 +245,7 @@ test('browser forms take dollars, calendar dates and wall times on the studio cl
   assert.equal((await h.state()).payments[0].amountCents, 7500)
 }))
 
-test('SCHED-003: instructor, room and named equipment conflicts include buffers, normalized identity and exact UTC boundaries', () => run(async h => {
+test('SCHED-003: instructor, room and named equipment conflicts include buffers, normalized identity, exact boundaries and readable occupied intervals', () => run(async h => {
   const coach = await h.cmd('person.save', { name: 'Priya', email: 'priya@studio.example', role: 'instructor', active: true })
   const other = await h.cmd('person.save', { name: 'Taylor', email: 'taylor@studio.example', role: 'instructor', active: true })
   const monday = week(), at = (hour, minute = 0) => `${monday}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`
@@ -258,8 +268,11 @@ test('SCHED-003: instructor, room and named equipment conflicts include buffers,
       const before = await h.state()
       const refused = await h.cmd('classes.prepare', { week: monday, classes: [entry(`Conflicting ${label}`, start, end, { ...resource, ...buffer }), entry('Must not partially save', at(18), at(19))] }, h.owner, 409)
       assert.match(refused.error, /Published reformer class/)
-      assert.ok(refused.error.includes(published.id))
-      assert.match(refused.error, /09:50:00.000Z.*11:15:00.000Z/)
+      assert.ok(refused.error.includes(published.title)); assert.ok(!refused.error.includes(published.id))
+      const bufferedStart = new Date(Date.parse(published.start)-published.bufferBeforeMinutes*60_000), bufferedEnd = new Date(Date.parse(published.end)+published.bufferAfterMinutes*60_000)
+      const clock = value => new Intl.DateTimeFormat('en-US',{timeZone:'UTC',hour:'numeric',minute:'2-digit'}).format(value).toLowerCase()
+      assert.match(refused.error,new RegExp(clock(bufferedStart).replace(/ [ap]m$/,'')+'.*'+clock(bufferedEnd)))
+      assert.ok(!refused.error.includes(bufferedStart.toISOString()) && !refused.error.includes(bufferedEnd.toISOString()))
       const after = await h.state()
       assert.equal(after.version, before.version)
       assert.equal(after.drafts.length, before.drafts.length)
@@ -274,7 +287,7 @@ test('SCHED-003: instructor, room and named equipment conflicts include buffers,
     const right = entry('Second proposed class', at(15, 30), at(16, 30), resource)
     const before = (await h.state()).drafts.length
     const refused = await h.cmd('classes.prepare', { week: monday, classes: [left, right] }, h.owner, 409)
-    assert.match(refused.error, /First proposed class.*Second proposed class/)
+    assert.ok(refused.error.includes(left.title) && refused.error.includes(right.title))
     assert.equal((await h.state()).drafts.length, before)
   }
   for (const invalid of [{ bufferBeforeMinutes: -1 }, { bufferAfterMinutes: 1.5 }, { equipment: 'Reformer 2' }, { room: 42 }]) {
@@ -313,7 +326,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
     assert.ok(page.text.includes(unavailable.id))
     assert.match(page.text, /Private medical time off &lt;not public&gt;/)
     const refused = await h.cmd('classes.publish', { id: draft.id }, h.owner, 409)
-    assert.ok(refused.error.includes(unavailable.id))
+    assert.ok(refused.error.toLowerCase().includes(unavailable.resourceName.toLowerCase())); assert.ok(!refused.error.includes(unavailable.id))
     assert.equal((await h.state()).approvals.length, before.approvals.length)
     assert.equal((await h.state()).drafts.find(d => d.id === draft.id).status, 'draft')
     assert.match((await form('classes.publish', { id: draft.id })).text, /Scheduling conflict/)
@@ -340,7 +353,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
   for (const [resourceKind, resourceId] of [['instructor', coach.id], ['room', 'MAIN room'], ['equipment', 'REFORMER 2']]) {
     const before = (await h.state()).unavailability.length
     const rejected = await h.cmd('scheduling.unavailable.save', { resourceKind, resourceId, start: new Date(Date.parse(session.end) + 14 * 60_000).toISOString(), end: new Date(Date.parse(session.end) + 20 * 60_000).toISOString(), reason: 'Cannot invalidate class cleanup' }, h.owner, 409)
-    assert.ok(rejected.error.includes(published.id))
+    assert.ok(rejected.error.includes(published.title)); assert.ok(!rejected.error.includes(published.id))
     assert.equal((await h.state()).unavailability.length, before)
     // An exception touching the exact cleanup boundary does not block the class.
     await h.cmd('scheduling.unavailable.save', { resourceKind, resourceId, start: new Date(Date.parse(session.end) + 15 * 60_000).toISOString(), end: new Date(Date.parse(session.end) + 20 * 60_000).toISOString(), reason: 'After cleanup' })
@@ -354,7 +367,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
   assert.ok(!context.text.includes(secret))
   const agentConflict = await h.send('/api/strap/agent/command', { name: 'classes.prepare', input: { week: monday, classes: [{ title: 'Unavailable agent proposal', start: monday + 'T20:10:00Z', end: monday + 'T20:30:00Z', capacity: 10, instructorId: coach.id }] } }, '', headers)
   assert.equal(agentConflict.status, 409)
-  assert.ok(agentConflict.text.includes(privateException.id))
+  assert.ok(agentConflict.text.includes(privateException.resourceName)); assert.ok(!agentConflict.text.includes(privateException.id))
   assert.ok(!agentConflict.text.includes(secret))
 }))
 
@@ -387,7 +400,7 @@ test('SCHED-003: concurrent publication commits one complete allocation and disp
     assert.ok(page.text.includes(winner.classes[0].title))
     assert.match(page.text, /Occupied interval/)
     const retry = await h.cmd('classes.publish', { id: loser.id }, h.owner, 409)
-    assert.ok(retry.error.includes(winner.classes[0].id))
+    assert.ok(retry.error.includes(winner.classes[0].title)); assert.ok(!retry.error.includes(winner.classes[0].id))
     assert.equal((await h.state()).classes.length, state.classes.length)
     assert.equal((await h.state()).approvals.length, state.approvals.length)
   }

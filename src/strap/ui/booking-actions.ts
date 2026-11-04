@@ -1,3 +1,5 @@
+import { quantity } from '../readable'
+import { delivery } from './closures'
 // SCHED-014 desk controls share the existing roster and member card surfaces.
 import { filteredCancellations } from '../cancellations'
 import { actionChannel, actionNotice, cancellationReason, effectText } from './booking-rules'
@@ -81,7 +83,7 @@ export function cancellationsPanel(s: any, query: URLSearchParams) {
   const classIds = new Set(events.map(action => action.classId)), staffIds = [...new Set(events.map(action => action.actorId))]
   const controls = field('date', 'Cancellation date', query.get('date'), 'date')
     + select('classId', 'Class', [['', 'All classes'], ...rows(s, 'classes').filter(c => classIds.has(c.id)).map(c => [c.id, `${classTitle(c)} · ${stamp(s, c.start)}`] as [unknown, unknown])], query.get('classId') ?? '', '')
-    + select('staffId', 'Actor', [['', 'All actors'], ...staffIds.map(id => [id, `${id} (${events.find(action => action.actorId === id)?.actorRole})`] as [unknown, unknown])], query.get('staffId') ?? '', '')
+    + select('staffId', 'Actor', [['', 'All actors'], ...staffIds.map(id => [id, `${events.find(action => action.actorId === id)?.actorName ?? 'Former studio user'} (${events.find(action => action.actorId === id)?.actorRole})`] as [unknown, unknown])], query.get('staffId') ?? '', '')
     + select('type', 'Cancellation type', [['', 'All types'], ['early', 'Early'], ['late', 'Late'], ['waitlist', 'Waitlist'], ['class_cancelled', 'Class cancelled'], ['waitlist_closed', 'Waitlist closed'], ['offer_expired', 'Offer expired']], query.get('type') ?? '', '')
   const preserved = ['q', 'person'].filter(key => query.has(key)).map(key => hidden(key, query.get(key))).join('')
   const search = `<form class="form" method="get" action="/app/people#cancellations">${preserved}<div class="row2">${controls}</div><button class="btn-quiet" type="submit">Filter cancellations</button></form>`
@@ -92,9 +94,9 @@ export function cancellationsPanel(s: any, query: URLSearchParams) {
     const restore = action.restoredAt ? `<small>Restored ${when(s, action.restoredAt)}</small>` : b && lastCancel.id === action.id ? restoreControl(s, c, b, back) : ''
     const notice = action.notice?.status === 'suppressed' ? 'Suppressed' : action.notice?.status === 'in_app' ? 'In-app notice' : '—'
     const restoreRow = restore.startsWith('<details') ? `<tr><td colspan="3">${restore}</td></tr>` : ''
-    return `<tr>${cell('Member / class', `<strong>${h(person(s, action.personId))}</strong><small>${h(c ? classTitle(c) : action.classId)}${c ? ` · ${when(s, c.start, c.timeZone)}` : ''}</small><small>Cancelled ${when(s, action.at)}</small>`)}${cell('Action', `${h(action.type)} · ${money(action.feeCents)} fee<small>${action.creditReturned ? 'Credit returned' : 'No credit returned'}</small><small>${h(action.reason)}</small>${action.waiver?.reason ? `<small>Waiver: ${h(action.waiver.reason)}</small>` : ''}<small>${h(action.actorRole)} · ${h(action.actorId)} · ${h(action.channel)}</small>`)}${cell('Notice / restore', `${notice}${action.notice?.suppressionReason ? `<small>Suppression reason: ${h(action.notice.suppressionReason)}</small>` : ''}${action.notice?.mailStatus ? `<small>Mail: ${h(action.notice.mailStatus)}</small>` : ''}${restoreRow ? '' : restore}`)}</tr>${restoreRow}`
+    return `<tr>${cell('Member / class', `<strong>${h(person(s, action.personId))}</strong><small>${h(c ? classTitle(c) : 'Former class')}${c ? ` · ${when(s, c.start, c.timeZone)}` : ''}</small><small>Cancelled ${when(s, action.at)}</small>`)}${cell('Action', `${h(String(action.type).replaceAll('_',' '))} · ${money(action.feeCents)} fee<small>${action.creditReturned ? 'Credit returned' : 'No credit returned'}</small><small>${h(action.reason)}</small>${action.waiver?.reason ? `<small>Waiver: ${h(action.waiver.reason)}</small>` : ''}<small>${h(action.actorName)} (${h(action.actorRole)}) · ${h(action.channel)}</small>`)}${cell('Notice / restore', `${notice}${action.notice?.suppressionReason ? `<small>Suppression reason: ${h(action.notice.suppressionReason)}</small>` : ''}${action.notice?.mailStatus ? `<small>${h(delivery(rows(s,'noticeDeliveries').find(d => d.sourceId === (action.mailSourceId ?? action.id)) ?? {status:action.notice.mailStatus}))}</small>` : ''}${restoreRow ? '' : restore}`)}</tr>${restoreRow}`
   }).join('')
   const exportLink = `/api/strap/cancellations.csv${filters.size ? `?${filters.toString()}` : ''}`
-  return panel('Cancellations', body(`${search}<p class="meta">${filtered.length} cancellations · ${filtered.filter(action => action.type === 'late').length} late · <a href="${h(exportLink)}">Download filtered CSV</a> · <a href="${h(exportLink.replace('.csv','.xlsx'))}">Download filtered XLSX</a></p>`)
+  return panel('Cancellations', body(`${search}<p class="meta">${quantity(filtered.length, 'cancellation')} · ${filtered.filter(action => action.type === 'late').length} late · <a href="${h(exportLink)}">Download filtered CSV</a> · <a href="${h(exportLink.replace('.csv','.xlsx'))}">Download filtered XLSX</a></p>`)
     + (list ? `<div class="table-wrap">${table(['Member / class', 'Action', 'Notice / restore'], list)}</div>` : emptyLine('No cancellations match these filters.')), { id: 'cancellations', icon: 'clock' })
 }

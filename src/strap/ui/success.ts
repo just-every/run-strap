@@ -37,7 +37,7 @@ function card(s: any, f: FollowUp, first: boolean) {
     const usual = habit(s, f.personId, value => clock(s, value))
     facts.push(...(usual ? [usual] : []), `No visit in ${weeks(lastVisit(s, f.personId))}`)
     const c = first ? openSpot(s, f.personId) : null
-    if (c) extra = `<div class="offer">${icon('calendar')}<div><small>Open spot</small><b>${h(dayShort(s, dayOf(s, c.start, c.timeZone)))} · ${h(clock(s, c.start, c.timeZone))}</b><small>${h(classTitle(c))} · ${c.occupancy.total - attendance(s, c.id).booked.length} open</small></div></div><p>${h(packs[0].remaining)} credits left on their ${h(packName(packs[0]))}. Members book open spots themselves from Classes.</p>`
+    if (c) extra = `<div class="offer">${icon('calendar')}<div><small>Open spot</small><b>${h(dayShort(s, dayOf(s, c.start, c.timeZone)))} · ${h(clock(s, c.start, c.timeZone))}</b><small>${h(classTitle(c))} · ${c.occupancy.total - attendance(s, c.id).booked.length} open</small></div></div><p>${h(creditsLeft(packs[0]))} on their ${h(packName(packs[0]))}. Members book open spots themselves from Classes.</p>`
   }
   if (f.kind === 'expiring') facts.push(`${packName(packs[0])} ends ${dayShort(s, dayOf(s, packs[0].expiresAt))}`, creditsLeft(packs[0])), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a renewal</a>`
   if (f.kind === 'empty') facts.push(rows(s, 'packs').some(p => p.personId === f.personId) ? 'No credits left' : 'No class pack yet'), action = `<a class="btn small" href="/app/packs?person=${encodeURIComponent(f.personId)}#prepare-pack">Prepare a pack</a>`

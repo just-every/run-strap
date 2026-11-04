@@ -1,3 +1,5 @@
+import branding from '../../branding.json';
+import { studioSettings } from './studio';
 import { catalogPackInput, currentProductVersion, personalCatalogMember } from './product-catalog';
 import { halfUp } from './plan-changes';
 import { parseGuestTerms } from './guest-allowances';
@@ -113,8 +115,8 @@ export function prepareReminder(tx: Transaction, input: Record<string,unknown>) 
   preparer(tx.who);
   const member = person(tx.state,input.personId,false), balanceCents = balance(tx.state,member.id);
   insist(balanceCents > 0,'nothing_owed',409);
-  const amount = (balanceCents/100).toFixed(2);
-  const draft = {id:id(),type:'reminder',status:'draft',personId:member.id,balanceCents,basis:reminderBasis(tx.state,member.id),recipient:member.email,subject:`Studio balance reminder: $${amount}`,body:`Hello ${member.name},\n\nOur records show a studio balance of $${amount}. If you have already paid, please reply with your payment reference so we can match it.\n\nThank you.`,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
+  const amount = (balanceCents/100).toFixed(2), studio = studioSettings(tx.state), studioName = studio?.legalName || studio?.location || branding.name;
+  const draft = {id:id(),type:'reminder',status:'draft',personId:member.id,balanceCents,basis:reminderBasis(tx.state,member.id),recipient:member.email,subject:`${studioName} balance reminder: $${amount}`,body:`Hello ${member.name},\n\nOur records at ${studioName} show a balance of $${amount}. If you have already paid, please reply with your payment reference so we can match it.\n\nThank you,\n${studioName}`,createdAt:now(),createdBy:tx.who.id,createdByRole:tx.who.role};
   tx.put('draft',draft); return draft;
 }
 export function approveReminder(tx: Transaction, input: Record<string,unknown>) {

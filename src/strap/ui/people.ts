@@ -1,3 +1,4 @@
+import { quantity } from '../readable'
 import { clientAppointmentsPanel } from './client-appointments'
 import { privacyPanel } from './privacy'
 import { attendanceBookingAccess } from './attendance-access'
@@ -62,7 +63,7 @@ export function peoplePage(s: any, query: URLSearchParams) {
   }).join(''))}</div>` : q ? emptyLine(`No one matches “${query.get('q')}”.`) : emptyState('users', 'No members yet', 'Add your first member or instructor, or import members from a Mindbody CSV.', '<a class="btn" href="#add-person">Add a person</a>')
   const search = `<form class="search" method="get" action="/app/people" role="search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><label class="visually-hidden" for="people-q">Search people</label><input id="people-q" name="q" type="search" value="${h(query.get('q') ?? '')}" placeholder="Search by name or email"></form>`
   const add = panel('Add a person', body(form('person.save', '/app/people', personFields(), 'Add person')), { id: 'add-person', icon: 'addperson' })
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>People</h1><p>${members} active members · ${instructors} instructors</p></div>`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>People</h1><p>${quantity(members, 'active member')} · ${quantity(instructors, 'instructor')}</p></div>`
     + panel(q ? `Matching “${query.get('q')}”` : 'Members and instructors', `<div class="panel-body">${search}</div>${table_}`, { icon: 'users' })
     + (chosen?.role === 'member' ? appointmentsPanel(s,chosen.id,back) : '')
     + panel('Booking changes awaiting approval', draftRecords(s, '/app/people', ['booking-change']).html, {icon:'calendar'})

@@ -1,3 +1,5 @@
+import { rangeText } from '../readable';
+import { studioSettings } from './studio';
 import { humanOwner, id, instant, integer, insist, list, now, person, record, text, type RecordData } from './types';
 import type { Transaction } from './store';
 import { locationById } from './locations';
@@ -66,8 +68,21 @@ export function schedulingConflicts(classes: RecordData[], published: RecordData
   return conflicts;
 }
 
-export function refuseSchedulingConflicts(conflicts: SchedulingConflict[], includeReasons = true) {
-  insist(!conflicts.length,`Scheduling conflict: ${conflicts.map(c => `${c.classTitle} [${c.classId}] — ${c.resource.kind} ${c.resource.label}: ${c.recordKind === 'class' ? c.record.title : includeReasons ? c.record.reason : 'Unavailable'} [${c.record.id}], ${c.occupiedStart} to ${c.occupiedEnd}`).join('; ')}`,409);
+export function refuseSchedulingConflicts(conflicts: SchedulingConflict[], includeReasons = true, timeZone = 'UTC') {
+  const groups = new Map<string,SchedulingConflict[]>();
+  for (const c of conflicts) {
+    const key = c.classId + ':' + c.record.id, group = groups.get(key) ?? [];
+    group.push(c); groups.set(key,group);
+  }
+  const sentences = [...groups.values()].map(group => {
+    const c = group[0], resources = [...new Set(group.map(item => `${item.resource.kind} ${item.resource.label}`))];
+    const names = resources.length < 2 ? resources[0] : resources.slice(0,-1).join(', ') + ' and ' + resources.at(-1);
+    const occupied = rangeText(c.occupiedStart,c.occupiedEnd,c.record.timeZone ?? timeZone);
+    return c.recordKind === 'class'
+      ? `${names} ${resources.length === 1 ? 'is' : 'are'} already booked for ${c.record.title}, ${occupied}. Choose another time for ${c.classTitle}.`
+      : `${names} ${resources.length === 1 ? 'is' : 'are'} unavailable, ${occupied}${includeReasons ? ': ' + c.record.reason : ''}. Choose another time for ${c.classTitle}.`;
+  });
+  insist(!conflicts.length,'Scheduling conflict: ' + sentences.join(' '),409);
 }
 
 export function saveUnavailability(tx: Transaction, input: Record<string,unknown>) {
@@ -85,7 +100,7 @@ export function saveUnavailability(tx: Transaction, input: Record<string,unknown
     createdAt:previous?.createdAt ?? now(),createdBy:previous?.createdBy ?? tx.who.id,updatedAt:now(),updatedBy:tx.who.id};
   insist(entry.end > entry.start,'unavailability_end_must_follow_start');
   // An exception cannot silently invalidate an already-published allocation.
-  refuseSchedulingConflicts(list(tx.state,'class').filter(c => c.status !== 'cancelled').flatMap(c => schedulingConflicts([c],[],[entry])));
+  refuseSchedulingConflicts(list(tx.state,'class').filter(c => c.status !== 'cancelled').flatMap(c => schedulingConflicts([c],[],[entry])),true,studioSettings(tx.state)?.timeZone ?? 'UTC');
   tx.put('unavailability',entry); return entry;
 }
 
