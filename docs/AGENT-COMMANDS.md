@@ -1,5 +1,7 @@
 # Agent preparations
 
+Before opening **Agent access**, the owner opens **Security** and enrolls an authenticator app or passkey, then uses that second factor at each new sign-in. In local development, the session opened from the private `RER_OPEN` link already confirms identity for enrollment; no email confirmation is needed.
+
 The owner creates a preparation key in **Agent access**. It expires after 30 days and can be revoked immediately. Save the one-time value privately; never put it in chat, logs or source.
 
 `GET /api/strap/agent/context` and `POST /api/strap/agent/command` require `Authorization: Bearer VALUE`. POST accepts JSON `{ "name": "pack.prepare", "input": { "personId": "MEMBER_ID", "credits": 5, "amountCents": 10000, "expiresAt": "2027-01-01T00:00:00Z" } }`.

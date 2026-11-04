@@ -3,6 +3,10 @@
 Everyone who signs in to Strap is a person in **People**: your members and your instructors. The owner adds them, and
 only the owner grants or ends access. The owner may grant the bounded member-record right described below.
 
+Before adding an instructor, changing sign-in or access, or inviting anyone, open **Security** and enroll an
+authenticator app or passkey. Use that second factor at each new sign-in. In local development, the session opened
+from your private `RER_OPEN` link already confirms your identity for enrollment; no email confirmation is needed.
+
 ## Add a person
 
 Use **Add a person** with the person's full name, email, role (**Member** or **Instructor**) and status. People you
@@ -16,6 +20,7 @@ instructor by name.
 
 Open an active person and press **Invite to sign in**. On a hosted installation, Strap emails them a sign-in link;
 after that they sign in with their email whenever they like.
+You can offer sign-in again to an active person who previously accepted an invitation, including after a restore.
 
 While Strap runs on your computer no email leaves it. To try the invited member's view yourself, open the terminal's
 private `RER_OPEN` link in a second browser profile first, then sign out there. At the local app address, open `/signin`

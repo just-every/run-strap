@@ -350,7 +350,7 @@
       "executable": false
     },
     "docs/AGENT-COMMANDS.md": {
-      "sha256": "446ba570f3eb772bbcf7d5e475672fe1692420686704530354a312947c714a8e",
+      "sha256": "495133a4de20e12826d68b2513fe38e861935bac770e60998f33ba4cd437aab7",
       "executable": false
     },
     "docs/AUTOMATION.md": {
@@ -406,7 +406,7 @@
       "executable": false
     },
     "docs/people.md": {
-      "sha256": "cf86ab2aed371926a148738aaa00564fa5790eda698b2c5d840e72eec43b9088",
+      "sha256": "ace1a7f59ae5465ab507fd648d6049a82d53a9c2ca5878272927f364b15d1380",
       "executable": false
     },
     "docs/put-strap-online.md": {
@@ -3002,7 +3002,7 @@
       "executable": false
     },
     "src/server.dev.ts": {
-      "sha256": "84e462128c36698c718cd4f686df352e9ad393ad5057daab1780775a83cabba2",
+      "sha256": "b23468d87a6120995734d8fc153829a137c3a5c89f7f560172baef0d964e4734",
       "executable": false
     },
     "src/server.ts": {
@@ -3109,6 +3109,10 @@
       "sha256": "186c5e6bbd33a7b249aa498f236d02980ef11bb5f2a7503b5fcf186b6f0a6df8",
       "executable": false
     },
+    "src/strap/action-result.ts": {
+      "sha256": "d73814274a00192093f32803d388a225d390ac44096a89bb80df7f28845d1a47",
+      "executable": false
+    },
     "src/strap/archive-policy.mjs": {
       "sha256": "f41cda74b4c933a9ef78139d1a220c2c2f11aa71dabf9587f47b0c9989f9736c",
       "executable": false
@@ -3162,7 +3166,7 @@
       "executable": false
     },
     "src/strap/credentials.ts": {
-      "sha256": "31c4eb37c6f21c1d73f4920e50a39bd1a861d99d722f8a0a3b74b7ae517b8a10",
+      "sha256": "263029dafd1cea3353f2fde3f98b8069771195055e1e958a8484bd1c96882e4f",
       "executable": false
     },
     "src/strap/demo/history.ts": {
@@ -3618,7 +3622,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "1f45503c1870abea2e04464fb8bd7d3c2f36696e92d22bd39d21defcbac9a858",
+      "sha256": "66ce1e0ef8f281b4660d397efd4fd0bead6b2f81813fb4b48f8cf848a76dfd3d",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -3742,7 +3746,7 @@
       "executable": false
     },
     "src/strap/security/mfa.ts": {
-      "sha256": "18d3d12a4d209791fab4431fecc118dc62dd967342ccc23fc96bb9faaf516a6a",
+      "sha256": "69f740ebb6340cce46a73a88fab9b05e76dfbe8ea7dfb1660108291d83610a06",
       "executable": false
     },
     "src/strap/security/webauthn.ts": {
@@ -4014,7 +4018,7 @@
       "executable": false
     },
     "src/strap/ui/people.ts": {
-      "sha256": "8c1aab6566a9592c8057c680132bb194744c5d68dfc8fbeeed50fe3fd5904c4a",
+      "sha256": "4d1be17baf05163eae76f43b2a9e9d73471f6d7c277a78e2e4092e70585460b7",
       "executable": false
     },
     "src/strap/ui/plan-changes.ts": {
@@ -4082,7 +4086,7 @@
       "executable": false
     },
     "src/strap/ui/security.ts": {
-      "sha256": "866bdc0ea3da9a6029edbd8c20c8929891f275966aaba3b65c439bb3b7c19e0b",
+      "sha256": "e7b77b67f333c30a8f5f6c9f427a77d6d269afc1ce8e72bf7916b95016ab5640",
       "executable": false
     },
     "src/strap/ui/series.ts": {
@@ -4166,7 +4170,7 @@
       "executable": false
     },
     "src/strap/ui/unavailable.ts": {
-      "sha256": "05b268dbbc84480609614a4f9036799486b1a85d21180912a3b258ec0f649296",
+      "sha256": "bd832b74d5a95d17975311ea1e78ee0cb91378e5c3934b2ace97cb77cf14b5f7",
       "executable": false
     },
     "src/strap/ui/waitlist.ts": {
@@ -4198,7 +4202,7 @@
       "executable": false
     },
     "tests/archive.test.mjs": {
-      "sha256": "70eb445f88dfb5607a54446c78bd68de6cf2a1a3560265a802a5e6a03ec0108f",
+      "sha256": "9e845663d7be3aabc11e6db38671b1641b8779fc201d26c6bd4efd62422b2df5",
       "executable": false
     },
     "tests/attendance-browser.mjs": {
@@ -4441,6 +4445,10 @@
       "sha256": "ebd51c09bd49fc90281d989b80c3d44ed5f4b4e13e3924260e47b257145c296f",
       "executable": false
     },
+    "tests/form-result.mjs": {
+      "sha256": "45ed79fad74571373eed5f8b89bc3f5eccecc9d18d064df4c0c7c646f281a199",
+      "executable": false
+    },
     "tests/freezes-browser.mjs": {
       "sha256": "84f612f2552fd1de1ad2e31bcff35e12441b2fd666b56c5ff03906ae4ecf235b",
       "executable": false
@@ -4470,7 +4478,7 @@
       "executable": false
     },
     "tests/integrations.test.mjs": {
-      "sha256": "5cb9edf655a7b45b902fc213ab3ab2fbcf751476d9c299265ee1b87f3abeb4d1",
+      "sha256": "e9b77fa1d7cd5bfb0afc7ae1b5c41a956079de6531d70e7848e5f0328179a699",
       "executable": false
     },
     "tests/intro-offers-browser.mjs": {
@@ -4498,7 +4506,7 @@
       "executable": false
     },
     "tests/locations.test.mjs": {
-      "sha256": "0724dcfaad76cda96072c257c6365c50bead28472b3d8d9d98fa2ff719be27e7",
+      "sha256": "96e154539194c6919ac1c8e9955eec9211b07fe2d08a347a4f5b832ce2ac9668",
       "executable": false
     },
     "tests/mail-edge.mjs": {
@@ -4598,7 +4606,7 @@
       "executable": false
     },
     "tests/privacy-timed-journey.mjs": {
-      "sha256": "023a8aca23c252598cbee6562b2cb24db666d471ce2ab75e630be399792ffe75",
+      "sha256": "02df78c5d49c1450bcbaac9fe8d9f0aa81e7e7ea2ad2c555eb852d5a71aecbb5",
       "executable": false
     },
     "tests/profiles-browser.mjs": {
@@ -4606,7 +4614,7 @@
       "executable": false
     },
     "tests/profiles.test.mjs": {
-      "sha256": "2ce674300c99c36497dd27e97ae59fd5927684f5c59b7e45773928dd0823772b",
+      "sha256": "644f0b1c692ae79e13d65bcc53f8add7aca5d59eb24dda3ac0227c852591734d",
       "executable": false
     },
     "tests/recognition-browser.mjs": {
@@ -4682,7 +4690,7 @@
       "executable": false
     },
     "tests/security.test.mjs": {
-      "sha256": "934f5ab1491ceabf7449d6246b678d637e427327aca30bdd45dde92087b8bd59",
+      "sha256": "54419700f6300bc57275eb24fc5961b6b1948e530d509a382710b21e86f9f8bc",
       "executable": false
     },
     "tests/series-browser.mjs": {
@@ -4750,7 +4758,7 @@
       "executable": false
     },
     "tests/strap.test.mjs": {
-      "sha256": "70ce5b4918dcf173cd9383633caa28f853bc16544dd1324c6fb1adcfca82f82b",
+      "sha256": "48eeb80cb4ed7ddd9ae7c136f1a65cec74d4d2ed2e7e11d0b086c978f8f3318e",
       "executable": false
     },
     "tests/studio-audit-cases.mjs": {
