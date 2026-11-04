@@ -15,11 +15,12 @@ Cloudflare account. Strap runs as a Worker with a D1 database there; the records
 ## Deploy
 
 ```sh
-rer deploy --dry-run
-rer deploy
+rer dev --stop
+rer deploy --dry-run --owner-name "Your name"
+rer deploy --owner-name "Your name"
 ```
 
-The dry run checks and builds everything without contacting Cloudflare. The real deploy creates the Worker and
+Stop local development first so it releases the local state. The dry run validates and builds, then reads the target secret bindings from Cloudflare. It needs `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; without them it exits with a credentials error after the build. It deploys nothing. The real deploy creates the Worker and
 database, applies the database migrations, uploads the secrets, checks the app answers, and makes `OWNER_EMAIL` the
 owner. Open the address it prints and sign in by email. A custom domain is optional.
 

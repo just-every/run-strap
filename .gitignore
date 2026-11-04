@@ -16,3 +16,6 @@ dist/
 
 rer-package/
 delivery-artifact/
+
+# Private studio archives from the documented backup path.
+exports/

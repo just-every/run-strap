@@ -11,19 +11,47 @@ its own database and opens in your browser.
 
 ## Run Strap on your computer
 
-One line installs the `rer` command, gets Strap into `run-strap` and starts it:
+Install the `rer` launcher first. You do not need Node:
 
 ```sh
-curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-strap
+curl -fsSL https://runeditrun.com/install.sh | sh
 ```
 
-Already have Node 22 or later? `npx -y @runeditrun/rer dev just-every/run-strap` does the same. If the installer prints a line that puts `rer` on your PATH, run that line too. To start it again later, run the same line from the same folder, or `cd run-strap && rer dev`.
+Before starting Strap, make the command available in this terminal:
 
-`rer dev` installs everything, makes you the owner and prints two lines. `RER_OPEN` is a private link that opens Strap
-signed in as you: keep it to yourself. `RER_READY` is the ordinary address. The first launch can take a few minutes;
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+rer cli path
+```
+
+Run the shell startup line that `rer cli path` prints so `rer` is also available in new terminals. The installer does not change your shell startup file.
+
+Then clone and start Strap:
+
+```sh
+rer dev just-every/run-strap
+```
+
+This gets Strap into `run-strap`. To start it again later, run `cd run-strap && rer dev`.
+
+**Node 22+ only:** if you already have Node 22 or later, you can use `npx -y @runeditrun/rer dev just-every/run-strap` instead.
+
+`rer dev` installs everything, prepares an owner and prints `RER_OPEN`, a private link that opens Strap signed in as
+that owner: keep it to yourself. `RER_READY` is the ordinary app address. The first launch can take a few minutes;
 running `rer dev` again reuses the copy that is already running.
 
-To start with your own email as the owner, run `npx -y @runeditrun/rer install just-every/run-strap`, then `rer setup --owner-email you@example.com` and `rer dev` from the checkout. Stop Strap with `rer dev --stop` or Ctrl-C. If the saved port is busy, run `rer dev --port 8899`.
+To start with your own email as the owner, install the launcher above, then run:
+
+```sh
+rer install just-every/run-strap
+cd run-strap
+rer setup --owner-email you@example.com
+rer dev
+```
+
+`rer dev` leaves Strap running in the background, so closing the terminal or pressing Ctrl-C after launch does not
+stop it. From the `run-strap` checkout, use `rer dev --stop` when you are finished. If the saved port is busy, run
+`rer dev --port 8899` with an available port. Keep local development private.
 
 ## Finish setup
 
@@ -35,23 +63,29 @@ The first time you open Strap you see **Finish setup**. Check the owner name and
 | Screen | What it is for |
 | --- | --- |
 | Today | The day's classes, each class's roster with check-in, the class that needs you, and Member success: follow-ups and drafts waiting for your approval |
-| Classes | The published week, the current waiver and the form that prepares next week |
+| Classes | Published classes, repeating timetables, class-week drafts and the current waiver |
 | Packs and payments | Class packs and credits, member balances, payments and balance reminders |
 | People | Members and instructors, invitations and access |
 | Import | Bringing members across from a Mindbody CSV |
 | Agent access | Keys that let an assistant prepare drafts for you |
 | Studio | Location, time zone, legal studio identity, US address, receipt details and weekly business hours |
-| Local mail | Sign-in and invitation emails while Strap runs on your computer |
 
 Each person sees only their own work. The owner sees everything. An instructor sees their classes on **Today** and **My
 classes** and checks people in to their own classes. A member sees the published classes, their own bookings, **My packs** and their balance.
+
+## Try a member’s view locally
+
+Add an active member in **People**, then choose **Invite to sign in**. Local development sends no external email.
+Open the terminal’s private `RER_OPEN` link in a second browser profile first, then sign out in that profile. Open
+`/signin` at the local app address and choose **Sign in as** the invited member. Keep your owner profile open separately.
+On a hosted installation, invitations and email sign-in use your configured mail sender.
 
 ## Your first week
 
 1. Add your instructors and members in [People](people.md), or [move them in](MOVE-IN.md) from a CSV.
 2. Give members credits by preparing and approving a pack in [Packs and payments](packs-and-payments.md).
 3. Publish a [waiver](waivers.md) if members must acknowledge one before booking.
-4. [Prepare and publish the week](classes.md). Members can book straight away.
+4. [Prepare and publish classes](classes.md). Members can book straight away.
 5. When it is time to open your doors to everyone, [put Strap online](put-strap-online.md).
 
 ## Studio identity and hours

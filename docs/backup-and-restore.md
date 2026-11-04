@@ -5,7 +5,7 @@ your members' details.
 
 ## Export
 
-Stop Strap, then export:
+Install the launcher and configure its PATH using [Getting started](getting-started.md) first. Stop Strap, then export:
 
 ```sh
 rer dev --stop
@@ -23,7 +23,7 @@ and pair your kiosks again.
 Restore into a fresh clone of the same version of Strap, before running setup or entering any data:
 
 ```sh
-npx -y @runeditrun/rer install just-every/run-strap
+rer install just-every/run-strap
 cd run-strap
 rer import --input /private/path/strap.rer --yes
 rer setup --owner-email original-owner@example.com
@@ -35,13 +35,24 @@ copy that already holds data.
 
 ## After erasing someone
 
-If you erased a person after an older backup was made, pass the later archive as the journal so the erasure still holds:
+Restore the current archive made after the erasure:
 
 ```sh
-rer import --input OLD.rer --journal LATER.rer --yes
+rer import --input /private/path/after-erasure.rer --yes
 ```
 
-An offline older backup can't know about a later erasure, so retire old copies you no longer need.
+An older archive plus a later journal is not a guaranteed recovery path. The launcher refuses incompatible erasure epochs with `restore_refused` / `erasure_epoch`; do not remove the journal to bypass that refusal. Use the post-erasure archive instead to restore the unaffected studio records and keep the erasure.
+
+If you need to supply a later journal for an otherwise compatible older archive, `--input` accepts an absolute path but `--journal` currently requires a path inside the destination checkout. Copy the later archive into the ignored `exports/` folder first:
+
+```sh
+mkdir -p exports
+cp /private/path/LATER.rer exports/LATER.rer
+chmod 600 exports/LATER.rer
+rer import --input /private/path/OLD.rer --journal exports/LATER.rer --yes
+```
+
+A containment error in this command refers to `--journal`: use the contained path shown above. A later journal fences erased identities; it does not merge the two archives or promise an older restore. An offline older backup can't know about a later erasure, so protect and retire old copies you no longer need. The documented `exports/` folder is ignored by Git; keep archives private wherever you store them.
 
 ## Start over
 

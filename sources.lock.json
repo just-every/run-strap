@@ -306,7 +306,7 @@
       "executable": false
     },
     ".gitignore": {
-      "sha256": "a4e238ffc6e0269af81c2cbd893a26f49fabf4f43b40587e7c08725392a1e74f",
+      "sha256": "328854bc2c64274b7e24d08eeff1d6d0b547dea30f10097da07e9ac85e92d84e",
       "executable": false
     },
     ".node-version": {
@@ -358,7 +358,7 @@
       "executable": false
     },
     "docs/backup-and-restore.md": {
-      "sha256": "21ab5223a3420cefc5551abce020dd687540ce0ad58e8347ccdf03bb316d0228",
+      "sha256": "5cc7aa7c7b30a5df58bb188dce90b7d0929a5d055eead37fe9a71736d133f763",
       "executable": false
     },
     "docs/BILLING-AGREEMENTS.md": {
@@ -370,7 +370,7 @@
       "executable": false
     },
     "docs/classes.md": {
-      "sha256": "3907766b31a24b9618e6465103d5a3c68c72646ede4e5b0ede993e06cea18b2a",
+      "sha256": "e4af6b7096168d7bb874b7a9e8ed16ed7c7a6b03a51936374e9b9c9cf1762068",
       "executable": false
     },
     "docs/COURSES.md": {
@@ -382,7 +382,7 @@
       "executable": false
     },
     "docs/getting-started.md": {
-      "sha256": "15b19427cb4862f95d3e489cb5288ff012b1f56711c0ded6b79ddac848c73fc0",
+      "sha256": "457e3e8ec32148a56c7578d541a55594a09de18e470a3416b9e9e84f758268fe",
       "executable": false
     },
     "docs/INTEGRATIONS.md": {
@@ -393,8 +393,12 @@
       "sha256": "38981f6eadfe852ff49653dd5157148a10e9b7f480d9819e01b7a69bd328f5b1",
       "executable": false
     },
+    "docs/MOVE-IN-INTEGRATION.md": {
+      "sha256": "b531635890ed73dfcc11e3349f8d834a092b5f6950d3d5b959e7a5e6d2c76398",
+      "executable": false
+    },
     "docs/MOVE-IN.md": {
-      "sha256": "234d1b364a1de4ffc376a1b8a515445c408c2e730d931550fd0d69383e074867",
+      "sha256": "a27cee370a389c652459ad5c414838d7cc33986a6966e3f5dad2315c01620fec",
       "executable": false
     },
     "docs/packs-and-payments.md": {
@@ -402,11 +406,11 @@
       "executable": false
     },
     "docs/people.md": {
-      "sha256": "3c607fe3e20f44db91931bc6e783cff4b63dfbd422bce9452ca55d0018bde66b",
+      "sha256": "cf86ab2aed371926a148738aaa00564fa5790eda698b2c5d840e72eec43b9088",
       "executable": false
     },
     "docs/put-strap-online.md": {
-      "sha256": "687edc014e1567b63181fa3d543e9155c04b3ddb694991517db1108138f65822",
+      "sha256": "598604a6e3893b4293a920ef7857f4a6ae8bbf54456bfec4586dc08888970b18",
       "executable": false
     },
     "docs/RETENTION-REPORT.md": {
@@ -414,7 +418,7 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "af5791532f1fe497c31b240267f3cc72fb0ee1f95f2d1fbe9fc278bf3746a14b",
+      "sha256": "bf6214acf35a1cf93fd6b42e8fec12dfda8185a6c51be8a857edeaeae1ec8459",
       "executable": false
     },
     "docs/SOURCES.md": {
@@ -898,7 +902,7 @@
       "executable": false
     },
     "README.md": {
-      "sha256": "25880674fb225aa3971b23b70472bc06733be5024740ad97c7767e833ccc03c9",
+      "sha256": "d091a54bc841ed36d77771579a1fb8e655755580f388da84b09c04905b8ed6ec",
       "executable": false
     },
     "RELEASE.json": {

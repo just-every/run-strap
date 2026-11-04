@@ -14,12 +14,13 @@ instructor by name.
 
 ## Invite someone to sign in
 
-Open an active person and press **Invite to sign in**. Strap emails them a sign-in link; after that they sign in with
-their email whenever they like.
+Open an active person and press **Invite to sign in**. On a hosted installation, Strap emails them a sign-in link;
+after that they sign in with their email whenever they like.
 
-While Strap runs on your computer no email leaves it. Invitations land in **Local mail** instead. To try a member's view
-yourself, open the private `RER_OPEN` link in a second browser profile, sign out there, then open the invitation from
-**Local mail** in that profile.
+While Strap runs on your computer no email leaves it. To try the invited member's view yourself, open the terminal's
+private `RER_OPEN` link in a second browser profile first, then sign out there. At the local app address, open `/signin`
+and choose **Sign in as** the invited person from the eligible identities. Keep your owner profile open separately,
+and keep the private launch link to yourself.
 
 ## Member profiles
 
