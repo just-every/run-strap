@@ -370,6 +370,13 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         await guard(env, who, path, name, input)
         const result = await execute(request, env, who, name, input)
         if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
+        // Enrollment and recovery results belong to Security even when the
+        // person arrived from another page. Keep that page as the continuation,
+        // and carry private material across the redirect only in a sealed cookie.
+        if (['mfa.totp.start','mfa.totp.confirm','mfa.recovery.renew'].includes(name)) {
+          const target = back.split(/[?#]/)[0] === '/app/security' ? back : `/app/security?returnTo=${encodeURIComponent(back)}`
+          return actionResultRedirect(env, who, target, { result })
+        }
         if (['agent.create','integration.create','integration.rotate','kiosk.pair'].includes(name)) return actionResultRedirect(env, who, back, { result })
         if (name === 'person.invite') return actionResultRedirect(env, who, back, { message: (result as { message: string }).message })
         if (name === 'payment.record') return actionResultRedirect(env, who, back, { message: `Payment ${(result as { reference: string }).reference} recorded.` })
