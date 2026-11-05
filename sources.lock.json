@@ -3622,7 +3622,7 @@
       "executable": false
     },
     "src/strap/http.ts": {
-      "sha256": "66ce1e0ef8f281b4660d397efd4fd0bead6b2f81813fb4b48f8cf848a76dfd3d",
+      "sha256": "fc56398a7590a96a1fccd49fbbc58a0438cb3a2a3d73b06ccb93c47aa2fafd71",
       "executable": false
     },
     "src/strap/intake-tablet.ts": {
@@ -4086,7 +4086,7 @@
       "executable": false
     },
     "src/strap/ui/security.ts": {
-      "sha256": "e7b77b67f333c30a8f5f6c9f427a77d6d269afc1ce8e72bf7916b95016ab5640",
+      "sha256": "ec45f6dbc60ad3f7e4f6c0a1a1d7e0701dcf2f26d8ece184c560da1578b8b9f2",
       "executable": false
     },
     "src/strap/ui/series.ts": {
@@ -4690,7 +4690,7 @@
       "executable": false
     },
     "tests/security.test.mjs": {
-      "sha256": "54419700f6300bc57275eb24fc5961b6b1948e530d509a382710b21e86f9f8bc",
+      "sha256": "55f74eff7c663ac7ea79cd881e818ba91ac48950b5349b7c85a59fd917331b56",
       "executable": false
     },
     "tests/series-browser.mjs": {

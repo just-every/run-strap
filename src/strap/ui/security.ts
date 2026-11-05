@@ -8,7 +8,7 @@ const holdText: Record<string, string> = {
   mfa_enrollment_required: 'Reports, pay, exports, staff access and provider connections open once you add a second factor.',
   mfa_required: 'Enter a code from your authenticator app, use a passkey or a recovery code to continue.',
 }
-const codes = (list: string[]) => panel('Save your recovery codes', body(`<p>Each code works once if you lose your authenticator app or passkey. They are shown only now. Store them somewhere private.</p><ul class="recovery">${list.map(code => `<li><code>${h(code)}</code></li>`).join('')}</ul>`), { icon: 'key' })
+const codes = (list: string[], next: string) => panel('Save your recovery codes', body(`<p>Each code works once if you lose your authenticator app or passkey. They are shown only now. Store them somewhere private.</p><ul class="recovery">${list.map(code => `<li><code>${h(code)}</code></li>`).join('')}</ul><p><a class="btn" href="${h(next)}">Continue</a></p>`), { icon: 'key' })
 
 function verify(m: any, query: URLSearchParams) {
   const passkey = m.factors.some((f: any) => f.kind === 'passkey' && f.usable)
@@ -60,12 +60,14 @@ function managersPanel(s: any, members: any[], finance: Set<string>) {
 
 export function securityPage(s: any, query: URLSearchParams, notice: any) {
   const m = s.mfa, recovery = result(notice)?.recovery_codes, hold = query.get('hold') ?? ''
+  const returnTo = query.get('returnTo') ?? '/app/security'
+  const next = /^\/app[\w/-]*(?:\?[\w=&%+.-]*)?(?:#[\w-]+)?$/.test(returnTo) ? returnTo : '/app/security'
   const held = m.factors.some((f: any) => f.usable) && !m.verified
   const enrolled = m.factors.some((f: any) => f.usable)
   const intro = held ? '' : `<p class="lede">${enrolled ? 'Your second factor is set up and this session is verified.' : m.required ? 'Your role needs a second factor before reports, pay, exports, staff access and provider connections open.' : 'Add a second factor to protect your account. You will be asked for it at each new sign-in.'}${!enrolled && hold === 'mfa_enrollment_required' ? ` ${h(holdText[hold])}` : ''}</p>`
   const reason = m.reasonText ? `<div class="notice" role="alert">${h(m.reasonText)}</div>` : ''
   const sent = result(notice)?.status === 'accepted' ? '<p class="notice" role="status">Confirmation link sent. Open it in this browser, confirm, then return to Security.</p>' : ''
-  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Security</h1></div>${intro}${reason}${sent}${recovery ? codes(recovery) : ''}`
+  return `<div class="page"><div class="page-main"><div class="page-title"><h1>Security</h1></div>${intro}${reason}${sent}${recovery ? codes(recovery, next) : ''}`
     + (held ? verify(m, query) : enroll(m, notice, query) + factors(s, m) + (s.access ? people(s)+staffRightsPanel(s) : ''))
     + `</div></div><script src="/brand/app/security.js" defer></script>`
 }
