@@ -97,11 +97,6 @@ async function revenueState(env: Bindings, who: Actor) {
   return {...current,locations:current.locations ?? locations(loaded.state).filter(l => !loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',undefined,l.id)),recurringRevenueSources:recurringRevenueSources(loaded.state,loaded.who)}
 }
 
-async function revenueState(env: Bindings, who: Actor) {
-  const current = await state(env,who,true), loaded = await load(env.DB,who)
-  return {...current,locations:current.locations ?? locations(loaded.state).filter(l => !loaded.who.staffAccess || hasStaffRight(loaded.state,loaded.who,'exports',undefined,l.id)),recurringRevenueSources:recurringRevenueSources(loaded.state,loaded.who)}
-}
-
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
   if (url.pathname === '/app/revenue') {
