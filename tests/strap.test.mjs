@@ -35,6 +35,14 @@ test('native invitations, role isolation, CSRF, input validation and immediate r
   assert.equal(cross.status, 403)
   await h.cmd('person.save', { id: alex.id, name: 'Alex', email: alex.email, role: 'member', active: false })
   await h.state(alex.cookie, 403)
+  const ended = await h.send('/app', undefined, alex.cookie, { accept: 'text/html' })
+  assert.equal(ended.status, 403)
+  assert.match(ended.text, /action="\/app\/action\?name=session\.signout"/)
+  const signout = await h.mf.dispatchFetch(h.origin + '/app/action?name=session.signout', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: alex.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: '' })
+  assert.equal(signout.status, 303)
+  assert.equal(signout.headers.get('location'), '/signin')
+  assert.equal((await h.send('/auth/session', undefined, alex.cookie)).status, 401)
+
   await h.cmd('person.erase', { id: sam.id }, h.owner, 409)
   const malformed = await h.mf.dispatchFetch(h.origin + '/api/strap/command', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/json' }, body: '{' })
   assert.equal(malformed.status, 400)
@@ -60,7 +68,17 @@ test('published week, atomic credit booking, FIFO waitlist promotion and attenda
   await pack(h, alex.id); await pack(h, sam.id)
   const session = await timetable(h, coach.id)
   const booked = await h.cmd('booking.book', { classId: session.id }, alex.cookie)
-  const waiting = await h.cmd('booking.book', { classId: session.id }, sam.cookie)
+  const joined = await h.mf.dispatchFetch(h.origin + '/app/action?name=booking.book&returnTo=%2Fapp', {method:'POST',headers:{origin:h.origin,cookie:sam.cookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({classId:session.id}),redirect:'manual'})
+  assert.equal(joined.status,303)
+  const waiting = (await h.state(sam.cookie)).bookings.find(b => b.classId === session.id)
+  const target = new URL(joined.headers.get('location'),h.origin)
+  assert.equal(target.searchParams.get('bookingResult'),waiting.id)
+  const resultPage = await h.send(target.pathname+target.search,undefined,sam.cookie)
+  assert.match(resultPage.text, /data-app-notice[^>]*role="status"/)
+  assert.ok(resultPage.text.includes(waiting.id))
+  const otherPage = await h.send(target.pathname+target.search,undefined,alex.cookie)
+  assert.doesNotMatch(otherPage.text, /data-app-notice[^>]*role="status"/)
+  assert.equal((await h.state()).bookings.filter(b => b.id === waiting.id).length,1)
   let s = await h.state()
   assert.equal(s.bookings.find(b => b.id === waiting.id).status, 'waitlisted')
   assert.equal(s.packs.find(p => p.personId === alex.id).remaining, 4)
@@ -103,6 +121,39 @@ test('approved pack charges and once-only external payment references keep balan
   assert.equal(s.payments.length, 1)
   assert.equal(s.balances.find(p => p.personId === alex.id).balanceCents, 12500)
   assert.ok(s.approvals.some(a => a.draftId === draft.id))
+  await h.confirmSetup(h.owner);
+  await h.cmd('studio.save',{location:'Catalog studio',timeZone:'America/New_York'});
+  const {catalogTerms}=await import('./catalog-cases.mjs');
+  const version=await h.cmd('catalog.publish',{...catalogTerms,revision:0});
+  const coach=await h.person('CatalogCoach','instructor'),desk=await h.person('CatalogDesk');
+  await h.cmd('staff.access.grant',{personId:desk.id,role:'front-desk',enabled:true,rights:{'membership-sale':{enabled:true,scopes:[{memberIds:[alex.id],locationIds:['studio'],doors:['all']}]}}});
+  await h.enroll(desk.cookie);
+  const key=await h.cmd('agent.create',{label:'Catalog preparation'}),headers={authorization:`Bearer ${key.token}`};
+  const agent=(name,input)=>h.send('/api/strap/agent/command',{name,input},'',headers);
+  const prepared=await agent('pack.prepare',{personId:alex.id,catalogVersionId:version.id});
+  assert.equal(prepared.status,200);
+  const before=(await h.state()).version;
+  for (const cookie of [alex.cookie,coach.cookie,desk.cookie]) {
+    await h.cmd('catalog.publish',{...catalogTerms,revision:1},cookie,403);
+    await h.cmd('catalog.retire',{id:version.productId,revision:1},cookie,403);
+    await h.cmd('pack.prepare',{personId:alex.id,catalogVersionId:version.id},cookie,403);
+    await h.cmd('pack.approve',{id:prepared.value.id},cookie,403);
+  }
+  for (const [name,input] of [['catalog.publish',{...catalogTerms,revision:1}],['catalog.retire',{id:version.productId,revision:1}],['pack.approve',{id:prepared.value.id}]]) assert.equal((await agent(name,input)).status,403);
+  await h.cmd('pack.prepare',{personId:alex.id,catalogVersionId:version.id,amountCents:1},h.owner,400);
+  assert.equal((await h.state()).version,before,'denied writes and attempted catalog price override have no effect');
+  await h.cmd('agent.revoke',{id:key.id});
+  const revokedVersion=(await h.state()).version;
+  assert.equal((await agent('pack.prepare',{personId:alex.id,catalogVersionId:version.id})).status,401);
+  assert.equal((await h.state()).version,revokedVersion);
+  await h.cmd('pack.approve',{id:prepared.value.id});
+  const child=await h.person('CatalogChild'),home=await h.cmd('household.save',{name:'Catalog household'});
+  const personal=await h.cmd('pack.prepare',{personId:child.id,catalogVersionId:version.id});
+  await h.cmd('household.participant.add',{id:home.id,personId:child.id});
+  const householdVersion=(await h.state()).version;
+  await h.cmd('pack.approve',{id:personal.id},h.owner,409);
+  await h.cmd('pack.prepare',{personId:child.id,catalogVersionId:version.id},h.owner,409);
+  assert.equal((await h.state()).version,householdVersion,'a changed household cannot redirect a personal sale');
 }))
 
 test('waiver acknowledgements bind exact immutable versions before booking', () => run(async h => {
@@ -138,6 +189,37 @@ test('agent prepares exact work, native owner approves, agent cannot approve or 
   assert.equal((await agent('reminder.prepare', { personId: alex.id })).status, 401)
 }))
 
+test('owner discards a stale balance reminder and approves its current replacement', () => run(async h => {
+  const member = await h.person('JordanWhitfield')
+  await h.confirmSetup(h.owner)
+  await pack(h, member.id, 10, 10500)
+  const stale = await h.cmd('reminder.prepare', { personId: member.id })
+  await h.cmd('payment.record', { personId: member.id, amountCents: 5000, reference: 'SQ-4471-2318' })
+  await h.cmd('reminder.approve', { id: stale.id }, h.owner, 409)
+  await h.cmd('reminder.discard', { id: stale.id }, member.cookie, 403)
+  const key = await h.cmd('agent.create', { label: 'Reminder preparation' })
+  assert.equal((await h.send('/api/strap/agent/command', { name: 'reminder.discard', input: { id: stale.id } }, '', { authorization: `Bearer ${key.token}` })).status, 403)
+  const discarded = await h.mf.dispatchFetch(h.origin + '/app/action?name=reminder.discard&returnTo=%2Fapp%2Fpacks', {
+    method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id: stale.id }), redirect: 'manual',
+  })
+  assert.equal(discarded.status, 303)
+  const saved = (await h.state()).drafts.find(d => d.id === stale.id)
+  assert.equal(saved.status, 'discarded')
+  assert.equal(saved.body, stale.body)
+  assert.ok(saved.discardedBy && saved.discardedAt)
+  const packsPage = await h.send('/app/packs', undefined, h.owner)
+  const todayPage = await h.send('/app', undefined, h.owner)
+  assert.ok(!packsPage.text.includes(`id="draft-${stale.id}"`))
+  assert.ok(!todayPage.text.includes(`#draft-${stale.id}`))
+  await h.cmd('reminder.discard', { id: stale.id }, h.owner, 409)
+  const replacement = await h.cmd('reminder.prepare', { personId: member.id })
+  assert.equal(replacement.balanceCents, 5500)
+  await h.cmd('reminder.approve', { id: replacement.id })
+  await h.cmd('reminder.discard', { id: replacement.id }, h.owner, 409)
+  assert.equal((await h.state()).balances.find(b => b.personId === member.id).balanceCents, 5500)
+}))
+
 test('Mindbody documented-shape CSV previews, journals originals, applies exact review and preserves edits on undo', () => run(async h => {
   const csv = await readFile('tests/fixtures/members.csv', 'utf8')
   const preview = await h.cmd('import.preview', { csv })
@@ -150,10 +232,29 @@ test('Mindbody documented-shape CSV previews, journals originals, applies exact 
   const people = (await h.state()).people
   assert.ok(people.length > 1); assert.ok(people.every(p => !p.active))
   const journal = await h.cmd('import.journal', { jobId: job.id }); assert.ok(journal.originals.length)
+  await h.confirmSetup(h.owner)
+  const viewJournal = async cookie => h.mf.dispatchFetch(h.origin + '/app/action?name=import.journal&returnTo=%2Fapp%2Fimport', {
+    method: 'POST', headers: { origin: h.origin, cookie, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ jobId: job.id }), redirect: 'manual',
+  })
+  const source = await (await viewJournal(h.owner)).text()
+  const original = source.match(/<textarea[^>]*name="originalCsv0"[^>]*>([\s\S]*?)<\/textarea>/)
+  assert.ok(original)
+  assert.equal(original[1].replace(/&quot;/g, '"'), csv)
+  assert.match(original[0], /readonly/)
+  const reader = await h.person('JournalReader')
+  assert.equal((await viewJournal(reader.cookie)).status, 403)
   await h.cmd('person.save', { id: people[0].id, name: 'Edited by owner', email: people[0].email, role: 'member', active: false })
   await h.cmd('import.undo', { jobId: job.id })
   const after = (await h.state()).people
-  assert.equal(after.length, 1); assert.equal(after[0].name, 'Edited by owner')
+  const importedAfter = after.filter(p => p.id !== reader.id)
+  assert.equal(importedAfter.length, 1); assert.equal(importedAfter[0].name, 'Edited by owner')
+  const reversed = await h.cmd('import.journal', { jobId: job.id })
+  assert.equal(reversed.undo.dispositions.filter(d => d.disposition === 'retained').length, 1)
+  assert.equal(reversed.undo.dispositions.filter(d => d.disposition === 'reversed').length, people.length - 1)
+  const report = await (await viewJournal(h.owner)).text()
+  assert.ok(report.includes('Edited by owner') || report.includes(people[0].id))
+  assert.ok(report.includes('originalCsv0'))
 }))
 
 test('unused identity erasure clears PII and blocks recreation or CSV reimport', () => run(async h => {
@@ -202,7 +303,7 @@ test('browser forms take dollars, calendar dates and wall times on the studio cl
   assert.equal((await h.state()).payments[0].amountCents, 7500)
 }))
 
-test('SCHED-003: instructor, room and named equipment conflicts include buffers, normalized identity and exact UTC boundaries', () => run(async h => {
+test('SCHED-003: instructor, room and named equipment conflicts include buffers, normalized identity, exact boundaries and readable occupied intervals', () => run(async h => {
   const coach = await h.cmd('person.save', { name: 'Priya', email: 'priya@studio.example', role: 'instructor', active: true })
   const other = await h.cmd('person.save', { name: 'Taylor', email: 'taylor@studio.example', role: 'instructor', active: true })
   const monday = week(), at = (hour, minute = 0) => `${monday}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`
@@ -225,8 +326,11 @@ test('SCHED-003: instructor, room and named equipment conflicts include buffers,
       const before = await h.state()
       const refused = await h.cmd('classes.prepare', { week: monday, classes: [entry(`Conflicting ${label}`, start, end, { ...resource, ...buffer }), entry('Must not partially save', at(18), at(19))] }, h.owner, 409)
       assert.match(refused.error, /Published reformer class/)
-      assert.ok(refused.error.includes(published.id))
-      assert.match(refused.error, /09:50:00.000Z.*11:15:00.000Z/)
+      assert.ok(refused.error.includes(published.title)); assert.ok(!refused.error.includes(published.id))
+      const bufferedStart = new Date(Date.parse(published.start)-published.bufferBeforeMinutes*60_000), bufferedEnd = new Date(Date.parse(published.end)+published.bufferAfterMinutes*60_000)
+      const clock = value => new Intl.DateTimeFormat('en-US',{timeZone:'UTC',hour:'numeric',minute:'2-digit'}).format(value).toLowerCase()
+      assert.match(refused.error,new RegExp(clock(bufferedStart).replace(/ [ap]m$/,'')+'.*'+clock(bufferedEnd)))
+      assert.ok(!refused.error.includes(bufferedStart.toISOString()) && !refused.error.includes(bufferedEnd.toISOString()))
       const after = await h.state()
       assert.equal(after.version, before.version)
       assert.equal(after.drafts.length, before.drafts.length)
@@ -241,7 +345,7 @@ test('SCHED-003: instructor, room and named equipment conflicts include buffers,
     const right = entry('Second proposed class', at(15, 30), at(16, 30), resource)
     const before = (await h.state()).drafts.length
     const refused = await h.cmd('classes.prepare', { week: monday, classes: [left, right] }, h.owner, 409)
-    assert.match(refused.error, /First proposed class.*Second proposed class/)
+    assert.ok(refused.error.includes(left.title) && refused.error.includes(right.title))
     assert.equal((await h.state()).drafts.length, before)
   }
   for (const invalid of [{ bufferBeforeMinutes: -1 }, { bufferAfterMinutes: 1.5 }, { equipment: 'Reformer 2' }, { room: 42 }]) {
@@ -280,7 +384,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
     assert.ok(page.text.includes(unavailable.id))
     assert.match(page.text, /Private medical time off &lt;not public&gt;/)
     const refused = await h.cmd('classes.publish', { id: draft.id }, h.owner, 409)
-    assert.ok(refused.error.includes(unavailable.id))
+    assert.ok(refused.error.toLowerCase().includes(unavailable.resourceName.toLowerCase())); assert.ok(!refused.error.includes(unavailable.id))
     assert.equal((await h.state()).approvals.length, before.approvals.length)
     assert.equal((await h.state()).drafts.find(d => d.id === draft.id).status, 'draft')
     assert.match((await form('classes.publish', { id: draft.id })).text, /Scheduling conflict/)
@@ -307,7 +411,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
   for (const [resourceKind, resourceId] of [['instructor', coach.id], ['room', 'MAIN room'], ['equipment', 'REFORMER 2']]) {
     const before = (await h.state()).unavailability.length
     const rejected = await h.cmd('scheduling.unavailable.save', { resourceKind, resourceId, start: new Date(Date.parse(session.end) + 14 * 60_000).toISOString(), end: new Date(Date.parse(session.end) + 20 * 60_000).toISOString(), reason: 'Cannot invalidate class cleanup' }, h.owner, 409)
-    assert.ok(rejected.error.includes(published.id))
+    assert.ok(rejected.error.includes(published.title)); assert.ok(!rejected.error.includes(published.id))
     assert.equal((await h.state()).unavailability.length, before)
     // An exception touching the exact cleanup boundary does not block the class.
     await h.cmd('scheduling.unavailable.save', { resourceKind, resourceId, start: new Date(Date.parse(session.end) + 15 * 60_000).toISOString(), end: new Date(Date.parse(session.end) + 20 * 60_000).toISOString(), reason: 'After cleanup' })
@@ -321,7 +425,7 @@ test('SCHED-003: owner availability forms block stale drafts, protect published 
   assert.ok(!context.text.includes(secret))
   const agentConflict = await h.send('/api/strap/agent/command', { name: 'classes.prepare', input: { week: monday, classes: [{ title: 'Unavailable agent proposal', start: monday + 'T20:10:00Z', end: monday + 'T20:30:00Z', capacity: 10, instructorId: coach.id }] } }, '', headers)
   assert.equal(agentConflict.status, 409)
-  assert.ok(agentConflict.text.includes(privateException.id))
+  assert.ok(agentConflict.text.includes(privateException.resourceName)); assert.ok(!agentConflict.text.includes(privateException.id))
   assert.ok(!agentConflict.text.includes(secret))
 }))
 
@@ -354,7 +458,7 @@ test('SCHED-003: concurrent publication commits one complete allocation and disp
     assert.ok(page.text.includes(winner.classes[0].title))
     assert.match(page.text, /Occupied interval/)
     const retry = await h.cmd('classes.publish', { id: loser.id }, h.owner, 409)
-    assert.ok(retry.error.includes(winner.classes[0].id))
+    assert.ok(retry.error.includes(winner.classes[0].title)); assert.ok(!retry.error.includes(winner.classes[0].id))
     assert.equal((await h.state()).classes.length, state.classes.length)
     assert.equal((await h.state()).approvals.length, state.approvals.length)
   }

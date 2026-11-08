@@ -1,3 +1,4 @@
+import { formResult } from './form-result.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -242,7 +243,7 @@ test('MEM-006: transactional choices stay independent of channel marketing conse
   assert.equal((await h.state()).staffActions.filter(a=>a.command==='preferences.save.staff').length,3)
   // The owner creates a real scoped key through the app, with its native one-time secret.
   const keyPage=await h.mf.dispatchFetch(h.origin+'/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations',{method:'POST',headers:{origin:h.origin,cookie:h.owner,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({label:'Preference sharing','sc_attendance:read':'true',location:'studio'}),redirect:'manual'})
-  const token=(await keyPage.text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
+  const token=(await (await formResult(h,keyPage)).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1];assert.ok(token)
   const attendance=async()=>{const r=await h.mf.dispatchFetch(h.origin+'/api/strap/integration/attendance',{headers:{authorization:'Bearer '+token,'strap-schema-version':'1',host:new URL(h.origin).host}});assert.equal(r.status,200);return r.json()}
   assert.ok((await attendance()).data.some(c=>c.attendance.length>0))
   await h.cmd('preferences.save',{revision:4,attendanceSharing:false,requestId:'synthetic-strap-sharing-off'},member.cookie)

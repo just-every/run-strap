@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
 import { emailStepUp, enrollTotp, softwarePasskey, totp } from './mfa-helpers.mjs'
+import { formResult } from './form-result.mjs'
 
 const mail = async (h, email) => (await h.db.prepare('SELECT message FROM rer_mail_development_outbox ORDER BY sequence DESC').all()).results.map(r => JSON.parse(r.message)).find(m => m.to.includes(email))
 const operatorId = async (h, cookie) => (await h.send('/auth/session', undefined, cookie)).value.operator.id
@@ -26,6 +27,37 @@ async function presentPasskey(h, key, cookie, options) {
   assert.equal(publicKey.userVerification, 'required')
   return h.send('/api/strap/command', { name: 'mfa.passkey.verify', input: { challenge_id, ...key.assertion(publicKey.challenge, options) } }, cookie)
 }
+
+test('SEC-004: the People warning leads to usable authenticator enrollment before returning to add an instructor', () => run(async h => {
+  await h.confirmSetup(h.owner)
+  const people = await get(h, '/app/people', h.owner, 200)
+  const security = people.text.match(/href="([^"]+)">set up or confirm your second factor in Security/)[1]
+  const post = async (page, name, input) => {
+    const target = page.match(new RegExp(`action="([^"]+name=${name.replaceAll('.', '\\.')}&[^\"]+)"`))[1].replaceAll('&amp;', '&')
+    const response = await h.mf.dispatchFetch(h.origin + target, { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(input).toString(), redirect: 'manual' })
+    assert.equal(response.status, 303)
+    assert.equal(response.headers.get('location'), '/app/security?returnTo=%2Fapp%2Fpeople', 'private results stay on Security with the intended continuation')
+    return (await formResult(h, response)).text()
+  }
+  await emailStepUp(h, h.owner)
+  const entry = await get(h, security, h.owner, 200)
+  const started = await post(entry.text, 'mfa.totp.start', { label: 'Authenticator app' })
+  assert.match(started, /<h1>Security<\/h1>/)
+  const secret = started.match(/<code>([A-Z2-7]+)<\/code>/)[1]
+  assert.match(started, /name="code"/)
+  const factor = started.match(/name="factor" value="([^"]+)"/)[1]
+  assert.doesNotMatch((await get(h, '/app/security?returnTo=%2Fapp%2Fpeople', h.owner, 200)).text, new RegExp(secret), 'ordinary refresh does not redisplay the setup key')
+  const confirmed = await post(started, 'mfa.totp.confirm', { factor, code: totp(secret) })
+  assert.match(confirmed, /Save your recovery codes/)
+  assert.equal((confirmed.match(/<li><code>/g) ?? []).length, 10)
+  assert.match(confirmed, /href="\/app\/people">Continue<\/a>/)
+  assert.doesNotMatch((await get(h, '/app/security?returnTo=%2Fapp%2Fpeople', h.owner, 200)).text, /Save your recovery codes/, 'ordinary refresh does not redisplay recovery codes')
+  const returned = await get(h, '/app/people', h.owner, 200)
+  assert.doesNotMatch(returned.text, /set up or confirm your second factor in Security/)
+  const added = await h.mf.dispatchFetch(h.origin + '/app/action?name=person.save&returnTo=%2Fapp%2Fpeople', { method: 'POST', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ name: 'Synthetic Instructor', email: 'instructor@studio.example', role: 'instructor', active: 'true' }).toString(), redirect: 'manual' })
+  assert.equal(added.status, 303)
+  assert.equal((await h.state()).people.find(p => p.email === 'instructor@studio.example').role, 'instructor')
+}, { mfa: false }))
 
 test('SEC-004: a finance user is refused the revenue report before enrolling, then signs in with an authenticator app, a passkey and a recovery code (each recovery code works once)', () => run(async h => {
   await h.cmd('studio.save', { location: 'Nashville', timeZone: 'America/Chicago' })
@@ -155,7 +187,8 @@ test('SEC-004: owners are held at reports, pay, exports, staff access and provid
   ]) await unchanged(async () => {
     const form = await h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=%2Fapp%2Fpeople`, { method: 'POST', headers: { origin: h.origin, cookie: second, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(input).toString() })
     assert.equal(form.status, 403); assert.equal(form.headers.get('x-strap-refusal'), 'mfa_enrollment_required')
-    assert.match(await form.text(), /mfa enrollment required/)
+    const page = await form.text(); assert.match(page, /data-app-notice[^>]*role="alert"/); assert.doesNotMatch(page, />mfa enrollment required</)
+    assert.match(page, /action="\/app\/action\?name=mfa\.totp\.start/)
   }, name + ' form')
   assert.equal((await h.state()).people.find(p => p.id === member.id).role, 'member')
   // First enrollment needs Base's fresh email proof; neither starting method writes before that proof.

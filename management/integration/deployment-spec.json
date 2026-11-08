@@ -264,6 +264,18 @@
       "name": "0043-automation-reviews.sql",
       "sha256": "608867a78ce1e192b859fa27ec3ff10f6de094254d4ee7f0ac929b4628e5021e",
       "sql": "-- Preview confirmation is installation-local as well as owner-bound.\nCREATE TABLE st_automation_reviews (\n  id TEXT PRIMARY KEY,\n  rule_id TEXT NOT NULL,\n  review_key TEXT NOT NULL\n);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0044-booking-widget.sql",
+      "sha256": "912760b11502a02bc8fa5350d4576126a60ac8635cadcccf2337257ebaa3ca26",
+      "sql": "-- Public publication history travels; installation-local handoffs and authority do not.\nCREATE TABLE st_widget_connections (\n  id INTEGER PRIMARY KEY CHECK(id=1),\n  publication_id TEXT NOT NULL\n);\nCREATE TABLE st_widget_selections (\n  token_hash TEXT PRIMARY KEY,\n  publication_id TEXT NOT NULL,\n  class_id TEXT NOT NULL,\n  class_basis TEXT NOT NULL,\n  expires_at TEXT NOT NULL,\n  consumed_at TEXT\n);\nCREATE INDEX st_widget_selection_expiry ON st_widget_selections(expires_at);\n"
+    },
+    {
+      "binding": "DB",
+      "name": "0045-widget-signup.sql",
+      "sha256": "09d37fd07e65748556fdbed6ca0625dd0b063f022504bd5af118ea6b569c875a",
+      "sql": "-- Short-lived invitation requests confer no account or booking authority.\nCREATE TABLE st_widget_signup_requests (\n  selection_hash TEXT PRIMARY KEY REFERENCES st_widget_selections(token_hash) ON DELETE CASCADE,\n  selection_token TEXT NOT NULL,\n  name TEXT NOT NULL,\n  email TEXT NOT NULL,\n  requested_at TEXT NOT NULL,\n  expires_at TEXT NOT NULL,\n  person_id TEXT\n);\n"
     }
   ],
   "compatibilityDate": "2026-09-08",

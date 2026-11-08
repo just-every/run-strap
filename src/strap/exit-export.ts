@@ -33,9 +33,15 @@ const tables = [
 type Row = Record<string, unknown>
 
 const relationships = [
+  { from: 'st_records.data.personId', to: 'st_people.id', when: 'kind=payoutAccess or kind=payoutAccessEvent', note: 'Retained whole-merchant read approval and audit only; restored connection authority never travels.' },
   { from: 'st_records.data.classId', to: 'st_records.id', kind: 'class', when: 'kind=widgetClass' },
   { from: 'st_records.data.instructorId', to: 'st_people.id', when: 'kind=widgetInstructor' },
   { from: 'st_records.data.publicationId', to: 'st_records.id', when: 'kind=widgetPublicationEvent and publicationId names a public class or biography', note: 'Publication provenance only; restored public delivery and selections require new installation authority.' },
+  { from: 'st_records.data.refreshId', to: 'st_records.id', kind: 'payoutRefresh', when: 'kind=cardBalanceObservation or kind=payoutObservation' },
+  { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=cardBalanceObservation' },
+  { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=cardBalanceObservation' },
+  { from: 'st_records.data.providerTransactionId and providerPayoutId', to: 'Stripe TEST resources under accountId', when: 'kind=cardBalanceObservation or kind=payoutObservation', note: 'Observed references only; no bank deposit confirmation or execution authority.' },
+  { from: 'st_records.data.transactions[].providerTransactionId and sourceId', to: 'Stripe TEST resources under accountId', when: 'kind=payoutObservation', note: 'Complete provider statement observations, including signed cents and provider times; native receipt coverage and bank confirmation remain separate.' },
   { from: 'st_records.data.packId', to: 'st_records.id', kind: 'pack', when: 'kind=stripeInvoice or kind=billingReconciliation or kind=billingException' },
   { from: 'st_records.data.invoiceId', to: 'st_records.id', kind: 'stripeInvoice', when: 'kind=stripeEvent or kind=billingReconciliation or kind=billingException or kind=payment with collection=stripe-test-checkout' },
   { from: 'st_records.data.paymentId', to: 'st_records.id', kind: 'payment', when: 'kind=stripeInvoice' },
@@ -100,6 +106,10 @@ const relationships = [
   { from: 'st_records.data.targetId', to: 'st_people.id', when: 'kind=memberMerge or kind=memberMergePreview' },
   { from: 'st_records.data.sequenceId', to: 'st_records.id', kind: 'renewalSequence', when: 'kind=marketingMessage or kind=memberMessage' },
   { from: 'st_records.data.marketingMessageId', to: 'st_records.id', kind: 'marketingMessage', when: 'kind=memberMessage' },
+  { from: 'st_records.data.versionId', to: 'st_records.id', kind: 'productCatalogVersion', when: 'kind=productCatalog' },
+  { from: 'st_records.data.productId', to: 'st_records.id', kind: 'productCatalog', when: 'kind=productCatalogVersion' },
+  { from: 'st_records.data.catalogVersion.id', to: 'st_records.id', kind: 'productCatalogVersion', when: 'kind=pack or kind=draft' },
+  { from: 'st_records.data.catalogVersionId', to: 'st_records.id', kind: 'productCatalogVersion', when: 'kind=charge' },
   { from: 'st_records.data.introSaleId', to: 'st_records.id', kind: 'introSale' },
   { from: 'st_records.data.introOfferId', to: 'st_records.id', kind: 'introOffer' },
   { from: 'st_records.data.offerId', to: 'st_records.id', kind: 'introOffer', when: 'kind=introPreview or kind=introSale' },

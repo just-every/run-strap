@@ -63,6 +63,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
     return input;
   }
   if(name.startsWith('billing.')) {
+    if(name.startsWith('billing.payouts.access.'))input.version=Number(input.version)
     for(const key of ['confirm','adultVerified','adultConfirmed','authorizeRecurring','confirmReplacement'])if(key in input)input[key]=input[key]==='yes'
     return input
   }
@@ -150,7 +151,7 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'staff.access.grant') {
     const selected = (prefix: string) => Object.keys(input).filter(key => key.startsWith(prefix) && input[key] === 'true').map(key => key.slice(prefix.length));
     const scope = {memberIds:selected('member_'),locationIds:selected('location_'),doors:['all']};
-    return {personId:input.personId,role:input.role,enabled:input.enabled === 'true',rights:Object.fromEntries(selected('right_').map(right => [right,{enabled:true,scopes:[scope],...(right === 'member-record' ? {canCreate:input.canCreate === 'true'} : {})}]))};
+    return {personId:input.personId,role:input.role,enabled:input.enabled === 'true',reason:input.reason,rights:Object.fromEntries(selected('right_').map(right => [right,{enabled:true,scopes:[scope],...(right === 'member-record' ? {canCreate:input.canCreate === 'true'} : {})}]))};
   }
   if (name === 'member.record.grant') { input.enabled = input.enabled === 'true'; input.canCreate = input.canCreate === 'true'; input.memberIds = Object.keys(input).filter(k => k.startsWith('member_') && input[k] === 'true').map(k => k.slice(7));for(const key of Object.keys(input)) if(key.startsWith('member_')) delete input[key]; }
   if (name === 'member.note.add') input.alert = input.alert === 'true';
@@ -160,6 +161,14 @@ export function formInput(name: string, raw: Record<string, unknown>, timeZone: 
   if (name === 'intro.identity.verify') { input.householdChecked = input.householdChecked === 'true'; for (const key of ['samePersonAsId','householdWithId']) if (input[key] === '') delete input[key]; }
   if (name === 'intro.preview' && input.exceptionReason === '') delete input.exceptionReason;
   if (name === 'intro.purchase') input.confirm = input.confirm === 'true';
+  if (name === 'pack.prepare' && input.catalogVersionId !== undefined) return {personId:input.personId,catalogVersionId:input.catalogVersionId};
+  if (name === 'catalog.publish') {
+    const picked=Object.keys(input).filter(k=>k.startsWith('lc_')&&input[k]==='true').map(k=>k.slice(3));
+    for (const k of Object.keys(input)) if (k.startsWith('lc_')) delete input[k];
+    input.eligibleLocations=picked.length ? picked : [input.locationId];
+    for (const k of ['credits','validDays','revision']) input[k]=Number(input[k]);
+  }
+  if (name === 'catalog.retire') input.revision=Number(input.revision);
   if (name === 'pack.prepare' || name === 'pack.locations.set') {
     const picked = Object.keys(input).filter(key => key.startsWith('lc_') && input[key] === 'true').map(key => key.slice(3))
     for (const key of Object.keys(input)) if (key.startsWith('lc_')) delete input[key]

@@ -1,3 +1,4 @@
+import { zoneName } from '../zone'
 import { field, h, hidden, textarea } from './shared'
 import { phoneText } from './profile'
 
@@ -18,5 +19,5 @@ export function studioProfileFields(studio: any = {}) {
     + ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((label,i) => {
       const day = i+1, row = hours.find((item: any) => item.day === day)
       return `<div class="row2">${field(`opens_${day}`,`${label} opens`,row?.opens ?? '','time')}${field(`closes_${day}`,`${label} closes`,row?.closes ?? '','time')}</div>`
-    }).join('') + `<p>Time zone: ${h(studio.timeZone ?? 'choose above')}.</p></fieldset>`
+    }).join('') + `<p>Time zone: ${h(studio.timeZone ? zoneName(studio.timeZone) : 'choose above')}.</p></fieldset>`
 }

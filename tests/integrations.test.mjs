@@ -1,3 +1,4 @@
+import { formResult } from './form-result.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { run } from './harness.mjs'
@@ -14,8 +15,9 @@ async function api(h, token, path, { method = 'GET', version = '1', body } = {})
 // Secrets are issued only in the app: the owner's Integrations form creates keys and rotates secrets.
 async function inApp(h, name, fields, cookie = h.owner) {
   const response = await h.mf.dispatchFetch(h.origin + `/app/action?name=${name}&returnTo=%2Fapp%2Fintegrations`, { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString() })
-  const text = await response.text()
-  return { status: response.status, text, token: text.match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1] ?? null }
+  const page = await formResult(h, response, cookie)
+  const text = await page.text()
+  return { status: page.status, text, token: text.match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)?.[1] ?? null }
 }
 async function createKey(h, fields) {
   const page = await inApp(h, 'integration.create', fields)
@@ -342,4 +344,38 @@ test('API-002 / API-003: attendance requires a new explicit scope on a new key a
   assert.equal((await h.send('/auth/operator/role', { operatorId: originalOwner.id, role: 'member' }, h.owner)).status, 200)
   const accessChanged = await api(h, attendanceOnly.token, '/api/strap/integration/attendance', { method: 'POST', version: '' })
   assert.deepEqual([accessChanged.status, accessChanged.value.error], [401, 'integration_credential_revoked'])
+}))
+
+test('Browser credential creation redirects to a private result; refresh neither creates nor reveals another credential', () => run(async h => {
+  await h.confirmSetup(h.owner)
+  for (const [name, path, fields, collection, secret] of [
+    ['agent.create', '/app/agent', { label: 'Planning assistant' }, 'agentKeys', /<p class="token">([^<]+)<\/p>/],
+    ['integration.create', '/app/integrations', { label: 'Roster display', 'sc_roster:read': 'true', location: 'studio' }, 'integrations', /<p class="token">([^<]+)<\/p>/],
+    ['kiosk.pair', '/app/studio', { label: 'Front desk tablet' }, 'kiosks', /<code>([^<]+\/kiosk\/pair\?token=[^<]+)<\/code>/],
+  ]) {
+    const before = (await h.state())[collection].length
+    const posted = await h.mf.dispatchFetch(h.origin + '/app/action?name=' + name + '&returnTo=' + encodeURIComponent(path), {
+      method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields),
+    })
+    assert.equal(posted.status, 303)
+    assert.equal(new URL(posted.headers.get('location'), h.origin).pathname, path)
+    const flash = posted.headers.get('set-cookie').split(';')[0]
+    assert.match(posted.headers.get('set-cookie'), /HttpOnly/)
+    assert.match(posted.headers.get('set-cookie'), /SameSite=Strict/)
+    const page = await formResult(h, posted)
+    assert.equal(page.status, 200)
+    const value = (await page.text()).match(secret)?.[1]
+    assert.ok(value, 'the redirected page displays the new private credential')
+    assert.ok(!flash.includes(value), 'the result cookie does not contain the plaintext secret')
+    assert.match(page.headers.get('set-cookie'), /Max-Age=0/)
+    const refreshed = await h.send(path, undefined, h.owner)
+    assert.equal(refreshed.status, 200)
+    assert.ok(!refreshed.text.includes(value), 'refresh cannot redisplay the secret')
+    assert.equal((await h.state())[collection].length, before + 1, 'refresh creates nothing')
+    const other = await h.signIn(h.auth.OWNER_EMAIL)
+    await h.cmd('mfa.verify', { code: h.mfaOwner.recoveryCodes.shift() }, other)
+    const differentSession = await h.send(path, undefined, other + '; ' + flash)
+    assert.equal(differentSession.status, 200)
+    assert.ok(!differentSession.text.includes(value), 'a different session cannot read this result')
+  }
 }))

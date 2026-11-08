@@ -1,4 +1,7 @@
+import { formResult } from './form-result.mjs'
 import { publishWidget, widgetChoice, widgetOrigin } from './booking-widget-journey.mjs';
+import { reconciliationEdge,readPayouts } from './payout-reconciliation-cases.mjs';
+import { payoutAccessInput } from './payout-finance-cases.mjs';
 import { seedAutomationArchive, assertRestoredAutomation } from './automation-archive.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -110,7 +113,7 @@ async function archiveCopyTablet(h,owner,waiver,suffix) {
   assert.equal(paired.status,303)
   return {person,cookie:paired.headers.get('set-cookie').split(';')[0],fields:{signerName:person.name,confirm:'yes',adultConfirmed:'yes',emailCopy:'yes'}}
 }
-const integrationKey = async h => (await (await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() })).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
+const integrationKey = async h => (await (await formResult(h, await h.mf.dispatchFetch(h.origin + '/app/action?name=integration.create&returnTo=%2Fapp%2Fintegrations', { method: 'POST', redirect: 'manual', headers: { origin: h.origin, cookie: h.owner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ label: 'Excluded integration', 'sc_roster:read': 'true', 'sc_attendance:read': 'true', location: 'studio', 'ev_booking.changed': 'true', 'ev_attendance.changed': 'true' }).toString() }))).text()).match(/<p class="token">(strap_int_[0-9a-f]{64})<\/p>/)[1]
 const integrationRead = (h, token, resource = 'roster') => h.mf.dispatchFetch(h.origin + '/api/strap/integration/' + resource, { headers: { host: new URL(h.origin).host, authorization: `Bearer ${token}`, 'strap-schema-version': '1' } })
 test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API-002 / API-003 / RPT-007: portable exit reconstruction and public CLI archive round trip refuses damaged or populated stores and respects erasure, including a member’s emergency contact and its history', { timeout: 240_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(),'strap-archive-')), source=join(temporary,'source'), restored=join(temporary,'restored'), erased=join(temporary,'erased')
@@ -438,7 +441,7 @@ test('MOVE-011 / ARCHIVE-001 / SCHED-001 / SCHED-014 / SCHED-005 / APP-003 / API
 test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring invoice authority disconnected', { timeout: 180_000 }, async () => {
   const temporary=await mkdtemp(join(tmpdir(),'strap-billing-archive-')),source=join(temporary,'source'),restored=join(temporary,'restored')
   let h
-  const payments=paymentEdge(),billingAuth=paymentAuth;
+  const payments=reconciliationEdge(),billingAuth=paymentAuth;
   const providerEdge=payments;
   try {
     for(const path of [source,restored])await checkout(path)
@@ -469,6 +472,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(paidCheckout.status,'open');payments.complete(paidCheckout.providerSessionId);
     const paidEvent=payments.event(paidCheckout.providerSessionId);assert.equal((await signedEvent(h,paidEvent)).status,200);
     const pendingCheckout=await h.cmd('billing.checkout.start',{packId:deliveredPack.id,requestId:'synthetic-strap-archive-pending',confirm:true});
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true});
+    const retainedPayouts=await readPayouts(h);assert.equal(retainedPayouts.cards.length,1);assert.equal(retainedPayouts.cards[0].feeCents,175);
+    const payoutFinance=await h.person('synthetic-strap-archive-finance');
+    await h.cmd('staff.access.grant',{personId:payoutFinance.id,role:'finance',enabled:true,rights:{}});await h.enroll(payoutFinance.cookie);
+    const payoutApproval=await payoutAccessInput(h,payoutFinance.id,'synthetic-strap-archive-read-approval');
+    const payoutGrant=(await h.cmd('billing.payouts.access.grant',payoutApproval)).after;
+    assert.equal((await readPayouts(h,payoutFinance.cookie)).totals.netCents,2825);
     const retainedPayments=await billingView(h);
     assert.equal(retainedPayments.invoices.find(i=>i.id===paidCheckout.id).status,'paid');
     const terminationReason=await h.cmd('plan.cancellation.reason.save',{code:'moved-away',label:'Moved away',active:true,revision:0})
@@ -484,8 +494,15 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     const sourceAgent=await h.cmd('agent.create',{label:'Archive termination preparation'}),agentHeaders={authorization:'Bearer '+sourceAgent.token}
     const draftResponse=await h.send('/api/strap/agent/command',{name:'plan.cancellation.prepare',input:{packId:draftPack.id,reasonCode:terminationReason.code,reason:'Member asked about moving',effectiveAt:'2099-11-15T00:00:00Z',requestId:'synthetic-strap-archive-agent-draft'}},'',agentHeaders)
     assert.equal(draftResponse.status,200,draftResponse.text);const agentDraft=draftResponse.value.result??draftResponse.value
+    const immediateInput={packId:draftPack.id,timing:'immediate',reasonCode:terminationReason.code,reason:'Moving today',requestId:'synthetic-strap-archive-immediate-preview'}
+    const immediateDraft=await h.cmd('plan.cancellation.prepare',immediateInput)
+    const immediatePreview=await h.cmd('plan.cancellation.prepare',{...immediateInput,requestId:'synthetic-strap-archive-immediate-final'})
+    const immediate=await h.cmd('plan.cancellation.confirm',{id:immediatePreview.id,key:immediatePreview.key,requestId:'synthetic-strap-archive-immediate-confirm'})
+    assert.equal(immediate.status,'applied');assert.equal(immediate.effectiveAt,immediatePreview.effectiveAt)
     const retiredReason=await h.cmd('plan.cancellation.reason.save',{code:terminationReason.code,label:'Moved elsewhere',active:false,revision:terminationReason.revision})
 
+    const catalogMember=await h.person('CatalogArchive');
+    const catalogData=await(await import('./catalog-cases.mjs')).catalogPurchases(h,member,catalogMember);
     const before=await h.state(),sourceOrigin=h.origin,identity={auth:{...h.auth},owner:h.owner,port:Number(new URL(h.origin).port),outbound:providerEdge.outbound}
     assert.equal(agreed.status,'active')
     assert.equal(agreed.billingOrigin,sourceOrigin)
@@ -510,6 +527,11 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(h.auth.STRIPE_BILLING_TEST_KEY,billingAuth.STRIPE_BILLING_TEST_KEY,'provider key is unchanged while local payment execution authority is excluded');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM st_payment_connections').first()).count,0);
     const state=()=>h.state(restoredOwner)
+    await(await import('./catalog-cases.mjs')).assertCatalogRestored(h,catalogData,restoredOwner);
+    const restoredCatalogMember=await h.signIn(catalogMember.email);
+    const catalogReceipt=await h.send('/app/packs',undefined,restoredCatalogMember);
+    assert.equal(catalogReceipt.status,200);assert.ok(catalogReceipt.text.includes(catalogData.v2.id));
+    console.log('PROBE PLAN-001 native restore: public export and import -> all catalog versions, original sold terms and charges retained; retired approval refused.');
     const recoveredCancellation=(await h.state(restoredOwner)).cancellations
     assert.deepEqual(recoveredCancellation.reasonCodes.find(r=>r.code==='moved-away'),retiredReason)
     const restoredTermination=recoveredCancellation.cancellations.find(c=>c.id===termination.id)
@@ -521,6 +543,17 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.deepEqual([restoredDraft.status,restoredDraft.createdRole,restoredDraft.reasonCode,restoredDraft.reasonLabel,restoredDraft.stale],['preview','agent','moved-away','Moved away',true])
     assert.equal((await h.send('/api/strap/agent/context',undefined,'',agentHeaders)).status,401,'preparation credentials never return with an archive')
     await h.cmd('plan.cancellation.confirm',{id:restoredDraft.id,key:restoredDraft.key,requestId:'synthetic-strap-archive-stale-agent'},restoredOwner,409)
+    const restoredImmediate=recoveredCancellation.cancellations.find(c=>c.id===immediate.id)
+    const {canWithdraw:immediateWithdraw,stale:immediateStale,...restoredImmediateRecord}=restoredImmediate
+    assert.equal(immediateWithdraw,false);assert.equal(immediateStale,false)
+    assert.deepEqual(restoredImmediateRecord,immediate,'applied immediate termination retains its exact reviewed instant, reason and effects')
+    const restoredImmediateDraft=recoveredCancellation.cancellations.find(c=>c.id===immediateDraft.id)
+    assert.deepEqual([restoredImmediateDraft.timing,restoredImmediateDraft.effectiveAt,restoredImmediateDraft.previewExpiresAt,restoredImmediateDraft.stale],['immediate',immediateDraft.effectiveAt,immediateDraft.previewExpiresAt,true])
+    const immediateVersion=(await h.state(restoredOwner)).version
+    await h.cmd('plan.cancellation.confirm',{id:restoredImmediateDraft.id,key:restoredImmediateDraft.key,requestId:'synthetic-strap-archive-immediate-refused'},restoredOwner,409)
+    assert.equal((await h.state(restoredOwner)).version,immediateVersion)
+    assert.equal(recoveredCancellation.statements.filter(c=>c.cancellationId===immediate.id).length,1)
+    assert.equal((await h.state(restoredOwner)).staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===immediate.id).length,1)
     const withdraw={id:withdrawal.id,key:withdrawal.key,requestId:'synthetic-strap-archive-withdraw-confirm'}
     await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner);await h.cmd('plan.cancellation.withdraw.confirm',withdraw,restoredOwner)
     const withdrawnState=await h.state(restoredOwner)
@@ -544,6 +577,23 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     assert.equal(historicalBilling.connected,false);assert.equal(historicalBilling.methods.some(method=>method.available),false);
     assert.deepEqual(historicalBilling.methods.map(({available,...method})=>method).sort((a,b)=>a.id.localeCompare(b.id)),methodHistory,'restore retains the superseded method and selected replacement as historical records');
     assert.equal(historicalBilling.mandates.find(mandate=>mandate.id===membershipBefore.value.mandate.id).methodAuthorized,true,'original method evidence remains historical data');
+    const payoutReads=payments.reads.length,restoredPayouts=await readPayouts(h,restoredOwner);
+    assert.equal(restoredPayouts.connected,false);
+    for(const key of ['cards','payouts','refreshes','latest','totals'])assert.deepEqual(restoredPayouts[key],retainedPayouts[key]);
+    assert.deepEqual(restoredPayouts.payouts[0].statementTotals,{grossCents:3000,feeCents:175,netCents:2825});
+    assert.equal(restoredPayouts.payouts[0].transactions.length,1);
+    assert.ok(restoredPayouts.payouts[0].transactions.every(t=>t.providerTransactionId&&t.sourceId&&t.providerCreatedAt&&t.availableAt));
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,h.owner)).status,401,'source owner session cannot read restored observations');
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout',confirm:true},restoredOwner,409);
+    await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-archive-payout-new',confirm:true},restoredOwner,409);
+    assert.equal(payments.reads.length,payoutReads,'restored provider history carries no refresh authority');
+    assert.deepEqual((await billingView(h,restoredOwner)).payoutAccess.grants.find(g=>g.id===payoutGrant.id),payoutGrant);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,payoutFinance.cookie)).status,401);
+    const restoredFinance=await h.signIn(payoutFinance.email);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'mfa_enrollment_required');
+    await h.enroll(restoredFinance);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required');
+    console.log('PROBE BILL-011 restore: native archive at same origin -> exact fee and payout identities, times and cents retained; source session refused; old and new refresh requests disconnected.');
     const restoredBilling=await billingView(h,restoredOwner);
     assert.equal(restoredBilling.connected,false);
     assert.deepEqual(restoredBilling.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)),retainedPayments.invoices.map(({balanceCents,access,...i})=>i).sort((a,b)=>a.id.localeCompare(b.id)));
@@ -583,6 +633,13 @@ test('BILL-005 / MOVE-011: native restore at the same origin leaves recurring in
     await h.cmd('billing.connect',{accountId:'synthetic-strap-10',mode:'test',confirm:true,requestId:'synthetic-strap-restored-review'},restoredOwner);
     const reviewed=await billingView(h,restoredOwner);assert.equal(reviewed.connected,true);assert.notEqual(reviewed.connection.connectionId,oldEpoch);
     assert.equal(reviewed.methods.some(m=>m.available),false,'fresh merchant review cannot resurrect historical method authority');
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required');
+    await h.cmd('billing.payouts.access.grant',payoutApproval,restoredOwner);
+    assert.equal((await h.send('/api/strap/billing/payouts.json',undefined,restoredFinance)).value.error,'payout_read_right_required','captured source approval stays inert after reconnection');
+    const freshPayoutApproval=await payoutAccessInput(h,payoutFinance.id,'synthetic-strap-restored-fresh-read-approval',restoredOwner);
+    await h.cmd('billing.payouts.access.grant',freshPayoutApproval,restoredOwner);
+    assert.equal((await readPayouts(h,restoredFinance)).totals.netCents,2825);
+    console.log('PROBE BILL-011 finance restore: native archive retains read approvals and audit -> old session refused, fresh factor still denied after reconnection and captured approval replay; fresh owner approval alone restores retained reads.');
     payments.complete(pendingCheckout.providerSessionId);
     await h.cmd('billing.reconcile',{id:pendingCheckout.id,requestId:'synthetic-strap-restored-after-review'},restoredOwner);
     assert.equal((await billingView(h,restoredOwner)).invoices.find(i=>i.id===pendingCheckout.id).status,'paid');

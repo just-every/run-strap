@@ -223,7 +223,71 @@ export async function staffContractRights(h) {
     await refuse('booking.book',{classId:later.id},lifecycleMember.cookie,409);
     console.log('PROBE PLAN-012 native effective date: scoped front desk confirms a reason-coded termination with future booking, runtime restarts and two scheduler sweeps -> access ends, original credit returns once, one final statement and staff-made history, no invoice or extra charge; late withdrawal and rebooking refused.');
   }
+  await immediateTerminationCases(h,s);
   console.log('PROBE PLAN-012 staff withdrawal: manager and front desk at two locations -> own scheduled termination withdrawn once with canonical audit, invoices stay stopped until personal fresh acceptance; other terminator, wrong scope, missing right and revoked replay refused without writes.');
+}
+
+async function immediateTerminationCases(h,s) {
+  const {desk,grant,refuse}=s,day=86400000,ana=await h.person('ImmediateTerminationMember');
+  // A studio-defined code with a statutory name still denotes an ordinary termination.
+  const reason=await h.cmd('plan.cancellation.reason.save',{code:'cooling-off',label:'Moved away',active:true,revision:0});
+  const pack=await h.cmd('pack.approve',{id:(await h.cmd('pack.prepare',{personId:ana.id,credits:4,amountCents:8000,expiresAt:new Date(Date.now()+30*day).toISOString()})).id});
+  const sold=(await h.state()).packs.find(p=>p.id===pack.id);
+  const proposal=await h.cmd('plan.recurring.prepare',{packId:pack.id,intervalMonths:1,requestId:randomUUID()});
+  const terms=await h.cmd('plan.recurring.accept',{id:proposal.id,key:proposal.key},ana.cookie);
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify({...sold,termStartAt:new Date(Date.now()-30*day).toISOString()}),pack.id).run();
+  const payment=await h.cmd('payment.record',{personId:ana.id,amountCents:8000,reference:'synthetic-strap-immediate-receipt'});
+  const charge=(await h.state()).charges.find(c=>c.packId===pack.id);
+  await h.cmd('contract.prepayment.record',{packId:pack.id,paymentId:payment.id,chargeId:charge.id,amountCents:8000,reference:'synthetic-strap-immediate-allocation'});
+  const later=await s.publish('Immediate termination future class',48),seat=await h.cmd('booking.book',{classId:later.id,packId:pack.id},ana.cookie);
+  assert.equal(seat.packId,pack.id);
+  const input={packId:pack.id,timing:'immediate',reasonCode:reason.code,reason:'Moved away today',channel:'phone',requestId:randomUUID()};
+  await grant(desk,'front-desk',['member-record'],[ana.id],['studio']);await refuse('plan.cancellation.prepare',input,desk.cookie);
+  await grant(desk,'front-desk',['member-record','contract-change'],[ana.id],['studio']);
+  await refuse('plan.cancellation.prepare',{...input,timing:'date',requestId:randomUUID()},desk.cookie,400);
+  await refuse('plan.cancellation.prepare',{...input,effectiveAt:new Date(Date.now()+day).toISOString(),requestId:randomUUID()},desk.cookie,400);
+  let preview=await h.cmd('plan.cancellation.prepare',input,desk.cookie);
+  const original=await h.state();assert.equal(original.packs.find(p=>p.id===pack.id).expiresAt,sold.expiresAt);
+  assert.equal(original.bookings.find(b=>b.id===seat.id).status,'booked','preparation changes no access or booking');
+  assert.equal(preview.timing,'immediate');assert.equal(preview.effects.unusedPrepaid.amountCents,4000);
+  assert.deepEqual(await h.cmd('plan.cancellation.prepare',input,desk.cookie),preview,'replay keeps the reviewed instant');
+  // Clock-source fixture crosses expiry without waiting fifteen minutes or altering the application clock.
+  await h.db.prepare('UPDATE st_records SET data=? WHERE id=?').bind(JSON.stringify({...preview,previewExpiresAt:new Date(Date.now()-1000).toISOString()}),preview.id).run();
+  assert.equal((await h.state()).cancellations.cancellations.find(c=>c.id===preview.id).stale,true);
+  await refuse('plan.cancellation.confirm',{id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()},desk.cookie,409);
+  preview=await h.cmd('plan.cancellation.prepare',{...input,requestId:randomUUID()},desk.cookie);
+  await h.cmd('payment.record',{personId:ana.id,amountCents:1,reference:'synthetic-strap-immediate-changed-source'});
+  await refuse('plan.cancellation.confirm',{id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()},desk.cookie,409);
+  preview=await h.cmd('plan.cancellation.prepare',{...input,requestId:randomUUID()},desk.cookie);
+  const confirm={id:preview.id,key:preview.key,channel:'phone',requestId:randomUUID()};
+  await grant(desk,'front-desk',['member-record']);await refuse('plan.cancellation.confirm',confirm,desk.cookie);
+  await grant(desk,'front-desk',['member-record','contract-change'],[ana.id],['studio']);
+  await refuse('plan.cancellation.confirm',confirm,ana.cookie);
+  const before=await h.state();
+  const race=await Promise.all([h.send('/api/strap/command',{name:'plan.cancellation.confirm',input:confirm},desk.cookie),h.send('/api/strap/command',{name:'plan.cancellation.confirm',input:confirm},desk.cookie)]);
+  assert.ok(race.some(r=>r.status===200));assert.ok(race.every(r=>[200,409].includes(r.status)),JSON.stringify(race));
+  const winner=race.find(r=>r.status===200).value,ended=winner.result??winner;
+
+  assert.equal(ended.status,'applied');assert.equal(ended.effectiveAt,preview.effectiveAt);assert.deepEqual(ended.effects,preview.effects);
+  assert.deepEqual(await h.cmd('plan.cancellation.confirm',confirm,desk.cookie),ended);
+  await h.setAuth({});for(let i=0;i<2;i++)await(await h.mf.getWorker()).scheduled({cron:'* * * * *'});
+  const after=await h.state(),closed=after.packs.find(p=>p.id===pack.id),booking=after.bookings.find(b=>b.id===seat.id);
+  assert.equal(closed.expiresAt,preview.effectiveAt);assert.deepEqual([booking.status,booking.refunded,booking.feeCents],['cancelled',true,0]);
+  assert.equal(after.packCreditEvents.filter(e=>e.bookingId===seat.id&&e.type==='restore').length,1);
+  assert.equal(after.cancellations.statements.filter(c=>c.cancellationId===ended.id).length,1);
+  const refund=after.cancellations.refunds.find(r=>r.cancellationId===ended.id);
+  assert.equal(refund.amountCents,preview.effects.unusedPrepaid.amountCents);
+  assert.equal(refund.coolingOptions,null,'a catalog code must not invoke statutory refund authority');
+  assert.deepEqual(refund.formula,preview.effects.unusedPrepaid.formula);
+  assert.deepEqual(after.charges,before.charges);assert.deepEqual(after.payments,before.payments);
+  assert.equal(after.recurring.invoices.filter(i=>i.recurringTermsId===terms.id).length,0);
+  const audit=after.staffActions.filter(a=>a.command==='plan.cancellation.confirm'&&a.after.id===ended.id);
+  assert.equal(audit.length,1);assert.deepEqual([audit[0].actorRole,audit[0].after.status,audit[0].after.reasonLabel],['front-desk','applied','Moved away']);
+  assert.ok((await h.state(ana.cookie)).notices.some(n=>n.subject==='Membership ended'&&n.body.includes(ended.effectiveAt)));
+  await refuse('plan.cancellation.withdraw.prepare',{id:ended.id,requestId:randomUUID()},desk.cookie,409);
+  await refuse('booking.book',{classId:later.id,packId:pack.id},ana.cookie,409);
+  await grant(desk,'front-desk',['member-record']);await refuse('plan.cancellation.confirm',confirm,desk.cookie);
+  console.log('PROBE PLAN-012 immediate: scoped front desk reviews and confirms a receipt-backed immediate termination -> exact instant and refund retained, access and booking end once with canonical audit and notices, no collection or invoice; expired, changed-source, member and revoked attempts refuse without writes.');
 }
 
 export async function staffAppointmentRoles(h) {
@@ -292,4 +356,181 @@ async function populatedLegacyRights(h,s) {
   await s.refuse('appointment.reservation.prepare',{...source,personId:s.ana.id},staff.cookie);
   await s.refuse('appointment.reservation.prepare',{...source,locationId:'studio'},staff.cookie);
   assert.equal((await h.send('/api/strap/reports/revenue.csv',undefined,staff.cookie)).status,403);
+}
+
+/** Current retail authority is checked before reading, writing or returning a saved result. */
+export async function staffRetailRights(h) {
+  const buyer=await h.person('RetailBuyer'),other=await h.person('RetailOther');
+  const manager=await h.person('RetailManager'),desk=await h.person('RetailDesk');
+  const finance=await h.person('RetailFinance'),coach=await h.person('RetailCoach','instructor');
+  const west=await h.cmd('location.save',{name:'Retail West',timeZone:'America/Los_Angeles'});
+  const supplier=await h.cmd('retail.supplier.add',{name:'Retail rights supplier',reference:'synthetic-strap-201',requestId:'rights-supplier'});
+  const sku=await h.cmd('retail.sku.add',{supplierId:supplier.id,sku:'RIGHTS',barcode:'synthetic-strap-202',name:'Rights shirt',variant:'Medium',priceCents:2000,lowStock:1,requestId:'rights-sku'});
+  const places=['studio',west.id],sessions={},foreignSales={};
+  for(const locationId of places) {
+    await h.cmd('retail.receive',{skuId:sku.id,locationId,quantity:21,reference:'synthetic-strap-stock-'+locationId,requestId:'rights-stock-'+locationId});
+    sessions[locationId]=await h.cmd('drawer.open',{locationId,register:'Rights drawer',floatCents:10000,requestId:'rights-drawer-'+locationId});
+    foreignSales[locationId]=await h.cmd('retail.sell',{personId:other.id,skuId:sku.id,locationId,quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-foreign-sale-'+locationId,requestId:'rights-foreign-sale-'+locationId});
+  }
+  const grant=async(p,role,names,memberIds=[buyer.id],locationIds=['studio'])=>h.cmd('staff.access.grant',{personId:p.id,role,enabled:true,rights:Object.fromEntries(names.map(right=>[right,{enabled:true,scopes:[{memberIds,locationIds,doors:['all']}]}]))});
+  const refuse=async(name,input,cookie,status=403)=>{
+    const before=await h.state();
+    const r=await h.send('/api/strap/command',{name,input},cookie);
+    assert.equal(r.status,status,JSON.stringify(r.value));
+    const after=await h.state();
+    assert.equal(after.version,before.version,'refusal changes no stock, tender, gift or audit');
+    assert.deepEqual(after.staffActions,before.staffActions);
+  };
+  const read=async(cookie=h.owner)=>(await h.send('/api/strap/retail',undefined,cookie)).value;
+  const once=async(name,input,cookie)=>{
+    const replies=await Promise.all([h.send('/api/strap/command',{name,input},cookie),h.send('/api/strap/command',{name,input},cookie)]);
+    assert.ok(replies.some(r=>r.status===200),name+' commits');
+    assert.ok(replies.every(r=>r.status===200 || r.status===409),name+' concurrent response');
+    return h.cmd(name,input,cookie);
+  };
+  const ownerGift=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:other.id,locationId:west.id,amountCents:7000,tender:'external',reference:'synthetic-strap-203',requestId:'rights-hidden-gift'});
+  const distantGift=await h.cmd('retail.gift.issue',{personId:buyer.id,recipientId:buyer.id,locationId:west.id,amountCents:5000,tender:'external',reference:'synthetic-strap-205',requestId:'rights-distant-gift'});
+  const foreignPurchaser=await h.cmd('retail.gift.issue',{personId:other.id,recipientId:buyer.id,amountCents:3000,tender:'external',reference:'synthetic-strap-204',requestId:'rights-foreign-purchaser'});
+  for(const [staff,role] of [[manager,'manager'],[desk,'front-desk']]) {
+    for(const locationId of places) {
+      const suffix=role+'-'+locationId,otherLocation=places.find(l=>l!==locationId);
+      await grant(staff,role,['sale'],[buyer.id],[locationId]);
+      if(locationId==='studio')await h.enroll(staff.cookie);
+      assert.equal((await h.send('/app/retail',undefined,staff.cookie)).status,200);
+      const view=await read(staff.cookie);
+      assert.deepEqual(view.retailLocations.map(l=>l.id),[locationId]);
+      assert.ok(view.retail.stock.every(s=>s.locationId===locationId));
+      assert.deepEqual(view.retailPeople.map(p=>p.id),[buyer.id]);
+      assert.ok(!JSON.stringify(view).includes(ownerGift.id));
+      assert.deepEqual(view.retail.movements,[]);
+      assert.ok(view.drawers.sessions.every(s=>s.locationId===locationId && !('expectedCents' in s)));
+      for(const path of ['/api/strap/retail/day?date=2026-10-01','/api/strap/retail/day.csv?date=2026-10-01','/api/strap/staff-history.csv','/api/strap/exit.json'])assert.equal((await h.send(path,undefined,staff.cookie)).status,403,path);
+      const input={personId:buyer.id,skuId:sku.id,locationId,quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-sale-'+suffix,requestId:'rights-sale-'+suffix,channel:'phone'};
+      await refuse('retail.sell',{...input,personId:other.id},staff.cookie);
+      await refuse('retail.sell',{...input,locationId:otherLocation},staff.cookie);
+      await refuse('retail.sell',{...input,expectedCents:1999},staff.cookie,409);
+      const requests=await Promise.all([h.send('/api/strap/command',{name:'retail.sell',input},staff.cookie),h.send('/api/strap/command',{name:'retail.sell',input},staff.cookie)]);
+      assert.ok(requests.some(r=>r.status===200));
+      assert.ok(requests.every(r=>r.status===200 || r.status===409));
+      const sale=await h.cmd('retail.sell',input,staff.cookie);
+      assert.deepEqual(await h.cmd('retail.sell',input,staff.cookie),sale);
+      await refuse('retail.sell',{...input,quantity:2},staff.cookie,409);
+      const returnInput={saleId:sale.id,quantity:1,restock:true,reason:'Unused merchandise',requestId:'rights-return-'+suffix,channel:'phone'};
+      await refuse('retail.return',returnInput,staff.cookie);
+      const issue={personId:buyer.id,recipientId:buyer.id,locationId,amountCents:6000,tender:'external',reference:'synthetic-strap-gift-'+suffix,requestId:'rights-gift-'+suffix,channel:'phone'};
+      await refuse('retail.gift.issue',{...issue,personId:other.id},staff.cookie);
+      await refuse('retail.gift.issue',{...issue,recipientId:other.id},staff.cookie);
+      const card=await once('retail.gift.issue',issue,staff.cookie);
+      assert.deepEqual(await h.cmd('retail.gift.issue',issue,staff.cookie),card);
+      const redeem={...input,tender:'gift',giftCardId:card.id,reference:'synthetic-strap-redeem-'+suffix,requestId:'rights-redeem-'+suffix};
+      await refuse('retail.sell',{...redeem,giftCardId:locationId==='studio'?distantGift.id:foreignPurchaser.id},staff.cookie);
+      await refuse('retail.sell',{...redeem,giftCardId:ownerGift.id},staff.cookie);
+      const redeemed=await once('retail.sell',redeem,staff.cookie);
+      assert.deepEqual(await h.cmd('retail.sell',redeem,staff.cookie),redeemed);
+      const adjust={giftCardId:card.id,amountCents:100,reason:'Approved correction',requestId:'rights-adjust-'+suffix,channel:'phone'};
+      const refund={giftCardId:card.id,amountCents:1000,reason:'Recorded external refund',reference:'synthetic-strap-refund-'+suffix,requestId:'rights-refund-'+suffix,channel:'phone'};
+      await refuse('retail.gift.adjust',adjust,staff.cookie);
+      await refuse('retail.gift.refund',refund,staff.cookie);
+      await grant(staff,role,['refund'],[buyer.id],[locationId]);
+      await refuse('retail.sell',{...input,requestId:'refund-only-sale'},staff.cookie);
+      await refuse('retail.gift.issue',{...issue,requestId:'refund-only-issue'},staff.cookie);
+      const returned=await once('retail.return',returnInput,staff.cookie);
+      assert.deepEqual([returned.tender,returned.amountCents,returned.restock],['external',2000,true]);
+      assert.deepEqual(await h.cmd('retail.return',returnInput,staff.cookie),returned);
+      const giftReturnInput={...returnInput,saleId:redeemed.id,restock:false,requestId:'rights-gift-return-'+suffix};
+      const giftReturn=await once('retail.return',giftReturnInput,staff.cookie);
+      assert.deepEqual([giftReturn.tender,giftReturn.amountCents,giftReturn.restock],['gift',2000,false]);
+      assert.deepEqual(await h.cmd('retail.return',giftReturnInput,staff.cookie),giftReturn);
+      const adjusted=await once('retail.gift.adjust',adjust,staff.cookie);
+      assert.deepEqual([adjusted.before,adjusted.after],[6000,6100]);
+      assert.deepEqual(await h.cmd('retail.gift.adjust',adjust,staff.cookie),adjusted);
+      const refunded=await once('retail.gift.refund',{...refund,tender:'cash',personId:other.id,locationId:otherLocation},staff.cookie);
+      assert.deepEqual([refunded.personId,refunded.locationId,refunded.tender,refunded.amountCents],[buyer.id,locationId,'external',1000],'refund resolves the saved original, never body overrides');
+      const actualRefund={...refund,tender:'cash',personId:other.id,locationId:otherLocation};
+      assert.deepEqual(await h.cmd('retail.gift.refund',actualRefund,staff.cookie),refunded);
+      if(locationId==='studio')await refuse('retail.gift.refund',{...refund,giftCardId:foreignPurchaser.id,reference:'synthetic-strap-foreign-funding-'+role,requestId:'foreign-funding-'+role},staff.cookie);
+      for(const [name,body] of [['retail.return',{...returnInput,saleId:foreignSales[otherLocation].id}],['retail.gift.adjust',{...adjust,giftCardId:ownerGift.id}],['retail.gift.refund',{...refund,giftCardId:ownerGift.id}]])await refuse(name,{...body,personId:buyer.id,locationId,reference:'synthetic-strap-wrong-source-'+name+'-'+suffix,requestId:'wrong-source-'+name+'-'+suffix},staff.cookie);
+      const r=await read(),state=await h.state();
+      assert.equal(r.gifts.cards.find(c=>c.id===card.id).balanceCents,5100);
+      assert.equal(r.sales.filter(s=>s.reference===input.reference).length,1,'concurrent submission retains one sale');
+      assert.equal(r.movements.filter(m=>m.sourceId===sale.id).length,1,'one stock decrement');
+      assert.equal(r.movements.filter(m=>m.sourceId===returned.id).length,1,'one stock return');
+      assert.equal(r.gifts.entries.filter(e=>e.sourceId===redeemed.id).length,1,'one gift redemption');
+      assert.equal(r.gifts.entries.filter(e=>e.sourceId===giftReturn.id).length,1,'one original gift restoration');
+      assert.equal(state.payments.filter(p=>p.retailSaleId===sale.id).length,1);
+      assert.equal(state.payments.filter(p=>p.retailReturnId===returned.id).length,1);
+      for(const [name,body,result,right] of [['retail.sell',input,sale,'sale'],['retail.gift.issue',issue,card,'sale'],['retail.sell',redeem,redeemed,'sale'],['retail.return',returnInput,returned,'refund'],['retail.return',giftReturnInput,giftReturn,'refund'],['retail.gift.adjust',adjust,adjusted,'refund'],['retail.gift.refund',actualRefund,refunded,'refund']]) {
+        const audit=state.staffActions.filter(a=>a.command===name&&a.after.id===result.id);
+        assert.equal(audit.length,1);assert.equal(audit[0].actorRole,role);assert.equal(audit[0].channel,'phone');assert.equal(audit[0].right,right);
+        await grant(staff,role,[],[buyer.id],[locationId]);
+        await refuse(name,body,staff.cookie);
+        await refuse(name,{...body,requestId:'new-revoked-'+body.requestId},staff.cookie);
+      }
+      assert.equal((await h.send('/api/strap/retail',undefined,staff.cookie)).status,403);
+      assert.equal((await h.send('/app/retail',undefined,staff.cookie)).status,403);
+    }
+  }
+  for(const [p,role] of [[finance,'finance'],[coach,'instructor']]) {
+    await grant(p,role,['staff-pay']);await h.enroll(p.cookie);
+    for(const path of ['/app/retail','/api/strap/retail'])assert.equal((await h.send(path,undefined,p.cookie)).status,403);
+    for(const name of ['retail.sell','retail.return','retail.gift.issue','retail.gift.adjust','retail.gift.refund'])await refuse(name,{},p.cookie);
+  }
+  const stock=(await read()).stock.filter(s=>s.skuId===sku.id && places.includes(s.locationId));
+  assert.deepEqual(stock.map(s=>s.onHand),[18,18],'each location retains its exact independently received stock after once-only sales and returns');
+  await grant(manager,'manager',['sale','refund'],[buyer.id],places);
+  await grant(desk,'front-desk',['sale','refund'],[buyer.id],places);
+  // Cash is recorded through an existing open drawer; staff receive no drawer totals.
+  const cash={personId:buyer.id,skuId:sku.id,locationId:west.id,quantity:1,expectedCents:2000,tender:'cash',sessionId:sessions[west.id].id,reference:'synthetic-strap-cash',requestId:'rights-cash'};
+  const cashSale=await h.cmd('retail.sell',cash,manager.cookie);
+  const cashReturn={saleId:cashSale.id,quantity:1,restock:true,sessionId:sessions[west.id].id,reason:'Original cash return',requestId:'rights-cash-return'};
+  const returnedCash=await h.cmd('retail.return',cashReturn,manager.cookie);
+  assert.equal(returnedCash.tender,'cash');assert.equal(returnedCash.amountCents,2000);
+  assert.deepEqual(await h.cmd('retail.return',cashReturn,manager.cookie),returnedCash);
+  const drawer=(await read()).sessions.find(s=>s.id===sessions[west.id].id);
+  assert.equal(drawer.expectedCents,10000);assert.equal(drawer.entries.filter(e=>e.sourceId===cashSale.id||e.sourceId===returnedCash.id).length,2);
+  const cashIssue={personId:buyer.id,recipientId:buyer.id,locationId:west.id,amountCents:2000,tender:'cash',sessionId:sessions[west.id].id,reference:'synthetic-strap-cash-gift',requestId:'rights-cash-gift'};
+  const cashGift=await h.cmd('retail.gift.issue',cashIssue,desk.cookie);
+  assert.deepEqual(await h.cmd('retail.gift.issue',cashIssue,desk.cookie),cashGift);
+  const cashGiftRefund={giftCardId:cashGift.id,amountCents:500,tender:'external',sessionId:sessions[west.id].id,reason:'Original cash funding returned',reference:'synthetic-strap-cash-gift-refund',requestId:'rights-cash-gift-refund'};
+  await refuse('retail.gift.refund',{...cashGiftRefund,sessionId:sessions.studio.id},desk.cookie,409);
+  const cashRefund=await h.cmd('retail.gift.refund',cashGiftRefund,desk.cookie);
+  assert.deepEqual([cashRefund.tender,cashRefund.amountCents],['cash',500]);
+  assert.deepEqual(await h.cmd('retail.gift.refund',cashGiftRefund,desk.cookie),cashRefund);
+  const cashAfter=await read();
+  assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).expectedCents,11500);
+  assert.equal(cashAfter.gifts.cards.find(c=>c.id===cashGift.id).balanceCents,1500);
+  assert.equal(cashAfter.sessions.find(s=>s.id===sessions[west.id].id).entries.filter(e=>[cashGift.id,cashRefund.id].includes(e.sourceId)).length,2);
+  // Sale and refund grants remain independent even when both rights stay enabled.
+  const splitScope=async(staff,swap=false)=>h.cmd('staff.access.grant',{personId:staff.id,role:staff.id===manager.id?'manager':'front-desk',enabled:true,rights:{
+    sale:{enabled:true,scopes:[{memberIds:[swap?other.id:buyer.id],locationIds:[swap?west.id:'studio'],doors:['all']}]},
+    refund:{enabled:true,scopes:[{memberIds:[swap?buyer.id:other.id],locationIds:[swap?'studio':west.id],doors:['all']}]},
+  }});
+  for(const staff of [manager,desk]) {
+    await splitScope(staff);
+    const suffix=staff.id===manager.id?'manager':'desk';
+    const input={personId:buyer.id,skuId:sku.id,locationId:'studio',quantity:1,expectedCents:2000,tender:'external',reference:'synthetic-strap-split-'+suffix,requestId:'split-sale-'+suffix};
+    const sale=await h.cmd('retail.sell',input,staff.cookie);
+    const ret={saleId:foreignSales[west.id].id,quantity:1,restock:true,reason:'Separately authorized original return',requestId:'split-return-'+suffix};
+    // Use a fresh original for each staff actor: neither denial nor replay relies on an exhausted sale.
+    ret.saleId=(await h.cmd('retail.sell',{...input,personId:other.id,locationId:west.id,reference:'synthetic-strap-split-source-'+suffix,requestId:'split-source-'+suffix})).id;
+    const returned=await h.cmd('retail.return',ret,staff.cookie);
+    await refuse('retail.return',{...ret,saleId:sale.id,requestId:'split-denied-return-'+suffix},staff.cookie);
+    await refuse('retail.sell',{...input,personId:other.id,locationId:west.id,requestId:'split-denied-sale-'+suffix},staff.cookie);
+    await splitScope(staff,true);
+    await refuse('retail.sell',input,staff.cookie);
+    await refuse('retail.return',ret,staff.cookie);
+    await splitScope(staff);
+    assert.deepEqual(await h.cmd('retail.sell',input,staff.cookie),sale);
+    assert.deepEqual(await h.cmd('retail.return',ret,staff.cookie),returned);
+    const audits=(await h.state()).staffActions;
+    for(const saved of [sale,returned])assert.equal(audits.filter(a=>a.after?.id===saved.id).length,1);
+    await grant(staff,staff.id===manager.id?'manager':'front-desk',['sale','refund'],[buyer.id],places);
+  }
+  if(process.env.STRAP_RIGHTS_PROOF_DIR || process.env.STRAP_PROOF_DIR)await (await import('./retail-browser.mjs')).staffRetailBrowser(h,{manager,desk,buyer,sku,west,ownerGift,foreignSales,splitScope});
+  console.log('PROBE STAFF-001 retail access: manager and front desk at two locations open their scoped page and read; ungranted finance and instructor reads and writes return 403.');
+  console.log('PROBE STAFF-001 sale: concurrent and replayed external, cash and gift sales retain one stock, tender and canonical staff audit effect; wrong member, location and price are refused.');
+  console.log('PROBE STAFF-001 merchandise return: separate refund authority restores original external, cash or gift value once, with explicit restock or damaged treatment.');
+  console.log('PROBE STAFF-001 gift funding: issue, redeem, adjust and refund preserve original purchaser and tender; wrong holder, funding scope, location and drawer are refused.');
+  console.log('PROBE STAFF-001 independent rights: separate member and location grants select only authorized sale and refund sources; narrowing either scope refuses the next request and its saved replay while the other right stays enabled.');
+  console.log('PROBE STAFF-001 revocation: the next new request and each committed replay return 403 with unchanged stock, tender, gift and audit records.');
 }

@@ -108,7 +108,7 @@ test('SCHED-014: staff cancellation previews, reasons, waiver and suppression, o
     assert.deepEqual([exported.bookingId,exported.type,exported.channel,exported.feeCents,exported.reason],[late.id,'late','phone',1500,'Other'])
     assert.ok(exported.restoredAt); assert.equal(exported.actorId,s.actor.id)
     const screen = (await h.send('/app/people?'+filter,undefined,h.owner)).text
-    assert.match(screen,/1 cancellations · 1 late/); assert.match(screen,/Restored /)
+    assert.match(screen,/1 cancellation · 1 late/); assert.match(screen,/Restored /)
     assert.equal((await h.send('/api/strap/cancellations.csv',undefined,ana.cookie)).status,403)
     assert.equal((await h.send('/api/strap/cancellations.csv',undefined,coach.cookie)).status,403)
     await refused(h,'booking.move',{id:first.id,classId:later.id,cancelReason:'Other'},ben.cookie,'forbidden',403)

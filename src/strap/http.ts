@@ -1,3 +1,8 @@
+import { errorText } from './ui/errors'
+import { localDate } from './zone'
+import { actionResult, actionResultRedirect } from './action-result'
+import { payoutAccessAvailable } from './payout-access';
+import { payoutReport, payoutCsv } from './payout-reconciliation';
 import { publicSchedule, selectWidgetClass, widgetSelection, widgetSettingsView, widgetAdult, widgetPrerequisites, requestWidgetSignup, widgetPublication } from './domain/booking-widget';
 import { renderWidget, widgetPage, widgetReview, widgetHeaders, widgetSignup } from './ui/booking-widget';
 import { widgetReturn, widgetReturnCookie } from './widget-return';
@@ -54,9 +59,11 @@ import { auditEvents, factorCounts, mfaCommand, mfaView } from './security/mfa'
 import { financeCommand, financeUsers } from './security/finance'
 import { managerCommand, managers } from './security/manager'
 
+const downloadName = (name: string) => name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'member'
+
 const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers })
-const pages = new Set(['/app/widget','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
+const pages = new Set(['/app/payouts','/app/widget','/app/courses','/app/time-clock', '/app/retail', '/app/referrals', '/app/offers', '/app/intake', '/app/tuition', '/app/households', '/app/household', '/app/makeups', '/app', '/app/classes', '/app/people', '/app/packs', '/app/import', '/app/agent', '/app/studio', '/app/reports', '/app/revenue', '/app/renewals', '/app/retention', '/app/teaching-pay', '/app/recognition', '/app/leads', '/app/substitutions', '/app/profile', '/app/integrations', '/app/security'])
 const preparations = ['plan.cancellation.prepare','lead.success.prepare','attendance.plan.prepare','recommendation.prepare', 'classes.prepare', 'pack.prepare', 'reminder.prepare', 'booking.change.prepare', 'series.prepare', 'series.change.prepare']
 
 /** The owner's list of people who can sign in, with their factor counts, for resets and finance grants. */
@@ -72,7 +79,8 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   if (who.role === 'front-desk' || !report && who.staffAccess && ['manager','instructor'].includes(who.role)) return {...await snapshot(env.DB,who,env.AUTH_ORIGIN),displayName:(await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{name:string}>())?.name ?? '',mfa};
   if (who.role === 'finance') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
-    return { ...await financeSnapshot(env.DB, who), classes: [], displayName: operator?.name ?? '', mfa }
+    const loaded=await load(env.DB,who)
+    return { ...await financeSnapshot(env.DB, who), payoutAccessAvailable:await payoutAccessAvailable(env,loaded.state,loaded.who), classes: [], displayName: operator?.name ?? '', mfa }
   }
   if (who.role === 'manager') {
     const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
@@ -81,7 +89,8 @@ async function state(env: Bindings, who: Actor, report = false): Promise<Record<
   const importJobs = who.role === 'owner' ? (await env.DB.prepare("SELECT id,state,checkpoint,total,fingerprint,error FROM ik_jobs WHERE destination='strap:members' AND namespace='strap.mindbody.csv.v1' AND mapping_version='mindbody-members-v1' AND principal_id=? ORDER BY rowid DESC LIMIT 30").bind(who.id).all()).results : []
   const operator = await env.DB.prepare('SELECT display_name AS name FROM oa_operators WHERE id=?').bind(who.id).first<{ name: string }>()
   const current = await snapshot(env.DB, who, env.AUTH_ORIGIN), deliveries = await noticeDeliveries(env, who.role)
-  const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return mail ? {...action,notice:{...action.notice,mailStatus:mail.status}} : action })
+  const actorNames = who.role === 'owner' ? (await env.DB.prepare('SELECT id,display_name AS name FROM oa_operators').all()).results as {id:string;name:string}[] : []
+  const bookingActions = current.bookingActions.map(action => { const mail = deliveries.find((d: any) => d.sourceId === (action.mailSourceId ?? action.id)); return {...action,actorName:actorNames.find(a => a.id === action.actorId)?.name ?? (action.actorRole === 'system' ? 'Studio automation' : 'Former studio user'),...(mail ? {notice:{...action.notice,mailStatus:mail.status}} : {})} })
   const launches = who.role === 'owner' ? await waiverLaunchStatuses(env) : []
   const leadOwners = who.role === 'owner' ? (await env.DB.prepare("SELECT id,display_name AS name FROM oa_operators WHERE role='owner' AND status='active'").all()).results : []
   const hidden = who.role === 'owner' && !await cleared(env, who) ? Object.fromEntries([...privilegedState,'retail','drawers','gifts','timeClock'].map(key => [key, key === 'teachingPay' || key === 'memberMail' || key === 'smsTest' ? null : []])) : {}
@@ -95,6 +104,7 @@ async function revenueState(env: Bindings, who: Actor) {
 
 async function appState(env: Bindings, who: Actor, target: string) {
   const url = new URL(target,env.AUTH_ORIGIN)
+  if(url.pathname==='/app/payouts')return {...await state(env,who),payoutReconciliation:await payoutReport(env,who)}
   if (url.pathname === '/app/revenue') {
     const current = await revenueState(env,who)
     if (who.role !== 'owner') return current
@@ -156,7 +166,7 @@ async function execute(request: Request, env: Bindings, who: Actor, name: string
 
 async function guard(env: Bindings, who: Actor, path: string, name = '', input: Record<string, unknown> = {}) {
   if ((who.role === 'front-desk' || who.staffAccess && who.role === 'manager') && !['/app/widget','/app/revenue','/app/reports','/api/strap/reports/revenue','/api/strap/reports/revenue.csv','/api/strap/reports/revenue.xlsx','/api/strap/reports/attendance','/api/strap/reports/attendance.csv','/api/strap/reports/attendance.xlsx','/app/courses','/app/retail','/api/strap/retail','/app/referrals','/app','/app/intake','/app/people','/app/profile','/app/security','/api/strap/state','/api/strap/member-history','/api/strap/profile-save','/api/strap/preferences.json','/api/strap/mfa','/app/action','/api/strap/command'].includes(path)) fail('member_record_right_required',403);
-  if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !delegatedBillingRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.client.accept','appointment.client.move.prepare','appointment.client.cancel.prepare','appointment.client.change.confirm','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
+  if (who.role === 'front-desk' && name && !delegatedCommandRight(name) && !delegatedBillingRight(name) && !['waiver.launch','waiver.tablet.launch','attendance.availability.launch','attendance.plan.prepare','attendance.plan.accept.staff','appointment.client.accept','appointment.client.move.prepare','appointment.client.cancel.prepare','appointment.client.change.confirm','appointment.reservation.prepare','appointment.reservation.confirm','appointment.move.prepare','appointment.cancel.prepare','appointment.change.confirm','appointment.restore.prepare','lead.referral.record','intake.tablet.launch','intake.submit.staff','member.record.create','member.record.invite','profile.save.staff','preferences.save.staff','member.message.send.staff','session.signout'].includes(name) && !name.startsWith('mfa.') && !['retail.sell','retail.return','retail.gift.issue','retail.gift.adjust','retail.gift.refund'].includes(name)) fail('member_record_right_required',403);
   if (who.role === 'finance' && !(who.staffAccess && delegatedBillingRight(name) === 'collection' && ['/api/strap/command','/app/action'].includes(path)) && !financeRoute(path) && !name.startsWith('mfa.') && name !== 'session.signout') fail('finance_reports_only', 403)
   if (who.role === 'manager' && !who.staffAccess && !managerRoute(path) && !['/app/time-clock','/api/strap/time-clock'].includes(path) && name !== 'clock.approve' && !name.startsWith('mfa.') && name !== 'session.signout') fail('manager_reports_only', 403)
   if (who.staffAccess && /^\/api\/strap\/reports\/.*\.(csv|xlsx)$/.test(path)) {const current=await load(env.DB,who);if(!hasStaffRight(current.state,current.who,'exports'))fail('staff_right_required',403);}
@@ -233,6 +243,12 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     if (url.origin !== env.AUTH_ORIGIN || (request.headers.has('host') && request.headers.get('host') !== url.host)) fail('Wrong application origin', 403)
     if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
     if (request.method === 'POST' && !isAgent && (request.headers.get('origin') !== env.AUTH_ORIGIN || request.headers.get('sec-fetch-site') === 'cross-site')) fail('Cross-site request refused', 403)
+    // Ending a native session must still work after studio access has ended.
+    if (request.method === 'POST' && path === '/app/action' && url.searchParams.get('name') === 'session.signout') {
+      await inputBody(request)
+      const response = await operatorAuth(env).signOut(request)
+      return new Response(null, { status: 303, headers: { ...headers, 'set-cookie': response.cookie, location: '/signin' } })
+    }
     who = await principal(request, env, isAgent)
     if (!isAgent && path !== '/app/action' && path !== '/api/strap/command') await guard(env, who, path)
     if (request.method === 'GET') {
@@ -251,6 +267,10 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const page=widgetReview(selected,token,members,staff,prerequisites);
         if(!staff)page.headers.set('set-cookie',await widgetReturnCookie(env,who,token,selected.selection.expires_at));
         return page;
+      }
+      if(path==='/api/strap/billing/payouts.json' || path==='/api/strap/billing/payouts.csv') {
+        const report=await payoutReport(env,who)
+        return new Response(path.endsWith('.csv')?payoutCsv(report):JSON.stringify(report,null,2)+'\n',{headers:{...headers,'content-type':path.endsWith('.csv')?'text/csv; charset=utf-8':'application/json; charset=utf-8','content-disposition':'attachment; filename=strap-payout-reconciliation.'+(path.endsWith('.csv')?'csv':'json')}})
       }
       if(path==='/api/strap/billing')return json(await billingState(env,who))
       if(path==='/api/strap/billing/agreement.json' || path==='/api/strap/billing/agreement.html') {
@@ -271,11 +291,14 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         if(path.endsWith('.csv')) return new Response('approvalId,shiftId,employeeId,locationId,job,startAt,endAt,breakMinutes,minutes,approvedBy\n'+approvedHours(loaded.state).map(r=>[r.id,r.shiftId,r.employeeId,r.locationId,r.job,r.startAt,r.endAt,r.breakMinutes,r.minutes,r.approvedBy].map(v=>'"'+JSON.stringify(v).replace(/"/g,'""')+'"').join(',')).join('\n')+'\n',{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="approved-hours.csv"'}})
         return json(timeSnapshot(loaded.state,who))
       }
-      if(path==='/app/retail' && !['owner','front-desk'].includes(who.role)) fail('owner_required',403)
+      if(path==='/app/retail') {
+        if(!['owner','front-desk','manager'].includes(who.role)) fail('owner_required',403)
+        if(who.role!=='owner' && !('saleGrant' in deskRetailSnapshot((await load(env.DB,who)).state,who))) fail('retail_right_required',403)
+      }
       if(path.startsWith('/api/strap/retail')) {
-        if(!['owner','front-desk'].includes(who.role)) fail('owner_required',403)
+        if(!['owner','front-desk','manager'].includes(who.role)) fail('owner_required',403)
         const loaded=await load(env.DB,who)
-        if(who.role==='front-desk') {if(path!=='/api/strap/retail') fail('owner_required',403); const view=deskRetailSnapshot(loaded.state,who); if(!('saleGrant' in view)) fail('retail_right_required',403); return json(view)}
+        if(who.role!=='owner') {if(path!=='/api/strap/retail') fail('owner_required',403); const view=deskRetailSnapshot(loaded.state,who); if(!('saleGrant' in view)) fail('retail_right_required',403); return json(view)}
         if(path==='/api/strap/retail') {const inventory=inventorySnapshot(loaded.state),barcode=url.searchParams.get('barcode');return json({...inventory,...drawerSnapshot(loaded.state),gifts:giftSnapshot(loaded.state),lookup:barcode ? inventory.skus.find(s=>s.barcode===barcode) ?? null : null})}
         if(path==='/api/strap/retail/day' || path==='/api/strap/retail/day.csv') {
           const report=tenderDay(loaded.state,url.searchParams.get('date') ?? '')
@@ -357,7 +380,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         return json(profileSaveStatus(loaded.state, loaded.who, Object.fromEntries(url.searchParams)));
       }
       if (pages.has(path)) {
-        let notice = {};
+        const flash = await actionResult(request, env, who)
+        let notice = flash.notice;
         if (['/app/profile','/app/people'].includes(path) && url.searchParams.has('profileSave')) {
           const loaded = await load(env.DB, who);
           const receipt = profileSaveStatus(loaded.state, loaded.who, {
@@ -368,7 +392,9 @@ export async function strapResponse(request: Request, original: Bindings): Promi
           notice = receipt.status === 'saved' ? { message: 'Profile saved. Verified against the current studio record.' } : { error: 'That save is not the current profile. Review the current details before editing.' };
         }
         const current=await appState(env, who, path + url.search);
-        return renderApp({...current,...(path==='/app/packs'?{widgetReturn:await widgetReturn(request,env,who)}:{})}, path + url.search, notice);
+        const page = await renderApp({...current,...(path==='/app/packs'?{widgetReturn:await widgetReturn(request,env,who)}:{})}, path + url.search, notice);
+        if (flash.clear) page.headers.append('set-cookie', flash.clear)
+        return page;
       }
       if (path === '/api/strap/state' || path === '/api/strap/agent/context') return json(await state(env, who))
       if (path === '/api/strap/commands') return json({ commands:[...commandCatalogue(),...billingCommandCatalogue(),...privacyCommandCatalogue()], preparations, approval: 'Native owner session required; agent keys cannot approve.', human: ['classes.publish', 'pack.approve', 'reminder.approve'] })
@@ -378,7 +404,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         const current = await snapshot(env.DB, who, env.AUTH_ORIGIN)
         const draft = current.drafts.find((d: any) => d.id === reminderFile[1] && d.type === 'reminder' && d.status === 'approved')
         if (!draft) fail('Approved reminder not found', 404)
-        return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="strap-reminder-${reminderFile[1]}.txt"` } })
+        return new Response(`To: ${draft!.recipient}\nSubject: ${draft!.subject}\n\n${draft!.body}\n`, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="balance-reminder-${downloadName(current.people.find((p: any) => p.id === draft!.personId)?.name ?? 'member')}-${localDate(draft!.createdAt,current.studio?.timeZone ?? 'UTC')}.txt"` } })
       }
     } else {
       if (path === '/app/action') {
@@ -386,25 +412,35 @@ export async function strapResponse(request: Request, original: Bindings): Promi
         await guard(env, who, path, name)
         const current = await state(env, who)
         const input = formInput(name, await inputBody(request), current.studio?.timeZone, current.locations)
-        if (name === 'session.signout') {
-          const response = await operatorAuth(env).signOut(request)
-          const next = new Headers({ ...headers, 'set-cookie': response.cookie, location: '/signin' })
-          return new Response(null, { status: 303, headers: next })
-        }
         if (name === 'person.save' && !('active' in input)) input.active = false
         await guard(env, who, path, name, input)
         const selectedBooking=(name==='booking.book'||name==='booking.desk') && typeof input.selection==='string';
         const result = await execute(request, env, who, name, input)
         if(selectedBooking && (result as any)?.status==='booked')return new Response(null,{status:303,headers:{...headers,location:'/app'}});
         if (['profile.save','profile.save.staff'].includes(name) && request.headers.get('accept') === 'application/json') return json(result);
+        if (name === 'booking.book' && (result as any).status === 'waitlisted') {
+          const target = new URL(back,env.AUTH_ORIGIN); target.searchParams.set('bookingResult',(result as any).id)
+          return new Response(null,{status:303,headers:{...headers,location:target.pathname+target.search+target.hash}})
+        }
+        // Enrollment and recovery results belong to Security even when the
+        // person arrived from another page. Keep that page as the continuation,
+        // and carry private material across the redirect only in a sealed cookie.
+        if (['mfa.totp.start','mfa.totp.confirm','mfa.recovery.renew'].includes(name)) {
+          const target = back.split(/[?#]/)[0] === '/app/security' ? back : `/app/security?returnTo=${encodeURIComponent(back)}`
+          return actionResultRedirect(env, who, target, { result })
+        }
+        if (['agent.create','integration.create','integration.rotate','kiosk.pair'].includes(name)) return actionResultRedirect(env, who, back, { result })
+        if (name === 'person.invite') return actionResultRedirect(env, who, back, { message: (result as { message: string }).message })
+        if (name === 'payment.record') return actionResultRedirect(env, who, back, { message: `Payment ${(result as { reference: string }).reference} recorded.` })
+        if (name === 'person.erase') return actionResultRedirect(env, who, back, { message: 'Personal data erased.' })
         if(name==='privacy.export' || name==='privacy.retained')return new Response(JSON.stringify(result,null,2)+'\n',{headers:{...headers,'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="strap-privacy.json"'}})
         // A refresh after booking or approving must read the result, rather
         // than resubmit the mutation. These commands need an immediate
-        // private result document (source review, journal, one-time key or pairing link).
+        // private result document (source review or journal). Credentials redirect above.
         const personalBillingLaunch=name.startsWith('billing.')&&name.endsWith('.launch')
         const freezeLaunch=['freeze.accept.launch','freeze.end.accept.launch'].includes(name)
-        if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'agent.create', 'integration.create', 'integration.rotate', 'kiosk.pair', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
-        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
+        if (!personalBillingLaunch && !freezeLaunch && !['billing.setup.start','billing.checkout.start','waiver.tablet.launch','intake.tablet.launch', 'import.preview', 'import.journal', 'booking.bulk.cancel', 'recognition.launch', 'mfa.totp.start', 'mfa.totp.confirm', 'mfa.recovery.renew', 'mfa.reset', 'mfa.remove', 'mfa.step-up'].includes(name)) return new Response(null, { status: 303, headers: { ...headers, location: back } })
+        return renderApp(await appState(env, who, back), back, { message: personalBillingLaunch || ['import.preview','import.journal'].includes(name) ? undefined : 'Saved.', result: name === 'import.preview' ? { ...(result as object), csv: input.csv } : result })
       }
       if (path === '/api/strap/command' || path === '/api/strap/agent/command') {
         const body = await inputBody(request)
@@ -420,6 +456,8 @@ export async function strapResponse(request: Request, original: Bindings): Promi
     const status = Number((error as any)?.status) || 500
     const message = status < 500 ? (error as Error).message : 'Could not complete this change. Refresh and try again.'
     const held = status === 403 && /^mfa_(required|enrollment_required)$/.test(message)
+    if (path === '/app/action' && status === 403 && message === 'Cross-site request refused' && request.headers.get('accept')?.includes('text/html')) return unavailablePage('/app', 'cross-site')
+    if ((pages.has(path) || path === '/app/action') && status === 403 && message === 'active_person_required' && request.headers.get('accept')?.includes('text/html')) return unavailablePage('/app', 'ended')
     if (path === '/app/action' && who) {
       if (['profile.save','profile.save.staff'].includes(url.searchParams.get('name') ?? '') && request.headers.get('accept') === 'application/json') return json({ error: message }, status);
       if (status >= 500) return unavailablePage(back, 'uncertain')
@@ -436,7 +474,7 @@ export async function strapResponse(request: Request, original: Bindings): Promi
       }
       const target = held ? `/app/security?returnTo=${encodeURIComponent(back)}&hold=${message}` : back
       let page: Response
-      try { page = await renderApp(await appState(env, who, target), target, { error: message.replace(/_/g, ' ') }) }
+      try { page = await renderApp(await appState(env, who, target), target, { error: errorText(message) }) }
       catch { return unavailablePage(back, 'uncertain') }
       return held || message === 'step_up_required' ? new Response(page.body, { status: 403, headers: { ...Object.fromEntries(page.headers), 'x-strap-refusal': message } }) : page
     }

@@ -1,3 +1,4 @@
+import { payoutReconciliationCases } from './payout-reconciliation-cases.mjs';
 import { billingBrowser } from './billing-browser.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -411,3 +412,5 @@ test('Merchant readiness, hosted plan payment and signed reconciliation retain h
 
   },{auth:paymentAuth,outbound:async request=>{const response=await edge.outbound(request);if(new URL(request.url).pathname==='/v1/account'&&onAccount)await onAccount();return response;},mfa:false});
 });
+
+test('Owner TEST reconciliation retains source-linked fees and unmatched payouts without money effects or delegated authority',{timeout:180000},payoutReconciliationCases);

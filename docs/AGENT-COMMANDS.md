@@ -1,5 +1,7 @@
 # Agent preparations
 
+Before opening **Agent access**, the owner opens **Security** and enrolls an authenticator app or passkey, then uses that second factor at each new sign-in. In local development, the session opened from the private `RER_OPEN` link already confirms identity for enrollment; no email confirmation is needed.
+
 The owner creates a preparation key in **Agent access**. It expires after 30 days and can be revoked immediately. Save the one-time value privately; never put it in chat, logs or source.
 
 `GET /api/strap/agent/context` and `POST /api/strap/agent/command` require `Authorization: Bearer VALUE`. POST accepts JSON `{ "name": "pack.prepare", "input": { "personId": "MEMBER_ID", "credits": 5, "amountCents": 10000, "expiresAt": "2027-01-01T00:00:00Z" } }`.
@@ -9,7 +11,7 @@ Allowed commands:
 | Command | Input | Result |
 | --- | --- | --- |
 | `classes.prepare` | `week` (Monday date), `classes` array of `{title,start,end,capacity,instructorId}` with optional `service` (blank uses the class name), `room`, `equipment` (array of names), `bufferBeforeMinutes`, `bufferAfterMinutes` | Frozen weekly publication draft |
-| `pack.prepare` | `personId`, positive integer `credits`, nonnegative integer `amountCents`, ISO `expiresAt`, optional `eligibleServices` (array; empty permits all classes) | Frozen pack and charge draft |
+| `pack.prepare` | `personId` and `catalogVersionId` from `productCatalog.versions` for an active finite-pack product, with no term overrides; or `personId`, positive integer `credits`, nonnegative integer `amountCents`, ISO `expiresAt`, optional `eligibleServices` (array; empty permits all classes) | Frozen pack and charge draft; catalog preparation snapshots the selected immutable version for a personal non-household sale |
 | `reminder.prepare` | `personId` | Frozen current balance and reminder text |
 
 Keys only prepare. The owner signs in normally, reviews the exact draft, and uses **Publish** or **Approve**. `classes.publish`, `pack.approve` and `reminder.approve` require that native human owner session and an `id` for the draft. The approval is recorded with the person, draft, reviewed contents and time; stale source data refuses approval. Neither a key nor a bearer token sent to a human route grants approval authority. Reminders export text; nothing is sent externally.
@@ -107,6 +109,8 @@ no permission to send a future message or collect money is created.
 ## Reviewed termination drafts
 
 `plan.cancellation.prepare` accepts an accepted native invoice agreement's `packId`, an ISO `effectiveAt` within its current paid term, an active studio `reasonCode`, a `reason` comment and a unique `requestId`. The preparation context exposes the eligible agreement identities and active reason catalog. The result retains the code, label, exact native effects and agent provenance. Preparation changes no invoice authority, charge, booking, notice or other due lifecycle work.
+
+For an immediate native termination, supply `timing: "immediate"` without `effectiveAt`. The preview fixes its effective instant and refund valuation; it changes no access until confirmed and expires after 15 minutes or at the current paid term end, whichever comes first. Confirmation applies the reviewed native effects once. `timing: "term_end"` without a date selects the current paid term end. An explicit `timing: "date"` requires `effectiveAt`. Studio catalog codes do not confer statutory refund authority.
 
 The owner reviews the draft under **Packs and payments** and confirms through `plan.cancellation.confirm` using its `id`, exact `key`, a fresh `requestId` and request `channel`. Scoped contract-change staff may also confirm after reviewing the same effects. A changed source, changed reason label or retired reason requires a fresh preview. A retried preparation retains its original snapshot. Agent credentials cannot confirm, stop or withdraw a termination, change the catalog or replace a human session. Revocation immediately closes the preparation and context doors.
 

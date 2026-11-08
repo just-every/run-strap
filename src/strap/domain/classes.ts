@@ -28,7 +28,7 @@ export function checkAllocations(tx: Transaction, classes: RecordData[], exclude
     insist(item.start > now() && item.end > item.start,'class_must_be_future');
     tx.future(item.start);
   }
-  refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')),tx.who.role === 'owner');
+  refuseSchedulingConflicts(schedulingConflicts(classes,published,list(tx.state,'unavailability')),tx.who.role === 'owner',studioSettings(tx.state)?.timeZone ?? 'UTC');
   refuseLocationClosures(tx.state,classes);
 }
 function checkClasses(tx: Transaction, classes: RecordData[], week: string) {

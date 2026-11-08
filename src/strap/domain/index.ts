@@ -6,6 +6,7 @@ import { publishCourse, prepareEnrollment, launchCourseAcceptance, acceptCourse,
 import { saveAppointmentPrice } from './appointment-funding';
 import { staffDeskSnapshot } from './staff-snapshot';
 import { privacySnapshot } from '../privacy';
+import { studioAudit } from '../studio-audit';
 import { grantStaffAccess, staffAccess, legacyStaffGrants, legacyStaffGrant, hasStaffRight } from './staff-rights';
 import { delegatedCommandRight, authorizeStaffCommand } from './staff-command-access';
 import { currentWaivers, assertSigningEnrollments } from './bookings';
@@ -18,7 +19,7 @@ import { authorizeAppointmentCommand, prepareAppointmentReservation, confirmAppo
 import { saveAppointmentOffer, previewAppointmentOffer, saveAppointmentSeriesOffer, previewAppointmentSeriesOffer } from './appointment-offers';
 import { previewRetentionHistory, importRetentionHistory } from './retention-history';
 import { scheduleRenewalDisclosure, cancelRenewalDisclosure, launchDisclosureAcceptance, acceptDisclosurePrice, deliverRenewalDisclosures, renewalDisclosuresSnapshot } from './renewal-disclosures';
-import { grantRetailStaff, retailGrant, requireRetail } from './retail-records';
+import { grantRetailStaff, retailGrant, requireRetail, priorRetailRequest } from './retail-records';
 import { clockIn, clockStep, requestHoursCorrection, approveHours, grantClockApprover, timeSnapshot } from './time-clock';
 import { issueGift, adjustGift, savePromotion, giftSnapshot, refundGiftFunding } from './gift-cards';
 import { saveSupplier, saveSku, receiveStock, countStock, transferStock, sellRetail, returnRetail, inventorySnapshot } from './inventory';
@@ -32,6 +33,7 @@ import { sendMemberMessage, addMemberNote, createDeskMember, grantMemberRecord, 
 import { verifyIntroIdentity, saveIntroOffer, closeIntroOffer, previewIntro, purchaseIntro, introSnapshot } from './intro-offers';
 import { recordCoolingServiceValue } from './cooling-refunds';
 import { recordContractDelivery, saveContractRegion } from './contract-copies';
+import { publishProduct, retireProduct, productCatalog, catalogDraftStale } from './product-catalog';
 import { saveTerminationReason } from './termination-reasons';
 import { requestCancellation, prepareCancellation, confirmCancellation, prepareWithdrawCancellation, confirmWithdrawCancellation, applyDueCancellations, cancellationsSnapshot, stopCancellation, statutoryCancellation, saveCancellationPolicy, cancellationBlocks, launchCancellationWithdrawal } from './contract-cancellations';
 import { saveContractAuthority, acceptContractAuthority, revokeContractAuthority, launchContractAuthority } from './contract-authority';
@@ -73,7 +75,7 @@ import { closureImpact, dismissNotice } from './closures';
 import { confirmBooking, connectMemberMail, memberMail, type NoticeContext } from './notices';
 import { acceptOffer, promoteAll, saveWaitlistPolicy, waitlistPolicy } from './waitlist';
 import { checkinAlerts, staffCode, inWindow, kioskCheckin, kioskLookup, memberCheckin, ownCode, rotateCode, scanCheckin, selfCheckin } from './checkin';
-import { adjustPack, approvePack, approveReminder, balance, preparePack, prepareReminder, recordPayment } from './money';
+import { adjustPack, approvePack, approveReminder, balance, discardReminder, preparePack, prepareReminder, recordPayment } from './money';
 import { erasePerson, savePerson } from './people';
 import { profileOf as profileOfForDesk, memberProfile, profileSnapshot, saveMemberProfile, saveOwnProfile } from './profiles';
 import { saveStudio, studioSettings } from './studio';
@@ -133,7 +135,7 @@ export const handlers = {
   'retail.count':defineCommand(countStock,['owner']),
   'retail.transfer':defineCommand(transferStock,['owner']),
   'retail.sell':defineCommand(sellRetail,['owner','front-desk'],{staffRight:'sale'}),
-  'retail.return':defineCommand(returnRetail,['owner']),
+  'retail.return':defineCommand(returnRetail,['owner','front-desk'],{staffRight:'refund'}),
   'drawer.open':defineCommand(openDrawer,['owner']),
   'drawer.close':defineCommand(closeDrawer,['owner']),
   'drawer.cash':defineCommand(drawerCash,['owner']),
@@ -309,6 +311,8 @@ export const handlers = {
   'appointment.offer.preview':defineCommand(previewAppointmentOffer,['owner']),
   'scheduling.unavailable.save':defineCommand(saveUnavailability,['owner']),
   'scheduling.unavailable.remove':defineCommand(removeUnavailability,['owner']),
+  'catalog.publish':defineCommand(publishProduct,['owner']),
+  'catalog.retire':defineCommand(retireProduct,['owner']),
   'pack.prepare':defineCommand(preparePack,['owner','agent']),
   'pack.approve':defineCommand(approvePack,['owner']),
   'pack.adjust':defineCommand(adjustPack,['owner']),
@@ -331,6 +335,7 @@ export const handlers = {
   'payment.record':defineCommand(recordPayment,['owner']),
   'reminder.prepare':defineCommand(prepareReminder,['owner','agent']),
   'reminder.approve':defineCommand(approveReminder,['owner']),
+  'reminder.discard':defineCommand(discardReminder,['owner']),
   'booking.change.prepare':defineCommand(prepareBookingChange,['owner','agent']),
   'booking.change.approve':defineCommand(approveBookingChange,['owner']),
   'booking.move':defineCommand(moveBooking,['owner','member','instructor'],{member:{staff:'booking.move',right:'booking'},staffRight:'booking'}),
@@ -399,7 +404,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   if(name === 'intake.submit.staff') authorizeIntakeSubmission(tx,input);
   const enrollmentBasis = intakeEnrollmentBasis(tx.state);
   const signingEnrollmentBasis=new Set(list(tx.state,'pack').map(p=>p.id));
-  if (name.startsWith('retail.') && ['front-desk','manager'].includes(who.role)) requireRetail(tx, name === 'retail.sell' ? 'sale' : name.slice(7), input);
+  if (name.startsWith('retail.') && who.role !== 'owner') requireRetail(tx, name === 'retail.sell' ? 'sale' : name.slice(7), input);
   if (name.startsWith('appointment.client.')) authorizeClientAppointment(tx,name,input);
   if (name.startsWith('appointment.') && !name.startsWith('appointment.client.') && !name.includes('.offer.') && !['appointment.booking.grant','appointment.price.save'].includes(name)) authorizeAppointmentCommand(tx,input);
   if(tx.who.role==='front-desk' && name.startsWith('attendance.') && !delegatedStaff) {const offer=tx.state.records.get(String(input.id))?.data,personId=String(input.personId ?? offer?.personId ?? '');const grant=legacyStaffGrant(tx.state,tx.who,'attendance-plan');const entry=tx.state.records.get(String(input.classId))?.data;requireAttendanceBooking(tx,personId,entry?[entry.locationId ?? 'studio']:grant?.locationIds ?? []);}
@@ -410,6 +415,7 @@ export async function command(db: D1Database, who: Actor, name: string, input: R
   }
   await validateWidgetBooking(tx,name,input);
   const replay = staff ? priorStaffRequest(tx,name,input) : null;
+  if (name.startsWith('drawer.')) { const prior=priorRetailRequest(tx,name,input); if(prior)return prior; }
   if (replay) return name.startsWith('course.') ? coursePublicResult(tx.who,replay) : name.startsWith('freeze.') ? freezePublicResult(tx.who,replay) : replay;
   const before = staff ? staffBefore(tx,name,input) : null, priorIds = new Set([...list(tx.state,'bookingAction'),...list(tx.state,'profileChange')].map(a => a.id));
   const privatePreparation = name.startsWith('widget.') || name==='plan.cancellation.prepare' || name.startsWith('plan.cancellation.withdraw.') || name.startsWith('lead.success.') || ['appointment.offer.save','appointment.offer.preview','appointment.series.offer.save','appointment.series.offer.preview'].includes(name);
@@ -524,7 +530,7 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
   const timetableBasis = owner ? await seriesBasis(state) : null;
   const timetableDraft = (d: any) => ({...d,stale:d.status === 'draft' && d.basis !== timetableBasis});
   const pay = who.role === 'owner' || who.role === 'instructor' ? teachingPay(state,who.role === 'instructor' ? who.personId : undefined) : null;
-  return {courseTuition:coursesSnapshot(state,who),staffAccessGrants:who.role==='owner'?list(state,'staffAccess'):[],attendanceBookingGrants:who.role==='owner'?legacyStaffGrants(state,'attendanceBookingGrant'):[],attendancePlans:attendancePlanSnapshot(state,who),timeClock:timeSnapshot(state,who),gifts:who.role==='owner' ? giftSnapshot(state) : null,retail:who.role==='owner' ? inventorySnapshot(state) : null,drawers:who.role==='owner' ? drawerSnapshot(state) : null,intake:intakeSnapshot(state,who),familyTuition:familyTuitionSnapshot(state,who),renewalSequences:who.role === 'owner' ? list(state,'renewalSequence') : [],renewalSequencePreviews:who.role === 'owner' ? list(state,'renewalSequencePreview') : [],marketingMessages:who.role === 'owner' ? list(state,'marketingMessage') : [],memberPreferences:who.role === 'member' ? preferenceExport(state,who,who.personId!) : null,memberMessages:who.role === 'member' ? list(state,'memberMessage').filter(m => m.personId === who.personId) : [],memberRecords:who.role === 'owner' ? state.people.filter(p => p.role === 'member' && !p.erasedAt).map(p => memberHistory(state,who,p.id)) : [],memberRecordGrants:who.role === 'owner' ? legacyStaffGrants(state,'memberRecordGrant') : [],memberMergePreviews:who.role === 'owner' ? list(state,'memberMergePreview') : [],intros:introSnapshot(state,who),cancellations:await cancellationsSnapshot(state,who),freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),...appointmentSnapshot(state,who),...clientAppointmentSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),winback:winbackSnapshot(state,who),nurture:nurtureSnapshot(state,who),emptyPlaces:emptyPlaceSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,...placed(state,c),occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:withWards('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:withWards('packCreditEvent').filter(e=>who.role !== 'agent' || !classOf.get(e.classId)?.privatePersonId),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
+  return {productCatalog:owner ? productCatalog(state) : null,studioAudit:who.role==='owner'?studioAudit(state):[],courseTuition:coursesSnapshot(state,who),staffAccessGrants:who.role==='owner'?list(state,'staffAccess'):[],attendanceBookingGrants:who.role==='owner'?legacyStaffGrants(state,'attendanceBookingGrant'):[],attendancePlans:attendancePlanSnapshot(state,who),timeClock:timeSnapshot(state,who),gifts:who.role==='owner' ? giftSnapshot(state) : null,retail:who.role==='owner' ? inventorySnapshot(state) : null,drawers:who.role==='owner' ? drawerSnapshot(state) : null,intake:intakeSnapshot(state,who),familyTuition:familyTuitionSnapshot(state,who),renewalSequences:who.role === 'owner' ? list(state,'renewalSequence') : [],renewalSequencePreviews:who.role === 'owner' ? list(state,'renewalSequencePreview') : [],marketingMessages:who.role === 'owner' ? list(state,'marketingMessage') : [],memberPreferences:who.role === 'member' ? preferenceExport(state,who,who.personId!) : null,memberMessages:who.role === 'member' ? list(state,'memberMessage').filter(m => m.personId === who.personId) : [],memberRecords:who.role === 'owner' ? state.people.filter(p => p.role === 'member' && !p.erasedAt).map(p => memberHistory(state,who,p.id)) : [],memberRecordGrants:who.role === 'owner' ? legacyStaffGrants(state,'memberRecordGrant') : [],memberMergePreviews:who.role === 'owner' ? list(state,'memberMergePreview') : [],intros:introSnapshot(state,who),cancellations:await cancellationsSnapshot(state,who),freezes:frozen,recurring:recurringSnapshot(state,who,connection,origin),makeups:makeupSnapshot(state,who),guests:guestSnapshot(state,who),...reservationSnapshot(state,who),...appointmentSnapshot(state,who),...clientAppointmentSnapshot(state,who),profileChanges:profileSnapshot(state,who),classReminderRules:who.role === 'owner' ? list(state,'classReminderRule') : [],reminderTasks:who.role === 'owner' ? list(state,'reminderTask') : [],messagePreferenceLaunches:who.role === 'owner' ? list(state,'messagePreferenceLaunch') : [],messagePreference:who.role === 'member' ? messagePreference(state,who.personId!) : null,messageTemplates:who.role === 'owner' ? messageTemplates(state) : null,planChanges:planChangeSnapshot(state,who),substitutions:substitutionSnapshot(state,who),winback:winbackSnapshot(state,who),nurture:nurtureSnapshot(state,who),emptyPlaces:emptyPlaceSnapshot(state,who),pipeline:who.role === 'owner' ? leadSnapshot(state,who) : null,recognition:recognitionSnapshot(state,who),teachingPay:pay,payRules:who.role === 'owner' ? list(state,'payRule') : who.role === 'instructor' ? list(state,'payRule').filter(r => pay?.rows.some(row => row.ruleId === r.id)) : [],series:owner ? list(state,'series') : [],seriesChanges:owner ? list(state,'draft').filter(d => ['series','series-change'].includes(d.type)).map(timetableDraft) : [],seriesCancellations:who.role === 'owner' ? list(state,'seriesCancellation').map(timetableDraft) : [],staffActions:who.role === 'owner' ? staffActions(state) : [],staffNotices:who.role === 'owner' ? list(state,'notice') : [],waiverLaunches:who.role === 'owner' ? list(state,'waiverLaunch') : [],bookingActions:who.role === 'owner' ? bookingActions(state) : [],cancellationReasons:who.role === 'owner' ? cancellationReasons(state) : [],actor:who,version:state.version,people,classes:classes.map(c => ({...c,...placed(state,c),occupancy:seatCapacity(state,c),spots:classSpots(state,c),bookingWindow:bookingWindow(state,c,who.personId && !owner ? bookingPack(state,who.personId,c) ?? planRefused(state,who.personId,c)?.pack : null)})),bookingRules:bookingRules(state),waitlistPolicy:waitlistPolicy(state),memberMail:who.role === 'owner' ? memberMail(state) : null,bookings,packs:withWards('pack').map(pack => ({...pack,summary:packSummary(state,pack)})),packCreditEvents:withWards('packCreditEvent').filter(e=>who.role !== 'agent' || !classOf.get(e.classId)?.privatePersonId),fees:fees(state).filter(f => owner || f.personId === who.personId),payments:own('payment'),charges:own('charge'),
     demand:owner ? {classes:demandEvidence(state),availability:demandAvailability(state)} : null,drafts:owner?await Promise.all(list(state,'draft').map(async (d): Promise<RecordData> => ({...d,...(d.recommendation ? {stale:await recommendationStale(state,d)} : {})}))):[],approvals:owner?list(state,'approval'):[],unavailability:who.role === 'owner'?list(state,'unavailability'):[],spotLayouts:who.role === 'owner'?spotLayouts(state):[],waiver:latestWaiver(state),waivers:currentWaivers(state),studio:studioSettings(state),households:householdSnapshot(state,who),householdPayerChanges:who.role === 'owner' ? list(state,'householdPayerChange') : [],locations:locations(state),packLocationChanges:who.role === 'owner' ? list(state,'packLocationChange') : [],acknowledgements:withWards('acknowledgement').map(a=>who.role==='agent'||who.role==='instructor'?{id:a.id,personId:a.personId,waiverId:a.waiverId,createdAt:a.createdAt}:a),
     closures:who.role === 'owner' ? list(state,'closure').map(c => c.status === 'draft' ? {...c,stale:closureImpact(state,c).key !== c.impact.key} : c) : [],notices:who.role === 'member' || who.role === 'instructor' ? withWards('notice') : [],
     checkinCodes:who.role === 'owner' || who.role === 'member' ? own('memberCheckin').filter(r => r.code).map(r => ({personId:r.personId,code:r.code,codeRevision:r.codeRevision,codeIssuedAt:r.codeIssuedAt})) : [],
@@ -532,13 +538,29 @@ async function snapshotFor(state: State, who: Actor, connection?: {connection_id
 }
 
 export function deskRetailSnapshot(state: State, who: Actor) {
-  const grant = retailGrant(state,who);
   if (!['front-desk','manager'].includes(who.role)) return {};
-  if (!grant?.enabled || (!grant.sale && !grant.refund)) return {};
-  const inventory = inventorySnapshot(state), all = giftSnapshot(state);
-  const visible = (c: RecordData) => hasStaffRight(state,who,'sale',c.personId,c.locationId,'retail') || hasStaffRight(state,who,'refund',c.personId,c.locationId,'retail');
-  const cards = all.cards.filter(visible);
-  const gifts = {cards:cards.map(({id,personId,locationId,balanceCents}: any) => ({id,personId,locationId,balanceCents})),entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
-  const retail = {...inventory,suppliers:[],receipts:[],returns:[],movements:[],actions:[],sales:inventory.sales.filter(c => visible(c)),stock:inventory.stock.filter(c => grant.locationIds.includes(c.locationId))};
-  return {saleGrant:grant,gifts,retail,drawers:{sessions:[],adjustments:[]},locations:locations(state).filter(l => grant.locationIds.includes(l.id)),retailPeople:state.people.filter(p => grant.memberIds.includes(p.id)).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}))};
+  const permits = (right: 'sale'|'refund', memberId?: string, locationId?: string) => hasStaffRight(state,who,right,memberId,locationId,'retail');
+  const sale = permits('sale'), refund = permits('refund');
+  if (!sale && !refund) return {};
+  const visible = (c: RecordData) => permits('sale',c.personId,c.locationId) || permits('refund',c.personId,c.locationId);
+  const places = locations(state).filter(l => permits('sale',undefined,l.id) || permits('refund',undefined,l.id));
+  const people = state.people.filter(p => p.active && !p.erasedAt && places.some(l => permits('sale',p.id,l.id) || permits('refund',p.id,l.id))).map(p => ({id:p.id,name:p.name,role:p.role,active:p.active}));
+  const saleLocations = places.filter(l=>permits('sale',undefined,l.id));
+  const salePeople = people.filter(p=>saleLocations.some(l=>permits('sale',p.id,l.id)));
+  const grant = {...retailGrant(state,who),enabled:true,sale,refund,memberIds:people.map(p=>p.id),locationIds:places.map(l=>l.id)};
+  const inventory = inventorySnapshot(state), all = giftSnapshot(state), cards = all.cards.filter(visible);
+  const gifts = {cards:cards.map((c: RecordData) => ({id:c.id,personId:c.personId,locationId:c.locationId,balanceCents:c.balanceCents,
+    canRedeem:permits('sale',c.personId,c.locationId),canAdjust:permits('refund',c.personId,c.locationId),canRefund:permits('refund',c.personId,c.locationId) && permits('refund',c.purchaserId,c.locationId)})),
+    entries:[],promotions:all.promotions,uses:[],refunds:[],liabilityCents:cards.reduce((n,c) => n+c.balanceCents,0)};
+  const sales = inventory.sales.filter(visible).map(c=>{
+    const originalGift = c.tender === 'gift' ? state.records.get(c.giftCardId)?.data : null;
+    const canReturn = hasStaffRight(state,who,'refund',c.personId,c.locationId)
+      && (c.tender !== 'gift' || !!originalGift && hasStaffRight(state,who,'refund',originalGift.personId,originalGift.locationId));
+    return {...c,canReturn};
+  });
+  const retail = {...inventory,suppliers:[],receipts:[],returns:inventory.returns.filter(r=>sales.some(s=>s.id===r.saleId)),movements:[],actions:[],sales,
+    stock:inventory.stock.filter(c => places.some(l=>l.id===c.locationId))};
+  const sessions = drawerSnapshot(state).sessions.filter(c=>c.status==='open' && places.some(l=>l.id===c.locationId)).map(c=>({id:c.id,register:c.register,locationId:c.locationId,status:c.status,entries:[]}));
+  return {saleGrant:grant,retailPermissions:{sale,refund,merchandiseSale:hasStaffRight(state,who,'sale'),merchandiseRefund:hasStaffRight(state,who,'refund')},
+    gifts,retail,drawers:{sessions,adjustments:[]},retailLocations:places,locations:places,retailPeople:people,retailSaleLocations:saleLocations,retailSalePeople:salePeople};
 }

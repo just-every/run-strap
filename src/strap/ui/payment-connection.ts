@@ -30,8 +30,23 @@ export function planPaymentsPanel(s: any) {
   const reconciliations=b.reconciliations.map((r: any)=>`<article data-reconciliation="${h(r.id)}"><p>${h(r.invoiceId)} · ${h(r.status)} · ${when(s,r.at)}</p>`
     +(r.provider?`<p>Stripe ${money(r.provider.amountCents)} USD · ${h(r.provider.paymentStatus)} · invoice ${h(r.provider.providerInvoiceId ?? 'not yet issued')}.</p>`:'<p>Stripe comparison unavailable; no settlement inferred.</p>')
     +`<p>Studio balance ${money(r.native.balanceBeforeCents)} before, ${money(r.native.balanceAfterCents)} after · ${r.native.balanceMatches?'matches recorded receipt':'needs review'}. Plan credits ${h(r.native.accessBefore.remaining)} before, ${h(r.native.accessAfter.remaining)} after · ${r.native.accessMatches?'access unchanged':'needs review'}.</p></article>`).join('');
-  return panel('Plan payments and reconciliation',body('<p>One-time USD test card payment for an approved plan. The payer personally completes Stripe checkout. This does not enable recurring autopay.</p><p><a href="/app/studio#payment-connection">Review Stripe connection in Studio settings</a></p>'
+  return panel('Plan payments and reconciliation',body('<p><a href="/app/payouts">Review TEST fees and payouts</a></p><p>One-time USD test card payment for an approved plan. The payer personally completes Stripe checkout. This does not enable recurring autopay.</p><p><a href="/app/studio#payment-connection">Review Stripe connection in Studio settings</a></p>'
     +(eligible.length?`<details><summary>Collect an approved plan</summary>${start}</details>`:'')+(invoices||'<p>No hosted plan payments yet.</p>')
     +`<h3>Exception queue</h3>${exceptions||'<p>No exceptions.</p>'}<details><summary>Reconciliation history</summary>${reconciliations||'<p>No comparisons yet.</p>'}</details>`
     +`<details><summary>Signed event history</summary>${b.events.map((e: any)=>`<p>${h(e.providerEventId)} · ${h(e.eventType)} · ${h(e.status)}</p>`).join('')||'<p>No signed events yet.</p>'}</details>`),{id:'payments'});
+}
+
+export function payoutAccessPanel(s: any) {
+  const b=s.billing,a=b?.payoutAccess;
+  if(!owner(s) || !a)return '';
+  const back='/app/studio#payout-access',connection=b.connection;
+  const lines=a.candidates.map((candidate: any)=>{
+    const member=s.people.find((p: any)=>p.id===candidate.personId),grant=a.grants.find((g: any)=>g.personId===candidate.personId);
+    const current=grant?.enabled && grant.financeBasis===candidate.financeBasis && grant.connectionId===connection?.connectionId;
+    const base=request()+hidden('personId',candidate.personId)+hidden('version',grant?.version??0)+field('reason','Reason','','text','required maxlength="500"');
+    const approve=connection?.review?.ready ? form('billing.payouts.access.grant',back,base+hidden('financeBasis',candidate.financeBasis)+hidden('accountId',connection.accountId)+hidden('connectionId',connection.connectionId)+confirm('Allow this finance user to read all retained payment and payout observations for merchant '+connection.accountId+', across every member and location.'),'Grant reconciliation reads','quiet') : '<p>Review the test connection before granting reads.</p>';
+    const revoke=grant?.enabled ? form('billing.payouts.access.revoke',back,base+confirm('Remove this person’s reconciliation read access now.'),'Revoke reconciliation reads','quiet') : '';
+    return '<section data-payout-access="'+h(candidate.personId)+'"><h3>'+h(member?.name??'Finance user')+'</h3><p data-payout-access-state>'+(current?'Read access granted':'Separate read approval required')+'</p><details><summary>Review reconciliation access</summary>'+approve+revoke+'</details></section>';
+  }).join('');
+  return panel('Finance reconciliation access',body('<p>This separate approval exposes the whole merchant’s retained TEST statement and its downloads. Existing finance, export and collection rights do not grant it. A second factor is required at each sign-in. Finance users cannot refresh the provider, move money or change access. Changing their finance authority, reconnecting billing or restoring an archive requires a fresh approval.</p>'+(lines||'<p>Invite and grant a finance role in Security first.</p>')+'<details><summary>Reconciliation access history</summary>'+a.history.map((e: any)=>'<p>'+h(e.at)+' · '+h(e.personId)+' · '+(e.after?.enabled?'granted':'revoked')+' · '+h(e.reason??'Retained audit')+'</p>').join('')+'</details>'),{id:'payout-access'});
 }

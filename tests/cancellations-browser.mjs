@@ -387,6 +387,28 @@ export async function staffTerminationsBrowser(h,s){
           assert.equal(after.staffActions.filter(a=>a.command==='plan.cancellation.withdraw.confirm'&&a.after.id===withdrawal.id).length,1);
           assert.match(await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).innerText(),/Confirmed/);
           for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await page.locator(`[data-cancellation-withdrawal="${withdrawal.id}"]`).scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-staff-withdrawn-${proofWidth}.png`)});}
+          // The immediate flow is asserted at the phone width; both layouts get a visual receipt.
+          await page.setViewportSize({width:390,height:1000});
+          const immediate=await saleAndAgreement(h,s.ben,'synthetic-strap-immediate-browser');
+          await page.goto(url);await page.reload();await page.getByText('Prepare an earlier termination',{exact:true}).click();
+          const immediateForm=commandForm(page,'plan.cancellation.prepare');
+          await immediateForm.locator('[name=packId]').selectOption(immediate.pack.id);
+          await immediateForm.locator('[name=timing]').selectOption('immediate');
+          await immediateForm.locator('[name=reasonCode]').selectOption('moved-away');
+          await immediateForm.locator('[name=reason]').fill('Moved away today');
+          await immediateForm.getByRole('button',{name:'Preview early termination',exact:true}).click();
+          const immediatePreview=(await h.state()).cancellations.cancellations.find(c=>c.packId===immediate.pack.id&&c.status==='preview');
+          assert.ok(immediatePreview);assert.equal(immediatePreview.timing,'immediate');
+          const immediateCard=page.locator(`[data-contract-cancellation="${immediatePreview.id}"]`);
+          assert.match(await immediateCard.innerText(),/Immediate termination: access changes on confirmation/);
+          for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await immediateCard.scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-immediate-preview-${proofWidth}.png`)});}
+          await page.setViewportSize({width:390,height:1000});
+          await immediateCard.getByRole('button',{name:'Confirm this exact early termination',exact:true}).click();
+          const applied=(await h.state()).cancellations.cancellations.find(c=>c.id===immediatePreview.id);
+          assert.equal(applied.status,'applied');assert.equal(applied.effectiveAt,immediatePreview.effectiveAt);
+          assert.match(await immediateCard.innerText(),/Applied/);
+          assert.equal(await immediateCard.getByRole('button',{name:'Preview withdrawal of my cancellation',exact:true}).count(),0);
+          for(const proofWidth of [390,1440]){await page.setViewportSize({width:proofWidth,height:1000});await immediateCard.scrollIntoViewIfNeeded();await page.screenshot({path:join(proof,`PLAN012-immediate-confirmed-${proofWidth}.png`)});}
         }
       }finally{await context.close()}
     }

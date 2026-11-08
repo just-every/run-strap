@@ -4,12 +4,12 @@ import { html } from '../html'
 import { arrow, check, heading, icon } from './parts'
 
 const steps = [
-  { day: 'Sat Sep 26', line: 'Lead from your website booking widget' },
-  { day: 'Mon Sep 28', line: 'Bought Intro 3 weeks · $59.00 · waiver signed' },
-  { day: 'Mon Sep 28', line: 'Welcome email · what to bring, grip socks' },
+  { day: 'Sat Sep 26', line: 'Lead added at the front desk' },
+  { day: 'Mon Sep 28', line: 'Bought Intro 3 weeks · $59.00 · waiver accepted' },
+  { day: 'Mon Sep 28', line: 'Welcome message · what to bring, grip socks' },
   { day: 'Thu Oct 15', line: '9 classes so far · offer sent' },
 ]
-const terms = [['Today · Oct 19–31 prorated', '$79.26'], ['Then on the 1st', '$189.00'], ['Next charge', 'Sun Nov 1'], ['Autopay', 'Visa •• 7316']]
+const terms = [['Today · Oct 19–31 prorated', '$79.26'], ['Then on the 1st', '$189.00'], ['Next invoice', 'Sun Nov 1'], ['Stop', 'Any time, one tap']]
 
 const phone = html`<figure class="phone" aria-label="Larkhill's member app: join Monthly Unlimited for $79.26 today">
   <div class="phone-screen">
@@ -20,7 +20,7 @@ const phone = html`<figure class="phone" aria-label="Larkhill's member app: join
       <p class="phone-sub">$189 / month · both studios</p>
       <dl class="phone-terms">${terms.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>
       <p class="phone-agree"><span class="box" aria-hidden="true">${check()}</span>I agree to the membership terms</p>
-      <p class="phone-join">Join · pay $79.26</p>
+      <p class="phone-join">Join · $79.26</p>
     </div>
     <span class="phone-home" aria-hidden="true"></span>
   </div>

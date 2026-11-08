@@ -1,3 +1,5 @@
+import { momentText, rangeText, quantity } from '../readable';
+import { zoneName } from '../zone';
 import { humanOwner, now, type RecordData, type State } from './types';
 import type { Transaction } from './store';
 import { studioSettings } from './studio';
@@ -17,7 +19,7 @@ export const memberMail = (state: State) => state.records.get('member-mail')?.da
 export const mailNotConfigured = 'email not configured; members see an in-app notice only';
 
 const zoneOf = (state: State) => studioSettings(state)?.timeZone ?? 'UTC';
-export const whenText = (state: State, at: string, zone?: string) => new Intl.DateTimeFormat('en-US',{timeZone:zone ?? zoneOf(state),weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(at));
+export const whenText = (state: State, at: string, zone?: string) => momentText(at,zone ?? zoneOf(state));
 export const titleOf = (entry: RecordData) => String(entry.title).split(' · ')[0];
 
 /** Same required facts in every booking/class notice; templates add prose,
@@ -28,9 +30,12 @@ export function messageBody(state: State, body: string, bookingIds: string[], en
     const booking = state.records.get(id)?.data;
     const entry = entries.find(c => c.id === booking?.classId) ?? state.records.get(booking?.classId)?.data;
     if (!entry) return '';
-    const zone = entry.timeZone ?? studio?.timeZone ?? 'UTC', exact = (at: string) => new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',timeZoneName:'shortOffset',hour:'numeric',minute:'2-digit'}).format(new Date(at));
+    const zone = entry.timeZone ?? studio?.timeZone ?? 'UTC';
     const terms = booking?.cancelTerms ?? {cutoffHours:0,lateReturnsCredit:true,lateFeeCents:0};
-    return `${titleOf(entry)}: ${whenText(state,entry.start,zone)} [${exact(entry.start)}] to ${whenText(state,entry.end,zone)} [${exact(entry.end)}] (${zone}). Location: ${entry.location ?? studio?.location ?? 'Studio'}${entry.room ? ', '+entry.room : ''}. Instructor: ${entry.instructorName}. Cancellation policy: ${terms.cutoffHours} hours before start; late cancellation ${terms.lateReturnsCredit ? 'returns' : 'uses'} the credit, $${(terms.lateFeeCents/100).toFixed(2)} fee. Manage your bookings after sign-in: /app`;
+    const cancellation = !terms.cutoffHours || terms.lateReturnsCredit && !terms.lateFeeCents
+      ? 'Cancel any time before class for your credit back.'
+      : `Cancel at least ${quantity(terms.cutoffHours,'hour')} before class for your credit back. Later cancellations ${terms.lateReturnsCredit ? 'return' : 'use'} the credit${terms.lateFeeCents ? ` and add a $${(terms.lateFeeCents/100).toFixed(2)} fee` : ''}.`;
+    return `${titleOf(entry)} · ${rangeText(entry.start,entry.end,zone)} (${zoneName(zone)}). Location: ${entry.location ?? studio?.location ?? 'Studio'}${entry.room ? ', '+entry.room : ''}. Instructor: ${entry.instructorName}. ${cancellation}`;
   }).filter(Boolean);
   return [template.prefix,body,...facts,template.suffix].filter(Boolean).join('\n\n');
 }

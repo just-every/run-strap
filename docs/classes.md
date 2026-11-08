@@ -1,7 +1,7 @@
 # Classes and the waitlist
 
-You publish a week of classes at a time. Members book with their class credits, a full class keeps a waitlist, and a
-cancellation hands the spot to the first person waiting.
+Publish a repeating timetable or a week of individual classes. Members book with their class credits, a full class
+keeps a waitlist, and a cancellation hands the spot to the first eligible person waiting.
 
 ## Set your studio's clock
 
@@ -9,10 +9,25 @@ Before the first week, open **Studio** (the location row under the logo, with it
 zone, such as Central for Nashville. Every class time is entered and shown on that clock, the US way ("6:00 am"),
 for you, your instructors and your members, and daylight saving time is handled for you.
 
+## Prepare a repeating timetable
+
+Open **Classes → Repeating timetable → Prepare repeating classes**. Add an active instructor in **People** first.
+Choose **First class date**, **Repeat through** and **Repeat every (weeks)**. The first date sets the weekday; the
+interval repeats that class on the same weekday and local start time, including across daylight saving changes.
+You can publish up to 104 occurrences, each with its own roster.
+
+Enter the class name, service, local start time, minutes, instructor, room, total capacity and online capacity.
+Online capacity reserves that many places for online booking; the remaining places are held for the desk. Choose a
+location if you have more than one. Add equipment names and preparation/cleanup time as needed.
+
+Press **Preview repeating timetable**. Under **Review repeating timetable**, check every occurrence, its location,
+instructor and capacity. Resolve any listed conflicts, then choose **Approve and publish timetable** to open booking.
+Preparing alone publishes nothing.
+
 ## Prepare a class week
 
 Open **Classes** and find **Prepare a class week**. Choose the Monday that starts the week, then fill one row per class:
-the class name, its room, the day, the start time, its length in minutes, the number of spots and the instructor,
+the class name, its room, the day, the start time, its length in minutes, the number of spots, online spots and the instructor,
 picked by name. **Service** groups classes for pack eligibility, such as `Mat` or `Reformer`; blank uses the class name. The pack’s eligible services must match this name, ignoring case and extra spaces. Rows left without a class name are skipped; **Add seven more rows** gives you more.
 
 Enter each shared piece of equipment or reformer by name, one per line. Use the same room and equipment names wherever they are shared; matching ignores case and extra spaces. Preparation and cleanup minutes reserve the instructor, room and equipment before and after the class. Two reservations may touch at their exact end and start, but may not overlap.
@@ -23,11 +38,11 @@ Enter each shared piece of equipment or reformer by name, one per line. Use the 
 
 The draft appears under **Prepared class weeks** as a table of the week's classes. Read it through, then press
 **Approve and publish this exact week**. The classes appear under **Upcoming classes** and on **Today**, and members can
-book them. A published class is never changed quietly: to run a different week, prepare and publish that week.
+book them. Use **Edit or cancel** in **Repeating timetable** to preview and approve a scoped change to published repeating classes. Use **Closures and cancellations** below to cancel other published classes.
 
 The draft is checked again when you publish. If another class or an unavailable interval has appeared, the draft lists the blocking records and stays unpublished.
 
-Strap publishes the classes you list; it does not repeat a schedule for you.
+The class-week form publishes only the rows you list. Use **Repeating timetable** for recurring classes.
 
 ## Record unavailable time
 

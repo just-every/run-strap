@@ -1,6 +1,7 @@
+import { rangeText } from '../readable'
 import { locationChoices, manyLocations } from './facts'
 import { schedulingConflicts, type SchedulingConflict } from '../domain/scheduling'
-import { when } from './format'
+import { when, zoneOf } from './format'
 import { body, cell, emptyLine, field, form, h, hidden, panel, rows, select, table, textarea } from './shared'
 
 export function allocationDetails(c: any) {
@@ -17,7 +18,7 @@ export function draftConflicts(s: any, d: any) {
 export function conflictDetails(s: any, conflicts: SchedulingConflict[]) {
   if (!conflicts.length) return ''
   return `<div role="alert"><p><strong>Resolve these scheduling conflicts before publication.</strong></p>${table(['Class', 'Resource', 'Conflicting record', 'Occupied interval'], conflicts.map(c =>
-    `<tr>${cell('Class', h(c.classTitle))}${cell('Resource', `${h(c.resource.kind)}: ${h(c.resource.label)}`)}${cell('Conflicting record', `<strong>${h(c.recordKind === 'class' ? c.record.title : c.record.reason)}</strong><small>${h(c.recordKind === 'class' ? 'Class' : 'Unavailable')} · ${h(c.record.id)}</small>`)}${cell('Occupied interval', `${when(s, c.occupiedStart)} – ${when(s, c.occupiedEnd)}`)}</tr>`).join(''))}</div>`
+    `<tr>${cell('Class', h(c.classTitle))}${cell('Resource', `${h(c.resource.kind)}: ${h(c.resource.label)}`)}${cell('Conflicting record', `<strong>${h(c.recordKind === 'class' ? c.record.title : c.record.reason)}</strong><small>${h(c.recordKind === 'class' ? 'Class' : 'Unavailable')}</small>`)}${cell('Occupied interval', `${h(rangeText(c.occupiedStart,c.occupiedEnd,c.record.timeZone ?? zoneOf(s) ?? 'UTC'))}`)}</tr>`).join(''))}</div>`
 }
 
 export function availabilityPanel(s: any) {

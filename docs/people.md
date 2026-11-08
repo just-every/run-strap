@@ -3,6 +3,10 @@
 Everyone who signs in to Strap is a person in **People**: your members and your instructors. The owner adds them, and
 only the owner grants or ends access. The owner may grant the bounded member-record right described below.
 
+Before adding an instructor, changing sign-in or access, or inviting anyone, open **Security** and enroll an
+authenticator app or passkey. Use that second factor at each new sign-in. In local development, the session opened
+from your private `RER_OPEN` link already confirms your identity for enrollment; no email confirmation is needed.
+
 ## Add a person
 
 Use **Add a person** with the person's full name, email, role (**Member** or **Instructor**) and status. People you
@@ -14,12 +18,14 @@ instructor by name.
 
 ## Invite someone to sign in
 
-Open an active person and press **Invite to sign in**. Strap emails them a sign-in link; after that they sign in with
-their email whenever they like.
+Open an active person and press **Invite to sign in**. On a hosted installation, Strap emails them a sign-in link;
+after that they sign in with their email whenever they like.
+You can offer sign-in again to an active person who previously accepted an invitation, including after a restore.
 
-While Strap runs on your computer no email leaves it. Invitations land in **Local mail** instead. To try a member's view
-yourself, open the private `RER_OPEN` link in a second browser profile, sign out there, then open the invitation from
-**Local mail** in that profile.
+While Strap runs on your computer no email leaves it. To try the invited member's view yourself, open the terminal's
+private `RER_OPEN` link in a second browser profile first, then sign out there. At the local app address, open `/signin`
+and choose **Sign in as** the invited person from the eligible identities. Keep your owner profile open separately,
+and keep the private launch link to yourself.
 
 ## Member profiles
 
@@ -61,10 +67,10 @@ After a restore, staff waiver links stay paused with member email. Review and re
 
 ## Find and download staff actions
 
-In People, **Staff action history** shows recorded staff-made actions. Select a person to focus on that member, then
+In People, **Staff action history** shows recorded staff-made member actions, retained staff-access grants and revocations, and drawer count corrections and reopens. Select a person to focus on that member, then
 filter by acting staff member, action right, channel, command and from/through date. Both date bounds include the whole day in the studio's
 time zone. The newest event is first; event identity orders simultaneous events. Clear a field to include all its values.
-Open **Recorded change** for the before/after effect and the retained actor, right, channel and reason.
+Open **Recorded change** for the before and after effect and the retained actor, right, channel and reason. Access changes show their exact grant version and original source identity. Drawer changes retain their original session and source identity, count or status change and recorded reason. New changes retain the acting role; older missing roles, versions, channels or resulting snapshots remain explicitly unavailable. The view never substitutes current grants or drawer balances for historical facts.
 
 **Download staff history CSV** and **Open staff history JSON** use the same filters. These are private owner downloads;
 members, instructors and preparation agents cannot use them. Reads and downloads never create or rewrite history.

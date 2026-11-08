@@ -55,8 +55,14 @@ export async function credentialCommand(request: Request, env: Bindings, who: Ac
       if(person.role!=='member')fail('member_required',403);
       returnTo='/app/widget?selection='+String(input.widgetSelection);
     }
-    await operatorAuth(env).invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo })
-    return { invited: true }
+    const auth = operatorAuth(env)
+    const existing = await env.DB.prepare('SELECT role,status FROM oa_operators WHERE email=? COLLATE NOCASE').bind(person.email).first<{ role: string; status: string }>()
+    // Accepted identities travel in archives; sessions and sign-in links do not.
+    // Offer ordinary sign-in again rather than attempting a conflicting invitation.
+    if (existing?.status === 'active' && existing.role === 'member') {
+      if (env.AUTH_LOCAL !== 'true') await auth.requestMagicLink(request, { email: person.email, returnTo })
+    } else await auth.invite(request, { email: person.email, displayName: person.name, role: 'member', returnTo })
+    return { invited: true, message: env.AUTH_LOCAL === 'true' ? `${person.name} can now sign in. Open /signin in their local browser and choose their name.` : `A sign-in link was sent to ${person.name}.` }
   }
   fail('Unknown access command', 404)
 }

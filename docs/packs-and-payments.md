@@ -5,6 +5,26 @@ spend on classes, and the money balance between what their packs cost and what t
 
 Strap never charges a card. You take payment the way you do today and record it here.
 
+## Publish and sell a catalog pack
+
+Open **Studio settings**, then **Product catalog**, and choose **Publish a finite pack**.
+Give it a stable product code, name, USD price, class-credit count, validity in elapsed days,
+eligible services and selected locations. A blank service list permits all services. Each
+publication creates a new immutable version. To change a price or other terms, publish
+another version; **Retire product** stops new sales without changing any sold pack.
+
+In **Packs and payments**, use **Prepare a catalog pack** to select an active version and
+a member outside a household. Review its exact version, price, credits, service and location
+terms and expiration under **Prepared packs and reminders**, then approve the exact pack.
+An agent may prepare this review, while the human owner alone approves it. A changed or
+retired catalog version invalidates an unapproved draft; prepare a fresh review.
+
+The approved pack adds its price to that member's studio balance and grants its credits once.
+It performs no payment collection or automatic renewal. The member's **Purchase receipts**
+retain the original version, price, credits, services, locations and expiration after later
+catalog changes. This finite-pack path does not provide member checkout, household funding,
+recurring catalog products or delegated staff sales.
+
 ## Give a member a pack
 
 Open **Packs and payments** and use **Prepare a pack**:
@@ -55,7 +75,7 @@ own balance under **My packs**.
 For a member who owes money, **Prepare a balance reminder** (or **Prepare a reminder** in **Member success** on Today) writes a draft with the recipient, the outstanding balance
 and the exact message. Approve it, then use **Download** in **Approval history** to get the text and send it from your own
 email. Strap does not send reminders itself. If the member's balance changes before you approve, Strap asks you to
-prepare the reminder again.
+discard the old draft with **Discard reminder**, then prepare the reminder again for the current balance. Discarding removes it from **Prepared packs and reminders** and **Pending approvals** while retaining its exact original contents and who discarded it. Only the native owner can discard an unapproved reminder; approved reminders stay in approval history.
 
 ## Revenue and collections
 

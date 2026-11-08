@@ -6,6 +6,7 @@ import { join,extname } from 'node:path';
 import { chromium } from '@playwright/test';
 import { run } from './harness.mjs';
 import { paymentSeed,billingView,signedEvent } from './payment-fixtures.mjs';
+import { readPayouts } from './payout-reconciliation-cases.mjs';
 import { auditPage } from './accessibility-browser.mjs';
 
 const key=process.env.STRAP_STRIPE_TEST_KEY;
@@ -103,12 +104,50 @@ await run(async h=>{
           await page.locator(selector).screenshot({path:join(process.env.STRAP_PROOF_DIR,'BILL-real-'+name+'-'+width+'.png')});
         }
       }
+      const originalCharge=providerSession.payment_intent.latest_charge;
+      const canonicalCharge=await provider('/charges/'+originalCharge.id+'?expand[]=balance_transaction');
+      assert.equal(canonicalCharge.id,paid.providerChargeId);assert.equal(canonicalCharge.payment_intent,paid.paymentIntentId);
+      assert.equal(canonicalCharge.balance_transaction.source,canonicalCharge.id);
+      assert.equal(canonicalCharge.amount,5000);assert.equal(canonicalCharge.currency,'usd');
+      assert.ok(Number.isSafeInteger(canonicalCharge.balance_transaction.amount));assert.ok(canonicalCharge.balance_transaction.currency);
+      assert.equal(canonicalCharge.balance_transaction.amount-canonicalCharge.balance_transaction.fee,canonicalCharge.balance_transaction.net);
+      const beforePayouts=await h.state(),beforePosts=edge.filter(c=>c.method==='POST').length;
+      const refresh=await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-live-payouts',confirm:true});
+      assert.ok(['observed','incomplete'].includes(refresh.status));
+      const payoutReport=await readPayouts(h),observation=payoutReport.cards.find(c=>c.invoiceId===paid.id);
+      assert.equal(observation.status,'observed');assert.equal(observation.sourceAmountCents,5000);assert.equal(observation.sourceCurrency,'usd');assert.equal(observation.currency,canonicalCharge.balance_transaction.currency);assert.equal(observation.providerChargeId,canonicalCharge.id);assert.equal(observation.providerTransactionId,canonicalCharge.balance_transaction.id);
+      assert.deepEqual([observation.grossCents,observation.feeCents,observation.netCents],[canonicalCharge.balance_transaction.amount,canonicalCharge.balance_transaction.fee,canonicalCharge.balance_transaction.net]);
+      const readCount=edge.length;await h.cmd('billing.payouts.refresh',{requestId:'synthetic-strap-live-payouts',confirm:true});await h.send('/api/strap/billing/payouts.csv',undefined,h.owner);
+      assert.equal(edge.length,readCount);assert.equal(edge.filter(c=>c.method==='POST').length,beforePosts);
+      const afterPayouts=await h.state();for(const key of ['charges','payments','packs'])assert.deepEqual(afterPayouts[key],beforePayouts[key]);
+      assert.ok(payoutReport.payouts.every(p=>p.depositStatus==='unmatched'&&!p.bankDepositConfirmed));
+      for(const payout of payoutReport.payouts) {
+        if(!payout.transactions) {assert.equal(payout.statementTotals,null);assert.equal(payout.statementDifferenceCents,null);continue;}
+        const canonical=[];let cursor='';
+        for(let page=0;page<20;page++) {
+          const batch=await provider('/balance_transactions?payout='+payout.providerPayoutId+'&limit=100'+(cursor?'&starting_after='+cursor:''));
+          canonical.push(...batch.data);
+          if(!batch.has_more)break;
+          assert.ok(batch.data.length);cursor=batch.data.at(-1).id;
+          assert.ok(page<19,'canonical payout membership must finish');
+        }
+        assert.equal(payout.transactions.length,canonical.length);
+        for(const t of payout.transactions) {
+          const original=canonical.find(row=>row.id===t.providerTransactionId);assert.ok(original);
+          assert.deepEqual([t.sourceId,t.type,t.currency,t.grossCents,t.feeCents,t.netCents],[original.source,original.type,original.currency,original.amount,original.fee,original.net]);
+          assert.equal(t.providerCreatedAt,new Date(original.created*1000).toISOString());assert.equal(t.availableAt,new Date(original.available_on*1000).toISOString());
+        }
+        const independent={grossCents:canonical.reduce((n,t)=>n+t.amount,0),feeCents:canonical.reduce((n,t)=>n+t.fee,0),netCents:canonical.reduce((n,t)=>n+t.net,0)};
+        assert.deepEqual(payout.statementTotals,independent);assert.equal(payout.statementDifferenceCents,payout.amountCents-independent.netCents);
+      }
+      console.log('PROBE BILL-011 live TEST: original canonical card charge and balance transaction -> independent gross, fee and net cents retained; refresh and reads create no provider POST or native money effect.');
+      console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST',accountId:account.id,chargeId:canonicalCharge.id,balanceTransactionId:canonicalCharge.balance_transaction.id,sourceAmountCents:observation.sourceAmountCents,sourceCurrency:observation.sourceCurrency,settlementCurrency:observation.currency,grossCents:observation.grossCents,feeCents:observation.feeCents,netCents:observation.netCents,observedAt:observation.observedAt,payoutRefresh:refresh.status,payoutReadError:refresh.payoutError??null,payouts:payoutReport.payouts.map(p=>({id:p.providerPayoutId,status:p.providerStatus,reconciliationStatus:p.providerReconciliationStatus,transactionCount:p.transactions?.length??null,statementTotals:p.statementTotals,statementDifferenceCents:p.statementDifferenceCents,nativeCoverageStatus:p.nativeCoverageStatus,mappingError:p.mappingError,bankDepositConfirmed:false})),bankReceipt:'unavailable'}));
       const summary=await billingView(h);
       console.log(JSON.stringify({candidateSHA:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),provider:'Stripe TEST',interruptedBeforeCommit:true,lostReturnAfterCommit:true,payerChoiceRetained:true,authoritativeRecovery:true,accountId:account.id,ready:true,sessionId:checkout.providerSessionId,invoiceId:paid.providerInvoiceId,paymentIntentId:paid.paymentIntentId,chargeId:providerSession.payment_intent.latest_charge.id,amountPaid:providerSession.invoice.amount_paid,nativePayments:financial.payments.length,balanceCents:paid.balanceCents,credits:paid.access,realEventIds:events.map(e=>e.id),signedReplay:'controlled replay of real Stripe events, not external endpoint delivery',signingCredentialRotated:true,merchantHistoryRetained:true,oldSigningCredentialRefused:true,reconciliations:summary.reconciliations.map(r=>({status:r.status,provider:r.provider,native:r.native})),exceptions:summary.exceptions.map(e=>({code:e.code,status:e.status})),edge}));
     } finally {await context.close();}
   } finally {await browser.close();}
 },{auth:{STRIPE_BILLING_TEST_KEY:key,STRIPE_BILLING_WEBHOOK_SECRET:signing},outbound:async request=>{
-  const u=new URL(request.url);assert.equal(u.origin,'https://api.stripe.com');assert.ok(['/v1/account','/v1/checkout/sessions','/v1/events'].some(p=>u.pathname===p||u.pathname.startsWith(p+'/')));
+  const u=new URL(request.url);assert.equal(u.origin,'https://api.stripe.com');assert.ok(['/v1/account','/v1/checkout/sessions','/v1/events','/v1/charges','/v1/payouts','/v1/balance_transactions'].some(p=>u.pathname===p||u.pathname.startsWith(p+'/')));
   // The real HTTP client computes framing for the forwarded body. Workerd's
   // chunked transfer header is not a valid Undici request option.
   const forwardHeaders=new Headers(request.headers);

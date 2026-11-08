@@ -28,8 +28,12 @@ const req = () => hidden("requestId", crypto.randomUUID());
 const detail = (title: string, html: string) =>
   `<details class="more"><summary>${breakable(title)}</summary><div class="panel-body">${html}</div></details>`;
 export function retailPage(s: any, query: URLSearchParams) {
-  const desk = s.actor.role === "front-desk";
-  if (desk) s = {...s,people:s.retailPeople ?? []};
+  const desk = s.actor.role !== "owner";
+  const canSell = !desk || s.retailPermissions?.sale;
+  const canRefund = !desk || s.retailPermissions?.refund;
+  const merchandiseSale = !desk || s.retailPermissions?.merchandiseSale;
+  const merchandiseRefund = !desk || s.retailPermissions?.merchandiseRefund;
+  if (desk) s = {...s,people:s.retailPeople ?? [],locations:s.retailLocations ?? []};
   const r = s.retail ?? {
       skus: [],
       suppliers: [],
@@ -42,6 +46,9 @@ export function retailPage(s: any, query: URLSearchParams) {
     places = (s.locations ?? []).map(
       (l: any) => [l.id, l.name] as [string, string],
     );
+  const salePeople = desk ? s.retailSalePeople ?? [] : s.people;
+  const salePlaces = desk ? (s.retailSaleLocations ?? []).map((l: any)=>[l.id,l.name]) : places;
+  const saleLoc = () => select('locationId','Location',salePlaces,'studio');
   const loc = () => select("locationId", "Location", places, "studio"),
     sku = () =>
       select(
@@ -176,18 +183,18 @@ export function retailPage(s: any, query: URLSearchParams) {
     ),
   );
   const sales = panel(
-    desk ? "Gift redemption" : "Desk sales and returns",
+    "Desk sales and returns",
     body(
-      (desk ? "<p>Redeem a named recipient’s gift at an authorized location. Confirm the exact total after eligible promotions. Each sale records the stock, gift value and receipt together.</p>" : "<p>Cash, gift cards or externally recorded payment. Gift redemption is noncash. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>") +
-        detail(
+      (desk && !merchandiseSale ? "<p>Redeem a named recipient’s gift at an authorized location. Confirm the exact total after eligible promotions. Each sale records the stock, gift value and receipt together.</p>" : "<p>Cash, gift cards or externally recorded payment. Gift redemption is noncash. The sale records stock, charge and receipt together. Enter the exact total shown by quantity and unit price; a changed price is refused. A cash refund uses an open drawer at the original sale location.</p>") +
+        (canSell ? detail(
           "Sell retail",
           form(
             "retail.sell",
             path,
             req() +
-              personSelect(s) +
+              personSelect({...s,people:salePeople}) +
               sku() +
-              loc() +
+              saleLoc() +
               quantity() +
               field(
                 "expected",
@@ -196,7 +203,7 @@ export function retailPage(s: any, query: URLSearchParams) {
                 "number",
                 'required min="0.01" step="0.01"',
               ) +
-              select("tender", "Tender", desk ? [["gift", "Gift card"]] : [
+              select("tender", "Tender", !merchandiseSale ? [["gift", "Gift card"]] : [
                 ["external", "Externally recorded"],
                 ["cash", "Cash"],
                 ["gift", "Gift card"],
@@ -205,7 +212,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               select(
                 "giftCardId",
                 "Gift card",
-                (s.gifts?.cards ?? []).map((c: any) => [
+                (s.gifts?.cards ?? []).filter((c: any)=>!desk || c.canRedeem).map((c: any) => [
                   c.id,
                   c.id + " · " + money(c.balanceCents),
                 ]),
@@ -216,8 +223,8 @@ export function retailPage(s: any, query: URLSearchParams) {
               field("reference", "Tender reference", "", "text", "required"),
             "Record sale",
           ),
-        ) +
-        (desk ? "" : detail(
+        ) : "") +
+        (!merchandiseRefund ? "" : detail(
           "Return retail",
           form(
             "retail.return",
@@ -226,7 +233,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               select(
                 "saleId",
                 "Original sale",
-                r.sales.map((v: any) => [
+                r.sales.filter((v: any)=>!desk || v.canReturn).map((v: any) => [
                   v.id,
                   v.name + " · " + v.variant + " · " + v.reference,
                 ]),
@@ -333,21 +340,21 @@ export function retailPage(s: any, query: URLSearchParams) {
       "<p>Outstanding gift liability: <strong>" +
         breakable(money(gift.liabilityCents)) +
         "</strong>. Cards have no expiration or fees. The owner controls custody. Explicit sale and refund rights limit staff to named recipients and locations. Returns restore the original gift value; no automatic cash payout occurs.</p>" +
-        detail(
+        (canSell ? detail(
           "Issue gift card",
           form(
             "retail.gift.issue",
             path,
             req() +
-              personSelect(s, "", "Purchaser") +
+              personSelect({...s,people:salePeople}, "", "Purchaser") +
               select(
                 "recipientId",
                 "Gift recipient",
-                (s.people ?? [])
+                (salePeople ?? [])
                   .filter((p: any) => p.active && p.role === "member")
                   .map((p: any) => [p.id, p.name]),
               ) +
-              loc() +
+              saleLoc() +
               field(
                 "amount",
                 "Gift value in USD",
@@ -363,8 +370,8 @@ export function retailPage(s: any, query: URLSearchParams) {
               field("reference", "Funding reference", "", "text", "required"),
             "Issue gift card",
           ),
-        ) +
-        detail(
+        ) : "") +
+        (canRefund ? detail(
           "Refund gift funding",
           form(
             "retail.gift.refund",
@@ -373,7 +380,7 @@ export function retailPage(s: any, query: URLSearchParams) {
               select(
                 "giftCardId",
                 "Original gift card",
-                gift.cards.map((c: any) => [
+                gift.cards.filter((c: any) => !desk || c.canRefund).map((c: any) => [
                   c.id,
                   c.id + " · " + money(c.balanceCents),
                 ]),
@@ -390,8 +397,8 @@ export function retailPage(s: any, query: URLSearchParams) {
               reason(),
             "Record original-tender refund",
           ),
-        ) +
-        detail(
+        ) : "") +
+        (desk ? "" : detail(
           "Add promotion",
           form(
             "retail.promotion.add",
@@ -443,14 +450,14 @@ export function retailPage(s: any, query: URLSearchParams) {
               ]),
             "Add promotion",
           ),
-        ) +
+        )) +
         (gift.cards.length
           ? table(
               ["Card", "Remaining liability", "Controls"],
               gift.cards
                 .map(
                   (c: any) =>
-                    `<tr>${cell("Card", breakable(c.id))}${cell("Remaining liability", breakable(money(c.balanceCents)))}${cell("Controls", detail("Refund-right adjustment", form("retail.gift.adjust", path, req() + hidden("giftCardId", c.id) + field("adjustment", "Signed adjustment in USD", "", "text", "required") + reason(), "Adjust gift value")))}</tr>`,
+                    `<tr>${cell("Card", breakable(c.id))}${cell("Remaining liability", breakable(money(c.balanceCents)))}${cell("Controls", (!desk || c.canAdjust) ? detail("Refund-right adjustment", form("retail.gift.adjust", path, req() + hidden("giftCardId", c.id) + field("adjustment", "Signed adjustment in USD", "", "text", "required") + reason(), "Adjust gift value")) : "")}</tr>`,
                 )
                 .join(""),
             )
@@ -505,5 +512,5 @@ export function retailPage(s: any, query: URLSearchParams) {
         )
       : emptyLine("No stock movements."),
   );
-  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Inventory and drawers</h1><p>Receive, sell, transfer and reconcile studio retail.</p></div>${catalog}${desk ? "" : setup}${sales}${desk ? "" : gifts + drawers + cashTrail + trail}</div></div>`;
+  return `<div class="page single"><div class="page-main"><div class="page-title"><h1>Inventory and drawers</h1><p>Receive, sell, transfer and reconcile studio retail.</p></div>${catalog}${desk ? "" : setup}${sales}${gifts}${desk ? "" : drawers + cashTrail + trail}</div></div>`;
 }

@@ -38,7 +38,7 @@ export async function privatePolicy(h) {
   await (await import('./report-downloads.mjs')).assertCancellationDownload(h,[query],['',desk.cookie,ana.cookie,coach.cookie]);
   assert.equal(exported.actorId,(await h.state(desk.cookie)).actor.id);assert.equal(exported.creditReturned,false);assert.equal(exported.notice,'in_app');assert.equal(exported.mail,'not_configured');assert.equal(exported.restoredAt,null);
 
-  const screen=(await h.send('/app/people?'+query,undefined,h.owner)).text;assert.match(screen,/1 cancellations · 1 late/);assert.match(screen,/Sick/);assert.match(screen,/Preview appointment restoration/);
+  const screen=(await h.send('/app/people?'+query,undefined,h.owner)).text;assert.match(screen,/1 cancellation · 1 late/);assert.match(screen,/Sick/);assert.match(screen,/Preview appointment restoration/);
 
   const restore=await h.cmd('appointment.restore.prepare',{reservationId:second.id,classId:second.occurrences[0].id,reason:'Member can attend',channel:'phone'},desk.cookie);
   second=await confirm(h,restore,desk.cookie);await confirm(h,restore,desk.cookie);
@@ -46,7 +46,7 @@ export async function privatePolicy(h) {
   assert.deepEqual(state.charges.filter(c=>c.bookingId===second.occurrences[0].bookingId).map(c=>c.amountCents).sort((a,b)=>a-b),[-1500,1500]);
   const restoredHistory=state.bookingActions.filter(a=>a.action==='cancel'&&a.bookingId===second.occurrences[0].bookingId);
   assert.equal(restoredHistory.length,1);assert.ok(restoredHistory[0].restoredAt);assert.equal(restoredHistory[0].feeCents,1500,'history keeps the original fee after reversal');
-  assert.match((await h.send('/app/people?'+query,undefined,h.owner)).text,/1 cancellations · 1 late/);
+  assert.match((await h.send('/app/people?'+query,undefined,h.owner)).text,/1 cancellation · 1 late/);
   assert.match((await h.send('/app/people?'+query,undefined,h.owner)).text,/Restored /);
 
   await grant(desk,'front-desk',[...rights,'fee-waiver'],[ana.id],['studio']);

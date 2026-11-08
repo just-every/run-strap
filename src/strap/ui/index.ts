@@ -1,3 +1,4 @@
+import { payoutsPage } from './payout-reconciliation';
 import { coursesPage } from './courses'
 import { timeClockPage } from './time-clock'
 import { retailPage } from './retail'
@@ -25,7 +26,7 @@ import { memberProfilePage } from './profile'
 import { packsPage } from './packs'
 import { householdPage, householdsPage } from './households'
 import { peoplePage } from './people'
-import { emptyState, h, owner } from './shared'
+import { emptyState, h, owner, rows } from './shared'
 import { shell, tabs, topBar } from './shell'
 import { studioPage } from './studio'
 import { successRail } from './success'
@@ -35,13 +36,14 @@ const security = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 
 
 export async function renderApp(state: any, target: string, notice: { message?: string; error?: string; result?: any } = {}): Promise<Response> {
   const url = new URL(target, 'https://strap.invalid'), current = url.pathname.replace(/\/$/, '') || '/app', query = url.searchParams
-  const allowed = tabs(state).some(t => t.href === current) || (owner(state) && current === '/app/studio')
+  if (!notice.message && state.actor.role === 'member' && rows(state,'bookings').some(b => b.id === query.get('bookingResult') && b.personId === state.actor.personId && b.status === 'waitlisted')) notice = {...notice,message:'This class is full. You are on the waitlist; no credit was used.'}
+  const allowed = tabs(state).some(t => t.href === current) || (owner(state) && ['/app/studio','/app/payouts'].includes(current))
   const desk = state.actor.role !== 'member'
-  const title = current === '/app' ? (desk ? 'Today' : 'Classes') : current === '/app/studio' ? 'Studio' : tabs(state).find(t => t.href === current)?.label ?? 'Page unavailable'
+  const title = current === '/app/payouts' ? 'Payment reconciliation' : current === '/app' ? (desk ? 'Today' : 'Classes') : current === '/app/studio' ? 'Studio' : tabs(state).find(t => t.href === current)?.label ?? 'Page unavailable'
   const content = !allowed
     ? `<div class="page single"><section class="panel">${emptyState('alert', 'Page unavailable', 'Your role cannot open this page.', '<a class="btn" href="/app">Back to Today</a>')}</section></div>`
     : current === '/app' ? (desk ? today(state, query, owner(state) ? successRail(state, query) : '') : memberHome(state))
-      : current === '/app/courses' ? coursesPage(state) : current === '/app/time-clock' ? timeClockPage(state) : current === '/app/retail' ? retailPage(state,query) : current === '/app/intake' ? intakePage(state,query,notice) : current === '/app/tuition' ? familyTuitionPage(state,query) : current === '/app/classes' ? classesPage(state, query)
+      : current === '/app/payouts' ? payoutsPage(state) : current === '/app/courses' ? coursesPage(state) : current === '/app/time-clock' ? timeClockPage(state) : current === '/app/retail' ? retailPage(state,query) : current === '/app/intake' ? intakePage(state,query,notice) : current === '/app/tuition' ? familyTuitionPage(state,query) : current === '/app/classes' ? classesPage(state, query)
         : current === '/app/households' ? householdsPage(state) : current === '/app/household' ? householdPage(state)
         : current === '/app/profile' ? memberProfilePage(state) : current === '/app/substitutions' ? substitutionsPage(state,notice) : current === '/app/referrals' ? referralsPage(state) : (current === '/app/leads' || current === '/app/offers') ? leadsPage(state,query) : current === '/app/people' ? peoplePage(state, query)
           : current === '/app/makeups' ? `<div class="page single"><div class="page-main"><div class="page-title"><h1>Absences and makeups</h1></div>${makeupsPanel(state)}</div></div>` : current === '/app/packs' ? packsPage(state, query)
