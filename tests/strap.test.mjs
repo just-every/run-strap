@@ -565,3 +565,9 @@ test('Public schedule frames on exact approved origins and returns to private bo
   const {paymentAuth,paymentEdge}=await import('./payment-fixtures.mjs'),edge=paymentEdge();
   await run(async h=>{await (await import('./booking-widget-browser.mjs')).widgetBrowser(h,week(),edge);},{auth:paymentAuth,outbound:edge.outbound});
 });
+
+test('a studio with mail off (MAIL_PROVIDER=none) refuses the document-copy mail review as mail_off', () => run(async h => {
+  await h.setAuth({ MAIL_PROVIDER: 'none', MAIL_FROM: '', MAIL_API_KEY: '' })
+  const refused = await h.cmd('waiver.copy.mail.review', { confirm: true }, h.owner, 409)
+  assert.match(JSON.stringify(refused), /mail_off/)
+}))

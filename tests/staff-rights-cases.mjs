@@ -334,7 +334,7 @@ async function populatedLegacyRights(h,s) {
   const operations=[h.db.prepare("DELETE FROM st_records WHERE kind='staffAccess'")];
   for(const [door,grant] of Object.entries(canonical.legacyGrants))operations.push(h.db.prepare('INSERT INTO st_records(id,kind,data,version) VALUES(?,?,?,?)').bind(grant.id,kinds[door],JSON.stringify(grant),1));
   await h.db.batch(operations);
-  await h.db.batch(unstable_splitSqlQuery(await readFile('migrations/core/0040-staff-rights.sql','utf8')).map(sql=>h.db.prepare(sql)));
+  await h.db.batch(unstable_splitSqlQuery(await readFile('migrations/core/0040_staff-rights.sql','utf8')).map(sql=>h.db.prepare(sql)));
   staff.cookie=await h.signIn(staff.email);await h.enroll(staff.cookie);
   const migrated=(await h.state()).staffAccessGrants.find(g=>g.personId===staff.id);
   assert.equal(migrated.role,'front-desk');assert.equal(migrated.enabled,true);

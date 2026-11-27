@@ -215,6 +215,14 @@ provider request. The default environment is `production`; select another with
 `--environment NAME`. Local validation does not establish provider acceptance,
 hosted health or mail delivery.
 
+Set `MAIL_PROVIDER=none` for a studio without a mail service. Run
+`MAIL_PROVIDER=none rer deploy --dry-run` to validate the deployment. This
+mode needs no sender address or mail API key. After a real deployment,
+`rer signin` uses the deployment's Cloudflare credentials to issue a one-time
+link for its owner. Email sign-in, invitations and member emails need a
+configured mail provider; with mail off members get in-app notices only, and
+document-copy email is refused with `mail_off`.
+
 `rer describe` reads the current checkout's actual verbs,
 flags, aliases, pins, effects and local state without installing or running
 project commands. New verbs accept `--help`, `--cwd PATH`, `--non-interactive`

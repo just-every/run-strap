@@ -26,7 +26,7 @@ const hasTabletCookie=(request: Request)=>(request.headers.get('cookie')??'').sp
 export async function reviewEvidenceCopyMail(tx: Transaction,env: Bindings,input: Record<string,unknown>) {
   humanOwner(tx.who);
   insist(input.confirm===true,'copy_mail_review_confirmation_required');
-  insist(memberMailConfigured(env),'copy_mail_provider_not_configured',409);
+  insist(memberMailConfigured(env),env.MAIL_PROVIDER==='none'?'mail_off':'copy_mail_provider_not_configured',409);
   const connection=memberMail(tx.state);
   insist(connection?.origin===env.AUTH_ORIGIN && connection.connectedBy && connection.connectedBy!=='first-use','copy_mail_review_required',409);
   tx.sql.push(tx.statement("INSERT INTO st_evidence_copy_mail(id,connection_id,origin,review_hash,provider_hash,approved_by,approved_at) VALUES('mail',?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET connection_id=excluded.connection_id,origin=excluded.origin,review_hash=excluded.review_hash,provider_hash=excluded.provider_hash,approved_by=excluded.approved_by,approved_at=excluded.approved_at",
